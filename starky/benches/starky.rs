@@ -20,12 +20,11 @@ fn bench(c: &mut Criterion) {
 
     // Sensitivity Analysis: Columns
     {
-        const SWEEP_NUM_COLS: [usize; 14] = [
-            4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768,
-        ];
+        const SWEEP_NUM_COLS: [usize; 12] =
+            [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192];
         const BASE_NUM_ROWS: usize = 65536;
         const BASE_CONSTRAINT_DEGREE_1: usize = 2;
-        seq!(i in 0..14 {
+        seq!(i in 0..12 {
             {
                 const NUM_COLS: usize = SWEEP_NUM_COLS[i];
                 type S = BenchmarkStark<F, D, NUM_COLS, BASE_NUM_ROWS, BASE_CONSTRAINT_DEGREE_1>;
@@ -82,10 +81,10 @@ fn bench(c: &mut Criterion) {
 
     // Sensitivity Analysis: Degree
     {
-        const SWEEP_CONSTRAINT_DEGREES: [usize; 5] = [2, 3, 4, 5, 6];
+        const SWEEP_CONSTRAINT_DEGREES: [usize; 4] = [2, 3, 4, 5];
         const BASE_NUM_COLS: usize = 32;
         const BASE_NUM_ROWS: usize = 65536;
-        seq!(i in 0..5 {
+        seq!(i in 0..4 {
             {
                 const CONSTRAINT_DEGREE: usize = SWEEP_CONSTRAINT_DEGREES[i];
                 type S = BenchmarkStark<F, D, BASE_NUM_COLS, BASE_NUM_ROWS, CONSTRAINT_DEGREE>;

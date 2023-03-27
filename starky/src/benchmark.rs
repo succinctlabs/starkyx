@@ -34,6 +34,19 @@ impl<
         const NUM_COLS: usize,
         const NUM_ROWS: usize,
         const CONSTRAINT_DEGREE: usize,
+    > Default for BenchmarkStark<F, D, NUM_COLS, NUM_ROWS, CONSTRAINT_DEGREE>
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<
+        F: RichField + Extendable<D>,
+        const D: usize,
+        const NUM_COLS: usize,
+        const NUM_ROWS: usize,
+        const CONSTRAINT_DEGREE: usize,
     > BenchmarkStark<F, D, NUM_COLS, NUM_ROWS, CONSTRAINT_DEGREE>
 {
     pub fn new() -> Self {
