@@ -95,7 +95,7 @@ impl<
         for i in 0..(NUM_COLS - 2) {
             let mut exp = P::ONES;
             for i in 0..CONSTRAINT_DEGREE {
-                exp = exp * vars.local_values[i];
+                exp *= vars.local_values[i];
             }
             yield_constr.constraint_transition(vars.next_values[i] - exp)
         }
