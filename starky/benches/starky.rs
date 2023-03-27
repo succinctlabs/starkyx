@@ -78,35 +78,6 @@ fn bench(c: &mut Criterion) {
             }
         });
     }
-
-    // Sensitivity Analysis: Degree
-    {
-        const SWEEP_CONSTRAINT_DEGREES: [usize; 4] = [2, 3, 4, 5];
-        const BASE_NUM_COLS: usize = 32;
-        const BASE_NUM_ROWS: usize = 65536;
-        seq!(i in 0..4 {
-            {
-                const CONSTRAINT_DEGREE: usize = SWEEP_CONSTRAINT_DEGREES[i];
-                type S = BenchmarkStark<F, D, BASE_NUM_COLS, BASE_NUM_ROWS, CONSTRAINT_DEGREE>;
-                let config = StarkConfig::standard_fast_config();
-                let public_inputs = [F::TWO];
-                let stark = S::new();
-                group.bench_function(BenchmarkId::new("sensitivity-degree-with-32-cols-and-65536-rows", CONSTRAINT_DEGREE), |b| {
-                    b.iter(|| {
-                        let trace = stark.generate_trace();
-                        prove::<F, C, S, D>(
-                            stark,
-                            &config,
-                            trace,
-                            public_inputs,
-                            &mut TimingTree::default(),
-                        )
-                        .unwrap();
-                    })
-                });
-            }
-        });
-    }
 }
 
 criterion_group! {
