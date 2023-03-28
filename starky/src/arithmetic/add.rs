@@ -13,7 +13,7 @@ pub const N_LIMBS: usize = 16;
 pub const NUM_ARITH_COLUMNS: usize = 6 * N_LIMBS;
 const RANGE_MAX: usize = 1usize << 16; // Range check strict upper bound
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct AddModStark<F, const D: usize> {
     _marker: PhantomData<F>,
 }
@@ -82,8 +82,7 @@ impl<F: PrimeField64> ArithmeticParser<F> {
         //
         // a(x) +  b(x) - c(x) - carry*m(x) = const(x)
         // note that we don't care about the coefficients of constr(x) at all, just that it will have a root.
-        let consr_polynomial: Vec<F> = 
-             input_0_digits
+        let consr_polynomial: Vec<F> = input_0_digits
             .iter()
             .zip(input_1_digits.iter())
             .zip(result_digits.iter())
@@ -128,7 +127,6 @@ impl<F: PrimeField64> ArithmeticParser<F> {
             row[i + N_LIMBS + 3 * N_LIMBS] = carry_digits[i];
             row[i + 2 * N_LIMBS + 3 * N_LIMBS] = aux_digits[i];
         }
-        
 
         // Check consr reconstruction
         // Calculates aux(x)*(x-2^16)
@@ -138,9 +136,9 @@ impl<F: PrimeField64> ArithmeticParser<F> {
         for i in 1..N_LIMBS - 1 {
             let val = -row[i + 2 * N_LIMBS + 3 * N_LIMBS].mul(pow_2)
                 + row[i - 1 + 2 * N_LIMBS + 3 * N_LIMBS];
-                consr_sanity.push(val)
+            consr_sanity.push(val)
         }
-        assert_eq!(row[N_LIMBS -1 + 2 * N_LIMBS + 3 * N_LIMBS], F::ZERO);
+        assert_eq!(row[N_LIMBS - 1 + 2 * N_LIMBS + 3 * N_LIMBS], F::ZERO);
         consr_sanity.push(row[N_LIMBS - 2 + 2 * N_LIMBS + 3 * N_LIMBS]);
         assert_eq!(consr_sanity.len(), N_LIMBS);
 
@@ -217,7 +215,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for AddModStark<F
         for i in 1..N_LIMBS - 1 {
             let val = -vars.local_values[i + 2 * N_LIMBS + 3 * N_LIMBS].mul(pow_2)
                 + vars.local_values[i - 1 + 2 * N_LIMBS + 3 * N_LIMBS];
-                consr_poly.push(val)
+            consr_poly.push(val)
         }
         consr_poly.push(vars.local_values[N_LIMBS - 2 + 2 * N_LIMBS + 3 * N_LIMBS]);
         for i in 0..N_LIMBS {
@@ -256,6 +254,43 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for AddModStark<F
             let constraint = builder.sub_extension(sub_minus_carry[i], auxilary[i]);
             yield_constr.constraint_transition(builder, constraint);
         }*/
+        // a(x) + b(x) - c(x) - carry * m(x) - (x - β) * s(x) == 0
+        // the first row = (a(x), b(x), m(x)) and the second ro = (c(x), carry(x), s(x))
+        let mut sum_minus_carry = vec![];
+        for i in 0..N_LIMBS {
+            let sum = builder.add_extension(vars.local_values[i], vars.local_values[i + N_LIMBS]);
+            let sum_minus_res = builder.sub_extension(sum, vars.local_values[i + 3 * N_LIMBS]);
+            let carry_mod = builder.mul_extension(
+                vars.local_values[N_LIMBS + 3 * N_LIMBS],
+                vars.local_values[i + 2 * N_LIMBS],
+            );
+            sum_minus_carry.push(builder.sub_extension(sum_minus_res, carry_mod));
+        }
+
+        let pow_2 = F::from_canonical_u32(2u32.pow(16));
+
+        let mut consr_poly = vec![];
+        let const_term_neg_pow_2 =
+            builder.mul_const_extension(pow_2, vars.local_values[2 * N_LIMBS + 3 * N_LIMBS]);
+        let zero = builder.constant_extension(<F as Extendable<D>>::Extension::from(F::ZERO));
+        let const_term = builder.sub_extension(zero, const_term_neg_pow_2);
+
+        consr_poly.push(const_term);
+        for i in 1..N_LIMBS - 1 {
+            let pow_2_aux = builder
+                .mul_const_extension(pow_2, vars.local_values[i + 2 * N_LIMBS + 3 * N_LIMBS]);
+            let val = builder.sub_extension(
+                vars.local_values[i - 1 + 2 * N_LIMBS + 3 * N_LIMBS],
+                pow_2_aux,
+            );
+            consr_poly.push(val);
+        }
+        consr_poly.push(vars.local_values[N_LIMBS - 2 + 2 * N_LIMBS + 3 * N_LIMBS]);
+
+        for i in 0..N_LIMBS {
+            let constraint = builder.sub_extension(sum_minus_carry[i], consr_poly[i]);
+            yield_constr.constraint_transition(builder, constraint);
+        }
     }
 
     fn constraint_degree(&self) -> usize {
@@ -265,16 +300,22 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for AddModStark<F
 
 #[cfg(test)]
 mod tests {
-    use core::arch::aarch64::poly64x2x3_t;
 
+    use num::bigint::{RandBigInt, RandomBits};
+    use plonky2::iop::witness::PartialWitness;
+    use plonky2::plonk::circuit_builder::CircuitBuilder;
+    use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
-    use num::bigint::{RandomBits, RandBigInt};
     use rand::Rng;
 
     use super::*;
     use crate::config::StarkConfig;
     use crate::prover::prove;
+    use crate::recursive_verifier::{
+        add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
+        verify_stark_proof_circuit,
+    };
     use crate::verifier::verify_stark_proof;
 
     #[test]
@@ -292,31 +333,57 @@ mod tests {
             _marker: PhantomData,
         };
 
-        let p22519 = BigUint::from(2u32).pow(255)- BigUint::from(19u32); 
+        let p22519 = BigUint::from(2u32).pow(255) - BigUint::from(19u32);
 
-
-        let mut rng = rand::thread_rng();        
+        let mut rng = rand::thread_rng();
 
         let mut additions = Vec::new();
         for i in 0..num_rows {
-            let a : BigUint = rng.gen_biguint(255) % &p22519;
-            assert!(&a < &p22519);
+            let a: BigUint = rng.gen_biguint(255) % &p22519;
             let b = rng.gen_biguint(255) % &p22519;
-            assert!(&b < &p22519);
             let p = p22519.clone();
-            assert_eq!(p, p22519);
             additions.push((a, b, p));
         }
 
         let trace = stark.generate_trace(additions);
-        let proof = prove::<F, C, S, D>(
-            stark.clone(),
+
+        // Verify proof as a stark
+        let proof =
+            prove::<F, C, S, D>(stark, &config, trace, [], &mut TimingTree::default()).unwrap();
+        verify_stark_proof(stark, proof.clone(), &config).unwrap();
+
+        // Verify recursive proof in a circuit
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
+
+        let degree_bits = proof.proof.recover_degree_bits(&config);
+        let virtual_proof =
+            add_virtual_stark_proof_with_pis(&mut recursive_builder, stark, &config, degree_bits);
+
+        recursive_builder.print_gate_counts(0);
+
+        let mut rec_pw = PartialWitness::new();
+        set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
+
+        verify_stark_proof_circuit::<F, C, S, D>(
+            &mut recursive_builder,
+            stark,
+            virtual_proof,
             &config,
-            trace,
-            [],
-            &mut TimingTree::default(),
+        );
+
+        let recursive_data = recursive_builder.build::<C>();
+
+        let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
+        let recursive_proof = plonky2::plonk::prover::prove(
+            &recursive_data.prover_only,
+            &recursive_data.common,
+            rec_pw,
+            &mut timing,
         )
         .unwrap();
-        verify_stark_proof(stark, proof.clone(), &config).unwrap();
+
+        //timing.print();
+        recursive_data.verify(recursive_proof).unwrap();
     }
 }
