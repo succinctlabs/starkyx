@@ -32,11 +32,6 @@ impl<F: PrimeField64, const D: usize> AddModStark<F, D> {
             trace_rows.push(row);
         }
 
-        /*for _ in 0..31 {
-            let row = vec![F::ZERO; NUM_ARITH_COLUMNS];
-            trace_rows.push(row);
-        }*/
-
         let trace_cols = transpose(&trace_rows);
 
         trace_cols.into_iter().map(PolynomialValues::new).collect()
