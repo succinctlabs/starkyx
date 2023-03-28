@@ -14,7 +14,6 @@ fn bench(c: &mut Criterion) {
     const D: usize = 2;
     type C = PoseidonGoldilocksConfig;
     type F = <C as GenericConfig<D>>::F;
-    
 
     let mut group = c.benchmark_group("starky-prover");
     group.sample_size(10);
