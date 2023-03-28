@@ -53,7 +53,8 @@ impl<F: PrimeField64> ArithmeticParser<F> {
     ///
     /// Each element represented by a polynomial a(x), b(x), c(x), m(x) of 16 limbs of 16 bits each
     /// We will witness the relation
-    ///  a(x) + b(x) - c(x) - carry * m(x) - (x - β) * s(x) == 0
+    ///  a(x) + b(x) - c(x) - carry * m(x) - (x - 2^16) * s(x) == 0
+    /// only a(x), b(x), c(x), m(x) should be range-checked.
     /// where carry = 0 or carry = 1
     /// the first row will contain a(x), b(x), m(x) and the second row will contain c(x), q(x), s(x)
     pub fn add_to_rows(input_0: BigUint, input_1: BigUint, modulus: BigUint) -> Vec<F> {
@@ -73,12 +74,16 @@ impl<F: PrimeField64> ArithmeticParser<F> {
 
         let carry_mod = &carry * &modulus;
         let carry_mod_digits = Self::bigint_into_u16_F_digits(&carry_mod, N_LIMBS);
+        for i in 0..N_LIMBS {
+            assert!(carry_mod_digits[i] == F::ZERO || carry_mod_digits[i] == modulus_digits[i]);
+        }
 
         // constr_poly is the array of coefficients of the polynomial
         //
         // a(x) +  b(x) - c(x) - carry*m(x) = const(x)
         // note that we don't care about the coefficients of constr(x) at all, just that it will have a root.
-        let consr_polynomial: Vec<F> = input_0_digits
+        let consr_polynomial: Vec<F> = 
+             input_0_digits
             .iter()
             .zip(input_1_digits.iter())
             .zip(result_digits.iter())
@@ -99,6 +104,7 @@ impl<F: PrimeField64> ArithmeticParser<F> {
         //
         //  NOTE : Doing divisions in F::Goldilocks probably not the most efficient
         let mut aux_digits = Vec::new();
+        let pow_2 = F::from_canonical_u32(65536u32);
         aux_digits.push(-consr_polynomial[0] / F::from_canonical_u32(65536u32));
 
         for deg in 1..N_LIMBS - 1 {
@@ -122,20 +128,24 @@ impl<F: PrimeField64> ArithmeticParser<F> {
             row[i + N_LIMBS + 3 * N_LIMBS] = carry_digits[i];
             row[i + 2 * N_LIMBS + 3 * N_LIMBS] = aux_digits[i];
         }
+        
 
-        let mut aux_sanity = vec![];
-        let pow_2 = F::from_canonical_u32(65536u32);
+        // Check consr reconstruction
+        // Calculates aux(x)*(x-2^16)
+        let mut consr_sanity = vec![];
 
-        aux_sanity.push(-row[2 * N_LIMBS + 3 * N_LIMBS].mul(pow_2));
+        consr_sanity.push(-row[2 * N_LIMBS + 3 * N_LIMBS].mul(pow_2));
         for i in 1..N_LIMBS - 1 {
-            let val = -row[i - 1 + 2 * N_LIMBS + 3 * N_LIMBS]
-                + row[i + 2 * N_LIMBS + 3 * N_LIMBS].mul(pow_2);
-            aux_sanity.push(val)
+            let val = -row[i + 2 * N_LIMBS + 3 * N_LIMBS].mul(pow_2)
+                + row[i - 1 + 2 * N_LIMBS + 3 * N_LIMBS];
+                consr_sanity.push(val)
         }
-        aux_sanity.push(row[N_LIMBS - 1 + 2 * N_LIMBS + 3 * N_LIMBS]);
+        assert_eq!(row[N_LIMBS -1 + 2 * N_LIMBS + 3 * N_LIMBS], F::ZERO);
+        consr_sanity.push(row[N_LIMBS - 2 + 2 * N_LIMBS + 3 * N_LIMBS]);
+        assert_eq!(consr_sanity.len(), N_LIMBS);
 
         for i in 0..N_LIMBS {
-            assert_eq!(aux_sanity[i], consr_polynomial[i]);
+            assert_eq!(consr_sanity[i], consr_polynomial[i]);
         }
 
         let mut sum_minus_carry_sanity = vec![];
@@ -147,7 +157,6 @@ impl<F: PrimeField64> ArithmeticParser<F> {
             );
         }
 
-        assert_eq!(consr_polynomial[0], F::ZERO);
         for i in 0..N_LIMBS {
             assert_eq!(sum_minus_carry_sanity[i], consr_polynomial[i]);
         }
@@ -201,18 +210,18 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for AddModStark<F
             );
         }
 
-        let mut auxillary = vec![];
+        let mut consr_poly = vec![];
         let pow_2 = P::Scalar::from_canonical_u32(65536u32);
 
-        auxillary.push(-vars.local_values[2 * N_LIMBS + 3 * N_LIMBS].mul(pow_2));
+        consr_poly.push(-vars.local_values[2 * N_LIMBS + 3 * N_LIMBS].mul(pow_2));
         for i in 1..N_LIMBS - 1 {
-            let val = -vars.local_values[i - 1 + 2 * N_LIMBS + 3 * N_LIMBS]
-                + vars.local_values[i + 2 * N_LIMBS + 3 * N_LIMBS].mul(pow_2);
-            auxillary.push(val)
+            let val = -vars.local_values[i + 2 * N_LIMBS + 3 * N_LIMBS].mul(pow_2)
+                + vars.local_values[i - 1 + 2 * N_LIMBS + 3 * N_LIMBS];
+                consr_poly.push(val)
         }
-        auxillary.push(vars.local_values[N_LIMBS - 1 + 2 * N_LIMBS + 3 * N_LIMBS]);
+        consr_poly.push(vars.local_values[N_LIMBS - 2 + 2 * N_LIMBS + 3 * N_LIMBS]);
         for i in 0..N_LIMBS {
-            yield_constr.constraint_transition(sum_minus_carry[i] - auxillary[i]);
+            yield_constr.constraint_transition(sum_minus_carry[i] - consr_poly[i]);
         }
     }
 
@@ -256,8 +265,12 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for AddModStark<F
 
 #[cfg(test)]
 mod tests {
+    use core::arch::aarch64::poly64x2x3_t;
+
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
+    use num::bigint::{RandomBits, RandBigInt};
+    use rand::Rng;
 
     use super::*;
     use crate::config::StarkConfig;
@@ -271,7 +284,7 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type S = AddModStark<F, D>;
 
-        let num_rows = 64;
+        let num_rows = 8192;
 
         let config = StarkConfig::standard_fast_config();
 
@@ -281,16 +294,18 @@ mod tests {
 
         let p22519 = BigUint::from(2u32).pow(255)- BigUint::from(19u32); 
 
-        let a = &p22519 - BigUint::from(44u32);
-        let b = &p22519 - BigUint::from(34u32);
-        let m = BigUint::from(2u32).pow(255)- BigUint::from(19u32);
+
+        let mut rng = rand::thread_rng();        
 
         let mut additions = Vec::new();
         for i in 0..num_rows {
-            let t_a = a.clone();
-            let t_b = b.clone();
-            let t_m = m.clone();
-            additions.push((t_a, t_b, t_m));
+            let a : BigUint = rng.gen_biguint(255) % &p22519;
+            assert!(&a < &p22519);
+            let b = rng.gen_biguint(255) % &p22519;
+            assert!(&b < &p22519);
+            let p = p22519.clone();
+            assert_eq!(p, p22519);
+            additions.push((a, b, p));
         }
 
         let trace = stark.generate_trace(additions);
