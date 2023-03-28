@@ -1,3 +1,12 @@
+//! Implementation of modular addition as a STARK (prototype)
+//! 
+//! The implementation based on a method used in Polygon starks
+//! 
+//! 
+//! 
+
+
+
 use core::marker::PhantomData;
 
 use num::BigUint;
@@ -14,6 +23,8 @@ pub const N_LIMBS: usize = 16;
 pub const NUM_ARITH_COLUMNS: usize = 6 * N_LIMBS;
 const RANGE_MAX: usize = 1usize << 16; // Range check strict upper bound
 
+
+/// 
 #[derive(Copy, Clone)]
 pub struct AddModStark<F, const D: usize> {
     _marker: PhantomData<F>,
