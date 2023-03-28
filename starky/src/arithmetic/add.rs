@@ -6,9 +6,9 @@ use plonky2::field::polynomial::PolynomialValues;
 use plonky2::field::types::PrimeField64;
 use plonky2::hash::hash_types::RichField;
 use plonky2::util::transpose;
-use crate::vars::{StarkEvaluationVars, StarkEvaluationTargets};
 
 use crate::stark::Stark;
+use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub const N_LIMBS: usize = 16;
 pub const NUM_ARITH_COLUMNS: usize = 6 * N_LIMBS;
@@ -164,6 +164,7 @@ impl<F: PrimeField64> ArithmeticParser<F> {
             .collect()
     }
 
+    #[allow(non_snake_case)]
     pub fn bigint_into_u16_F_digits(x: &BigUint, digits: usize) -> Vec<F> {
         let mut x_limbs: Vec<_> = Self::bigint_into_u16_digits(x)
             .iter()
@@ -174,7 +175,7 @@ impl<F: PrimeField64> ArithmeticParser<F> {
             "Number too large to fit in {} digits",
             digits
         );
-        for i in x_limbs.len()..digits {
+        for _ in x_limbs.len()..digits {
             x_limbs.push(F::ZERO);
         }
         x_limbs
@@ -272,13 +273,12 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for AddModStark<F
 #[cfg(test)]
 mod tests {
 
-    use num::bigint::{RandBigInt, RandomBits};
+    use num::bigint::RandBigInt;
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
-    use rand::Rng;
 
     use super::*;
     use crate::config::StarkConfig;
@@ -309,7 +309,7 @@ mod tests {
         let mut rng = rand::thread_rng();
 
         let mut additions = Vec::new();
-        for i in 0..num_rows {
+        for _ in 0..num_rows {
             let a: BigUint = rng.gen_biguint(255) % &p22519;
             let b = rng.gen_biguint(255) % &p22519;
             let p = p22519.clone();
