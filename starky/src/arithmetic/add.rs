@@ -55,9 +55,9 @@ impl<F: PrimeField64> ArithmeticParser<F> {
     /// the first row will contain a(x), b(x), m(x) and the second row will contain c(x), q(x), s(x)
     pub fn add_to_rows(input_0: BigUint, input_1: BigUint, modulus: BigUint) -> Vec<F> {
         let result = (&input_0 + &input_1) % &modulus;
-        debug_assert!(&result < &modulus);
+        debug_assert!(result < modulus);
         let carry = (&input_0 + &input_1 - &result) / &modulus;
-        debug_assert!(&carry == &BigUint::from(0u32) || &carry == &BigUint::from(1u32));
+        debug_assert!(carry == BigUint::from(0u32) || carry == BigUint::from(1u32));
 
         let carry_digits = Self::bigint_into_u16_F_digits(&carry, N_LIMBS);
 

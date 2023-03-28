@@ -73,7 +73,7 @@ impl<F: Field> PolynomialOperations<F> {
         }
     }
 
-    fn root_witness(a: &[F], _root: F) -> Vec<F> {
+    fn root_witness(_a: &[F], _root: F) -> Vec<F> {
         vec![]
     }
 }
