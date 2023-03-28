@@ -13,6 +13,7 @@ mod get_challenges;
 pub mod benchmark;
 pub mod config;
 pub mod constraint_consumer;
+pub mod lookup;
 pub mod permutation;
 pub mod proof;
 pub mod prover;
