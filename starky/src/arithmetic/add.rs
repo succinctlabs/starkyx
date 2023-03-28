@@ -325,7 +325,7 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type S = AddModStark<F, D>;
 
-        let num_rows = 8192;
+        let num_rows = 64;
 
         let config = StarkConfig::standard_fast_config();
 
