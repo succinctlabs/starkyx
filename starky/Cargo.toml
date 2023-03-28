@@ -13,7 +13,7 @@ edition = "2021"
 [features]
 default = ["parallel", "std", "timing"]
 parallel = ["plonky2/parallel", "plonky2_maybe_rayon/parallel"]
-std = ["anyhow/std", "plonky2/std"]
+std = ["anyhow/std", "plonky2/std", "num/std"]
 timing = ["plonky2/timing"]
 
 [dependencies]
@@ -22,6 +22,7 @@ itertools = { version = "0.10.0", default-features = false }
 log = { version = "0.4.14", default-features = false }
 plonky2_maybe_rayon = { version = "0.1.0", default-features = false }
 plonky2 = { version = "0.1.2", default-features = false }
+num = { version = "0.4", default-features = false }
 
 [dev-dependencies]
 env_logger = { version = "0.9.0", default-features = false }
