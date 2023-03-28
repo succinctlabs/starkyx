@@ -199,9 +199,9 @@ mod tests {
 
             // Set the first column to be the range check counter. Also set the second column to be
             // the column that only holds self.value.
-            for i in 0..trace_rows.len() {
-                trace_rows[i][0] = F::from_canonical_usize(i);
-                trace_rows[i][1] = self.value;
+            for (i, row) in trace_rows.iter_mut().enumerate() {
+                row[0] = F::from_canonical_usize(i);
+                row[1] = self.value;
             }
 
             // Generate witnessed permuted column and table permutation.
