@@ -6,6 +6,7 @@ use plonky2::field::polynomial::PolynomialValues;
 use plonky2::field::types::PrimeField64;
 use plonky2::hash::hash_types::RichField;
 use plonky2::util::transpose;
+use crate::vars::{StarkEvaluationVars, StarkEvaluationTargets};
 
 use crate::stark::Stark;
 
@@ -191,7 +192,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for AddModStark<F
 
     fn eval_packed_generic<FE, P, const D2: usize>(
         &self,
-        vars: crate::vars::StarkEvaluationVars<FE, P, { Self::COLUMNS }, { Self::PUBLIC_INPUTS }>,
+        vars: StarkEvaluationVars<FE, P, { Self::COLUMNS }, { Self::PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
         FE: plonky2::field::extension::FieldExtension<D2, BaseField = F>,
@@ -226,34 +227,9 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for AddModStark<F
     fn eval_ext_circuit(
         &self,
         builder: &mut plonky2::plonk::circuit_builder::CircuitBuilder<F, D>,
-        vars: crate::vars::StarkEvaluationTargets<D, { Self::COLUMNS }, { Self::PUBLIC_INPUTS }>,
+        vars: StarkEvaluationTargets<D, { Self::COLUMNS }, { Self::PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        /*   let mut sub_minus_carry = Vec::new();
-        for i in 0..N_LIMBS {
-            let sum = builder.add_extension(vars.local_values[i], vars.local_values[i + N_LIMBS]);
-            let sub_minus_res = builder.sub_extension(sum, vars.local_values[i+ 3*N_LIMBS]);
-            let carry_mod = builder.mul_extension(vars.local_values[0 + 3*N_LIMBS], vars.local_values[i + 2*N_LIMBS]);
-            sub_minus_carry.push(builder.sub_extension(sub_minus_res, carry_mod));
-        }
-
-        let mut auxilary = Vec::new();
-        let pow_2 = builder.constant_extension(
-                          <F as Extendable<D>>::Extension::from(
-                              F::from_canonical_u32(2u32.pow(16))));
-        let first_coeff = builder.mul_extension(vars.local_values[2*N_LIMBS + 3*N_LIMBS], pow_2);
-        let neg_one = builder.neg_one_extension();
-        auxilary.push(builder.mul_extension(neg_one, first_coeff));
-        for i in 1..N_LIMBS-1 {
-            let aux_pow2 = builder.mul_extension(vars.local_values[i + 2*N_LIMBS+ 3*N_LIMBS], pow_2);
-            auxilary.push(builder.sub_extension(vars.local_values[i + 1 + 2*N_LIMBS+ 3*N_LIMBS], aux_pow2));
-        }
-        auxilary.push(vars.local_values[N_LIMBS-1 + 2*N_LIMBS+ 3*N_LIMBS]);
-
-        for i in 0..N_LIMBS {
-            let constraint = builder.sub_extension(sub_minus_carry[i], auxilary[i]);
-            yield_constr.constraint_transition(builder, constraint);
-        }*/
         // a(x) + b(x) - c(x) - carry * m(x) - (x - β) * s(x) == 0
         // the first row = (a(x), b(x), m(x)) and the second ro = (c(x), carry(x), s(x))
         let mut sum_minus_carry = vec![];
