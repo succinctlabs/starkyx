@@ -13,7 +13,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use crate::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-pub(crate) fn eval_lookups<
+pub fn eval_lookups<
     F: Field,
     P: PackedField<Scalar = F>,
     const COLS: usize,
@@ -41,7 +41,7 @@ pub(crate) fn eval_lookups<
     yield_constr.constraint_last_row(diff_input_table);
 }
 
-pub(crate) fn eval_lookups_circuit<
+pub fn eval_lookups_circuit<
     F: RichField + Extendable<D>,
     const D: usize,
     const COLS: usize,
