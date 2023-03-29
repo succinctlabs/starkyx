@@ -1,4 +1,5 @@
 #![allow(dead_code)]
 
 pub mod add;
-pub(crate) mod polynomial;
+pub mod polynomial;
+pub(crate) mod util;

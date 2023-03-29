@@ -14,9 +14,10 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::util::transpose;
 
+use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOperations};
+use crate::arithmetic::util::biguint_to_16_digits;
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
-use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOperations};
 
 pub const N_LIMBS: usize = 16;
 pub const NUM_ARITH_COLUMNS: usize = 6 * N_LIMBS;
@@ -30,14 +31,14 @@ pub struct AddModStark<F, const D: usize> {
 
 type AdditionTuple = (BigUint, BigUint, BigUint);
 
-impl<F: RichField, const D: usize> AddModStark<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> AddModStark<F, D> {
     /// Generate trace for addition stark
     fn generate_trace(&self, additions: Vec<AdditionTuple>) -> Vec<PolynomialValues<F>> {
         let max_rows = core::cmp::max(2 * additions.len(), RANGE_MAX); // note : range_max not needed yet
         let mut trace_rows: Vec<Vec<F>> = Vec::with_capacity(max_rows);
 
         for (a, b, m) in additions {
-            let row = ArithmeticParser::<F>::add_to_rows(a, b, m);
+            let row = ArithmeticParser::<F, D>::add_to_rows(a, b, m);
             trace_rows.push(row);
         }
 
@@ -47,11 +48,11 @@ impl<F: RichField, const D: usize> AddModStark<F, D> {
     }
 }
 
-pub struct ArithmeticParser<F> {
+pub struct ArithmeticParser<F, const D: usize> {
     _marker: PhantomData<F>,
 }
 
-impl<F: RichField> ArithmeticParser<F> {
+impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     /// Converts two BigUint inputs into the correspinding rows of addition mod modulus
     ///
     /// a + b = c mod m
@@ -68,17 +69,17 @@ impl<F: RichField> ArithmeticParser<F> {
         let carry = (&input_0 + &input_1 - &result) / &modulus;
         debug_assert!(carry == BigUint::from(0u32) || carry == BigUint::from(1u32));
 
-        let carry_digits = Self::bigint_into_u16_F_digits(&carry, N_LIMBS);
+        let carry_digits = biguint_to_16_digits(&carry, N_LIMBS);
 
         let mut row = vec![F::ZERO; NUM_ARITH_COLUMNS];
 
-        let input_0_digits = Self::bigint_into_u16_F_digits(&input_0, N_LIMBS);
-        let input_1_digits = Self::bigint_into_u16_F_digits(&input_1, N_LIMBS);
-        let result_digits = Self::bigint_into_u16_F_digits(&result, N_LIMBS);
-        let modulus_digits = Self::bigint_into_u16_F_digits(&modulus, N_LIMBS);
+        let input_0_digits = biguint_to_16_digits(&input_0, N_LIMBS);
+        let input_1_digits = biguint_to_16_digits(&input_1, N_LIMBS);
+        let result_digits = biguint_to_16_digits(&result, N_LIMBS);
+        let modulus_digits = biguint_to_16_digits(&modulus, N_LIMBS);
 
         let carry_mod = &carry * &modulus;
-        let carry_mod_digits = Self::bigint_into_u16_F_digits(&carry_mod, N_LIMBS);
+        let carry_mod_digits = biguint_to_16_digits(&carry_mod, N_LIMBS);
         for i in 0..N_LIMBS {
             assert!(carry_mod_digits[i] == F::ZERO || carry_mod_digits[i] == modulus_digits[i]);
         }
@@ -166,31 +167,9 @@ impl<F: RichField> ArithmeticParser<F> {
 
         row
     }
-
-    pub fn bigint_into_u16_digits(x: &BigUint) -> Vec<u16> {
-        x.iter_u32_digits()
-            .flat_map(|x| vec![x as u16, (x >> 16) as u16])
-            .collect()
-    }
-
-    #[allow(non_snake_case)]
-    pub fn bigint_into_u16_F_digits(x: &BigUint, digits: usize) -> Vec<F> {
-        let mut x_limbs: Vec<_> = Self::bigint_into_u16_digits(x)
-            .iter()
-            .map(|xi| F::from_canonical_u16(*xi))
-            .collect();
-        assert!(
-            x_limbs.len() <= digits,
-            "Number too large to fit in {} digits",
-            digits
-        );
-        for _ in x_limbs.len()..digits {
-            x_limbs.push(F::ZERO);
-        }
-        x_limbs
-    }
 }
 
+// Old Add code
 impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for AddModStark<F, D> {
     const COLUMNS: usize = NUM_ARITH_COLUMNS;
     const PUBLIC_INPUTS: usize = 0;
