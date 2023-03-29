@@ -24,6 +24,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
+
 use crate::arithmetic::util::biguint_to_16_digits;
 
 /// A wrapper around a vector of field elements that implements polynomial operations.
@@ -51,11 +52,12 @@ impl<T: Clone> Polynomial<T> {
         Self { coefficients }
     }
 
-    pub fn new_from_biguint(num : & BigUint, num_bits : usize, num_limbs : usize) -> Self
-    where T : Field {
+    pub fn from_biguint(num: &BigUint, num_bits: usize, num_limbs: usize) -> Self
+    where
+        T: Field,
+    {
         assert_eq!(num_bits, 16, "Only 16 bit numbers supported");
         Self::new_from_vec(biguint_to_16_digits(num, num_limbs))
-
     }
 
     pub fn new_from_slice(coefficients: &[T]) -> Self {
@@ -287,10 +289,19 @@ impl<T: Add<Output = T> + Copy + Default> Add for Polynomial<T> {
         Self::new_from_vec(PolynomialOps::add(self.as_slice(), other.as_slice()))
     }
 }
+
 impl<T: Add<Output = T> + Copy + Default> Add for &Polynomial<T> {
     type Output = Polynomial<T>;
 
     fn add(self, other: Self) -> Polynomial<T> {
+        Polynomial::new_from_vec(PolynomialOps::add(self.as_slice(), other.as_slice()))
+    }
+}
+
+impl<T: Add<Output = T> + Copy + Default> Add<&Polynomial<T>> for Polynomial<T> {
+    type Output = Polynomial<T>;
+
+    fn add(self, other: &Polynomial<T>) -> Polynomial<T> {
         Polynomial::new_from_vec(PolynomialOps::add(self.as_slice(), other.as_slice()))
     }
 }
@@ -308,6 +319,14 @@ impl<T: Sub<Output = T> + Neg<Output = T> + Copy + Default> Sub for Polynomial<T
 
     fn sub(self, other: Self) -> Self {
         Self::new_from_vec(PolynomialOps::sub(self.as_slice(), other.as_slice()))
+    }
+}
+
+impl<T: Sub<Output = T> + Neg<Output = T> + Copy + Default> Sub<&Polynomial<T>> for Polynomial<T> {
+    type Output = Polynomial<T>;
+
+    fn sub(self, other: &Polynomial<T>) -> Polynomial<T> {
+        Polynomial::new_from_vec(PolynomialOps::sub(self.as_slice(), other.as_slice()))
     }
 }
 

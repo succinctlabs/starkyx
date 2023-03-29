@@ -47,7 +47,7 @@ pub struct ArithmeticMem {
     output: Register,
     modulus: Register,
     result: Register,
-    carry : Register,
+    carry: Register,
     witness: Register,
 }
 
@@ -89,26 +89,59 @@ impl<F: Field> Trace<F> {
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     fn op_trace(trace: &mut Trace<F>, operation: ArithmeticOp, alloc: ArithmeticMem) {
         match operation {
-            ArithmeticOp::AddMod(a, b, m) =>{
-                Self::add_trace(trace, &a, &b, &m, alloc.input, alloc.output, alloc.modulus, alloc.carry, alloc.witness);
+            ArithmeticOp::AddMod(a, b, m) => {
+                Self::add_trace(
+                    trace,
+                    &a,
+                    &b,
+                    &m,
+                    alloc.input,
+                    alloc.output,
+                    alloc.modulus,
+                    alloc.carry,
+                    alloc.witness,
+                );
             }
             _ => unimplemented!("Operation not supported yet"),
         }
     }
 
-    fn add_trace(trace: &mut Trace<F>, a : &BigUint, b : &BigUint, modulus : &BigUint,
-                input_reg : Register, output_reg : Register, modulus_reg : Register,
-                carry_reg : Register, witness_reg : Register) {
-
+    /// Converts two BigUint inputs into the correspinding rows of addition mod modulus
+    ///
+    /// a + b = c mod m
+    ///
+    /// Each element represented by a polynomial a(x), b(x), c(x), m(x) of 16 limbs of 16 bits each
+    /// We will witness the relation
+    ///  a(x) + b(x) - c(x) - carry(x) * m(x) - (x - 2^16) * s(x) == 0
+    /// only a(x), b(x), c(x), m(x) should be range-checked.
+    /// where carry = 0 or carry = 1
+    /// the first row will contain a(x), b(x), m(x) and the second row will contain c(x), q(x), s(x)
+    fn add_trace(
+        trace: &mut Trace<F>,
+        a: &BigUint,
+        b: &BigUint,
+        modulus: &BigUint,
+        input_reg: Register,
+        output_reg: Register,
+        modulus_reg: Register,
+        carry_reg: Register,
+        witness_reg: Register,
+    ) {
         // Calculate all results as BigUint
         let result = (a + b) % modulus;
         debug_assert!(&result < modulus);
-        let carry_bit = (a + b - &result) / modulus;
-        debug_assert!(carry_bit == BigUint::from(0u32) || carry_bit == BigUint::from(1u32));
-        let carry = carry_bit * modulus;
+        let carry = (a + b - &result) / modulus;
+        debug_assert!(carry == BigUint::from(0u32) || carry == BigUint::from(1u32));
 
         // Make polynomial limbs
-        
+        let p_a = Polynomial::<F>::from_biguint(a, 16, N_LIMBS);
+        let p_b = Polynomial::<F>::from_biguint(b, 16, N_LIMBS);
+        let p_m = Polynomial::<F>::from_biguint(modulus, 16, N_LIMBS);
+        let p_res = Polynomial::<F>::from_biguint(&result, 16, N_LIMBS);
+        let p_c = Polynomial::<F>::from_biguint(&carry, 16, N_LIMBS);
+
+        // Make the witness polynomial
+        let vanishing_poly = &p_a * &p_b - &p_res - &p_c * &p_m;
     }
 
     fn op_constraints() {}
