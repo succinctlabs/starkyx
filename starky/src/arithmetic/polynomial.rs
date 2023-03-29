@@ -17,12 +17,14 @@ use core::iter;
 use core::ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign};
 
 use itertools::Itertools;
+use num::BigUint;
 use plonky2::field::extension::Extendable;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
+use crate::arithmetic::util::biguint_to_16_digits;
 
 /// A wrapper around a vector of field elements that implements polynomial operations.
 ///
@@ -47,6 +49,13 @@ pub struct PolynomialGadget;
 impl<T: Clone> Polynomial<T> {
     pub fn new_from_vec(coefficients: Vec<T>) -> Self {
         Self { coefficients }
+    }
+
+    pub fn new_from_biguint(num : & BigUint, num_bits : usize, num_limbs : usize) -> Self
+    where T : Field {
+        assert_eq!(num_bits, 16, "Only 16 bit numbers supported");
+        Self::new_from_vec(biguint_to_16_digits(num, num_limbs))
+
     }
 
     pub fn new_from_slice(coefficients: &[T]) -> Self {

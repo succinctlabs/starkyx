@@ -10,6 +10,7 @@ use core::marker::PhantomData;
 use num::BigUint;
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
+use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::util::transpose;
@@ -23,7 +24,100 @@ pub const N_LIMBS: usize = 16;
 pub const NUM_ARITH_COLUMNS: usize = 6 * N_LIMBS;
 const RANGE_MAX: usize = 1usize << 16; // Range check strict upper bound
 
+/// An experimental parser to generate Stark constaint code from commands
 ///
+/// The output is writing to a "memory" passed to it.
+pub struct ArithmeticParser<F, const D: usize> {
+    _marker: PhantomData<F>,
+}
+
+pub enum Register {
+    Local(usize, usize),
+    Next(usize, usize),
+}
+
+pub enum ArithmeticOp {
+    AddMod(BigUint, BigUint, BigUint),
+    SubMod(BigUint, BigUint, BigUint),
+    MulMod(BigUint, BigUint, BigUint),
+}
+
+pub struct ArithmeticMem {
+    input: Register,
+    output: Register,
+    modulus: Register,
+    result: Register,
+    carry : Register,
+    witness: Register,
+}
+
+pub struct Trace<F> {
+    trace_rows: Vec<Vec<F>>,
+    current_row: usize,
+}
+
+impl<F: Field> Trace<F> {
+    fn new(num_rows: usize, num_cols: usize) -> Self {
+        let trace_rows = vec![vec![F::ZERO; num_cols]; num_rows];
+        Self {
+            trace_rows,
+            current_row: 0,
+        }
+    }
+    fn advance(&mut self) {
+        self.current_row += 1;
+    }
+
+    fn alloc(&mut self, register: Register, value: &[F]) {
+        match register {
+            Register::Local(index, length) => {
+                assert_eq!(length, value.len());
+                for (i, v) in value.iter().enumerate() {
+                    self.trace_rows[self.current_row][index + i] = *v;
+                }
+            }
+            Register::Next(_, _) => unimplemented!("Next row allocation not implemented yet"),
+        }
+    }
+
+    fn trace_cols(&self) -> Vec<PolynomialValues<F>> {
+        let trace_cols = transpose(&self.trace_rows);
+        trace_cols.into_iter().map(PolynomialValues::new).collect()
+    }
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
+    fn op_trace(trace: &mut Trace<F>, operation: ArithmeticOp, alloc: ArithmeticMem) {
+        match operation {
+            ArithmeticOp::AddMod(a, b, m) =>{
+                Self::add_trace(trace, &a, &b, &m, alloc.input, alloc.output, alloc.modulus, alloc.carry, alloc.witness);
+            }
+            _ => unimplemented!("Operation not supported yet"),
+        }
+    }
+
+    fn add_trace(trace: &mut Trace<F>, a : &BigUint, b : &BigUint, modulus : &BigUint,
+                input_reg : Register, output_reg : Register, modulus_reg : Register,
+                carry_reg : Register, witness_reg : Register) {
+
+        // Calculate all results as BigUint
+        let result = (a + b) % modulus;
+        debug_assert!(&result < modulus);
+        let carry_bit = (a + b - &result) / modulus;
+        debug_assert!(carry_bit == BigUint::from(0u32) || carry_bit == BigUint::from(1u32));
+        let carry = carry_bit * modulus;
+
+        // Make polynomial limbs
+        
+    }
+
+    fn op_constraints() {}
+
+    fn op_circuits() {}
+}
+
+// Old Add code
+
 #[derive(Copy, Clone)]
 pub struct AddModStark<F, const D: usize> {
     _marker: PhantomData<F>,
@@ -48,19 +142,6 @@ impl<F: RichField + Extendable<D>, const D: usize> AddModStark<F, D> {
     }
 }
 
-/// An experimental parser to generate Stark constaint code from commands
-/// 
-/// The output is in the form of "Tokens"
-pub struct ArithmeticParser<F, const D: usize> {
-    _marker: PhantomData<F>,
-}
-
-
-
-impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
-}
-
-// Old Add code
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     /// Converts two BigUint inputs into the correspinding rows of addition mod modulus
     ///
