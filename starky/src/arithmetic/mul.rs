@@ -1,9 +1,13 @@
+//! Implementation of modular multiplication as a STARK (prototype)
+//!
+//! The implementation is based on a method used in Polygon starks
+
 use core::marker::PhantomData;
 
 use num::BigUint;
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
-use plonky2::field::types::{Field, PrimeField64};
+use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::util::transpose;
 
@@ -123,16 +127,15 @@ impl<F: RichField> ArithmeticParser<F> {
 
         // Write computed values to trace table.
         let mut row = vec![F::ZERO; NB_COLUMNS];
-        for i in 0..NB_LIMBS {
-            row[A_LIMBS_START + i] = a_limbs[i];
-            row[B_LIMBS_START + i] = b_limbs[i];
-            row[C_LIMBS_START + i] = c_limbs[i];
-            row[CARRY_LIMBS_START + i] = carry_limbs[i];
-            row[MODULUS_LIMBS_START + i] = modulus_limbs[i];
-        }
-        for i in 0..NB_EXPANDED_LIMBS {
-            row[QUOTIENT_LIMBS_START + i] = quotient_limbs_expanded[i];
-        }
+        row[A_LIMBS_START..(NB_LIMBS + A_LIMBS_START)].copy_from_slice(&a_limbs[..NB_LIMBS]);
+        row[B_LIMBS_START..(NB_LIMBS + B_LIMBS_START)].copy_from_slice(&b_limbs[..NB_LIMBS]);
+        row[C_LIMBS_START..(NB_LIMBS + C_LIMBS_START)].copy_from_slice(&c_limbs[..NB_LIMBS]);
+        row[CARRY_LIMBS_START..(NB_LIMBS + CARRY_LIMBS_START)]
+            .copy_from_slice(&carry_limbs[..NB_LIMBS]);
+        row[MODULUS_LIMBS_START..(NB_LIMBS + MODULUS_LIMBS_START)]
+            .copy_from_slice(&modulus_limbs[..NB_LIMBS]);
+        row[QUOTIENT_LIMBS_START..(NB_EXPANDED_LIMBS + QUOTIENT_LIMBS_START)]
+            .copy_from_slice(&quotient_limbs_expanded[..NB_EXPANDED_LIMBS]);
         row
     }
 }
