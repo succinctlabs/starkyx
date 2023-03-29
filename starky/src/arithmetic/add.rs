@@ -14,7 +14,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::util::transpose;
 
-use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOperations};
+use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
 use crate::arithmetic::util::biguint_to_16_digits;
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
@@ -48,10 +48,19 @@ impl<F: RichField + Extendable<D>, const D: usize> AddModStark<F, D> {
     }
 }
 
+/// An experimental parser to generate Stark constaint code from commands
+/// 
+/// The output is in the form of "Tokens"
 pub struct ArithmeticParser<F, const D: usize> {
     _marker: PhantomData<F>,
 }
 
+
+
+impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
+}
+
+// Old Add code
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     /// Converts two BigUint inputs into the correspinding rows of addition mod modulus
     ///
@@ -169,7 +178,6 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     }
 }
 
-// Old Add code
 impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for AddModStark<F, D> {
     const COLUMNS: usize = NUM_ARITH_COLUMNS;
     const PUBLIC_INPUTS: usize = 0;
