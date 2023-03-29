@@ -354,6 +354,22 @@ impl<T: Mul<Output = T> + Add<Output = T> + Copy + Default> Mul for &Polynomial<
     }
 }
 
+impl<T: Mul<Output = T> + Add<Output = T> + Copy + Default> Mul<T> for Polynomial<T> {
+    type Output = Self;
+
+    fn mul(self, other: T) -> Self {
+        Self::new_from_vec(PolynomialOps::scalar_mul(self.as_slice(), &other))
+    }
+}
+
+impl<T: Mul<Output = T> + Add<Output = T> + Copy + Default> Mul<T> for &Polynomial<T> {
+    type Output = Polynomial<T>;
+
+    fn mul(self, other: T) -> Polynomial<T> {
+        Polynomial::new_from_vec(PolynomialOps::scalar_mul(self.as_slice(), &other))
+    }
+}
+
 impl<T: Default + Clone> Default for Polynomial<T> {
     fn default() -> Self {
         Self::new_from_vec(vec![T::default()])
