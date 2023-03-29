@@ -7,42 +7,57 @@ use plonky2::field::types::{Field, PrimeField64};
 use plonky2::hash::hash_types::RichField;
 use plonky2::util::transpose;
 
+use crate::arithmetic::polynomial::PolynomialOps;
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-pub const N_LIMBS: usize = 16;
-pub const NUM_ARITH_COLUMNS: usize = 14 * N_LIMBS;
-const RANGE_MAX: usize = 1usize << 16; // Range check strict upper bound
+pub const NB_LIMBS: usize = 16;
+pub const NB_EXPANDED_LIMBS: usize = NB_LIMBS * 2 - 1;
+const A_LIMBS_START: usize = 0;
+const B_LIMBS_START: usize = A_LIMBS_START + NB_LIMBS;
+const C_LIMBS_START: usize = B_LIMBS_START + NB_LIMBS;
+const CARRY_LIMBS_START: usize = C_LIMBS_START + NB_LIMBS;
+const MODULUS_LIMBS_START: usize = CARRY_LIMBS_START + NB_LIMBS;
+const QUOTIENT_LIMBS_START: usize = MODULUS_LIMBS_START + NB_LIMBS;
+const NB_COLUMNS: usize = QUOTIENT_LIMBS_START + NB_EXPANDED_LIMBS;
+const RANGE_MAX: usize = 1usize << 16;
+
+pub fn bigint_into_u16_digits(x: &BigUint) -> Vec<u16> {
+    x.iter_u32_digits()
+        .flat_map(|x| vec![x as u16, (x >> 16) as u16])
+        .collect()
+}
+
+pub fn bigint_to_u16_limbs<F: RichField>(x: &BigUint, digits: usize) -> Vec<F> {
+    let mut x_limbs = bigint_into_u16_digits(x)
+        .iter()
+        .map(|xi| F::from_canonical_u16(*xi))
+        .collect::<Vec<F>>();
+    assert!(
+        x_limbs.len() <= digits,
+        "Number too large to fit in {} digits",
+        digits
+    );
+    for _ in x_limbs.len()..digits {
+        x_limbs.push(F::ZERO);
+    }
+    x_limbs
+}
 
 #[derive(Copy, Clone)]
 pub struct MulModStark<F, const D: usize> {
     _marker: PhantomData<F>,
 }
 
-// Polynomial multiplication
-fn poly_mul<F: PrimeField64>(a: &[F], b: &[F]) -> Vec<F> {
-    assert_eq!(a.len(), b.len());
-
-    let mut result = vec![F::ZERO; a.len() + b.len()];
-
-    for (i, a) in a.iter().enumerate() {
-        for (j, b) in b.iter().enumerate() {
-            result[i + j] += *a * *b;
-        }
-    }
-    result
-}
-
 type MultiplyTuple = (BigUint, BigUint, BigUint);
 
-impl<F: PrimeField64, const D: usize> MulModStark<F, D> {
-    /// Generate trace for addition stark
+impl<F: RichField, const D: usize> MulModStark<F, D> {
     fn generate_trace(&self, multiplications: Vec<MultiplyTuple>) -> Vec<PolynomialValues<F>> {
         let max_rows = core::cmp::max(2 * multiplications.len(), RANGE_MAX);
         let mut trace_rows: Vec<Vec<F>> = Vec::with_capacity(max_rows);
 
         for (a, b, m) in multiplications {
-            let row = ArithmeticParser::<F>::mul_to_rows(a, b, m);
+            let row = ArithmeticParser::<F>::mul_to_rows(&a, &b, &m);
             trace_rows.push(row);
         }
 
@@ -56,47 +71,38 @@ pub struct ArithmeticParser<F> {
     _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField64> ArithmeticParser<F> {
-    /// Converts two BigUint inputs into the correspinding rows of addition mod modulus
-    ///
-    /// a * b = c mod m
-    ///
-    /// Each element represented by a polynomial a(x), b(x), c(x), m(x) of 16 limbs of 16 bits each
-    /// We will witness the relation
-    ///  a(x) * b(x) - c(x) - carry(x) * m(x) - (x - 2^16) * s(x) == 0
-    /// only a(x), b(x), c(x), m(x) should be range-checked.
-    /// where carry = 0 or carry = 1
-    /// the first row will contain a(x), b(x), m(x) and the second row will contain c(x), q(x), s(x)
-    pub fn mul_to_rows(a_bigint: BigUint, b_bigint: BigUint, m_bigint: BigUint) -> Vec<F> {
-        let mut row = vec![F::ZERO; NUM_ARITH_COLUMNS];
+impl<F: RichField> ArithmeticParser<F> {
+    pub fn mul_to_rows(a: &BigUint, b: &BigUint, modulus: &BigUint) -> Vec<F> {
+        // Calculate witnesses.
+        let c = (a * b) % modulus;
+        let carry = (a * b - &c) / modulus;
 
-        let c_bigint = (&a_bigint * &b_bigint) % &m_bigint;
-        debug_assert!(c_bigint < m_bigint);
-        let carry_bigint = (&a_bigint * &b_bigint - &c_bigint) / &m_bigint;
-        debug_assert!(carry_bigint < m_bigint);
+        // Calculate polynomial representation of big integers.
+        let a_limbs = bigint_to_u16_limbs::<F>(a, NB_LIMBS);
+        let b_limbs = bigint_to_u16_limbs::<F>(b, NB_LIMBS);
+        let c_limbs = bigint_to_u16_limbs::<F>(&c, NB_LIMBS);
+        let carry_limbs = bigint_to_u16_limbs::<F>(&carry, NB_LIMBS);
+        let modulus_limbs = bigint_to_u16_limbs::<F>(modulus, NB_LIMBS);
 
-        let a_digits_16_limbs = Self::bigint_into_u16_F_digits(&a_bigint, N_LIMBS);
-        let b_digits_16_limbs = Self::bigint_into_u16_F_digits(&b_bigint, N_LIMBS);
-        let c_digits_32_limbs = Self::bigint_into_u16_F_digits(&c_bigint, N_LIMBS * 2);
-        let carry_digits_16_limbs = Self::bigint_into_u16_F_digits(&carry_bigint, N_LIMBS);
-        let m_digits_16_limbs = Self::bigint_into_u16_F_digits(&m_bigint, N_LIMBS);
+        // Calculate polynomial representation of expanded big integers.
+        let a_mul_b_limbs_expanded = PolynomialOps::mul(&a_limbs, &b_limbs);
+        let carry_mul_modulus_limbs_expanded = PolynomialOps::mul(&carry_limbs, &modulus_limbs);
 
-        let a_mul_b_digits_32_limbs = poly_mul(&a_digits_16_limbs, &b_digits_16_limbs);
-        let carry_mul_m_digits_32_limbs = poly_mul(&carry_digits_16_limbs, &m_digits_16_limbs);
+        // Calculate the constraint polynomial.
+        //     constraint(x) = a(x) * b(x) - c(x) - carry(x) * modulus(x)
+        // Note that we do not care about the coefficients of the constraint polynomial, we just
+        // care that it has a root at (x - β), where β = 2^16.
+        let mut constraint_poly_limbs_expanded = Vec::new();
+        for i in 0..(2 * NB_LIMBS - 1) {
+            let mut value = a_mul_b_limbs_expanded[i] - carry_mul_modulus_limbs_expanded[i];
+            if i < NB_LIMBS {
+                value -= c_limbs[i];
+            }
+            constraint_poly_limbs_expanded.push(value)
+        }
 
-        // constr_poly is the array of coefficients of the polynomial
-        // a(x) * b(x) - c(x) - carry*m(x) = const(x)
-        // note that we don't care about the coefficients of constr(x) at all, just that it will have a root.
-        let consr_polynomial_32_limbs: Vec<F> = a_mul_b_digits_32_limbs
-            .iter()
-            .zip(c_digits_32_limbs.iter())
-            .zip(carry_mul_m_digits_32_limbs.iter())
-            .map(|((ab, c), cm)| *ab - *c - *cm)
-            .collect();
-
-        // assert_eq!(consr_polynomial.len(), N_LIMBS);
-        // By assumption β := 2^16 is a root of `a`, i.e. (x - β) divides
-        // `a`; if we write
+        // Calculate the quotient polynomaial that proves that constraint(x) has a root at 2^16.
+        // β := 2^16 is a root of `a` if (x - β) divides `a`; if we write
         //
         //    a(x) = \sum_{i=0}^{N-1} a[i] x^i
         //         = (x - β) \sum_{i=0}^{N-2} q[i] x^i
@@ -105,64 +111,34 @@ impl<F: PrimeField64> ArithmeticParser<F> {
         //
         //   q[0] = -a[0] / β  and  q[i] = (q[i-1] - a[i]) / β
         //
-        //  NOTE : Doing divisions in F::Goldilocks probably not the most efficient
-        let mut quotient_digits_32_limbs = Vec::new();
-        let two_to_the_16 = F::from_canonical_u32(65536u32);
-        quotient_digits_32_limbs.push(-consr_polynomial_32_limbs[0] / two_to_the_16);
-
-        for deg in 1..((N_LIMBS * 2) - 1) {
-            let temp1 = quotient_digits_32_limbs[deg - 1];
-            let digit = temp1 - consr_polynomial_32_limbs[deg];
-            let quot = digit / F::from_canonical_u32(65536u32);
-            quotient_digits_32_limbs.push(quot);
+        let beta = F::from_canonical_u32(1 << 16);
+        let mut quotient_limbs_expanded = Vec::new();
+        quotient_limbs_expanded.push(-constraint_poly_limbs_expanded[0] / beta);
+        for i in 1..((NB_LIMBS * 2) - 1) {
+            let coefficient = quotient_limbs_expanded[i - 1] - constraint_poly_limbs_expanded[i];
+            let quotient = coefficient / beta;
+            quotient_limbs_expanded.push(quotient);
         }
-        quotient_digits_32_limbs.push(F::ZERO);
+        quotient_limbs_expanded.push(F::ZERO);
 
-        // Add inputs and modulus as values in first row
-        for i in 0..N_LIMBS {
-            row[i] = a_digits_16_limbs[i];
-            row[i + N_LIMBS] = b_digits_16_limbs[i];
-            row[i + 2 * N_LIMBS] = carry_digits_16_limbs[i];
-            row[i + 3 * N_LIMBS] = m_digits_16_limbs[i];
+        // Write computed values to trace table.
+        let mut row = vec![F::ZERO; NB_COLUMNS];
+        for i in 0..NB_LIMBS {
+            row[A_LIMBS_START + i] = a_limbs[i];
+            row[B_LIMBS_START + i] = b_limbs[i];
+            row[C_LIMBS_START + i] = c_limbs[i];
+            row[CARRY_LIMBS_START + i] = carry_limbs[i];
+            row[MODULUS_LIMBS_START + i] = modulus_limbs[i];
         }
-
-        // Add result, quotient and aux polynomial as values in second row
-        for i in 0..(N_LIMBS * 2) {
-            row[i + 4 * N_LIMBS] = a_mul_b_digits_32_limbs[i];
-            row[i + 6 * N_LIMBS] = c_digits_32_limbs[i];
-            row[i + 8 * N_LIMBS] = carry_mul_m_digits_32_limbs[i];
-            row[i + 10 * N_LIMBS] = quotient_digits_32_limbs[i];
+        for i in 0..NB_EXPANDED_LIMBS {
+            row[QUOTIENT_LIMBS_START + i] = quotient_limbs_expanded[i];
         }
-
         row
-    }
-
-    pub fn bigint_into_u16_digits(x: &BigUint) -> Vec<u16> {
-        x.iter_u32_digits()
-            .flat_map(|x| vec![x as u16, (x >> 16) as u16])
-            .collect()
-    }
-
-    #[allow(non_snake_case)]
-    pub fn bigint_into_u16_F_digits(x: &BigUint, digits: usize) -> Vec<F> {
-        let mut x_limbs: Vec<_> = Self::bigint_into_u16_digits(x)
-            .iter()
-            .map(|xi| F::from_canonical_u16(*xi))
-            .collect();
-        assert!(
-            x_limbs.len() <= digits,
-            "Number too large to fit in {} digits",
-            digits
-        );
-        for _ in x_limbs.len()..digits {
-            x_limbs.push(F::ZERO);
-        }
-        x_limbs
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MulModStark<F, D> {
-    const COLUMNS: usize = NUM_ARITH_COLUMNS;
+    const COLUMNS: usize = NB_COLUMNS;
     const PUBLIC_INPUTS: usize = 0;
 
     fn eval_packed_generic<FE, P, const D2: usize>(
@@ -173,60 +149,53 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MulModStark<F
         FE: plonky2::field::extension::FieldExtension<D2, BaseField = F>,
         P: plonky2::field::packed::PackedField<Scalar = FE>,
     {
-        // // we want to constrain a(x) * b(x) - c(x) - carry(x) * m(x) - (x - β) * s(x) == 0
-        // // constrain a(x) * b(x) = a_mul_b(x) and carry(x) * m(x) = carry_mul_m(x);
-        let a_offset = 0;
-        let b_offset = N_LIMBS;
-        let carry_offset = 2 * N_LIMBS;
-        let m_offset = 3 * N_LIMBS;
-        let a_mul_b_offset = 4 * N_LIMBS;
-        let carry_mul_m_offset = 8 * N_LIMBS;
-
-        let mut a_mul_b_degree_terms = [P::ZEROS; N_LIMBS * 2];
-        let mut carry_mul_m_terms = [P::ZEROS; N_LIMBS * 2];
-        for i in 0..N_LIMBS {
-            for j in 0..N_LIMBS {
-                let deg = i + j;
-                a_mul_b_degree_terms[deg] +=
-                    vars.local_values[a_offset + i] * vars.local_values[b_offset + j];
-                carry_mul_m_terms[deg] +=
-                    vars.local_values[carry_offset + i] * vars.local_values[m_offset + j];
+        // We want to constrain a(x) * b(x) - c(x) - carry(x) * m(x) - (x - β) * s(x) == 0.
+        // Compute product terms a(x) * b(x) and carry(x) * m(x).
+        let mut a_mul_b_limbs_expanded = [P::ZEROS; NB_EXPANDED_LIMBS];
+        let mut carry_mul_m_limbs_expanded = [P::ZEROS; NB_EXPANDED_LIMBS];
+        for i in 0..NB_LIMBS {
+            for j in 0..NB_LIMBS {
+                let degree = i + j;
+                a_mul_b_limbs_expanded[degree] +=
+                    vars.local_values[A_LIMBS_START + i] * vars.local_values[B_LIMBS_START + j];
+                carry_mul_m_limbs_expanded[degree] += vars.local_values[CARRY_LIMBS_START + i]
+                    * vars.local_values[MODULUS_LIMBS_START + j];
             }
         }
-        for i in 0..(N_LIMBS * 2) {
-            yield_constr.constraint_transition(
-                a_mul_b_degree_terms[i] - vars.local_values[a_mul_b_offset + i],
-            );
-            yield_constr.constraint_transition(
-                carry_mul_m_terms[i] - vars.local_values[carry_mul_m_offset + i],
-            );
-        }
 
-        // // (x - β) * s(x) == 0
+        // Compute the polynomial constraint term (x - β) * s(x). Note that s(x) has degree 2N - 2
+        // because s(x) is one less degree than the constraint polynomial. Note that this expression
+        // expands out to: x * s(x) - β * s(x).
         let mut consr_poly = vec![];
-        let pow_2 = P::Scalar::from_canonical_u32(65536u32);
+        let beta = P::Scalar::from_canonical_u32(1 << 16);
 
-        // // -β * s(x), for x = \omega
-        consr_poly.push(-vars.local_values[10 * N_LIMBS].mul(pow_2));
+        // x * s(x) - β * s(x) = β * s(x) for x = \omega_0
+        consr_poly.push(-vars.local_values[QUOTIENT_LIMBS_START].mul(beta));
 
-        // // x * s(x) - β * s(x) for x = \omega_i
-        for i in 1..(2 * N_LIMBS) - 1 {
-            let val = -vars.local_values[i + 10 * N_LIMBS].mul(pow_2)
-                + vars.local_values[i - 1 + 10 * N_LIMBS];
+        // x * s(x) - β * s(x) for x = \omega_i, where i \neq 0 or n - 1
+        for i in 1..NB_EXPANDED_LIMBS {
+            let val = -vars.local_values[QUOTIENT_LIMBS_START + i].mul(beta)
+                + vars.local_values[QUOTIENT_LIMBS_START + i - 1];
             consr_poly.push(val)
         }
-        // x * s(x) for x = \omega_n, but this is just 0, because s(x) is degree n - 1
-        consr_poly.push(vars.local_values[2 * N_LIMBS - 2 + 10 * N_LIMBS]);
 
-        // // a_mul_b(x) - c(x) - carry_mul_m(x)
-        let c_offset = 6 * N_LIMBS;
-        for (i, consr) in consr_poly.iter().enumerate().take(N_LIMBS * 2) {
-            yield_constr.constraint_transition(
-                vars.local_values[a_mul_b_offset + i]
-                    - vars.local_values[c_offset + i]
-                    - vars.local_values[carry_mul_m_offset + i]
-                    - *consr,
-            );
+        // x * s(x) - β * s(x) = x * s(x) for x = \omega_{n-1}
+        consr_poly.push(vars.local_values[QUOTIENT_LIMBS_START + NB_EXPANDED_LIMBS - 1]);
+
+        // Final Constraint: a(x) * b(x) - c(x) - carry(x) * mul(x) - (x - \beta) * s(x) == 0
+        for (i, consr) in consr_poly.iter().enumerate().take(NB_EXPANDED_LIMBS) {
+            if i < NB_LIMBS {
+                yield_constr.constraint_transition(
+                    a_mul_b_limbs_expanded[i]
+                        - vars.local_values[C_LIMBS_START + i]
+                        - carry_mul_m_limbs_expanded[i]
+                        - *consr,
+                );
+            } else {
+                yield_constr.constraint_transition(
+                    a_mul_b_limbs_expanded[i] - carry_mul_m_limbs_expanded[i] - *consr,
+                );
+            }
         }
     }
 
@@ -236,76 +205,65 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MulModStark<F
         vars: StarkEvaluationTargets<D, { Self::COLUMNS }, { Self::PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        let a_offset = 0;
-        let b_offset = N_LIMBS;
-        let carry_offset = 2 * N_LIMBS;
-        let m_offset = 3 * N_LIMBS;
-        let a_mul_b_offset = 4 * N_LIMBS;
-        let carry_mul_m_offset = 8 * N_LIMBS;
+        let zero = builder.zero_extension();
+        let mut a_mul_b_limbs_expanded = [zero; NB_EXPANDED_LIMBS];
+        let mut carry_mul_m_limbs_expanded = [zero; NB_EXPANDED_LIMBS];
 
-        let mut a_mul_b_degree_terms = [builder.zero_extension(); N_LIMBS * 2];
-        let mut carry_mul_m_terms = [builder.zero_extension(); N_LIMBS * 2];
-        for i in 0..N_LIMBS * 2 {
-            a_mul_b_degree_terms[i] = builder.zero_extension();
-            carry_mul_m_terms[i] = builder.zero_extension();
-        }
-
-        for i in 0..N_LIMBS {
-            for j in 0..N_LIMBS {
-                let deg = i + j;
-                let t1 = builder.mul_extension(
-                    vars.local_values[a_offset + i],
-                    vars.local_values[b_offset + j],
+        // We want to constrain a(x) * b(x) - c(x) - carry(x) * m(x) - (x - β) * s(x) == 0.
+        // Compute product terms a(x) * b(x) and carry(x) * m(x).
+        for i in 0..NB_LIMBS {
+            for j in 0..NB_LIMBS {
+                let degree = i + j;
+                let a_mul_b_term = builder.mul_extension(
+                    vars.local_values[A_LIMBS_START + i],
+                    vars.local_values[B_LIMBS_START + j],
                 );
-                a_mul_b_degree_terms[deg] = builder.add_extension(t1, a_mul_b_degree_terms[deg]);
-                let t2 = builder.mul_extension(
-                    vars.local_values[carry_offset + i],
-                    vars.local_values[m_offset + j],
+                a_mul_b_limbs_expanded[degree] =
+                    builder.add_extension(a_mul_b_term, a_mul_b_limbs_expanded[degree]);
+                let carry_mul_m_term = builder.mul_extension(
+                    vars.local_values[CARRY_LIMBS_START + i],
+                    vars.local_values[MODULUS_LIMBS_START + j],
                 );
-                carry_mul_m_terms[deg] = builder.add_extension(t2, carry_mul_m_terms[deg]);
+                carry_mul_m_limbs_expanded[degree] =
+                    builder.add_extension(carry_mul_m_term, carry_mul_m_limbs_expanded[degree]);
             }
         }
-        for i in 0..(N_LIMBS * 2) {
-            let x = builder.sub_extension(
-                a_mul_b_degree_terms[i],
-                vars.local_values[a_mul_b_offset + i],
-            );
-            yield_constr.constraint_transition(builder, x);
-            let y = builder.sub_extension(
-                carry_mul_m_terms[i],
-                vars.local_values[carry_mul_m_offset + i],
-            );
-            yield_constr.constraint_transition(builder, y);
-        }
 
-        // (x - β) * s(x) == 0
+        // Compute the polynomial constraint term (x - β) * s(x). Note that s(x) has degree 2N - 2
+        // because s(x) is one less degree than the constraint polynomial. Note that this expression
+        // expands out to: x * s(x) - β * s(x).
         let mut consr_poly = vec![];
-        let pow_2 = builder.constant_extension(F::Extension::from_canonical_u32(65536u32));
+        let beta = builder.constant_extension(F::Extension::from_canonical_u32(1 << 16));
 
-        // // // -β * s(x), for x = \omega
-        let t = builder.mul_extension(vars.local_values[10 * N_LIMBS], pow_2);
+        // x * s(x) - β * s(x) = β * s(x) for x = \omega_0
+        let beta_mul_s = builder.mul_extension(vars.local_values[QUOTIENT_LIMBS_START], beta);
         let neg_one = builder.neg_one_extension();
-        consr_poly.push(builder.mul_extension(neg_one, t));
+        consr_poly.push(builder.mul_extension(neg_one, beta_mul_s));
 
-        // // x * s(x) - β * s(x) for x = \omega_i
-        for i in 1..(2 * N_LIMBS) - 1 {
-            let x = builder.mul_extension(neg_one, vars.local_values[i + 10 * N_LIMBS]);
-            let y = builder.mul_extension(x, pow_2);
-            let z = builder.add_extension(y, vars.local_values[i - 1 + 10 * N_LIMBS]);
-            consr_poly.push(z)
+        // x * s(x) - β * s(x) for x = \omega_i, where i \neq 0 or n - 1
+        for i in 1..NB_EXPANDED_LIMBS {
+            let neg_s = builder.mul_extension(neg_one, vars.local_values[QUOTIENT_LIMBS_START + i]);
+            let neg_beta_mul_s = builder.mul_extension(neg_s, beta);
+            consr_poly.push(builder.add_extension(
+                neg_beta_mul_s,
+                vars.local_values[QUOTIENT_LIMBS_START + i - 1],
+            ));
         }
-        // // x * s(x) for x = \omega_n, but this is just 0, because s(x) is degree n - 1
-        consr_poly.push(vars.local_values[2 * N_LIMBS - 2 + 10 * N_LIMBS]);
 
-        // a_mul_b(x) - c(x) - carry_mul_m(x)
-        let c_offset = 6 * N_LIMBS;
+        // x * s(x) - β * s(x) = x * s(x) for x = \omega_{n-1}
+        consr_poly.push(vars.local_values[QUOTIENT_LIMBS_START + NB_EXPANDED_LIMBS - 1]);
 
-        for (i, consr) in consr_poly.iter().enumerate().take(N_LIMBS * 2) {
-            let x = builder.sub_extension(
-                vars.local_values[a_mul_b_offset + i],
-                vars.local_values[c_offset + i],
-            );
-            let y = builder.sub_extension(x, vars.local_values[carry_mul_m_offset + i]);
+        // Final Constraint: a(x) * b(x) - c(x) - carry(x) * mul(x) - (x - \beta) * s(x) == 0
+        for (i, consr) in consr_poly.iter().enumerate().take(NB_EXPANDED_LIMBS) {
+            let x = if i < NB_LIMBS {
+                builder.sub_extension(
+                    a_mul_b_limbs_expanded[i],
+                    vars.local_values[C_LIMBS_START + i],
+                )
+            } else {
+                a_mul_b_limbs_expanded[i]
+            };
+            let y = builder.sub_extension(x, carry_mul_m_limbs_expanded[i]);
             let z = builder.sub_extension(y, *consr);
             yield_constr.constraint_transition(builder, z);
         }
@@ -342,7 +300,7 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type S = MulModStark<F, D>;
 
-        let num_rows = 64;
+        let num_rows = 8192;
 
         let config = StarkConfig::standard_fast_config();
 
@@ -369,7 +327,7 @@ mod tests {
             prove::<F, C, S, D>(stark, &config, trace, [], &mut TimingTree::default()).unwrap();
         verify_stark_proof(stark, proof.clone(), &config).unwrap();
 
-        // Verify recursive proof in a circuit
+        // // Verify recursive proof in a circuit
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
 

@@ -2,7 +2,7 @@
 //!
 //! This module includes:
 //!
-//! - PolynomialOperations: a struct that implements polynomial operations on slices
+//! - PolynomialOps: a struct that implements polynomial operations on slices
 //!   in a generic way. This is useful for general purpose operations when we don't
 //!  need to use a wrapper
 //! - Polynomial: a wrapper around a vector of field elements that implements polynomial
@@ -39,7 +39,7 @@ pub struct Polynomial<F> {
 ///
 /// All operations here assume input polynomials are of the same degree
 #[derive(Debug, Clone, Copy)]
-pub struct PolynomialOperations;
+pub struct PolynomialOps;
 
 #[derive(Debug, Clone, Copy)]
 pub struct PolynomialGadget;
@@ -90,7 +90,7 @@ impl<T: Default + Clone> Polynomial<T> {
     }
 }
 
-impl PolynomialOperations {
+impl PolynomialOps {
     /// Polynomial addition
     pub fn add<T>(a: &[T], b: &[T]) -> Vec<T>
     where
@@ -228,7 +228,7 @@ impl PolynomialOperations {
     /// Extract the quotient s(x) of a(x) such that
     /// (x-r)s(x) when r is a root of a(x)
     pub fn root_quotient<F: Field>(a: &[F], r: &F) -> Vec<F> {
-        assert_eq!(PolynomialOperations::eval(a, r), F::ZERO);
+        assert_eq!(PolynomialOps::eval(a, r), F::ZERO);
         let mut result = Vec::with_capacity(a.len() - 2);
         let r_inverse = if *r == F::ZERO { F::ZERO } else { r.inverse() };
 
@@ -251,13 +251,13 @@ impl<T> Polynomial<T> {
         T: Add<Output = T> + Mul<F, Output = T> + Copy + iter::Sum + Default,
         F: Field,
     {
-        PolynomialOperations::eval(self.as_slice(), &x)
+        PolynomialOps::eval(self.as_slice(), &x)
     }
 }
 
 impl<F: Field> Polynomial<F> {
     pub fn root_quotient(&self, r: F) -> Self {
-        Self::new_from_vec(PolynomialOperations::root_quotient(self.as_slice(), &r))
+        Self::new_from_vec(PolynomialOps::root_quotient(self.as_slice(), &r))
     }
 
     pub fn x() -> Self {
@@ -275,14 +275,14 @@ impl<T: Add<Output = T> + Copy + Default> Add for Polynomial<T> {
     type Output = Self;
 
     fn add(self, other: Self) -> Self {
-        Self::new_from_vec(PolynomialOperations::add(self.as_slice(), other.as_slice()))
+        Self::new_from_vec(PolynomialOps::add(self.as_slice(), other.as_slice()))
     }
 }
 impl<T: Add<Output = T> + Copy + Default> Add for &Polynomial<T> {
     type Output = Polynomial<T>;
 
     fn add(self, other: Self) -> Polynomial<T> {
-        Polynomial::new_from_vec(PolynomialOperations::add(self.as_slice(), other.as_slice()))
+        Polynomial::new_from_vec(PolynomialOps::add(self.as_slice(), other.as_slice()))
     }
 }
 
@@ -290,7 +290,7 @@ impl<T: Neg<Output = T> + Copy> Neg for Polynomial<T> {
     type Output = Self;
 
     fn neg(self) -> Self {
-        Self::new_from_vec(PolynomialOperations::neg(self.as_slice()))
+        Self::new_from_vec(PolynomialOps::neg(self.as_slice()))
     }
 }
 
@@ -298,7 +298,7 @@ impl<T: Sub<Output = T> + Neg<Output = T> + Copy + Default> Sub for Polynomial<T
     type Output = Self;
 
     fn sub(self, other: Self) -> Self {
-        Self::new_from_vec(PolynomialOperations::sub(self.as_slice(), other.as_slice()))
+        Self::new_from_vec(PolynomialOps::sub(self.as_slice(), other.as_slice()))
     }
 }
 
@@ -306,7 +306,7 @@ impl<T: Sub<Output = T> + Neg<Output = T> + Copy + Default> Sub for &Polynomial<
     type Output = Polynomial<T>;
 
     fn sub(self, other: Self) -> Polynomial<T> {
-        Polynomial::new_from_vec(PolynomialOperations::sub(self.as_slice(), other.as_slice()))
+        Polynomial::new_from_vec(PolynomialOps::sub(self.as_slice(), other.as_slice()))
     }
 }
 
@@ -314,7 +314,7 @@ impl<T: Mul<Output = T> + Add<Output = T> + Copy + Default> Mul for Polynomial<T
     type Output = Self;
 
     fn mul(self, other: Self) -> Self {
-        Self::new_from_vec(PolynomialOperations::mul(self.as_slice(), other.as_slice()))
+        Self::new_from_vec(PolynomialOps::mul(self.as_slice(), other.as_slice()))
     }
 }
 
@@ -322,7 +322,7 @@ impl<T: Mul<Output = T> + Add<Output = T> + Copy + Default> Mul for &Polynomial<
     type Output = Polynomial<T>;
 
     fn mul(self, other: Self) -> Polynomial<T> {
-        Polynomial::new_from_vec(PolynomialOperations::mul(self.as_slice(), other.as_slice()))
+        Polynomial::new_from_vec(PolynomialOps::mul(self.as_slice(), other.as_slice()))
     }
 }
 
