@@ -10,13 +10,13 @@ use core::marker::PhantomData;
 use num::BigUint;
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
-use plonky2::field::types::PrimeField64;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::util::transpose;
 
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
+use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOperations};
 
 pub const N_LIMBS: usize = 16;
 pub const NUM_ARITH_COLUMNS: usize = 6 * N_LIMBS;
@@ -30,7 +30,7 @@ pub struct AddModStark<F, const D: usize> {
 
 type AdditionTuple = (BigUint, BigUint, BigUint);
 
-impl<F: PrimeField64, const D: usize> AddModStark<F, D> {
+impl<F: RichField, const D: usize> AddModStark<F, D> {
     /// Generate trace for addition stark
     fn generate_trace(&self, additions: Vec<AdditionTuple>) -> Vec<PolynomialValues<F>> {
         let max_rows = core::cmp::max(2 * additions.len(), RANGE_MAX); // note : range_max not needed yet
@@ -51,7 +51,7 @@ pub struct ArithmeticParser<F> {
     _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField64> ArithmeticParser<F> {
+impl<F: RichField> ArithmeticParser<F> {
     /// Converts two BigUint inputs into the correspinding rows of addition mod modulus
     ///
     /// a + b = c mod m
