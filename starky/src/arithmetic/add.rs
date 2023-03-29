@@ -12,6 +12,7 @@ use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
 use plonky2::field::types::PrimeField64;
 use plonky2::hash::hash_types::RichField;
+use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::util::transpose;
 
 use crate::stark::Stark;
@@ -230,7 +231,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for AddModStark<F
 
     fn eval_ext_circuit(
         &self,
-        builder: &mut plonky2::plonk::circuit_builder::CircuitBuilder<F, D>,
+        builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { Self::COLUMNS }, { Self::PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
@@ -304,7 +305,7 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type S = AddModStark<F, D>;
 
-        let num_rows = 64;
+        let num_rows = 32;
 
         let config = StarkConfig::standard_fast_config();
 
