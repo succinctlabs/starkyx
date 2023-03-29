@@ -175,8 +175,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MulModStark<F
     {
         // // we want to constrain a(x) * b(x) - c(x) - carry(x) * m(x) - (x - β) * s(x) == 0
         // // constrain a(x) * b(x) = a_mul_b(x) and carry(x) * m(x) = carry_mul_m(x);
-        let a_offset = 0 * N_LIMBS;
-        let b_offset = 1 * N_LIMBS;
+        let a_offset = 0;
+        let b_offset = N_LIMBS;
         let carry_offset = 2 * N_LIMBS;
         let m_offset = 3 * N_LIMBS;
         let a_mul_b_offset = 4 * N_LIMBS;
@@ -220,12 +220,12 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MulModStark<F
 
         // // a_mul_b(x) - c(x) - carry_mul_m(x)
         let c_offset = 6 * N_LIMBS;
-        for i in 0..(N_LIMBS * 2) {
+        for (i, consr) in consr_poly.iter().enumerate().take(N_LIMBS * 2) {
             yield_constr.constraint_transition(
                 vars.local_values[a_mul_b_offset + i]
                     - vars.local_values[c_offset + i]
                     - vars.local_values[carry_mul_m_offset + i]
-                    - consr_poly[i],
+                    - *consr,
             );
         }
     }
