@@ -1,9 +1,6 @@
 //! Implementation of modular addition as a STARK (prototype)
 //!
 //! The implementation based on a method used in Polygon starks
-//!
-//!
-//!
 
 use core::marker::PhantomData;
 
