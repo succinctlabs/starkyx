@@ -17,12 +17,15 @@ use core::iter;
 use core::ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign};
 
 use itertools::Itertools;
+use num::BigUint;
 use plonky2::field::extension::Extendable;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
+
+use crate::arithmetic::util::biguint_to_16_digits;
 
 /// A wrapper around a vector of field elements that implements polynomial operations.
 ///
@@ -47,6 +50,14 @@ pub struct PolynomialGadget;
 impl<T: Clone> Polynomial<T> {
     pub fn new_from_vec(coefficients: Vec<T>) -> Self {
         Self { coefficients }
+    }
+
+    pub fn from_biguint(num: &BigUint, num_bits: usize, num_limbs: usize) -> Self
+    where
+        T: Field,
+    {
+        assert_eq!(num_bits, 16, "Only 16 bit numbers supported");
+        Self::new_from_vec(biguint_to_16_digits(num, num_limbs))
     }
 
     pub fn new_from_slice(coefficients: &[T]) -> Self {
@@ -278,10 +289,19 @@ impl<T: Add<Output = T> + Copy + Default> Add for Polynomial<T> {
         Self::new_from_vec(PolynomialOps::add(self.as_slice(), other.as_slice()))
     }
 }
+
 impl<T: Add<Output = T> + Copy + Default> Add for &Polynomial<T> {
     type Output = Polynomial<T>;
 
     fn add(self, other: Self) -> Polynomial<T> {
+        Polynomial::new_from_vec(PolynomialOps::add(self.as_slice(), other.as_slice()))
+    }
+}
+
+impl<T: Add<Output = T> + Copy + Default> Add<&Polynomial<T>> for Polynomial<T> {
+    type Output = Polynomial<T>;
+
+    fn add(self, other: &Polynomial<T>) -> Polynomial<T> {
         Polynomial::new_from_vec(PolynomialOps::add(self.as_slice(), other.as_slice()))
     }
 }
@@ -299,6 +319,14 @@ impl<T: Sub<Output = T> + Neg<Output = T> + Copy + Default> Sub for Polynomial<T
 
     fn sub(self, other: Self) -> Self {
         Self::new_from_vec(PolynomialOps::sub(self.as_slice(), other.as_slice()))
+    }
+}
+
+impl<T: Sub<Output = T> + Neg<Output = T> + Copy + Default> Sub<&Polynomial<T>> for Polynomial<T> {
+    type Output = Polynomial<T>;
+
+    fn sub(self, other: &Polynomial<T>) -> Polynomial<T> {
+        Polynomial::new_from_vec(PolynomialOps::sub(self.as_slice(), other.as_slice()))
     }
 }
 
@@ -323,6 +351,22 @@ impl<T: Mul<Output = T> + Add<Output = T> + Copy + Default> Mul for &Polynomial<
 
     fn mul(self, other: Self) -> Polynomial<T> {
         Polynomial::new_from_vec(PolynomialOps::mul(self.as_slice(), other.as_slice()))
+    }
+}
+
+impl<T: Mul<Output = T> + Add<Output = T> + Copy + Default> Mul<T> for Polynomial<T> {
+    type Output = Self;
+
+    fn mul(self, other: T) -> Self {
+        Self::new_from_vec(PolynomialOps::scalar_mul(self.as_slice(), &other))
+    }
+}
+
+impl<T: Mul<Output = T> + Add<Output = T> + Copy + Default> Mul<T> for &Polynomial<T> {
+    type Output = Polynomial<T>;
+
+    fn mul(self, other: T) -> Polynomial<T> {
+        Polynomial::new_from_vec(PolynomialOps::scalar_mul(self.as_slice(), &other))
     }
 }
 
@@ -471,6 +515,14 @@ impl PolynomialGadget {
         b: &Target,
     ) -> Vec<ExtensionTarget<D>> {
         a.iter().map(|x| builder.scalar_mul_ext(*b, *x)).collect()
+    }
+
+    pub fn ext_scalar_mul_extension<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        a: &[ExtensionTarget<D>],
+        b: &ExtensionTarget<D>,
+    ) -> Vec<ExtensionTarget<D>> {
+        a.iter().map(|x| builder.mul_extension(*b, *x)).collect()
     }
 
     pub fn scalar_poly_mul_extension<F: RichField + Extendable<D>, const D: usize>(

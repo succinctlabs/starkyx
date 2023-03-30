@@ -2,4 +2,5 @@
 
 pub mod add;
 pub mod mul;
-pub(crate) mod polynomial;
+pub mod polynomial;
+pub(crate) mod util;
