@@ -362,7 +362,7 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type S = ArithmeticOpStark<F, D>;
 
-        let num_rows = 2u64.pow(16);
+        let num_rows = 2u64.pow(13);
         let config = StarkConfig::standard_fast_config();
 
         let p22519 = BigUint::from(2u32).pow(255) - BigUint::from(19u32);
