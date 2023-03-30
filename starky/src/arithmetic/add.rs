@@ -17,7 +17,6 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::util::transpose;
 
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
-use crate::arithmetic::util::biguint_to_16_digits;
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -154,12 +153,12 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         let witness_poly = vanishing_poly.root_quotient(limb);
 
         // Allocate the values to the trace
-        trace.alloc(mem_alloc.input_1, &p_a.as_slice());
-        trace.alloc(mem_alloc.input_2, &p_b.as_slice());
-        trace.alloc(mem_alloc.output, &p_res.as_slice());
-        trace.alloc(mem_alloc.modulus, &p_m.as_slice());
-        trace.alloc(mem_alloc.carry, &p_c.as_slice());
-        trace.alloc(mem_alloc.witness, &witness_poly.as_slice());
+        trace.alloc(mem_alloc.input_1, p_a.as_slice());
+        trace.alloc(mem_alloc.input_2, p_b.as_slice());
+        trace.alloc(mem_alloc.output, p_res.as_slice());
+        trace.alloc(mem_alloc.modulus, p_m.as_slice());
+        trace.alloc(mem_alloc.carry, p_c.as_slice());
+        trace.alloc(mem_alloc.witness, witness_poly.as_slice());
     }
 
     /// Make the stark constrains for the AddMod operation
@@ -226,7 +225,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
 
         // Multiply by (x-2^16) and make the constraint
         let root_monomial: &[P] = &[-limb, P::from(P::Scalar::ONE)];
-        let witness_times_root = PolynomialOps::mul(&w, root_monomial);
+        let witness_times_root = PolynomialOps::mul(w, root_monomial);
 
         debug_assert!(vanising_poly.len() == witness_times_root.len());
         for i in 0..vanising_poly.len() {
@@ -281,13 +280,13 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         // Multiply by (x-2^16) and make the constraint
         let neg_limb = builder.constant_extension(-F::Extension::from_canonical_u32(2u32.pow(16)));
         let root_monomial = &[neg_limb, builder.constant_extension(F::Extension::ONE)];
-        let witness_times_root = PolynomialGadget::mul_extension(builder, &w, root_monomial);
+        let witness_times_root = PolynomialGadget::mul_extension(builder, w, root_monomial);
 
         debug_assert!(vanising_poly.len() == witness_times_root.len());
         let constraint =
             PolynomialGadget::sub_extension(builder, &vanising_poly, &witness_times_root);
-        for i in 0..vanising_poly.len() {
-            yield_constr.constraint_transition(builder, constraint[i]);
+        for constr in constraint {
+            yield_constr.constraint_transition(builder, constr);
         }
     }
 }
@@ -318,14 +317,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for ArithmeticOpS
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
-        for (operation, mem_alloc) in self.program.iter() {
-            ArithmeticParser::op_packed_generic_constraints(
-                operation,
-                *mem_alloc,
-                vars,
-                yield_constr,
-            );
-        }
+        let mem_alloc = &self.program[0].1;
+        ArithmeticParser::add_packed_generic_constraints(*mem_alloc, vars, yield_constr);
     }
 
     fn eval_ext_circuit(
@@ -334,9 +327,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for ArithmeticOpS
         vars: StarkEvaluationTargets<D, { Self::COLUMNS }, { Self::PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        for (operation, mem_alloc) in self.program.iter() {
-            ArithmeticParser::op_ext_circuits(&operation, *mem_alloc, builder, vars, yield_constr);
-        }
+        let mem_alloc = &self.program[0].1;
+        ArithmeticParser::op_add_ext_circuit(*mem_alloc, builder, vars, yield_constr);
     }
 
     fn constraint_degree(&self) -> usize {
@@ -364,7 +356,7 @@ mod tests {
     use crate::verifier::verify_stark_proof;
 
     #[test]
-    fn test_arihtmetic_op_add() {
+    fn test_arithmetic_op_add() {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
@@ -445,18 +437,18 @@ mod tests {
             &config,
         );
 
-        //let recursive_data = recursive_builder.build::<C>();
+        let recursive_data = recursive_builder.build::<C>();
 
-        //let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
-        //let recursive_proof = plonky2::plonk::prover::prove(
-         //   &recursive_data.prover_only,
-        //    &recursive_data.common,
-        //    rec_pw,
-        //    &mut timing,
-        //)
-        //.unwrap();
+        let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
+        let recursive_proof = plonky2::plonk::prover::prove(
+            &recursive_data.prover_only,
+            &recursive_data.common,
+            rec_pw,
+            &mut timing,
+        )
+        .unwrap();
 
-        //timing.print();
-        //recursive_data.verify(recursive_proof).unwrap();
+        timing.print();
+        recursive_data.verify(recursive_proof).unwrap();
     }
 }

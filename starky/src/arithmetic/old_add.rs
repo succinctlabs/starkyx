@@ -327,7 +327,7 @@ mod tests {
         // Verify proof as a stark
         let proof =
             prove::<F, C, S, D>(stark, &config, trace, [], &mut TimingTree::default()).unwrap();
-        /*verify_stark_proof(stark, proof.clone(), &config).unwrap();
+        verify_stark_proof(stark, proof.clone(), &config).unwrap();
 
         // Verify recursive proof in a circuit
         let config_rec = CircuitConfig::standard_recursion_config();
@@ -341,7 +341,7 @@ mod tests {
 
         let mut rec_pw = PartialWitness::new();
         set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-        
+
         verify_stark_proof_circuit::<F, C, S, D>(
             &mut recursive_builder,
             stark,
@@ -361,6 +361,6 @@ mod tests {
         .unwrap();
 
         //timing.print();
-        recursive_data.verify(recursive_proof).unwrap(); */
+        recursive_data.verify(recursive_proof).unwrap();
     }
 }
