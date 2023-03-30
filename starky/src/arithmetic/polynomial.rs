@@ -517,6 +517,14 @@ impl PolynomialGadget {
         a.iter().map(|x| builder.scalar_mul_ext(*b, *x)).collect()
     }
 
+    pub fn ext_scalar_mul_extension<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        a: &[ExtensionTarget<D>],
+        b: &ExtensionTarget<D>,
+    ) -> Vec<ExtensionTarget<D>> {
+        a.iter().map(|x| builder.mul_extension(*b, *x)).collect()
+    }
+
     pub fn scalar_poly_mul_extension<F: RichField + Extendable<D>, const D: usize>(
         builder: &mut CircuitBuilder<F, D>,
         a: &[ExtensionTarget<D>],
