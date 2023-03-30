@@ -3,6 +3,7 @@
 //! The implementation based on a method used in Polygon starks
 
 use core::marker::PhantomData;
+use std::sync::mpsc;
 
 use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
@@ -12,13 +13,14 @@ use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::util::transpose;
+use plonky2_maybe_rayon::*;
 
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub const N_LIMBS: usize = 16;
-pub const NUM_ARITH_COLUMNS: usize = 6 * N_LIMBS;
+pub const NUM_ARITH_COLUMNS: usize = 6 * N_LIMBS - 1;
 const RANGE_MAX: usize = 1usize << 16; // Range check strict upper bound
 
 #[derive(Clone, Debug)]
@@ -158,6 +160,45 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         trace.alloc(layout.witness, witness_poly.as_slice());
     }
 
+    fn add_trace_par(a: BigUint, b: BigUint, modulus: BigUint) -> Vec<F> {
+        // Calculate all results as BigUint
+        let result = (&a + &b) % &modulus;
+        debug_assert!(&result < &modulus);
+        let carry = (&a + &b - &result) / &modulus;
+        debug_assert!(carry == BigUint::from(0u32) || carry == BigUint::from(1u32));
+
+        // Make polynomial limbs
+        let p_a = Polynomial::<F>::from_biguint(&a, 16, N_LIMBS);
+        let p_b = Polynomial::<F>::from_biguint(&b, 16, N_LIMBS);
+        let p_m = Polynomial::<F>::from_biguint(&modulus, 16, N_LIMBS);
+        let p_res = Polynomial::<F>::from_biguint(&result, 16, N_LIMBS);
+        let p_c = Polynomial::<F>::from_biguint(&carry, 16, N_LIMBS);
+        let carry_bit = p_c.as_slice()[0];
+
+        // Make the witness polynomial
+        let vanishing_poly = &p_a + &p_b - &p_res - &p_m * carry_bit;
+
+        let limb = F::from_canonical_u32(2u32.pow(16));
+        let witness_poly = vanishing_poly.root_quotient(limb);
+        // Make the row according to layout
+        // input_1_index = 0;
+        // input_2_index = N_LIMBS;
+        // modulus_index = 2 * N_LIMBS;
+        // output_index = 3 * N_LIMBS;
+        // carry_index = 4 * N_LIMBS;
+        // witness_index = 5 * N_LIMBS;
+        let mut row = Vec::with_capacity(NUM_ARITH_COLUMNS);
+        row.append(&mut p_a.into_vec());
+        row.append(&mut p_b.into_vec());
+        row.append(&mut p_m.into_vec());
+        row.append(&mut p_res.into_vec());
+        row.append(&mut p_c.into_vec());
+        row.append(&mut witness_poly.into_vec());
+
+        // Allocate the values to the trace
+        row
+    }
+
     fn add_packed_generic_constraints<
         FE,
         P,
@@ -252,14 +293,33 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticOpStark<F, D> {
     fn gen_trace(&self, program: &Vec<ArithmeticOp>) -> Vec<PolynomialValues<F>> {
         let num_rows = program.len();
-        let num_columns = NUM_ARITH_COLUMNS;
-        let mut trace = Trace::<F>::new(num_rows, num_columns);
+        let _num_columns = NUM_ARITH_COLUMNS;
+        //let mut trace = Trace::<F>::new(num_rows, num_columns);
+        let mut trace_rows = vec![Vec::with_capacity(NUM_ARITH_COLUMNS); num_rows];
 
-        for operation in program.iter() {
-            ArithmeticParser::op_trace(&mut trace, operation, self.layout);
-            trace.advance();
+        let (tx, rx) = mpsc::channel::<(usize, Vec<F>)>();
+
+        for (i, op) in program.iter().enumerate() {
+            let tx = tx.clone();
+            let ArithmeticOp::AddMod(a_r, b_r, m_r) = op else { panic!("Invalid op") };
+            let (a, b, m) = (a_r.clone(), b_r.clone(), m_r.clone());
+            rayon::spawn(move || {
+                let row = ArithmeticParser::<F, D>::add_trace_par(a, b, m);
+                tx.send((i, row)).unwrap();
+            });
         }
-        trace.trace_cols()
+        drop(tx);
+
+        while let Ok((i, mut row)) = rx.recv() {
+            trace_rows[i].append(&mut row);
+        }
+        //for operation in program.iter() {
+        //ArithmeticParser::op_trace(&mut trace, operation, self.layout);
+        //trace.advance();
+        //}
+        //trace.trace_cols()
+        let trace_cols = transpose(&trace_rows);
+        trace_cols.into_iter().map(PolynomialValues::new).collect()
     }
 }
 
@@ -318,7 +378,7 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type S = ArithmeticOpStark<F, D>;
 
-        let num_rows = 2u64.pow(13);
+        let num_rows = 2u64.pow(16);
         let config = StarkConfig::standard_fast_config();
 
         let p22519 = BigUint::from(2u32).pow(255) - BigUint::from(19u32);
