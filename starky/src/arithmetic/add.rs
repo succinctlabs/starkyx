@@ -163,7 +163,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     fn add_trace_par(a: BigUint, b: BigUint, modulus: BigUint) -> Vec<F> {
         // Calculate all results as BigUint
         let result = (&a + &b) % &modulus;
-        debug_assert!(&result < &modulus);
+        debug_assert!(result < modulus);
         let carry = (&a + &b - &result) / &modulus;
         debug_assert!(carry == BigUint::from(0u32) || carry == BigUint::from(1u32));
 
