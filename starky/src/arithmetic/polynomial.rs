@@ -651,8 +651,8 @@ impl PolynomialGadget {
         let len = a.len();
 
         let mut result = Vec::with_capacity(len);
-        for i in 0..len {
-            result.push(builder.sub_extension(a[i], *b));
+        for elem in a {
+            result.push(builder.sub_extension(*elem, *b));
         }
         result
     }

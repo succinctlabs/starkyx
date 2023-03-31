@@ -35,15 +35,14 @@ pub struct ArithmeticOpStark<F, const D: usize> {
 }
 
 #[inline]
-pub const fn col_perm_index(i : usize) -> usize {
+pub const fn col_perm_index(i: usize) -> usize {
     2 * i + LOOKUP_SHIFT
 }
 
 #[inline]
-pub const fn table_perm_index(i : usize) -> usize {
+pub const fn table_perm_index(i: usize) -> usize {
     2 * i + 1 + LOOKUP_SHIFT
 }
-
 
 /// An experimental parser to generate Stark constaint code from commands
 ///
@@ -403,12 +402,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for ArithmeticOpS
         //yield_constr.constraint_first_row(vars.local_values[NUM_ARITH_COLUMNS]-FE::ZERO);
         // permutations
         for i in 0..NUM_ARITH_COLUMNS {
-            eval_lookups(
-                vars,
-                yield_constr,
-                col_perm_index(i),
-                table_perm_index(i),
-            );
+            eval_lookups(vars, yield_constr, col_perm_index(i), table_perm_index(i));
         }
     }
 
@@ -436,10 +430,14 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for ArithmeticOpS
     }
 
     fn permutation_pairs(&self) -> Vec<PermutationPair> {
-        (0..NUM_ARITH_COLUMNS).flat_map(|i| [
-            PermutationPair::singletons(i, col_perm_index(i)), 
-            PermutationPair::singletons(NUM_ARITH_COLUMNS , table_perm_index(i))
-            ]).collect()
+        (0..NUM_ARITH_COLUMNS)
+            .flat_map(|i| {
+                [
+                    PermutationPair::singletons(i, col_perm_index(i)),
+                    PermutationPair::singletons(NUM_ARITH_COLUMNS, table_perm_index(i)),
+                ]
+            })
+            .collect()
     }
 }
 
@@ -522,7 +520,7 @@ mod tests {
         )
         .unwrap();
         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
-        
+
         // Verify recursive proof in a circuit
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
@@ -559,6 +557,6 @@ mod tests {
         .unwrap();
 
         timing.print();
-        recursive_data.verify(recursive_proof).unwrap(); 
+        recursive_data.verify(recursive_proof).unwrap();
     }
 }

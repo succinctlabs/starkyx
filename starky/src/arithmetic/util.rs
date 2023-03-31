@@ -11,11 +11,7 @@ pub fn bigint_into_u16_digits(x: &BigUint, num_digits: usize) -> Vec<u16> {
         "Number too large to fit in {} digits",
         num_digits
     );
-
-    for _ in x_limbs.len()..num_digits {
-        x_limbs.push(0);
-    }
-
+    x_limbs.resize(num_digits, 0);
     x_limbs
 }
 
