@@ -26,7 +26,7 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use crate::arithmetic::util::biguint_to_16_digits;
+use crate::arithmetic::util::{bigint_into_u16_digits, biguint_to_16_digits_field};
 
 /// A wrapper around a vector of field elements that implements polynomial operations.
 ///
@@ -140,17 +140,38 @@ impl<T: Clone> Polynomial<T> {
         Self { coefficients }
     }
 
-    pub fn from_biguint(num: &BigUint, num_bits: usize, num_limbs: usize) -> Self
+    pub fn from_biguint_field(num: &BigUint, num_bits: usize, num_limbs: usize) -> Self
     where
         T: Field,
     {
         assert_eq!(num_bits, 16, "Only 16 bit numbers supported");
-        Self::new_from_vec(biguint_to_16_digits(num, num_limbs))
+        Self::new_from_vec(biguint_to_16_digits_field(num, num_limbs))
+    }
+
+    pub fn from_biguint_num(num: &BigUint, num_bits: usize, num_limbs: usize) -> Self
+    where
+        T: From<u16>,
+    {
+        assert_eq!(num_bits, 16, "Only 16 bit numbers supported");
+        let num_limbs = bigint_into_u16_digits(num, num_limbs)
+            .iter()
+            .map(|x| (*x).into())
+            .collect();
+        Self::new_from_vec(num_limbs)
     }
 
     pub fn new_from_slice(coefficients: &[T]) -> Self {
         Self {
             coefficients: coefficients.to_vec(),
+        }
+    }
+
+    pub fn from_polynomial<S>(p: Polynomial<S>) -> Self
+    where
+        S: Into<T>,
+    {
+        Self {
+            coefficients: p.coefficients.into_iter().map(|x| x.into()).collect(),
         }
     }
 
@@ -330,9 +351,8 @@ impl PolynomialOps {
     ///
     /// panics if r = 0
     /// Does not check if r is a root of a(x)
-    pub fn root_quotient<T, E>(a: &[T], r: &T) -> Vec<T>
+    pub fn root_quotient<T>(a: &[T], r: &T) -> Vec<T>
     where
-        E: One<Output = T> + Zero<Output = T>,
         T: Copy
             + Neg<Output = T>
             + Debug
@@ -345,14 +365,12 @@ impl PolynomialOps {
             + Eq
             + iter::Sum,
     {
-        //assert_eq!(PolynomialOps::eval::<T, E, T>(a, r), E::zero());
-        let mut result = Vec::with_capacity(a.len() - 2);
-        let r_inverse = E::one() / *r;
+        let mut result = Vec::with_capacity(a.len() - 1);
 
-        result.push(-a[0] * r_inverse);
+        result.push(-a[0] / *r);
         for i in 1..a.len() - 1 {
             let element = result[i - 1] - a[i];
-            result.push(element * r_inverse);
+            result.push(element / *r);
         }
         result
     }
@@ -371,6 +389,23 @@ impl<T> Polynomial<T> {
     {
         PolynomialOps::eval::<T, S, S>(self.as_slice(), &x)
     }
+
+    pub fn root_quotient(&self, r: T) -> Self
+    where
+        T: Copy
+            + Neg<Output = T>
+            + Debug
+            + MulAssign
+            + Mul<Output = T>
+            + Add<Output = T>
+            + Sub<Output = T>
+            + Div<Output = T>
+            + PartialEq
+            + Eq
+            + iter::Sum,
+    {
+        Self::new_from_vec(PolynomialOps::root_quotient(self.as_slice(), &r))
+    }
 }
 
 impl<F: Field> Polynomial<F> {
@@ -378,11 +413,13 @@ impl<F: Field> Polynomial<F> {
         PolynomialOps::eval::<F, Eval<F>, F>(self.as_slice(), &x)
     }
 
-    pub fn root_quotient_field(&self, r: F) -> Self {
-        Self::new_from_vec(PolynomialOps::root_quotient::<F, Eval<F>>(
-            self.as_slice(),
-            &r,
-        ))
+    pub fn from_canonical_u64(p: Polynomial<u64>) -> Self {
+        Self::new_from_vec(
+            p.coefficients
+                .into_iter()
+                .map(|x| F::from_canonical_u64(x))
+                .collect(),
+        )
     }
 
     pub fn x() -> Self {
@@ -601,6 +638,21 @@ impl PolynomialGadget {
         let mut result = Vec::with_capacity(len);
         for i in 0..len {
             result.push(builder.sub_extension(a[i], b[i]));
+        }
+        result
+    }
+
+    /// Polynomial subtraction
+    pub fn sub_constant_extension<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        a: &[ExtensionTarget<D>],
+        b: &ExtensionTarget<D>,
+    ) -> Vec<ExtensionTarget<D>> {
+        let len = a.len();
+
+        let mut result = Vec::with_capacity(len);
+        for i in 0..len {
+            result.push(builder.sub_extension(a[i], *b));
         }
         result
     }
@@ -845,7 +897,7 @@ mod tests {
             let val = Polynomial::constant(a.eval_field(x));
 
             let p = a - val;
-            let q = p.root_quotient_field(x);
+            let q = p.root_quotient(x);
 
             let y = GoldilocksField::rand();
             assert_eq!((y - x) * q.eval_field(y), p.eval_field(y));
