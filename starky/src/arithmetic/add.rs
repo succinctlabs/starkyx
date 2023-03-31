@@ -149,7 +149,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         let vanishing_poly = &p_a + &p_b - &p_res - &p_m * carry_bit;
 
         let limb = F::from_canonical_u32(2u32.pow(16));
-        let witness_poly = vanishing_poly.root_quotient(limb);
+        let witness_poly = vanishing_poly.root_quotient_field(limb);
 
         // Allocate the values to the trace
         trace.alloc(layout.input_1, p_a.as_slice());
@@ -179,7 +179,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         let vanishing_poly = &p_a + &p_b - &p_res - &p_m * carry_bit;
 
         let limb = F::from_canonical_u32(2u32.pow(16));
-        let witness_poly = vanishing_poly.root_quotient(limb);
+        let witness_poly = vanishing_poly.root_quotient_field(limb);
         // Make the row according to layout
         // input_1_index = 0;
         // input_2_index = N_LIMBS;

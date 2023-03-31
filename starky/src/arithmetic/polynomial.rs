@@ -13,8 +13,9 @@
 //!                    
 //!
 
+use core::fmt::Debug;
 use core::iter;
-use core::ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign};
+use core::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use itertools::Itertools;
 use num::BigUint;
@@ -34,6 +35,93 @@ use crate::arithmetic::util::biguint_to_16_digits;
 #[derive(Debug, Clone)]
 pub struct Polynomial<F> {
     coefficients: Vec<F>,
+}
+
+//Traits for evaluation and root extraction
+
+struct Eval<T>(T);
+
+impl<T> From<T> for Eval<T> {
+    fn from(f: T) -> Self {
+        Self(f)
+    }
+}
+
+pub struct PowersIter<T> {
+    base: T,
+    current: T,
+}
+
+impl<T: MulAssign + Copy> Iterator for PowersIter<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<T> {
+        let result = self.current;
+        self.current *= self.base;
+        Some(result)
+    }
+}
+
+pub trait One {
+    type Output;
+    fn one() -> Self::Output;
+}
+
+pub trait Zero {
+    type Output;
+    fn zero() -> Self::Output;
+}
+
+impl<F: Field> One for Eval<F> {
+    type Output = F;
+
+    fn one() -> Self::Output {
+        F::ONE
+    }
+}
+
+impl<F: Field> Zero for Eval<F> {
+    type Output = F;
+
+    fn zero() -> Self::Output {
+        F::ZERO
+    }
+}
+
+impl One for u64 {
+    type Output = u64;
+
+    fn one() -> Self::Output {
+        1
+    }
+}
+
+impl One for i64 {
+    type Output = i64;
+    fn one() -> Self::Output {
+        1
+    }
+}
+
+impl Zero for u64 {
+    type Output = u64;
+    fn zero() -> Self::Output {
+        0
+    }
+}
+
+impl Zero for i64 {
+    type Output = i64;
+    fn zero() -> Self::Output {
+        0
+    }
+}
+
+pub fn get_powers<T>(x: T, one: T) -> PowersIter<T> {
+    PowersIter {
+        base: x,
+        current: one,
+    }
 }
 
 /// General purpose polynomial operations on slices
@@ -226,22 +314,40 @@ impl PolynomialOps {
     }
 
     /// Evaluate the polynomial at a point
-    pub fn eval<T, F>(a: &[T], x: &F) -> T
+    pub fn eval<T, E, S>(a: &[T], x: &S) -> S
     where
-        T: Add<Output = T> + Mul<F, Output = T> + Copy + iter::Sum,
-        F: Field,
+        T: Copy,
+        E: One<Output = S>,
+        S: Add<Output = S> + MulAssign + Mul<T, Output = S> + Copy + iter::Sum,
     {
-        let powers = x.powers();
+        let one = E::one();
+        let powers = get_powers(*x, one);
 
-        a.iter().zip(powers).map(|(a, x)| *a * x).sum()
+        a.iter().zip(powers).map(|(a, x)| x.mul(*a)).sum()
     }
 
-    /// Extract the quotient s(x) of a(x) such that
-    /// (x-r)s(x) when r is a root of a(x)
-    pub fn root_quotient<F: Field>(a: &[F], r: &F) -> Vec<F> {
-        assert_eq!(PolynomialOps::eval(a, r), F::ZERO);
+    /// Extract the quotient s(x) of a(x) such that (x-r)s(x) when r is a root of a(x)
+    ///
+    /// panics if r = 0
+    /// Does not check if r is a root of a(x)
+    pub fn root_quotient<T, E>(a: &[T], r: &T) -> Vec<T>
+    where
+        E: One<Output = T> + Zero<Output = T>,
+        T: Copy
+            + Neg<Output = T>
+            + Debug
+            + MulAssign
+            + Mul<Output = T>
+            + Add<Output = T>
+            + Sub<Output = T>
+            + Div<Output = T>
+            + PartialEq
+            + Eq
+            + iter::Sum,
+    {
+        //assert_eq!(PolynomialOps::eval::<T, E, T>(a, r), E::zero());
         let mut result = Vec::with_capacity(a.len() - 2);
-        let r_inverse = if *r == F::ZERO { F::ZERO } else { r.inverse() };
+        let r_inverse = E::one() / *r;
 
         result.push(-a[0] * r_inverse);
         for i in 1..a.len() - 1 {
@@ -257,18 +363,26 @@ impl PolynomialOps {
 //
 
 impl<T> Polynomial<T> {
-    pub fn eval<F>(&self, x: F) -> T
+    pub fn eval<S>(&self, x: S) -> S
     where
-        T: Add<Output = T> + Mul<F, Output = T> + Copy + iter::Sum + Default,
-        F: Field,
+        T: Copy,
+        S: One<Output = S>,
+        S: Add<Output = S> + MulAssign + Mul<T, Output = S> + Copy + iter::Sum,
     {
-        PolynomialOps::eval(self.as_slice(), &x)
+        PolynomialOps::eval::<T, S, S>(self.as_slice(), &x)
     }
 }
 
 impl<F: Field> Polynomial<F> {
-    pub fn root_quotient(&self, r: F) -> Self {
-        Self::new_from_vec(PolynomialOps::root_quotient(self.as_slice(), &r))
+    pub fn eval_field(&self, x: F) -> F {
+        PolynomialOps::eval::<F, Eval<F>, F>(self.as_slice(), &x)
+    }
+
+    pub fn root_quotient_field(&self, r: F) -> Self {
+        Self::new_from_vec(PolynomialOps::root_quotient::<F, Eval<F>>(
+            self.as_slice(),
+            &r,
+        ))
     }
 
     pub fn x() -> Self {
@@ -561,11 +675,19 @@ mod tests {
 
         let poly_zero = Polynomial::<GoldilocksField>::default();
         let x = GoldilocksField::rand();
-        assert_eq!(poly_zero.eval(x), GoldilocksField::ZERO);
+        assert_eq!(poly_zero.eval_field(x), GoldilocksField::ZERO);
     }
 
     fn get_random_poly<F: Sample + Default + Clone>(degree: usize) -> Polynomial<F> {
         Polynomial::new_from_vec((0..=degree).map(|_| F::rand()).collect::<Vec<_>>())
+    }
+
+    fn get_random_i64_poly(degree: usize) -> Polynomial<i64> {
+        Polynomial::new_from_vec(
+            (0..=degree)
+                .map(|_| rand::random::<i16>().into())
+                .collect::<Vec<_>>(),
+        )
     }
 
     #[test]
@@ -584,7 +706,19 @@ mod tests {
             .map(|(a, x)| *a * x)
             .sum::<GoldilocksField>();
 
-        assert_eq!(eval, a.eval(x));
+        assert_eq!(eval, a.eval_field(x));
+
+        let p = get_random_i64_poly(3);
+        let r: i64 = rand::random::<i16>().into();
+
+        let p_coeff = p.coefficients();
+        let powers = (0..4).map(|i| r.pow(i as u32));
+
+        assert_eq!(p_coeff.len(), 4);
+
+        let eval_p = p_coeff.iter().zip(powers).map(|(a, x)| *a * x).sum::<i64>();
+
+        assert_eq!(eval_p, p.eval(r));
     }
 
     #[test]
@@ -602,8 +736,24 @@ mod tests {
             let poly_sum = &a + &b;
 
             let x_eval = GoldilocksField::rand();
-            assert_eq!(a.eval(x_eval) + b.eval(x_eval), poly_sum.eval(x_eval));
+            assert_eq!(
+                a.eval_field(x_eval) + b.eval_field(x_eval),
+                poly_sum.eval_field(x_eval)
+            );
         }
+
+        let p = get_random_i64_poly(10);
+        let q = get_random_i64_poly(10);
+
+        let r = &p + &q;
+        let expected_coeff = p
+            .as_slice()
+            .iter()
+            .zip(q.as_slice().iter())
+            .map(|(a, b)| a + b)
+            .collect::<Vec<_>>();
+
+        assert_eq!(r.as_slice(), expected_coeff.as_slice());
     }
 
     #[test]
@@ -617,8 +767,15 @@ mod tests {
             let neg_plus_a = &neg_a + &a;
 
             let x = GoldilocksField::rand();
-            assert_eq!(neg_plus_a.eval(x), GoldilocksField::ZERO);
-            assert_eq!(neg_a.eval(x), -a.eval(x));
+            assert_eq!(neg_plus_a.eval_field(x), GoldilocksField::ZERO);
+            assert_eq!(neg_a.eval_field(x), -a.eval_field(x));
+
+            let p = get_random_i64_poly(10);
+
+            let expected_coeff = p.as_slice().iter().map(|a| -a).collect::<Vec<_>>();
+            let r = -p;
+
+            assert_eq!(r.as_slice(), expected_coeff.as_slice());
         }
     }
 
@@ -637,7 +794,20 @@ mod tests {
             let poly_diff = &a - &b;
 
             let x = GoldilocksField::rand();
-            assert_eq!(a.eval(x) - b.eval(x), poly_diff.eval(x));
+            assert_eq!(a.eval_field(x) - b.eval_field(x), poly_diff.eval_field(x));
+
+            let p = get_random_i64_poly(10);
+            let q = get_random_i64_poly(10);
+
+            let r = &p - &q;
+            let expected_coeff = p
+                .as_slice()
+                .iter()
+                .zip(q.as_slice().iter())
+                .map(|(a, b)| a - b)
+                .collect::<Vec<_>>();
+
+            assert_eq!(r.as_slice(), expected_coeff.as_slice());
         }
     }
 
@@ -656,10 +826,10 @@ mod tests {
 
             let poly_mul = &a * &b;
             let x = GoldilocksField::rand();
-            assert_eq!(a.eval(x) * b.eval(x), poly_mul.eval(x));
+            assert_eq!(a.eval_field(x) * b.eval_field(x), poly_mul.eval_field(x));
 
             let poly_mul_zero = &a * &zero;
-            assert_eq!(poly_mul_zero.eval(x), GoldilocksField::ZERO);
+            assert_eq!(poly_mul_zero.eval_field(x), GoldilocksField::ZERO);
         }
     }
 
@@ -672,13 +842,13 @@ mod tests {
             let a = get_random_poly::<GoldilocksField>(n_degree);
 
             let x = GoldilocksField::rand();
-            let val = Polynomial::constant(a.eval(x));
+            let val = Polynomial::constant(a.eval_field(x));
 
             let p = a - val;
-            let q = p.root_quotient(x);
+            let q = p.root_quotient_field(x);
 
             let y = GoldilocksField::rand();
-            assert_eq!((y - x) * q.eval(y), p.eval(y));
+            assert_eq!((y - x) * q.eval_field(y), p.eval_field(y));
         }
     }
 
@@ -693,8 +863,8 @@ mod tests {
             let _s = get_random_poly::<GoldilocksField>(14);
 
             let x = F2::rand();
-            assert_eq!((&a + &b).eval(x), a.eval(x) + b.eval(x));
-            assert_eq!((&a * &b).eval(x), a.eval(x) * b.eval(x));
+            assert_eq!((&a + &b).eval_field(x), a.eval_field(x) + b.eval_field(x));
+            assert_eq!((&a * &b).eval_field(x), a.eval_field(x) * b.eval_field(x));
         }
     }
 
@@ -751,9 +921,15 @@ mod tests {
         let expected_zeros = Polynomial::new_from_vec(vec![F::ZERO; 2 * d + 1]);
 
         let x = F::rand();
-        assert_eq!(expected_sum.eval(x), a.eval(x) + b.eval(x));
-        assert_eq!(expect_diff.eval(x), a.eval(x) - b.eval(x));
-        assert_eq!(expected_mul.eval(x), a.eval(x) * b.eval(x));
+        assert_eq!(
+            expected_sum.eval_field(x),
+            a.eval_field(x) + b.eval_field(x)
+        );
+        assert_eq!(expect_diff.eval_field(x), a.eval_field(x) - b.eval_field(x));
+        assert_eq!(
+            expected_mul.eval_field(x),
+            a.eval_field(x) * b.eval_field(x)
+        );
 
         let input_1 = builder.add_virtual_targets(d + 1);
         let input_2 = builder.add_virtual_targets(d + 1);
@@ -806,9 +982,15 @@ mod tests {
         let expected_zeros = Polynomial::new_from_vec(vec![FE::ZERO; 2 * d + 1]);
 
         let x = FE::rand();
-        assert_eq!(expected_sum.eval(x), a.eval(x) + b.eval(x));
-        assert_eq!(expect_diff.eval(x), a.eval(x) - b.eval(x));
-        assert_eq!(expected_mul.eval(x), a.eval(x) * b.eval(x));
+        assert_eq!(
+            expected_sum.eval_field(x),
+            a.eval_field(x) + b.eval_field(x)
+        );
+        assert_eq!(expect_diff.eval_field(x), a.eval_field(x) - b.eval_field(x));
+        assert_eq!(
+            expected_mul.eval_field(x),
+            a.eval_field(x) * b.eval_field(x)
+        );
 
         let input_1 = builder.add_virtual_extension_targets(d + 1);
         let input_2 = builder.add_virtual_extension_targets(d + 1);
