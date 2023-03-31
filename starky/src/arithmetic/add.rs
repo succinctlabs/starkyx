@@ -313,11 +313,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticOpStark<F, D> {
         while let Ok((i, mut row)) = rx.recv() {
             trace_rows[i].append(&mut row);
         }
-        //for operation in program.iter() {
-        //ArithmeticParser::op_trace(&mut trace, operation, self.layout);
-        //trace.advance();
-        //}
-        //trace.trace_cols()
+
         let trace_cols = transpose(&trace_rows);
         trace_cols.into_iter().map(PolynomialValues::new).collect()
     }
