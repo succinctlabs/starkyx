@@ -16,12 +16,16 @@ use plonky2::util::transpose;
 use plonky2_maybe_rayon::*;
 
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
+use crate::lookup::{eval_lookups, eval_lookups_circuit, permuted_cols};
+use crate::permutation::PermutationPair;
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub const N_LIMBS: usize = 16;
 pub const NUM_ARITH_COLUMNS: usize = 6 * N_LIMBS - 1 + N_LIMBS - 1;
-const RANGE_MAX: usize = 1usize << 16; // Range check strict upper bound
+pub const NUM_COLUMNS: usize = 1 + NUM_ARITH_COLUMNS + 2 * NUM_ARITH_COLUMNS;
+pub const LOOKUP_SHIFT: usize = NUM_ARITH_COLUMNS + 1;
+pub const RANGE_MAX: usize = 1usize << 16; // Range check strict upper bound
 const WITNESS_OFFSET: usize = 1usize << 20; // Witness offset
 
 #[derive(Clone, Debug)]
@@ -29,6 +33,17 @@ pub struct ArithmeticOpStark<F, const D: usize> {
     layout: AddCircuitLayout,
     _marker: PhantomData<F>,
 }
+
+#[inline]
+pub const fn col_perm_index(i : usize) -> usize {
+    2 * i + LOOKUP_SHIFT
+}
+
+#[inline]
+pub const fn table_perm_index(i : usize) -> usize {
+    2 * i + 1 + LOOKUP_SHIFT
+}
+
 
 /// An experimental parser to generate Stark constaint code from commands
 ///
@@ -333,8 +348,8 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
 
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticOpStark<F, D> {
     fn gen_trace(&self, program: &Vec<ArithmeticOp>) -> Vec<PolynomialValues<F>> {
-        let num_rows = program.len();
-        let _num_columns = NUM_ARITH_COLUMNS;
+        let num_operations = program.len();
+        let num_rows = num_operations;
         //let mut trace = Trace::<F>::new(num_rows, num_columns);
         let mut trace_rows = vec![Vec::with_capacity(NUM_ARITH_COLUMNS); num_rows];
 
@@ -352,16 +367,27 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticOpStark<F, D> {
         drop(tx);
 
         while let Ok((i, mut row)) = rx.recv() {
-            trace_rows[i].append(&mut row);
+            row.push(F::from_canonical_usize(i)); // Add index for range check
+            trace_rows[i].append(&mut row); // Append row to trace
         }
 
-        let trace_cols = transpose(&trace_rows);
+        let mut trace_cols = transpose(&trace_rows);
+
+        // add .into_par_iter() to make it parallel after testing
+        let lookup_witness = (0..NUM_ARITH_COLUMNS)
+            .into_par_iter()
+            .map(|i| permuted_cols(&trace_cols[i], &trace_cols[NUM_ARITH_COLUMNS]))
+            .flat_map(|(col_perm, table_perm)| [col_perm, table_perm])
+            .collect::<Vec<_>>();
+
+        trace_cols.extend(lookup_witness.into_iter());
+
         trace_cols.into_iter().map(PolynomialValues::new).collect()
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for ArithmeticOpStark<F, D> {
-    const COLUMNS: usize = NUM_ARITH_COLUMNS;
+    const COLUMNS: usize = NUM_COLUMNS;
     const PUBLIC_INPUTS: usize = 0;
 
     fn eval_packed_generic<FE, P, const D2: usize>(
@@ -373,6 +399,17 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for ArithmeticOpS
         P: PackedField<Scalar = FE>,
     {
         ArithmeticParser::add_packed_generic_constraints(self.layout, vars, yield_constr);
+        // lookp table values
+        //yield_constr.constraint_first_row(vars.local_values[NUM_ARITH_COLUMNS]-FE::ZERO);
+        // permutations
+        for i in 0..NUM_ARITH_COLUMNS {
+            eval_lookups(
+                vars,
+                yield_constr,
+                col_perm_index(i),
+                table_perm_index(i),
+            );
+        }
     }
 
     fn eval_ext_circuit(
@@ -382,10 +419,27 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for ArithmeticOpS
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
         ArithmeticParser::op_add_ext_circuit(self.layout, builder, vars, yield_constr);
+        // lookup
+        for i in 0..NUM_ARITH_COLUMNS {
+            eval_lookups_circuit(
+                builder,
+                vars,
+                yield_constr,
+                col_perm_index(i),
+                table_perm_index(i),
+            );
+        }
     }
 
     fn constraint_degree(&self) -> usize {
         2
+    }
+
+    fn permutation_pairs(&self) -> Vec<PermutationPair> {
+        (0..NUM_ARITH_COLUMNS).flat_map(|i| [
+            PermutationPair::singletons(i, col_perm_index(i)), 
+            PermutationPair::singletons(NUM_ARITH_COLUMNS , table_perm_index(i))
+            ]).collect()
     }
 }
 
@@ -468,7 +522,7 @@ mod tests {
         )
         .unwrap();
         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
-
+        
         // Verify recursive proof in a circuit
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
@@ -505,6 +559,6 @@ mod tests {
         .unwrap();
 
         timing.print();
-        recursive_data.verify(recursive_proof).unwrap();
+        recursive_data.verify(recursive_proof).unwrap(); 
     }
 }
