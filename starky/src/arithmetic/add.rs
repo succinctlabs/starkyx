@@ -237,7 +237,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         let (r_l, r_h) = layout.output.get_range();
         let (m_l, m_h) = layout.modulus.get_range();
         let (c_l, c_h) = layout.carry.get_range();
-        let (w_low_l, w_high_l) = layout.witness_low.get_range();
+        let (w_low_l, w_low_h) = layout.witness_low.get_range();
         let (w_high_l, w_high_h) = layout.witness_high.get_range();
 
         // Make polynomial limbs
@@ -246,7 +246,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         let m = &vars.local_values[m_l..m_h];
         let r = &vars.local_values[r_l..r_h];
         let c = &vars.local_values[c_l..c_h];
-        let w_low = &vars.local_values[w_low_l..w_high_l];
+        let w_low = &vars.local_values[w_low_l..w_low_h];
         let w_high = &vars.local_values[w_high_l..w_high_h];
 
         let limb: P = P::Scalar::from_canonical_u32(2u32.pow(16)).into();
@@ -297,7 +297,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         let m = &vars.local_values[m_l..m_h];
         let r = &vars.local_values[r_l..r_h];
         let c = &vars.local_values[c_l..c_h];
-        let w_low = &vars.local_values[w_low_l..w_high_l];
+        let w_low = &vars.local_values[w_low_l..w_low_h];
         let w_high = &vars.local_values[w_high_l..w_high_h];
 
         // Construct the vanishing polynomial
