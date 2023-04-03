@@ -67,7 +67,7 @@ impl MulModLayout {
         input_2: Register,
         modulus: Register,
         output: Register,
-        witness : Register,
+        witness: Register,
     ) -> Self {
         debug_assert_eq!(input_1.len(), N_LIMBS);
         debug_assert_eq!(input_2.len(), N_LIMBS);
@@ -78,7 +78,10 @@ impl MulModLayout {
         let (witness_start, _) = witness.get_range();
         let carry = Register::Local(witness_start, NUM_CARRY_COLUMNS);
         let witness_low = Register::Local(witness_start + NUM_CARRY_COLUMNS, NUM_WITNESS_COLUMNS);
-        let witness_high = Register::Local(witness_start + NUM_CARRY_COLUMNS + NUM_WITNESS_COLUMNS, NUM_WITNESS_COLUMNS);
+        let witness_high = Register::Local(
+            witness_start + NUM_CARRY_COLUMNS + NUM_WITNESS_COLUMNS,
+            NUM_WITNESS_COLUMNS,
+        );
 
         Self {
             input_1,
@@ -486,7 +489,7 @@ mod tests {
             Register::Local(input_2_index, N_LIMBS),
             Register::Local(modulus_index, N_LIMBS),
             Register::Local(output_index, NUM_OUTPUT_COLUMNS),
-            Register::Local(4 * N_LIMBS, NUM_CARRY_COLUMNS + NUM_WITNESS_COLUMNS)
+            Register::Local(4 * N_LIMBS, NUM_CARRY_COLUMNS + NUM_WITNESS_COLUMNS),
         );
 
         for _ in 0..num_rows {

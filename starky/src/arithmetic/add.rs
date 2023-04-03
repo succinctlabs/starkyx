@@ -30,7 +30,8 @@ pub const NUM_MODULUS_COLUMNS: usize = N_LIMBS;
 pub const NUM_CARRY_COLUMNS: usize = N_LIMBS;
 pub const NUM_WTNESS_LOW_COLUMNS: usize = N_LIMBS - 1;
 pub const NUM_WTNESS_HIGH_COLUMNS: usize = N_LIMBS - 1;
-pub const NUM_ADD_WITNESS_COLUMNS : usize = NUM_CARRY_COLUMNS + NUM_WTNESS_LOW_COLUMNS + NUM_WTNESS_HIGH_COLUMNS;
+pub const NUM_ADD_WITNESS_COLUMNS: usize =
+    NUM_CARRY_COLUMNS + NUM_WTNESS_LOW_COLUMNS + NUM_WTNESS_HIGH_COLUMNS;
 
 pub const NUM_ARITH_COLUMNS: usize = 6 * N_LIMBS - 1 + N_LIMBS - 1;
 pub const NUM_COLUMNS: usize = 1 + NUM_ARITH_COLUMNS + 2 * NUM_ARITH_COLUMNS;
@@ -66,19 +67,39 @@ pub struct AddModLayout {
 }
 
 impl AddModLayout {
-    fn new(input_1 : Register, input_2 : Register, modulus : Register, output: Register, witness : Register) -> Self {
+    fn new(
+        input_1: Register,
+        input_2: Register,
+        modulus: Register,
+        output: Register,
+        witness: Register,
+    ) -> Self {
         debug_assert_eq!(input_1.len(), N_LIMBS);
         debug_assert_eq!(input_2.len(), N_LIMBS);
         debug_assert_eq!(modulus.len(), N_LIMBS);
         debug_assert_eq!(output.len(), N_LIMBS);
-        debug_assert_eq!(witness.len(), NUM_CARRY_COLUMNS + NUM_WTNESS_LOW_COLUMNS + NUM_WTNESS_HIGH_COLUMNS);
+        debug_assert_eq!(
+            witness.len(),
+            NUM_CARRY_COLUMNS + NUM_WTNESS_LOW_COLUMNS + NUM_WTNESS_HIGH_COLUMNS
+        );
 
         let (w_start, _) = witness.get_range();
         let carry = Register::Local(w_start, NUM_CARRY_COLUMNS);
         let witness_low = Register::Local(w_start + NUM_CARRY_COLUMNS, NUM_WTNESS_LOW_COLUMNS);
-        let witness_high = Register::Local(w_start + NUM_CARRY_COLUMNS + NUM_WTNESS_LOW_COLUMNS, NUM_WTNESS_HIGH_COLUMNS);
+        let witness_high = Register::Local(
+            w_start + NUM_CARRY_COLUMNS + NUM_WTNESS_LOW_COLUMNS,
+            NUM_WTNESS_HIGH_COLUMNS,
+        );
 
-        Self{input_1, input_2, modulus, output, carry, witness_low, witness_high}
+        Self {
+            input_1,
+            input_2,
+            modulus,
+            output,
+            carry,
+            witness_low,
+            witness_high,
+        }
     }
 }
 
@@ -458,7 +479,7 @@ mod tests {
         let input_2_index = N_LIMBS;
         let modulus_index = 2 * N_LIMBS;
         let output_index = 3 * N_LIMBS;
-        
+
         let layout = AddModLayout::new(
             Register::Local(input_1_index, N_LIMBS),
             Register::Local(input_2_index, N_LIMBS),
