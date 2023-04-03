@@ -356,10 +356,11 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MulStark<F, D
     {
         ArithmeticParser::mul_packed_generic_constraints(self.layout, vars, yield_constr);
         // lookp table values
+        // lookp table values
         yield_constr.constraint_first_row(vars.local_values[NUM_ARITH_COLUMNS]);
-        yield_constr.constraint_transition(
-            vars.local_values[NUM_ARITH_COLUMNS] + FE::ONE - vars.next_values[NUM_ARITH_COLUMNS],
-        );
+        let table_values_relation =
+            vars.local_values[NUM_ARITH_COLUMNS] + FE::ONE - vars.next_values[NUM_ARITH_COLUMNS];
+        yield_constr.constraint_transition(table_values_relation);
         // permutations
         for i in 0..NUM_ARITH_COLUMNS {
             eval_lookups(vars, yield_constr, col_perm_index(i), table_perm_index(i));
@@ -373,14 +374,15 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MulStark<F, D
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
         ArithmeticParser::mul_ext_circuit(self.layout, builder, vars, yield_constr);
-        // lookup
+        // lookup table values
         yield_constr.constraint_first_row(builder, vars.local_values[NUM_ARITH_COLUMNS]);
         let one = builder.constant_extension(F::Extension::ONE);
         let table_plus_one = builder.add_extension(vars.local_values[NUM_ARITH_COLUMNS], one);
-        let table_constr =
+        let table_relation =
             builder.sub_extension(table_plus_one, vars.next_values[NUM_ARITH_COLUMNS]);
-        yield_constr.constraint_transition(builder, table_constr);
+        yield_constr.constraint_transition(builder, table_relation);
 
+        // lookup argument
         for i in 0..NUM_ARITH_COLUMNS {
             eval_lookups_circuit(
                 builder,
