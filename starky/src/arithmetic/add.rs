@@ -489,19 +489,6 @@ mod tests {
             Register::Local(output_index, N_LIMBS),
             Register::Local(4 * N_LIMBS, NUM_ADD_WITNESS_COLUMNS),
         );
-        let carry_index = 4 * N_LIMBS;
-        let witness_low_index = 5 * N_LIMBS;
-        let witness_high_index = witness_low_index + N_LIMBS - 1;
-
-        let layout = AddCircuitLayout {
-            input_1: Register::Local(input_1_index, N_LIMBS),
-            input_2: Register::Local(input_2_index, N_LIMBS),
-            modulus: Register::Local(modulus_index, N_LIMBS),
-            output: Register::Local(output_index, N_LIMBS),
-            carry: Register::Local(carry_index, N_LIMBS),
-            witness_low: Register::Local(witness_low_index, N_LIMBS - 1),
-            witness_high: Register::Local(witness_high_index, N_LIMBS - 1),
-        };
 
         for _ in 0..num_rows {
             let a: BigUint = rng.gen_biguint(255) % &p22519;
