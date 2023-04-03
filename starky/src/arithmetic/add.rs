@@ -346,42 +346,49 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticOpStark<F, D> {
-    fn gen_trace(&self, program: &Vec<ArithmeticOp>) -> Vec<PolynomialValues<F>> {
+    fn gen_trace(&self, program: Vec<ArithmeticOp>) -> Vec<PolynomialValues<F>> {
         let num_operations = program.len();
         let num_rows = num_operations;
-        //let mut trace = Trace::<F>::new(num_rows, num_columns);
         let mut trace_rows = vec![Vec::with_capacity(NUM_ARITH_COLUMNS); num_rows];
+        //let mut trace_cols = vec![vec![F::ZERO;num_rows]; NUM_COLUMNS];
 
         let (tx, rx) = mpsc::channel::<(usize, Vec<F>)>();
 
-        for (i, op) in program.iter().enumerate() {
+        for (i, op) in program.into_iter().enumerate() {
             let tx = tx.clone();
-            let ArithmeticOp::AddMod(a_r, b_r, m_r) = op else { panic!("Invalid op") };
-            let (a, b, m) = (a_r.clone(), b_r.clone(), m_r.clone());
+            let ArithmeticOp::AddMod(a, b, m) = op else { panic!("Invalid op") };
             rayon::spawn(move || {
-                let row = ArithmeticParser::<F, D>::add_trace(a, b, m);
+                let mut row = ArithmeticParser::<F, D>::add_trace(a, b, m);
+                row.push(F::from_canonical_usize(i));
                 tx.send((i, row)).unwrap();
             });
         }
         drop(tx);
 
+        // Collecte the trace rows which are processed in parallel
         while let Ok((i, mut row)) = rx.recv() {
-            row.push(F::from_canonical_usize(i)); // Add index for range check
             trace_rows[i].append(&mut row); // Append row to trace
         }
 
+        // Transpose the trace to get the columns and resize to the correct size
         let mut trace_cols = transpose(&trace_rows);
+        trace_cols.resize(NUM_COLUMNS, Vec::with_capacity(num_rows));
 
-        // add .into_par_iter() to make it parallel after testing
-        let lookup_witness = (0..NUM_ARITH_COLUMNS)
+        // Calculate the permutation and append permuted columbs to trace
+        let (trace_values, perm_values) = trace_cols.split_at_mut(NUM_ARITH_COLUMNS + 1);
+        (0..NUM_ARITH_COLUMNS)
             .into_par_iter()
-            .map(|i| permuted_cols(&trace_cols[i], &trace_cols[NUM_ARITH_COLUMNS]))
-            .flat_map(|(col_perm, table_perm)| [col_perm, table_perm])
-            .collect::<Vec<_>>();
+            .map(|i| permuted_cols(&trace_values[i], &trace_values[NUM_ARITH_COLUMNS]))
+            .zip(perm_values.par_iter_mut().chunks(2))
+            .for_each(|((col_perm, table_perm), mut trace)| {
+                trace[0].extend(col_perm);
+                trace[1].extend(table_perm);
+            });
 
-        trace_cols.extend(lookup_witness.into_iter());
-
-        trace_cols.into_iter().map(PolynomialValues::new).collect()
+        trace_cols
+            .into_par_iter()
+            .map(PolynomialValues::new)
+            .collect()
     }
 }
 
@@ -508,7 +515,7 @@ mod tests {
             _marker: PhantomData,
         };
 
-        let trace = stark.gen_trace(&additions);
+        let trace = stark.gen_trace(additions);
 
         // Verify proof as a stark
         let proof = prove::<F, C, S, D>(
