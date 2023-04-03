@@ -21,6 +21,8 @@ use crate::permutation::PermutationPair;
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
+use super::{Register , ArithmeticOp, ArithmeticParser};
+
 pub const N_LIMBS: usize = 16;
 pub const NUM_ARITH_COLUMNS: usize = 6 * N_LIMBS - 1 + N_LIMBS - 1;
 pub const NUM_COLUMNS: usize = 1 + NUM_ARITH_COLUMNS + 2 * NUM_ARITH_COLUMNS;
@@ -44,36 +46,6 @@ pub const fn table_perm_index(i: usize) -> usize {
     2 * i + 1 + LOOKUP_SHIFT
 }
 
-/// An experimental parser to generate Stark constaint code from commands
-///
-/// The output is writing to a "memory" passed to it.
-#[derive(Debug, Clone, Copy)]
-pub struct ArithmeticParser<F, const D: usize> {
-    _marker: PhantomData<F>,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Register {
-    Local(usize, usize),
-    Next(usize, usize),
-}
-
-impl Register {
-    fn get_range(&self) -> (usize, usize) {
-        match self {
-            Register::Local(index, length) => (*index, *index + length),
-            Register::Next(index, length) => (*index, *index + length),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum ArithmeticOp {
-    AddMod(BigUint, BigUint, BigUint),
-    SubMod(BigUint, BigUint, BigUint),
-    MulMod(BigUint, BigUint, BigUint),
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct AddCircuitLayout {
     input_1: Register,
@@ -83,41 +55,6 @@ pub struct AddCircuitLayout {
     carry: Register,
     witness_low: Register,
     witness_high: Register,
-}
-
-pub struct Trace<F> {
-    trace_rows: Vec<Vec<F>>,
-    current_row: usize,
-}
-
-impl<F: Field> Trace<F> {
-    fn new(num_rows: usize, num_cols: usize) -> Self {
-        let trace_rows = vec![vec![F::ZERO; num_cols]; num_rows];
-        Self {
-            trace_rows,
-            current_row: 0,
-        }
-    }
-    fn advance(&mut self) {
-        self.current_row += 1;
-    }
-
-    fn alloc(&mut self, register: Register, value: &[F]) {
-        match register {
-            Register::Local(index, length) => {
-                assert_eq!(length, value.len());
-                for (i, v) in value.iter().enumerate() {
-                    self.trace_rows[self.current_row][index + i] = *v;
-                }
-            }
-            Register::Next(_, _) => unimplemented!("Next row allocation not implemented yet"),
-        }
-    }
-
-    fn trace_cols(&self) -> Vec<PolynomialValues<F>> {
-        let trace_cols = transpose(&self.trace_rows);
-        trace_cols.into_iter().map(PolynomialValues::new).collect()
-    }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
