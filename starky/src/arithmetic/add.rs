@@ -67,21 +67,21 @@ pub struct AddModLayout {
 }
 
 impl AddModLayout {
-    fn new(
+    pub const fn new(
         input_1: Register,
         input_2: Register,
         modulus: Register,
         output: Register,
         witness: Register,
     ) -> Self {
-        debug_assert_eq!(input_1.len(), N_LIMBS);
+        /*debug_assert_eq!(input_1.len(), N_LIMBS);
         debug_assert_eq!(input_2.len(), N_LIMBS);
         debug_assert_eq!(modulus.len(), N_LIMBS);
         debug_assert_eq!(output.len(), N_LIMBS);
         debug_assert_eq!(
             witness.len(),
             NUM_CARRY_COLUMNS + NUM_WTNESS_LOW_COLUMNS + NUM_WTNESS_HIGH_COLUMNS
-        );
+        );*/
 
         let (w_start, _) = witness.get_range();
         let carry = Register::Local(w_start, NUM_CARRY_COLUMNS);
@@ -479,6 +479,9 @@ mod tests {
         let input_2_index = N_LIMBS;
         let modulus_index = 2 * N_LIMBS;
         let output_index = 3 * N_LIMBS;
+        //let carry_index = 4 * N_LIMBS;
+        //let witness_low_index = 5 * N_LIMBS;
+        //let witness_high_index = witness_low_index + N_LIMBS - 1;
 
         let layout = AddModLayout::new(
             Register::Local(input_1_index, N_LIMBS),
@@ -487,7 +490,6 @@ mod tests {
             Register::Local(output_index, N_LIMBS),
             Register::Local(4 * N_LIMBS, NUM_ADD_WITNESS_COLUMNS),
         );
-
         for _ in 0..num_rows {
             let a: BigUint = rng.gen_biguint(255) % &p22519;
             let b = rng.gen_biguint(255) % &p22519;

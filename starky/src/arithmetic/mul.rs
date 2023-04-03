@@ -1,4 +1,4 @@
-//! Implementation of modular addition as a STARK (prototype)
+//! Implementation of modular multiplication as a STARK (prototype)
 //!
 //! The implementation based on a method used in Polygon starks
 
@@ -62,18 +62,18 @@ pub struct MulModLayout {
 }
 
 impl MulModLayout {
-    pub fn new(
+    pub const fn new(
         input_1: Register,
         input_2: Register,
         modulus: Register,
         output: Register,
         witness: Register,
     ) -> Self {
-        debug_assert_eq!(input_1.len(), N_LIMBS);
-        debug_assert_eq!(input_2.len(), N_LIMBS);
-        debug_assert_eq!(output.len(), NUM_OUTPUT_COLUMNS);
-        debug_assert_eq!(modulus.len(), NUM_MODULUS_COLUMNS);
-        debug_assert_eq!(witness.len(), NUM_CARRY_COLUMNS + 2 * NUM_WITNESS_COLUMNS);
+        //debug_assert_eq!(input_1.len(), N_LIMBS);
+        //debug_assert_eq!(input_2.len(), N_LIMBS);
+        //debug_assert_eq!(output.len(), NUM_OUTPUT_COLUMNS);
+        //debug_assert_eq!(modulus.len(), NUM_MODULUS_COLUMNS);
+        //debug_assert_eq!(witness.len(), NUM_CARRY_COLUMNS + 2 * NUM_WITNESS_COLUMNS);
 
         let (witness_start, _) = witness.get_range();
         let carry = Register::Local(witness_start, NUM_CARRY_COLUMNS);
@@ -338,12 +338,12 @@ impl<F: RichField + Extendable<D>, const D: usize> MulStark<F, D> {
         for (i, op) in program.into_iter().enumerate() {
             let tx = tx.clone();
             let ArithmeticOp::MulMod(a, b, m) = op else { panic!("Invalid op") };
-            //rayon::spawn(move || {
-            let mut row = ArithmeticParser::<F, D>::mul_trace(a, b, m);
-            debug_assert!(row.len() == NUM_ARITH_COLUMNS);
-            row.push(F::from_canonical_usize(i));
-            tx.send((i, row)).unwrap();
-            //});
+            rayon::spawn(move || {
+                let mut row = ArithmeticParser::<F, D>::mul_trace(a, b, m);
+                debug_assert!(row.len() == NUM_ARITH_COLUMNS);
+                row.push(F::from_canonical_usize(i));
+                tx.send((i, row)).unwrap();
+            });
         }
         drop(tx);
 
@@ -372,7 +372,10 @@ impl<F: RichField + Extendable<D>, const D: usize> MulStark<F, D> {
         debug_assert_eq!(trace_cols.len(), NUM_COLUMNS);
         debug_assert_eq!(trace_cols[0].len(), num_rows);
 
-        trace_cols.into_iter().map(PolynomialValues::new).collect()
+        trace_cols
+            .into_par_iter()
+            .map(PolynomialValues::new)
+            .collect()
     }
 }
 

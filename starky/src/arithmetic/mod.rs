@@ -23,18 +23,25 @@ pub enum Register {
 }
 
 impl Register {
-    fn get_range(&self) -> (usize, usize) {
+    #[inline]
+    pub const fn get_range(&self) -> (usize, usize) {
         match self {
             Register::Local(index, length) => (*index, *index + length),
             Register::Next(index, length) => (*index, *index + length),
         }
     }
 
-    fn len(&self) -> usize {
+    #[inline]
+    pub const fn len(&self) -> usize {
         match self {
             Register::Local(_, length) => *length,
             Register::Next(_, length) => *length,
         }
+    }
+
+    #[inline]
+    pub const fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 
