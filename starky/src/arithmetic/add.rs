@@ -23,6 +23,15 @@ use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub const N_LIMBS: usize = 16;
+
+pub const NUM_INPUT_COLUMNS: usize = 2 * N_LIMBS;
+pub const NUM_OUTPUT_COLUMNS: usize = N_LIMBS;
+pub const NUM_MODULUS_COLUMNS: usize = N_LIMBS;
+pub const NUM_CARRY_COLUMNS: usize = N_LIMBS;
+pub const NUM_WTNESS_LOW_COLUMNS: usize = N_LIMBS - 1;
+pub const NUM_WTNESS_HIGH_COLUMNS: usize = N_LIMBS - 1;
+pub const NUM_ADD_WITNESS_COLUMNS : usize = NUM_CARRY_COLUMNS + NUM_WTNESS_LOW_COLUMNS + NUM_WTNESS_HIGH_COLUMNS;
+
 pub const NUM_ARITH_COLUMNS: usize = 6 * N_LIMBS - 1 + N_LIMBS - 1;
 pub const NUM_COLUMNS: usize = 1 + NUM_ARITH_COLUMNS + 2 * NUM_ARITH_COLUMNS;
 pub const LOOKUP_SHIFT: usize = NUM_ARITH_COLUMNS + 1;
@@ -31,7 +40,7 @@ const WITNESS_OFFSET: usize = 1usize << 20; // Witness offset
 
 #[derive(Clone, Debug)]
 pub struct ArithmeticOpStark<F, const D: usize> {
-    layout: AddCircuitLayout,
+    layout: AddModLayout,
     _marker: PhantomData<F>,
 }
 
@@ -46,7 +55,7 @@ pub const fn table_perm_index(i: usize) -> usize {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct AddCircuitLayout {
+pub struct AddModLayout {
     input_1: Register,
     input_2: Register,
     output: Register,
@@ -54,6 +63,23 @@ pub struct AddCircuitLayout {
     carry: Register,
     witness_low: Register,
     witness_high: Register,
+}
+
+impl AddModLayout {
+    fn new(input_1 : Register, input_2 : Register, modulus : Register, output: Register, witness : Register) -> Self {
+        debug_assert_eq!(input_1.len(), N_LIMBS);
+        debug_assert_eq!(input_2.len(), N_LIMBS);
+        debug_assert_eq!(modulus.len(), N_LIMBS);
+        debug_assert_eq!(output.len(), N_LIMBS);
+        debug_assert_eq!(witness.len(), NUM_CARRY_COLUMNS + NUM_WTNESS_LOW_COLUMNS + NUM_WTNESS_HIGH_COLUMNS);
+
+        let (w_start, _) = witness.get_range();
+        let carry = Register::Local(w_start, NUM_CARRY_COLUMNS);
+        let witness_low = Register::Local(w_start + NUM_CARRY_COLUMNS, NUM_WTNESS_LOW_COLUMNS);
+        let witness_high = Register::Local(w_start + NUM_CARRY_COLUMNS + NUM_WTNESS_LOW_COLUMNS, NUM_WTNESS_HIGH_COLUMNS);
+
+        Self{input_1, input_2, modulus, output, carry, witness_low, witness_high}
+    }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
@@ -173,7 +199,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         const COLUMNS: usize,
         const PUBLIC_INPUTS: usize,
     >(
-        layout: AddCircuitLayout,
+        layout: AddModLayout,
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
@@ -226,7 +252,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     }
 
     pub fn add_ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        layout: AddCircuitLayout,
+        layout: AddModLayout,
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
@@ -432,19 +458,14 @@ mod tests {
         let input_2_index = N_LIMBS;
         let modulus_index = 2 * N_LIMBS;
         let output_index = 3 * N_LIMBS;
-        let carry_index = 4 * N_LIMBS;
-        let witness_low_index = 5 * N_LIMBS;
-        let witness_high_index = witness_low_index + N_LIMBS - 1;
-
-        let layout = AddCircuitLayout {
-            input_1: Register::Local(input_1_index, N_LIMBS),
-            input_2: Register::Local(input_2_index, N_LIMBS),
-            modulus: Register::Local(modulus_index, N_LIMBS),
-            output: Register::Local(output_index, N_LIMBS),
-            carry: Register::Local(carry_index, N_LIMBS),
-            witness_low: Register::Local(witness_low_index, N_LIMBS - 1),
-            witness_high: Register::Local(witness_high_index, N_LIMBS - 1),
-        };
+        
+        let layout = AddModLayout::new(
+            Register::Local(input_1_index, N_LIMBS),
+            Register::Local(input_2_index, N_LIMBS),
+            Register::Local(modulus_index, N_LIMBS),
+            Register::Local(output_index, N_LIMBS),
+            Register::Local(4 * N_LIMBS, NUM_ADD_WITNESS_COLUMNS),
+        );
 
         for _ in 0..num_rows {
             let a: BigUint = rng.gen_biguint(255) % &p22519;

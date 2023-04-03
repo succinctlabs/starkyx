@@ -51,7 +51,7 @@ pub const fn table_perm_index(i: usize) -> usize {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct MulCircuitLayout {
+pub struct MulModLayout {
     input_1: Register,
     input_2: Register,
     output: Register,
@@ -61,9 +61,40 @@ pub struct MulCircuitLayout {
     witness_high: Register,
 }
 
+impl MulModLayout {
+    pub fn new(
+        input_1: Register,
+        input_2: Register,
+        modulus: Register,
+        output: Register,
+        witness : Register,
+    ) -> Self {
+        debug_assert_eq!(input_1.len(), N_LIMBS);
+        debug_assert_eq!(input_2.len(), N_LIMBS);
+        debug_assert_eq!(output.len(), NUM_OUTPUT_COLUMNS);
+        debug_assert_eq!(modulus.len(), NUM_MODULUS_COLUMNS);
+        debug_assert_eq!(witness.len(), NUM_CARRY_COLUMNS + 2 * NUM_WITNESS_COLUMNS);
+
+        let (witness_start, _) = witness.get_range();
+        let carry = Register::Local(witness_start, NUM_CARRY_COLUMNS);
+        let witness_low = Register::Local(witness_start + NUM_CARRY_COLUMNS, NUM_WITNESS_COLUMNS);
+        let witness_high = Register::Local(witness_start + NUM_CARRY_COLUMNS + NUM_WITNESS_COLUMNS, NUM_WITNESS_COLUMNS);
+
+        Self {
+            input_1,
+            input_2,
+            output,
+            modulus,
+            carry,
+            witness_low,
+            witness_high,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct MulStark<F, const D: usize> {
-    layout: MulCircuitLayout,
+    layout: MulModLayout,
     _marker: PhantomData<F>,
 }
 
@@ -184,7 +215,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         const COLUMNS: usize,
         const PUBLIC_INPUTS: usize,
     >(
-        layout: MulCircuitLayout,
+        layout: MulModLayout,
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
@@ -237,7 +268,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     }
 
     pub fn mul_ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        layout: MulCircuitLayout,
+        layout: MulModLayout,
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
@@ -449,19 +480,14 @@ mod tests {
         let input_2_index = N_LIMBS;
         let modulus_index = 2 * N_LIMBS;
         let output_index = 3 * N_LIMBS;
-        let carry_index = 4 * N_LIMBS;
-        let witness_low_index = 5 * N_LIMBS;
-        let witness_high_index = witness_low_index + 2 * N_LIMBS - 2;
 
-        let layout = MulCircuitLayout {
-            input_1: Register::Local(input_1_index, N_LIMBS),
-            input_2: Register::Local(input_2_index, N_LIMBS),
-            modulus: Register::Local(modulus_index, N_LIMBS),
-            output: Register::Local(output_index, N_LIMBS),
-            carry: Register::Local(carry_index, N_LIMBS),
-            witness_low: Register::Local(witness_low_index, 2 * N_LIMBS - 2),
-            witness_high: Register::Local(witness_high_index, 2 * N_LIMBS - 2),
-        };
+        let layout = MulModLayout::new(
+            Register::Local(input_1_index, N_LIMBS),
+            Register::Local(input_2_index, N_LIMBS),
+            Register::Local(modulus_index, N_LIMBS),
+            Register::Local(output_index, NUM_OUTPUT_COLUMNS),
+            Register::Local(4 * N_LIMBS, NUM_CARRY_COLUMNS + NUM_WITNESS_COLUMNS)
+        );
 
         for _ in 0..num_rows {
             let a: BigUint = rng.gen_biguint(255) % &p22519;

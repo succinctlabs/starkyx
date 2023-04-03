@@ -14,8 +14,8 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-use self::add::AddCircuitLayout;
-use self::mul::MulCircuitLayout;
+use self::add::AddModLayout;
+use self::mul::MulModLayout;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Register {
@@ -30,6 +30,13 @@ impl Register {
             Register::Next(index, length) => (*index, *index + length),
         }
     }
+
+    fn len(&self) -> usize {
+        match self {
+            Register::Local(_, length) => *length,
+            Register::Next(_, length) => *length,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -40,8 +47,8 @@ pub enum ArithmeticOp {
 }
 
 pub enum ArithmeticLayout {
-    Add(AddCircuitLayout),
-    Mul(MulCircuitLayout)
+    Add(AddModLayout),
+    Mul(MulModLayout)
 }
 
 /// An experimental parser to generate Stark constaint code from commands
