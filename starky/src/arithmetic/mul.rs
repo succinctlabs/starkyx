@@ -177,7 +177,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         row
     }
 
-    fn mul_packed_generic_constraints<
+    pub fn mul_packed_generic_constraints<
         FE,
         P,
         const D2: usize,
@@ -236,7 +236,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         }
     }
 
-    fn mul_ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+    pub fn mul_ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         layout: MulCircuitLayout,
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,

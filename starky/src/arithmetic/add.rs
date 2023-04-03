@@ -66,7 +66,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     ///  a(x) + b(x) - c(x) - carry(x) * m(x) - (x - 2^16) * s(x) == 0
     /// a(x), b(x), c(x), m(x), s(x) should be range-checked.
     /// note carry = 0 or carry = 1
-    fn add_trace(a: BigUint, b: BigUint, modulus: BigUint) -> Vec<F> {
+    pub fn add_trace(a: BigUint, b: BigUint, modulus: BigUint) -> Vec<F> {
         // Calculate all results as BigUint
         let result = (&a + &b) % &modulus;
         debug_assert!(result < modulus);
@@ -166,7 +166,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         row
     }
 
-    fn add_packed_generic_constraints<
+    pub fn add_packed_generic_constraints<
         FE,
         P,
         const D2: usize,
@@ -225,7 +225,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         }
     }
 
-    fn op_add_ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+    pub fn add_ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         layout: AddCircuitLayout,
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
@@ -357,7 +357,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for ArithmeticOpS
         vars: StarkEvaluationTargets<D, { Self::COLUMNS }, { Self::PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        ArithmeticParser::op_add_ext_circuit(self.layout, builder, vars, yield_constr);
+        ArithmeticParser::add_ext_circuit(self.layout, builder, vars, yield_constr);
         // lookup table values
         yield_constr.constraint_first_row(builder, vars.local_values[NUM_ARITH_COLUMNS]);
         let one = builder.constant_extension(F::Extension::ONE);
