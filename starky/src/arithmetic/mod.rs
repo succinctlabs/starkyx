@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
+pub mod arithmetic_stark;
 pub mod add;
 pub mod mul;
-pub mod new_mul;
 pub mod polynomial;
 pub(crate) mod util;
 
