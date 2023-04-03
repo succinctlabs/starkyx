@@ -1,4 +1,4 @@
-//! An abstraction of Starks for emulated field operations handeling all the range_checks
+//! An abstraction of Starks for emulated field operations handling all the range_checks
 
 use core::marker::PhantomData;
 use std::sync::mpsc;
