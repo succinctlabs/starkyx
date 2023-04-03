@@ -2,15 +2,19 @@
 
 pub mod add;
 pub mod arithmetic_stark;
+pub mod eddsa;
 pub mod mul;
 pub mod polynomial;
 pub(crate) mod util;
+
+use std::sync::mpsc::Sender;
 
 use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
+use plonky2_maybe_rayon::*;
 
 use self::add::AddModLayout;
 use self::mul::MulModLayout;
@@ -32,6 +36,14 @@ impl Register {
     }
 
     #[inline]
+    pub const fn index(&self) -> usize {
+        match self {
+            Register::Local(index, _) => *index,
+            Register::Next(index, _) => *index,
+        }
+    }
+
+    #[inline]
     pub const fn len(&self) -> usize {
         match self {
             Register::Local(_, length) => *length,
@@ -43,18 +55,47 @@ impl Register {
     pub const fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    #[inline]
+    pub fn assign<T: Copy>(&self, trace_rows: &mut [Vec<T>], value: &mut [T], row_index: usize) {
+        match self {
+            Register::Local(index, length) => {
+                trace_rows[row_index][*index..*index + length].copy_from_slice(value);
+            }
+            Register::Next(index, length) => {
+                trace_rows[row_index + 1][*index..*index + length].copy_from_slice(value);
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum ArithmeticOp {
     AddMod(BigUint, BigUint, BigUint),
-    SubMod(BigUint, BigUint, BigUint),
     MulMod(BigUint, BigUint, BigUint),
+    EdAdd(BigUint, BigUint),
 }
 
+#[derive(Debug, Clone)]
 pub enum ArithmeticLayout {
     Add(AddModLayout),
     Mul(MulModLayout),
+}
+
+impl ArithmeticLayout {
+    pub fn allocation_registers(&self) -> (Register, Register, Register) {
+        match self {
+            ArithmeticLayout::Add(layout) => layout.allocation_registers(),
+            ArithmeticLayout::Mul(layout) => layout.allocation_registers(),
+        }
+    }
+
+    pub fn assign_row<T: Copy>(&self, trace_rows: &mut [Vec<T>], row: &mut [T], row_index: usize) {
+        match self {
+            ArithmeticLayout::Add(layout) => layout.assign_row(trace_rows, row, row_index),
+            ArithmeticLayout::Mul(layout) => layout.assign_row(trace_rows, row, row_index),
+        }
+    }
 }
 
 /// An experimental parser to generate Stark constaint code from commands
@@ -66,10 +107,23 @@ pub struct ArithmeticParser<F, const D: usize> {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
-    pub fn op_trace_row(operation: ArithmeticOp) -> Vec<F> {
+    pub fn op_trace_row(
+        row: usize,
+        op_index: usize,
+        tx: Sender<(usize, usize, Vec<F>)>,
+        operation: ArithmeticOp,
+    ) {
         match operation {
-            ArithmeticOp::AddMod(a, b, m) => Self::add_trace(a, b, m),
-            ArithmeticOp::MulMod(a, b, m) => Self::mul_trace(a, b, m),
+            ArithmeticOp::AddMod(a, b, m) => rayon::spawn(move || {
+                let mut row_vec = Self::add_trace(a, b, m);
+                row_vec.push(F::from_canonical_usize(row));
+                tx.send((row, op_index, row_vec)).unwrap()
+            }),
+            ArithmeticOp::MulMod(a, b, m) => rayon::spawn(move || {
+                let mut row_vec = Self::mul_trace(a, b, m);
+                row_vec.push(F::from_canonical_usize(row));
+                tx.send((row, op_index, row_vec)).unwrap()
+            }),
             _ => unimplemented!("Operation not supported"),
         }
     }

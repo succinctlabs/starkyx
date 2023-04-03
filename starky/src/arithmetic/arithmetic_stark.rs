@@ -73,28 +73,24 @@ impl<L: EmulatedCircuitLayout<N>, const N: usize, F, const D: usize> ArithmeticS
 impl<const N: usize, L: EmulatedCircuitLayout<N>, F: RichField + Extendable<D>, const D: usize>
     ArithmeticStark<L, N, F, D>
 {
-    pub fn generate_trace(&self, program: Vec<ArithmeticOp>) -> Vec<PolynomialValues<F>> {
+    pub fn generate_trace(&self, program: Vec<(ArithmeticOp, usize)>) -> Vec<PolynomialValues<F>> {
         let num_operations = program.len();
         let num_rows = num_operations;
 
-        let mut trace_rows = vec![Vec::with_capacity(L::NUM_ARITHMETIC_COLUMNS); num_rows];
+        let mut trace_rows = vec![vec![F::ZERO; L::NUM_ARITHMETIC_COLUMNS + 1]; num_rows];
 
         // Collecte the trace rows which are processed in parallel
-        let (tx, rx) = mpsc::channel::<(usize, Vec<F>)>();
+        let (tx, rx) = mpsc::channel();
 
-        for (i, op) in program.into_iter().enumerate() {
+        for (i, (op, op_index)) in program.into_iter().enumerate() {
             let tx = tx.clone();
-            rayon::spawn(move || {
-                let mut row = ArithmeticParser::<F, D>::op_trace_row(op);
-                row.push(F::from_canonical_usize(i));
-                tx.send((i, row)).unwrap();
-            });
+            ArithmeticParser::<F, D>::op_trace_row(i, op_index, tx, op);
         }
         drop(tx);
 
         // Insert the trace rows into the trace
-        while let Ok((i, mut row)) = rx.recv() {
-            trace_rows[i].append(&mut row);
+        while let Ok((i, op_index, mut row)) = rx.recv() {
+            L::OPERATIONS[op_index].assign_row(&mut trace_rows, &mut row, i)
         }
 
         // Transpose the trace to get the columns and resize to the correct size
@@ -256,7 +252,7 @@ mod tests {
             let p = p22519.clone();
 
             let operation = ArithmeticOp::AddMod(a.clone(), b.clone(), p.clone());
-            additions.push(operation);
+            additions.push((operation, 0));
         }
 
         let stark = S {
@@ -348,7 +344,7 @@ mod tests {
             let p = p22519.clone();
 
             let operation = ArithmeticOp::MulMod(a.clone(), b.clone(), p.clone());
-            multiplication.push(operation);
+            multiplication.push((operation, 0));
         }
 
         let stark = S {
