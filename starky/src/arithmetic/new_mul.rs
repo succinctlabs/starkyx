@@ -2,6 +2,7 @@
 //!
 //! The implementation based on a method used in Polygon starks
 
+use alloc::vec;
 use core::marker::PhantomData;
 use std::sync::mpsc;
 
@@ -23,27 +24,21 @@ use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub const N_LIMBS: usize = 16;
-
 pub const NUM_INPUT_COLUMNS: usize = 2 * N_LIMBS;
 pub const NUM_OUTPUT_COLUMNS: usize = N_LIMBS;
 pub const NUM_MODULUS_COLUMNS: usize = N_LIMBS;
 pub const NUM_CARRY_COLUMNS: usize = N_LIMBS;
-pub const NUM_WTNESS_LOW_COLUMNS: usize = N_LIMBS - 1;
-pub const NUM_WTNESS_HIGH_COLUMNS: usize = N_LIMBS - 1;
-pub const NUM_ADD_WITNESS_COLUMNS: usize =
-    NUM_CARRY_COLUMNS + NUM_WTNESS_LOW_COLUMNS + NUM_WTNESS_HIGH_COLUMNS;
+pub const NUM_WITNESS_COLUMNS: usize = 2 * N_LIMBS - 2;
 
-pub const NUM_ARITH_COLUMNS: usize = 6 * N_LIMBS - 1 + N_LIMBS - 1;
+pub const NUM_ARITH_COLUMNS: usize = NUM_INPUT_COLUMNS
+    + NUM_OUTPUT_COLUMNS
+    + NUM_MODULUS_COLUMNS
+    + NUM_CARRY_COLUMNS
+    + 2 * NUM_WITNESS_COLUMNS;
 pub const NUM_COLUMNS: usize = 1 + NUM_ARITH_COLUMNS + 2 * NUM_ARITH_COLUMNS;
 pub const LOOKUP_SHIFT: usize = NUM_ARITH_COLUMNS + 1;
 pub const RANGE_MAX: usize = 1usize << 16; // Range check strict upper bound
 const WITNESS_OFFSET: usize = 1usize << 20; // Witness offset
-
-#[derive(Clone, Debug)]
-pub struct ArithmeticOpStark<F, const D: usize> {
-    layout: AddModLayout,
-    _marker: PhantomData<F>,
-}
 
 #[inline]
 pub const fn col_perm_index(i: usize) -> usize {
@@ -56,7 +51,7 @@ pub const fn table_perm_index(i: usize) -> usize {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct AddModLayout {
+pub struct MulCircuitLayout {
     input_1: Register,
     input_2: Register,
     output: Register,
@@ -66,72 +61,40 @@ pub struct AddModLayout {
     witness_high: Register,
 }
 
-impl AddModLayout {
-    pub const fn new(
-        input_1: Register,
-        input_2: Register,
-        modulus: Register,
-        output: Register,
-        witness: Register,
-    ) -> Self {
-        /*debug_assert_eq!(input_1.len(), N_LIMBS);
-        debug_assert_eq!(input_2.len(), N_LIMBS);
-        debug_assert_eq!(modulus.len(), N_LIMBS);
-        debug_assert_eq!(output.len(), N_LIMBS);
-        debug_assert_eq!(
-            witness.len(),
-            NUM_CARRY_COLUMNS + NUM_WTNESS_LOW_COLUMNS + NUM_WTNESS_HIGH_COLUMNS
-        );*/
-
-        let (w_start, _) = witness.get_range();
-        let carry = Register::Local(w_start, NUM_CARRY_COLUMNS);
-        let witness_low = Register::Local(w_start + NUM_CARRY_COLUMNS, NUM_WTNESS_LOW_COLUMNS);
-        let witness_high = Register::Local(
-            w_start + NUM_CARRY_COLUMNS + NUM_WTNESS_LOW_COLUMNS,
-            NUM_WTNESS_HIGH_COLUMNS,
-        );
-
-        Self {
-            input_1,
-            input_2,
-            modulus,
-            output,
-            carry,
-            witness_low,
-            witness_high,
-        }
-    }
+#[derive(Clone, Debug)]
+pub struct MulStark<F, const D: usize> {
+    layout: MulCircuitLayout,
+    _marker: PhantomData<F>,
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
-    /// Converts two BigUint inputs into the correspinding rows of addition mod modulus
+    /// Converts two BigUint inputs into the correspinding rows of multiplication mod modulus
     ///
-    /// a + b = c mod m
+    /// a * b = c mod m
     ///
     /// Each element represented by a polynomial a(x), b(x), c(x), m(x) of 16 limbs of 16 bits each
     /// We will witness the relation
-    ///  a(x) + b(x) - c(x) - carry(x) * m(x) - (x - 2^16) * s(x) == 0
+    ///  a(x) * b(x) - c(x) - carry(x) * m(x) - (x - 2^16) * s(x) == 0
     /// a(x), b(x), c(x), m(x), s(x) should be range-checked.
-    /// note carry = 0 or carry = 1
-    pub fn add_trace(a: BigUint, b: BigUint, modulus: BigUint) -> Vec<F> {
-        // Calculate all results as BigUint
-        let result = (&a + &b) % &modulus;
+    pub fn mul_trace(a: BigUint, b: BigUint, modulus: BigUint) -> Vec<F> {
+        let result = (&a * &b) % &modulus;
         debug_assert!(result < modulus);
-        let carry = (&a + &b - &result) / &modulus;
-        debug_assert!(carry == BigUint::from(0u32) || carry == BigUint::from(1u32));
 
-        // Make polynomial limbs
+        let carry = (&a * &b - &result) / &modulus;
+        debug_assert!(carry < modulus);
+
+        // make polynomial limbs
         let p_a = Polynomial::<i64>::from_biguint_num(&a, 16, N_LIMBS);
         let p_b = Polynomial::<i64>::from_biguint_num(&b, 16, N_LIMBS);
         let p_m = Polynomial::<i64>::from_biguint_num(&modulus, 16, N_LIMBS);
         let p_res = Polynomial::<i64>::from_biguint_num(&result, 16, N_LIMBS);
         let p_c = Polynomial::<i64>::from_biguint_num(&carry, 16, N_LIMBS);
-        let carry_bit = p_c.as_slice()[0];
 
-        // Make the witness polynomial
-        let vanishing_poly = &p_a + &p_b - &p_res - &p_m * carry_bit;
-        debug_assert_eq!(vanishing_poly.degree(), N_LIMBS - 1);
+        // Compute the witness polynomial
+        let vanishing_poly = &p_a * &p_b - &p_res - &p_c * &p_m;
+        debug_assert_eq!(vanishing_poly.degree(), 2 * N_LIMBS - 2);
 
+        //sanity check
         let eval_vanishing = vanishing_poly
             .as_slice()
             .iter()
@@ -140,9 +103,10 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
             .sum::<BigInt>();
         debug_assert_eq!(eval_vanishing, BigInt::from(0));
 
+        // extract witness from vanishing polynomial
         let limb = 2u32.pow(16) as i64;
         let witness_poly = vanishing_poly.root_quotient(limb);
-        assert_eq!(witness_poly.degree(), N_LIMBS - 2);
+        assert_eq!(witness_poly.degree(), 2 * N_LIMBS - 3);
 
         for c in witness_poly.as_slice().iter() {
             debug_assert!(c.abs() < WITNESS_OFFSET as i64);
@@ -213,14 +177,14 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         row
     }
 
-    pub fn add_packed_generic_constraints<
+    fn mul_packed_generic_constraints<
         FE,
         P,
         const D2: usize,
         const COLUMNS: usize,
         const PUBLIC_INPUTS: usize,
     >(
-        layout: AddModLayout,
+        layout: MulCircuitLayout,
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
@@ -248,10 +212,10 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         let limb: P = P::Scalar::from_canonical_u32(2u32.pow(16)).into();
 
         // Construct the vanishing polynomial
-        let a_plus_b = PolynomialOps::add(a, b);
-        let a_plus_b_minus_result = PolynomialOps::sub(&a_plus_b, r);
-        let carry_times_mod = PolynomialOps::scalar_mul(m, &c[0]);
-        let vanising_poly = PolynomialOps::sub(&a_plus_b_minus_result, &carry_times_mod);
+        let a_mul_b = PolynomialOps::mul(a, b);
+        let a_mul_b_minus_result = PolynomialOps::sub(&a_mul_b, r);
+        let carry_times_mod = PolynomialOps::mul(m, c);
+        let vanising_poly = PolynomialOps::sub(&a_mul_b_minus_result, &carry_times_mod);
 
         // Reconstruct and shift back the witness polynomial
         let w_shifted = w_low
@@ -272,8 +236,8 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         }
     }
 
-    pub fn add_ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        layout: AddModLayout,
+    fn mul_ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+        layout: MulCircuitLayout,
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
@@ -297,11 +261,11 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         let w_high = &vars.local_values[w_high_l..w_high_h];
 
         // Construct the vanishing polynomial
-        let a_plus_b = PolynomialGadget::add_extension(builder, a, b);
-        let a_plus_b_minus_result = PolynomialGadget::sub_extension(builder, &a_plus_b, r);
-        let carry_times_mod = PolynomialGadget::ext_scalar_mul_extension(builder, m, &c[0]);
+        let a_mul_b = PolynomialGadget::mul_extension(builder, a, b);
+        let a_mul_b_minus_result = PolynomialGadget::sub_extension(builder, &a_mul_b, r);
+        let carry_times_mod = PolynomialGadget::mul_extension(builder, m, c);
         let vanising_poly =
-            PolynomialGadget::sub_extension(builder, &a_plus_b_minus_result, &carry_times_mod);
+            PolynomialGadget::sub_extension(builder, &a_mul_b_minus_result, &carry_times_mod);
 
         // Reconstruct and shift back the witness polynomial
         let limb_const = F::Extension::from_canonical_u32(2u32.pow(16));
@@ -327,10 +291,11 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> ArithmeticOpStark<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> MulStark<F, D> {
     fn gen_trace(&self, program: Vec<ArithmeticOp>) -> Vec<PolynomialValues<F>> {
         let num_operations = program.len();
         let num_rows = num_operations;
+        assert_eq!(num_rows, 1 << 16);
         let mut trace_rows = vec![Vec::with_capacity(NUM_ARITH_COLUMNS); num_rows];
         //let mut trace_cols = vec![vec![F::ZERO;num_rows]; NUM_COLUMNS];
 
@@ -338,12 +303,13 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticOpStark<F, D> {
 
         for (i, op) in program.into_iter().enumerate() {
             let tx = tx.clone();
-            let ArithmeticOp::AddMod(a, b, m) = op else { panic!("Invalid op") };
-            rayon::spawn(move || {
-                let mut row = ArithmeticParser::<F, D>::add_trace(a, b, m);
-                row.push(F::from_canonical_usize(i));
-                tx.send((i, row)).unwrap();
-            });
+            let ArithmeticOp::MulMod(a, b, m) = op else { panic!("Invalid op") };
+            //rayon::spawn(move || {
+            let mut row = ArithmeticParser::<F, D>::mul_trace(a, b, m);
+            debug_assert!(row.len() == NUM_ARITH_COLUMNS);
+            row.push(F::from_canonical_usize(i));
+            tx.send((i, row)).unwrap();
+            //});
         }
         drop(tx);
 
@@ -351,6 +317,9 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticOpStark<F, D> {
         while let Ok((i, mut row)) = rx.recv() {
             trace_rows[i].append(&mut row); // Append row to trace
         }
+
+        debug_assert_eq!(trace_rows.len(), num_rows);
+
         // Transpose the trace to get the columns and resize to the correct size
         let mut trace_cols = transpose(&trace_rows);
         trace_cols.resize(NUM_COLUMNS, Vec::with_capacity(num_rows));
@@ -366,14 +335,14 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticOpStark<F, D> {
                 trace[1].extend(table_perm);
             });
 
-        trace_cols
-            .into_par_iter()
-            .map(PolynomialValues::new)
-            .collect()
+        debug_assert_eq!(trace_cols.len(), NUM_COLUMNS);
+        debug_assert_eq!(trace_cols[0].len(), num_rows);
+
+        trace_cols.into_iter().map(PolynomialValues::new).collect()
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for ArithmeticOpStark<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MulStark<F, D> {
     const COLUMNS: usize = NUM_COLUMNS;
     const PUBLIC_INPUTS: usize = 0;
 
@@ -385,7 +354,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for ArithmeticOpS
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
-        ArithmeticParser::add_packed_generic_constraints(self.layout, vars, yield_constr);
+        ArithmeticParser::mul_packed_generic_constraints(self.layout, vars, yield_constr);
+        // lookp table values
         // lookp table values
         yield_constr.constraint_first_row(vars.local_values[NUM_ARITH_COLUMNS]);
         let table_values_relation =
@@ -403,7 +373,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for ArithmeticOpS
         vars: StarkEvaluationTargets<D, { Self::COLUMNS }, { Self::PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        ArithmeticParser::add_ext_circuit(self.layout, builder, vars, yield_constr);
+        ArithmeticParser::mul_ext_circuit(self.layout, builder, vars, yield_constr);
         // lookup table values
         yield_constr.constraint_first_row(builder, vars.local_values[NUM_ARITH_COLUMNS]);
         let one = builder.constant_extension(F::Extension::ONE);
@@ -411,7 +381,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for ArithmeticOpS
         let table_relation =
             builder.sub_extension(table_plus_one, vars.next_values[NUM_ARITH_COLUMNS]);
         yield_constr.constraint_transition(builder, table_relation);
-        // lookup argumment
+
+        // lookup argument
         for i in 0..NUM_ARITH_COLUMNS {
             eval_lookups_circuit(
                 builder,
@@ -459,11 +430,11 @@ mod tests {
     use crate::verifier::verify_stark_proof;
 
     #[test]
-    fn test_arithmetic_op_add() {
+    fn test_arithmetic_op_mul() {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type S = ArithmeticOpStark<F, D>;
+        type S = MulStark<F, D>;
 
         let num_rows = 2u64.pow(16);
         let config = StarkConfig::standard_fast_config();
@@ -472,35 +443,24 @@ mod tests {
 
         let mut rng = rand::thread_rng();
 
-        let mut additions = Vec::new();
+        let mut multiplications = Vec::new();
 
         let input_1_index = 0;
         let input_2_index = N_LIMBS;
         let modulus_index = 2 * N_LIMBS;
         let output_index = 3 * N_LIMBS;
-        //let carry_index = 4 * N_LIMBS;
-        //let witness_low_index = 5 * N_LIMBS;
-        //let witness_high_index = witness_low_index + N_LIMBS - 1;
-
-        let layout = AddModLayout::new(
-            Register::Local(input_1_index, N_LIMBS),
-            Register::Local(input_2_index, N_LIMBS),
-            Register::Local(modulus_index, N_LIMBS),
-            Register::Local(output_index, N_LIMBS),
-            Register::Local(4 * N_LIMBS, NUM_ADD_WITNESS_COLUMNS),
-        );
         let carry_index = 4 * N_LIMBS;
         let witness_low_index = 5 * N_LIMBS;
-        let witness_high_index = witness_low_index + N_LIMBS - 1;
+        let witness_high_index = witness_low_index + 2 * N_LIMBS - 2;
 
-        let layout = AddCircuitLayout {
+        let layout = MulCircuitLayout {
             input_1: Register::Local(input_1_index, N_LIMBS),
             input_2: Register::Local(input_2_index, N_LIMBS),
             modulus: Register::Local(modulus_index, N_LIMBS),
             output: Register::Local(output_index, N_LIMBS),
             carry: Register::Local(carry_index, N_LIMBS),
-            witness_low: Register::Local(witness_low_index, N_LIMBS - 1),
-            witness_high: Register::Local(witness_high_index, N_LIMBS - 1),
+            witness_low: Register::Local(witness_low_index, 2 * N_LIMBS - 2),
+            witness_high: Register::Local(witness_high_index, 2 * N_LIMBS - 2),
         };
 
         for _ in 0..num_rows {
@@ -508,8 +468,8 @@ mod tests {
             let b = rng.gen_biguint(255) % &p22519;
             let p = p22519.clone();
 
-            let operation = ArithmeticOp::AddMod(a.clone(), b.clone(), p.clone());
-            additions.push(operation);
+            let operation = ArithmeticOp::MulMod(a.clone(), b.clone(), p.clone());
+            multiplications.push(operation);
         }
 
         let stark = S {
@@ -517,7 +477,7 @@ mod tests {
             _marker: PhantomData,
         };
 
-        let trace = stark.gen_trace(additions);
+        let trace = stark.gen_trace(multiplications);
 
         // Verify proof as a stark
         let proof = prove::<F, C, S, D>(

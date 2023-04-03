@@ -3,6 +3,7 @@
 pub mod add;
 pub mod arithmetic_stark;
 pub mod mul;
+pub mod new_mul;
 pub mod polynomial;
 pub(crate) mod util;
 
@@ -23,6 +24,7 @@ pub enum Register {
 }
 
 impl Register {
+
     #[inline]
     pub const fn get_range(&self) -> (usize, usize) {
         match self {
@@ -52,10 +54,12 @@ pub enum ArithmeticOp {
     MulMod(BigUint, BigUint, BigUint),
 }
 
+
 pub enum ArithmeticLayout {
     Add(AddModLayout),
     Mul(MulModLayout),
 }
+
 
 /// An experimental parser to generate Stark constaint code from commands
 ///
@@ -113,3 +117,4 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         }
     }
 }
+
