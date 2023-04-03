@@ -2,12 +2,11 @@
 
 pub mod add;
 pub mod mul;
+pub mod new_mul;
 pub mod polynomial;
 pub(crate) mod util;
 
-
 use num::BigUint;
-
 
 #[derive(Debug, Clone, Copy)]
 pub enum Register {
@@ -31,8 +30,6 @@ pub enum ArithmeticOp {
     MulMod(BigUint, BigUint, BigUint),
 }
 
-
-
 /// An experimental parser to generate Stark constaint code from commands
 ///
 /// The output is writing to a "memory" passed to it.
@@ -40,4 +37,3 @@ pub enum ArithmeticOp {
 pub struct ArithmeticParser<F, const D: usize> {
     _marker: core::marker::PhantomData<F>,
 }
-

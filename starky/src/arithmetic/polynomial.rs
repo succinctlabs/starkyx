@@ -616,14 +616,14 @@ impl PolynomialGadget {
         a: &[ExtensionTarget<D>],
         b: &[ExtensionTarget<D>],
     ) -> Vec<ExtensionTarget<D>> {
-        debug_assert!(a.len() == b.len());
-        let len = a.len();
-
-        let mut result = Vec::with_capacity(len);
-        for i in 0..len {
-            result.push(builder.add_extension(a[i], b[i]));
-        }
-        result
+        a.iter()
+            .zip_longest(b.iter())
+            .map(|x| match x {
+                itertools::EitherOrBoth::Both(a, b) => builder.add_extension(*a, *b),
+                itertools::EitherOrBoth::Left(a) => *a,
+                itertools::EitherOrBoth::Right(b) => *b,
+            })
+            .collect()
     }
 
     /// Polynomial subtraction
@@ -632,14 +632,15 @@ impl PolynomialGadget {
         a: &[ExtensionTarget<D>],
         b: &[ExtensionTarget<D>],
     ) -> Vec<ExtensionTarget<D>> {
-        debug_assert!(a.len() == b.len());
-        let len = a.len();
-
-        let mut result = Vec::with_capacity(len);
-        for i in 0..len {
-            result.push(builder.sub_extension(a[i], b[i]));
-        }
-        result
+        let zero = builder.constant_extension(F::Extension::ZERO);
+        a.iter()
+            .zip_longest(b.iter())
+            .map(|x| match x {
+                itertools::EitherOrBoth::Both(a, b) => builder.sub_extension(*a, *b),
+                itertools::EitherOrBoth::Left(a) => *a,
+                itertools::EitherOrBoth::Right(b) => builder.sub_extension(zero, *b),
+            })
+            .collect()
     }
 
     /// Polynomial subtraction
