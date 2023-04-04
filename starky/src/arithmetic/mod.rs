@@ -13,6 +13,7 @@ use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
+use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_maybe_rayon::*;
 
@@ -66,6 +67,45 @@ impl Register {
             Register::Next(index, length) => {
                 trace_rows[row_index + 1][*index..*index + length].copy_from_slice(value);
             }
+        }
+    }
+
+    #[inline]
+    pub fn packed_entries_slice<
+        'a,
+        F,
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+    >(
+        &self,
+        vars: &StarkEvaluationVars<'a, FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
+    ) -> &'a [P]
+    where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>,
+    {
+        match self {
+            Register::Local(index, length) => &vars.local_values[*index..*index + length],
+            Register::Next(index, length) => &vars.next_values[*index..*index + length],
+        }
+    }
+
+    #[inline]
+    pub fn evaluation_targets<
+        'a,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+        const D: usize,
+    >(
+        &self,
+        vars: &StarkEvaluationTargets<'a, D, { COLUMNS }, { PUBLIC_INPUTS }>,
+    ) -> &'a [ExtensionTarget<D>] {
+        match self {
+            Register::Local(index, length) => &vars.local_values[*index..*index + length],
+            Register::Next(index, length) => &vars.next_values[*index..*index + length],
         }
     }
 }

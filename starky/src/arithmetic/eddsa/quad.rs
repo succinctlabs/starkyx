@@ -1,12 +1,14 @@
 use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
+use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::*;
 use crate::arithmetic::polynomial::Polynomial;
 use crate::arithmetic::util::{extract_witness_and_shift, split_digits, to_field_iter};
-use crate::arithmetic::{ArithmeticOp, ArithmeticParser, Register};
+use crate::arithmetic::{ArithmeticParser, Register};
+use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub const N_LIMBS: usize = 16;
 pub const NUM_CARRY_LIMBS: usize = N_LIMBS;
@@ -117,20 +119,37 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
 
         row
     }
-}
 
+    /// Quad generic constraints
+    pub fn quad_packed_generic_constraints<
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+    >(
+        layout: QuadLayout,
+        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
+    ) where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>,
+    {
+    }
+}
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use num::bigint::RandBigInt;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+
+    use super::*;
 
     #[test]
     fn test_quad_trace_generation() {
         let num_tests = 100;
         let p = get_p();
-        const D : usize = 2;
+        const D: usize = 2;
         type F = <PoseidonGoldilocksConfig as GenericConfig<D>>::F;
 
         for _ in 0..num_tests {
@@ -139,8 +158,8 @@ mod tests {
             let c = rand::thread_rng().gen_biguint(256) & &p;
             let d = rand::thread_rng().gen_biguint(256) & &p;
 
-            let _ = ArithmeticParser::<F, 4>::quad_trace(a.clone(), b.clone(), c.clone(), d.clone());
+            let _ =
+                ArithmeticParser::<F, 4>::quad_trace(a.clone(), b.clone(), c.clone(), d.clone());
         }
-
     }
 }

@@ -191,23 +191,14 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
-        // Get the range of the variables
-        let (a_l, a_h) = layout.input_1.get_range();
-        let (b_l, b_h) = layout.input_2.get_range();
-        let (r_l, r_h) = layout.output.get_range();
-        let (m_l, m_h) = layout.modulus.get_range();
-        let (c_l, c_h) = layout.carry.get_range();
-        let (w_low_l, w_low_h) = layout.witness_low.get_range();
-        let (w_high_l, w_high_h) = layout.witness_high.get_range();
-
         // Make polynomial limbs
-        let a = &vars.local_values[a_l..a_h];
-        let b = &vars.local_values[b_l..b_h];
-        let m = &vars.local_values[m_l..m_h];
-        let r = &vars.local_values[r_l..r_h];
-        let c = &vars.local_values[c_l..c_h];
-        let w_low = &vars.local_values[w_low_l..w_low_h];
-        let w_high = &vars.local_values[w_high_l..w_high_h];
+        let a = layout.input_1.packed_entries_slice(&vars);
+        let b = layout.input_2.packed_entries_slice(&vars);
+        let m = layout.modulus.packed_entries_slice(&vars);
+        let r = layout.output.packed_entries_slice(&vars);
+        let c = layout.carry.packed_entries_slice(&vars);
+        let w_low = layout.witness_low.packed_entries_slice(&vars);
+        let w_high = layout.witness_high.packed_entries_slice(&vars);
 
         let limb: P = P::Scalar::from_canonical_u32(2u32.pow(16)).into();
 
@@ -242,23 +233,14 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        // Get the range of the variables
-        let (a_l, a_h) = layout.input_1.get_range();
-        let (b_l, b_h) = layout.input_2.get_range();
-        let (r_l, r_h) = layout.output.get_range();
-        let (m_l, m_h) = layout.modulus.get_range();
-        let (c_l, c_h) = layout.carry.get_range();
-        let (w_low_l, w_low_h) = layout.witness_low.get_range();
-        let (w_high_l, w_high_h) = layout.witness_high.get_range();
-
         // Make polynomial limbs
-        let a = &vars.local_values[a_l..a_h];
-        let b = &vars.local_values[b_l..b_h];
-        let m = &vars.local_values[m_l..m_h];
-        let r = &vars.local_values[r_l..r_h];
-        let c = &vars.local_values[c_l..c_h];
-        let w_low = &vars.local_values[w_low_l..w_low_h];
-        let w_high = &vars.local_values[w_high_l..w_high_h];
+        let a = layout.input_1.evaluation_targets(&vars);
+        let b = layout.input_2.evaluation_targets(&vars);
+        let m = layout.modulus.evaluation_targets(&vars);
+        let r = layout.output.evaluation_targets(&vars);
+        let c = layout.carry.evaluation_targets(&vars);
+        let w_low = layout.witness_low.evaluation_targets(&vars);
+        let w_high = layout.witness_high.evaluation_targets(&vars);
 
         // Construct the vanishing polynomial
         let a_mul_b = PolynomialGadget::mul_extension(builder, a, b);
