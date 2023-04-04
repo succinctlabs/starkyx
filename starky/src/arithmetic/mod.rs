@@ -18,6 +18,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_maybe_rayon::*;
 
 use self::add::AddModLayout;
+use self::arithmetic_stark::EmulatedCircuitLayout;
 use self::mul::MulModLayout;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -110,7 +111,11 @@ impl Register {
 }
 
 pub trait Opcode<F, const D: usize>: 'static + Sized + Send + Sync {
-    fn generate_trace(self) -> Vec<F>;
+    fn generate_trace_row(self) -> Vec<F>;
+}
+
+pub trait Instruction<L : EmulatedCircuitLayout<F, D, N> ,F : RichField+Extendable<D>, const D: usize, const N: usize>: 'static + Sized + Send + Sync {
+    fn generate_trace(self, pc : usize, tx: Sender<(usize, usize, Vec<F>)>);
 }
 
 pub trait OpcodeLayout<F: RichField + Extendable<D>, const D: usize>:
@@ -157,6 +162,7 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for Arithm
         match self {
             ArithmeticLayout::Add(layout) => layout.assign_row(trace_rows, row, row_index),
             ArithmeticLayout::Mul(layout) => layout.assign_row(trace_rows, row, row_index),
+            _ => unimplemented!("Operation not supported"),
         }
     }
 
@@ -197,15 +203,17 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for Arithm
             ArithmeticLayout::Mul(layout) => {
                 ArithmeticParser::mul_ext_circuit(*layout, builder, vars, yield_constr)
             }
+            _ => unimplemented!("Operation not supported"),
         }
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Opcode<F, D> for ArithmeticOp {
-    fn generate_trace(self) -> Vec<F> {
+    fn generate_trace_row(self) -> Vec<F> {
         match self {
             ArithmeticOp::AddMod(a, b, m) => ArithmeticParser::add_trace(a, b, m),
             ArithmeticOp::MulMod(a, b, m) => ArithmeticParser::mul_trace(a, b, m),
+            _ => unimplemented!("Operation not supported"),
         }
     }
 }
@@ -218,6 +226,7 @@ pub struct ArithmeticParser<F, const D: usize> {
     _marker: core::marker::PhantomData<F>,
 }
 
+ 
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     pub fn op_trace_row(
         row: usize,
@@ -226,8 +235,9 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         operation: impl Opcode<F, D>,
     ) {
         rayon::spawn(move || {
-            let row_vec = operation.generate_trace();
+            let row_vec = operation.generate_trace_row();
             tx.send((row, op_index, row_vec)).unwrap()
         })
     }
 }
+ 

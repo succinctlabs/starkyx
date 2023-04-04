@@ -3,6 +3,8 @@
 use core::marker::PhantomData;
 use std::sync::mpsc;
 
+use super::Instruction;
+
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::field::polynomial::PolynomialValues;
@@ -19,11 +21,7 @@ use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 /// A layout for a circuit that emulates field operations
-pub trait EmulatedCircuitLayout<
-    F: RichField + Extendable<D>,
-    const NUM_OPERATIONS: usize,
-    const D: usize,
->: Sized + Send + Sync
+pub trait EmulatedCircuitLayout<F : RichField + Extendable<D>, const D : usize, const N: usize>: Sized + Send + Sync
 {
     const PUBLIC_INPUTS: usize;
     const NUM_ARITHMETIC_COLUMNS: usize;
@@ -31,7 +29,7 @@ pub trait EmulatedCircuitLayout<
     const TABLE_INDEX: usize;
 
     type Layouts: OpcodeLayout<F, D>;
-    const OPERATIONS: [Self::Layouts; NUM_OPERATIONS];
+    const OPERATIONS: [Self::Layouts; N];
 
     /// Check that the operations allocations are consistent with total number of columns
     fn is_consistent(&self) -> bool {
@@ -45,7 +43,7 @@ pub trait EmulatedCircuitLayout<
 
 pub const fn num_columns<
     F: RichField + Extendable<D>,
-    L: EmulatedCircuitLayout<F, N, D>,
+    L: EmulatedCircuitLayout<F, D, N>,
     const N: usize,
     const D: usize,
 >() -> usize {
@@ -61,7 +59,7 @@ pub struct ArithmeticStark<L, const N: usize, F, const D: usize> {
 }
 
 impl<
-        L: EmulatedCircuitLayout<F, N, D>,
+        L: EmulatedCircuitLayout<F, D, N>,
         const N: usize,
         F: RichField + Extendable<D>,
         const D: usize,
@@ -96,7 +94,7 @@ impl<
 
 impl<L, const N: usize, F, const D: usize> Default for ArithmeticStark<L, N, F, D>
 where
-    L: EmulatedCircuitLayout<F, N, D>,
+    L: EmulatedCircuitLayout<F, D, N>,
     F: RichField + Extendable<D>,
 {
     fn default() -> Self {
@@ -106,7 +104,7 @@ where
 
 impl<
         const N: usize,
-        L: EmulatedCircuitLayout<F, N, D>,
+        L: EmulatedCircuitLayout<F, D, N>,
         F: RichField + Extendable<D>,
         const D: usize,
     > ArithmeticStark<L, N, F, D>
@@ -166,7 +164,7 @@ impl<
 
 impl<
         const N: usize,
-        L: EmulatedCircuitLayout<F, N, D>,
+        L: EmulatedCircuitLayout<F, D, N>,
         F: RichField + Extendable<D>,
         const D: usize,
     > Stark<F, D> for ArithmeticStark<L, N, F, D>
@@ -269,7 +267,7 @@ mod tests {
     #[derive(Clone, Copy, Debug)]
     pub struct AddModLayoutCircuit;
 
-    impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, 1, D>
+    impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, D, 1>
         for AddModLayoutCircuit
     {
         const PUBLIC_INPUTS: usize = 0;
@@ -362,7 +360,7 @@ mod tests {
     pub struct MulModLayoutCircuit;
 
     use crate::arithmetic::mul;
-    impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, 1, D>
+    impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, D, 1>
         for MulModLayoutCircuit
     {
         const PUBLIC_INPUTS: usize = 0;

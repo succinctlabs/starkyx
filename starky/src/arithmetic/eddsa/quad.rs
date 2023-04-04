@@ -298,7 +298,7 @@ mod tests {
         Register::Local(5 * N_LIMBS, NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS),
     );
 
-    impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, 1, D>
+    impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, D, 1>
         for QuadLayoutCircuit
     {
         const PUBLIC_INPUTS: usize = 0;
