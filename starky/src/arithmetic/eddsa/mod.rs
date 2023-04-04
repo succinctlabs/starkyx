@@ -83,13 +83,6 @@ pub enum EdOpcode {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpcodeLayout {
-    fn read_input(&self, trace_rows: &mut [Vec<F>], row_index: usize) -> Vec<F> {
-        match self {
-            EdOpcodeLayout::Quad(quad) => quad.read_input(trace_rows, row_index),
-            EdOpcodeLayout::FpMul(fpmul) => vec![], //fpmul.read_input(trace_rows, row, row_index),
-            _ => unimplemented!("Operation not supported"),
-        }
-    }
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
         match self {
             EdOpcodeLayout::Quad(quad) => quad.assign_row(trace_rows, row, row_index),
@@ -158,12 +151,6 @@ pub enum EpOpcodewithInputLayout {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EpOpcodewithInputLayout {
-    fn read_input(&self, trace_rows: &mut [Vec<F>], row_index: usize) -> Vec<F> {
-        match self {
-            EpOpcodewithInputLayout::Ep(opcode) => opcode.read_input(trace_rows, row_index),
-            EpOpcodewithInputLayout::Input(opcode) => opcode.read_input(trace_rows, row_index),
-        }
-    }
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
         match self {
             EpOpcodewithInputLayout::Ep(opcode) => opcode.assign_row(trace_rows, row, row_index),

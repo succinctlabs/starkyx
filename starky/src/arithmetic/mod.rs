@@ -132,15 +132,12 @@ pub trait Instruction<
     const N: usize,
 >: 'static + Sized + Send + Sync
 {
-    fn input_opcode(&self) -> usize;
-    fn generate_trace(self, pc: usize, input: Vec<F>, tx: Sender<(usize, usize, Vec<F>)>);
+    fn generate_trace(self, pc: usize, tx: Sender<(usize, usize, Vec<F>)>);
 }
 
 pub trait OpcodeLayout<F: RichField + Extendable<D>, const D: usize>:
     'static + Sized + Send + Sync
 {
-    fn read_input(&self, trace_rows: &mut [Vec<F>], row_index: usize) -> Vec<F>;
-
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize);
 
     fn packed_generic_constraints<
@@ -182,10 +179,6 @@ impl WriteInputLayout {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for WriteInputLayout {
-    fn read_input(&self, _trace_rows: &mut [Vec<F>], _row_index: usize) -> Vec<F> {
-        vec![]
-    }
-
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
         self.input.assign(trace_rows, row, row_index);
     }
@@ -222,10 +215,6 @@ pub enum ArithmeticLayout {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for ArithmeticLayout {
-    fn read_input(&self, trace_rows: &mut [Vec<F>], row_index: usize) -> Vec<F> {
-        vec![]
-    }
-
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
         match self {
             ArithmeticLayout::Add(layout) => layout.assign_row(trace_rows, row, row_index),

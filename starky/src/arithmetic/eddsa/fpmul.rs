@@ -61,14 +61,11 @@ impl FpMulLayout {
 
     #[inline]
     pub fn assign_row<T: Copy>(&self, trace_rows: &mut [Vec<T>], row: &mut [T], row_index: usize) {
-        self.a.assign(trace_rows, &mut row[0..N_LIMBS], row_index);
-        self.b
-            .assign(trace_rows, &mut row[N_LIMBS..2 * N_LIMBS], row_index);
         self.output
-            .assign(trace_rows, &mut row[2 * N_LIMBS..3 * N_LIMBS], row_index);
+            .assign(trace_rows, &mut row[0..N_LIMBS], row_index);
         self.witness.assign(
             trace_rows,
-            &mut row[3 * N_LIMBS..3 * N_LIMBS + NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS],
+            &mut row[N_LIMBS..N_LIMBS + NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS],
             row_index,
         )
     }
@@ -102,10 +99,6 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         let (witness_low, witness_high) = split_digits::<F>(&witness_shifted);
 
         let mut row = Vec::with_capacity(NUM_MUL_COLUMNS);
-
-        // inputs
-        row.extend(to_field_iter::<F>(&p_a));
-        row.extend(to_field_iter::<F>(&p_b));
 
         // output
         row.extend(to_field_iter::<F>(&p_result));
@@ -253,7 +246,9 @@ mod tests {
         Register::Local(3 * N_LIMBS, NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS),
     );
 
-    impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, D, 1>
+    const INLAYOUT: WriteInputLayout = WriteInputLayout::new(Register::Local(0, 2 * N_LIMBS));
+
+    impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, D, 2>
         for FpMulLayoutCircuit
     {
         const PUBLIC_INPUTS: usize = 0;
@@ -261,9 +256,12 @@ mod tests {
         const NUM_ARITHMETIC_COLUMNS: usize = NUM_MUL_COLUMNS;
         const TABLE_INDEX: usize = NUM_MUL_COLUMNS;
 
-        type Layouts = EdOpcodeLayout;
+        type Layouts = EpOpcodewithInputLayout;
 
-        const OPERATIONS: [EdOpcodeLayout; 1] = [EdOpcodeLayout::FpMul(LAYOUT)];
+        const OPERATIONS: [EpOpcodewithInputLayout; 2] = [
+            EpOpcodewithInputLayout::Ep(EdOpcodeLayout::FpMul(LAYOUT)),
+            EpOpcodewithInputLayout::Input(INLAYOUT),
+        ];
     }
 
     #[derive(Debug, Clone)]
@@ -278,20 +276,20 @@ mod tests {
         }
     }
 
-    impl<F: RichField + Extendable<D>, const D: usize> Instruction<FpMulLayoutCircuit, F, D, 1>
+    impl<F: RichField + Extendable<D>, const D: usize> Instruction<FpMulLayoutCircuit, F, D, 2>
         for FpMulInstruction
     {
-        fn input_opcode(&self) -> usize {
-            0
-        }
-
-        fn generate_trace(
-            self,
-            pc: usize,
-            input: Vec<F>,
-            tx: mpsc::Sender<(usize, usize, Vec<F>)>,
-        ) {
+        fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {
             rayon::spawn(move || {
+                let p_a = Polynomial::<F>::from_biguint_field(&self.a, 16, N_LIMBS);
+                let p_b = Polynomial::<F>::from_biguint_field(&self.b, 16, N_LIMBS);
+
+                let input = [p_a.into_vec(), p_b.into_vec()]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>();
+
+                tx.send((pc, 1, input)).unwrap();
                 let operation = EdOpcode::FpMul(self.a, self.b);
                 tx.send((pc, 0, operation.generate_trace_row())).unwrap();
             });
@@ -303,7 +301,7 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type S = ArithmeticStark<FpMulLayoutCircuit, 1, F, D>;
+        type S = ArithmeticStark<FpMulLayoutCircuit, 2, F, D>;
 
         let num_rows = 2u64.pow(16);
         let config = StarkConfig::standard_fast_config();

@@ -90,13 +90,6 @@ impl QuadLayout {
 
     #[inline]
     pub fn assign_row<T: Copy>(&self, trace_rows: &mut [Vec<T>], row: &mut [T], row_index: usize) {
-        //self.a.assign(trace_rows, &mut row[0..N_LIMBS], row_index);
-        //self.b
-        //    .assign(trace_rows, &mut row[N_LIMBS..2 * N_LIMBS], row_index);
-        //self.c
-        //    .assign(trace_rows, &mut row[2 * N_LIMBS..3 * N_LIMBS], row_index);
-        //self.d
-        //    .assign(trace_rows, &mut row[3 * N_LIMBS..4 * N_LIMBS], row_index);
         self.output
             .assign(trace_rows, &mut row[0..N_LIMBS], row_index);
         self.witness.assign(
@@ -137,12 +130,6 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         let (witness_low, witness_high) = split_digits::<F>(&witness_shifted);
 
         let mut row = Vec::with_capacity(NUM_QUAD_COLUMNS);
-
-        // inputs
-        //row.extend(to_field_iter::<F>(&p_a));
-        //row.extend(to_field_iter::<F>(&p_b));
-        //row.extend(to_field_iter::<F>(&p_c));
-        //row.extend(to_field_iter::<F>(&p_d));
 
         // output
         row.extend(to_field_iter::<F>(&p_result));
@@ -271,7 +258,6 @@ mod tests {
     use std::sync::mpsc;
 
     use num::bigint::RandBigInt;
-    use plonky2::field::extension::flatten;
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
@@ -280,7 +266,6 @@ mod tests {
 
     use super::*;
     use crate::arithmetic::arithmetic_stark::{ArithmeticStark, EmulatedCircuitLayout};
-    use crate::arithmetic::util::field_limbs_to_biguint;
     use crate::arithmetic::Instruction;
     use crate::config::StarkConfig;
     use crate::prover::prove;
@@ -355,16 +340,7 @@ mod tests {
     impl<F: RichField + Extendable<D>, const D: usize> Instruction<QuadLayoutCircuit, F, D, 2>
         for QuadInstruction
     {
-        fn input_opcode(&self) -> usize {
-            0
-        }
-
-        fn generate_trace(
-            self,
-            pc: usize,
-            _input: Vec<F>,
-            tx: mpsc::Sender<(usize, usize, Vec<F>)>,
-        ) {
+        fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {
             rayon::spawn(move || {
                 let p_a = Polynomial::<F>::from_biguint_field(&self.a, 16, N_LIMBS);
                 let p_b = Polynomial::<F>::from_biguint_field(&self.b, 16, N_LIMBS);
