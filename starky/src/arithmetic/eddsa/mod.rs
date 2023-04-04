@@ -96,7 +96,6 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpco
             EdOpcodeLayout::FpMul(fpmul) => fpmul.assign_row(trace_rows, row, row_index),
             EdOpcodeLayout::DEN(den) => den.assign_row(trace_rows, row, row_index),
             EdOpcodeLayout::MULD(muld) => muld.assign_row(trace_rows, row, row_index),
-            _ => unimplemented!("Operation not supported"),
         }
     }
 
@@ -127,7 +126,6 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpco
             EdOpcodeLayout::MULD(muld) => {
                 ArithmeticParser::muld_packed_generic_constraints(*muld, vars, yield_constr)
             }
-            _ => unimplemented!("Operation not supported"),
         }
     }
 
@@ -150,7 +148,6 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpco
             EdOpcodeLayout::MULD(muld) => {
                 ArithmeticParser::muld_ext_constraints(*muld, builder, vars, yield_constr)
             }
-            _ => unimplemented!("Operation not supported"),
         }
     }
 }
@@ -162,7 +159,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Opcode<F, D> for EdOpcode {
             EdOpcode::FpMul(a, b) => ArithmeticParser::fpmul_trace(a, b),
             EdOpcode::DEN(a, b, sign) => ArithmeticParser::den_trace(a, b, sign),
             EdOpcode::MULD(a) => ArithmeticParser::muld_trace(a),
-            _ => unimplemented!("Operation not supported"),
         }
     }
 }
