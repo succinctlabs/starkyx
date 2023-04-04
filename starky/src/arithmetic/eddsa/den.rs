@@ -14,7 +14,7 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub const NUM_CARRY_LIMBS: usize = N_LIMBS;
 pub const NUM_WITNESS_LIMBS: usize = 2 * N_LIMBS - 2;
-pub const NUM_DEN_COLUMNS: usize = 5 * N_LIMBS + NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS;
+pub const NUM_DEN_COLUMNS: usize = 3 * N_LIMBS + NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS;
 
 /// A gadget to compute
 /// QUAD(x, y, z, w) = (a * b + c * d) mod p
@@ -71,14 +71,11 @@ impl DenLayout {
 
     #[inline]
     pub fn assign_row<T: Copy>(&self, trace_rows: &mut [Vec<T>], row: &mut [T], row_index: usize) {
-        self.a.assign(trace_rows, &mut row[0..N_LIMBS], row_index);
-        self.b
-            .assign(trace_rows, &mut row[N_LIMBS..2 * N_LIMBS], row_index);
         self.output
-            .assign(trace_rows, &mut row[2 * N_LIMBS..3 * N_LIMBS], row_index);
+            .assign(trace_rows, &mut row[0..N_LIMBS], row_index);
         self.witness.assign(
             trace_rows,
-            &mut row[3 * N_LIMBS..3 * N_LIMBS + NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS],
+            &mut row[N_LIMBS..N_LIMBS + NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS],
             row_index,
         )
     }
@@ -92,13 +89,13 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
 
         let b_signed = if sign { b.clone() } else { &p - &b };
 
-        let z = (1u32 + &b_signed) % &p;
+        let z = (&b_signed + 1u32) % &p;
         let z_inverse = z.modpow(&(&p - 2u32), &p);
         debug_assert_eq!(&z_inverse * &z % &p, BigUint::from(1u32));
 
         let result = (&a * &z_inverse) % &p;
         debug_assert!(result < p);
-        let carry = (&z * &result - &a) / &p;
+        let carry = (&result * &z - &a) / &p;
         debug_assert!(carry < p);
         debug_assert_eq!(&carry * &p, &z * &result - &a);
 
@@ -107,7 +104,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         let p_b = Polynomial::<i64>::from_biguint_num(&b, 16, N_LIMBS);
         let p_p = Polynomial::<i64>::from_biguint_num(&p, 16, N_LIMBS);
 
-        let p_b_sign = &p_b * (if sign { 1 } else { -1 });
+        let p_b_sign = if sign { p_b.clone() } else { &p_p - &p_b };
         let p_z = &p_b_sign + 1;
 
         let p_result = Polynomial::<i64>::from_biguint_num(&result, 16, N_LIMBS);
@@ -123,10 +120,6 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
 
         let mut row = Vec::with_capacity(NUM_DEN_COLUMNS);
 
-        // inputs
-        row.extend(to_field_iter::<F>(&p_a));
-        row.extend(to_field_iter::<F>(&p_b));
-
         // output
         row.extend(to_field_iter::<F>(&p_result));
         // carry and witness
@@ -136,7 +129,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
 
         row
     }
-    /*
+
     /// Quad generic constraints
     pub fn den_packed_generic_constraints<
         FE,
@@ -145,7 +138,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         const COLUMNS: usize,
         const PUBLIC_INPUTS: usize,
     >(
-        layout: FpMulLayout,
+        layout: DenLayout,
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
@@ -161,12 +154,18 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         let witness_low = layout.witness_low.packed_entries_slice(&vars);
         let witness_high = layout.witness_high.packed_entries_slice(&vars);
 
-        // Construct the expected vanishing polynmial
-        let ab = PolynomialOps::mul(a, b);
-        let ab_minus_output = PolynomialOps::sub(&ab, output);
         let p_limbs = Polynomial::<FE>::from_iter(P_iter());
+        let p_p = Polynomial::<P>::from_polynomial(p_limbs.clone());
+
+        // z = sign*b + 1
+        let minus_b = PolynomialOps::sub(p_p.as_slice(), b);
+        let mut z = if layout.sign { b.to_vec() } else { minus_b };
+        z[0] += P::from(FE::ONE);
+
+        let res_z = PolynomialOps::mul(output, &z);
+        let res_z_minus_a = PolynomialOps::sub(&res_z, a);
         let mul_times_carry = PolynomialOps::scalar_poly_mul(carry, p_limbs.as_slice());
-        let vanishing_poly = PolynomialOps::sub(&ab_minus_output, &mul_times_carry);
+        let vanishing_poly = PolynomialOps::sub(&res_z_minus_a, &mul_times_carry);
 
         // reconstruct witness
 
@@ -192,7 +191,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     }
 
     pub fn den_ext_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        layout: FpMulLayout,
+        layout: DenLayout,
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
@@ -206,14 +205,31 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         let witness_low = layout.witness_low.evaluation_targets(&vars);
         let witness_high = layout.witness_high.evaluation_targets(&vars);
 
-        // Construct the expected vanishing polynmial
-        let ab = PolynomialGadget::mul_extension(builder, a, b);
-        let ab_minus_output = PolynomialGadget::sub_extension(builder, &ab, output);
         let p_limbs =
             PolynomialGadget::constant_extension(builder, &P_iter().collect::<Vec<_>>()[..]);
+
+        let minus_b = PolynomialGadget::sub_extension(builder, &p_limbs, b);
+        let mut z = builder.add_virtual_extension_targets(N_LIMBS);
+        let one = builder.constant_extension(F::Extension::ONE);
+
+        if layout.sign {
+            z[0] = builder.add_extension(b[0], one);
+            for i in 1..N_LIMBS {
+                z[i] = b[i];
+            }
+        } else {
+            z[0] = builder.add_extension(minus_b[0], one);
+            for i in 1..N_LIMBS {
+                z[i] = minus_b[i];
+            }
+        }
+
+        // Construct the expected vanishing polynmial
+        let res_z = PolynomialGadget::mul_extension(builder, output, &z);
+        let res_z_minus_a = PolynomialGadget::sub_extension(builder, &res_z, a);
         let mul_times_carry = PolynomialGadget::mul_extension(builder, carry, &p_limbs[..]);
         let vanishing_poly =
-            PolynomialGadget::sub_extension(builder, &ab_minus_output, &mul_times_carry);
+            PolynomialGadget::sub_extension(builder, &res_z_minus_a, &mul_times_carry);
 
         // reconstruct witness
 
@@ -238,7 +254,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         for constr in constraint {
             yield_constr.constraint_transition(builder, constr);
         }
-    } */
+    }
 }
 
 #[cfg(test)]
@@ -274,64 +290,83 @@ mod tests {
             let a = rand::thread_rng().gen_biguint(256) % &p;
             let b = rand::thread_rng().gen_biguint(256) & &p;
 
+            let _ = ArithmeticParser::<F, 4>::den_trace(a.clone(), b.clone(), false);
             let _ = ArithmeticParser::<F, 4>::den_trace(a.clone(), b.clone(), true);
         }
     }
 
-    /*
-
     #[derive(Clone, Copy, Debug)]
-    pub struct FpMulLayoutCircuit;
+    pub struct DenLayoutCircuit;
 
-    const LAYOUT: FpMulLayout = FpMulLayout::new(
+    const LAYOUT: DenLayout = DenLayout::new(
         Register::Local(0, N_LIMBS),
         Register::Local(N_LIMBS, N_LIMBS),
+        true,
         Register::Local(2 * N_LIMBS, N_LIMBS),
         Register::Local(3 * N_LIMBS, NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS),
     );
 
-    impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, D, 1>
-        for FpMulLayoutCircuit
+    const INLAYOUT: WriteInputLayout = WriteInputLayout::new(Register::Local(0, 2 * N_LIMBS));
+
+    impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, D, 2>
+        for DenLayoutCircuit
     {
         const PUBLIC_INPUTS: usize = 0;
         const ENTRY_COLUMN: usize = 0;
-        const NUM_ARITHMETIC_COLUMNS: usize = NUM_MUL_COLUMNS;
-        const TABLE_INDEX: usize = NUM_MUL_COLUMNS;
+        const NUM_ARITHMETIC_COLUMNS: usize = NUM_DEN_COLUMNS;
+        const TABLE_INDEX: usize = NUM_DEN_COLUMNS;
 
-        type Layouts = EdOpcodeLayout;
+        type Layouts = EpOpcodewithInputLayout;
 
-        const OPERATIONS: [EdOpcodeLayout; 1] = [EdOpcodeLayout::FpMul(LAYOUT)];
+        const OPERATIONS: [EpOpcodewithInputLayout; 2] = [
+            EpOpcodewithInputLayout::Ep(EdOpcodeLayout::DEN(LAYOUT)),
+            EpOpcodewithInputLayout::Input(INLAYOUT),
+        ];
     }
 
     #[derive(Debug, Clone)]
-    pub struct FpMulInstruction {
+    pub struct DenlInstruction {
         pub a: BigUint,
         pub b: BigUint,
     }
 
-    impl FpMulInstruction {
+    impl DenlInstruction {
         pub fn new(a: BigUint, b: BigUint) -> Self {
             Self { a, b }
         }
     }
 
-    impl<F: RichField + Extendable<D>, const D: usize> Instruction<FpMulLayoutCircuit, F, D, 1>
-        for FpMulInstruction
+    impl<F: RichField + Extendable<D>, const D: usize> Instruction<DenLayoutCircuit, F, D, 2>
+        for DenlInstruction
     {
         fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {
             rayon::spawn(move || {
-            let operation = EdOpcode::FpMul(self.a, self.b);
-            tx.send((pc, 0, operation.generate_trace_row())).unwrap();
+                let p_a = Polynomial::<F>::from_biguint_field(&self.a, 16, N_LIMBS);
+                let p_b = Polynomial::<F>::from_biguint_field(&self.b, 16, N_LIMBS);
+
+                let input = [p_a.into_vec(), p_b.into_vec()]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>();
+
+                tx.send((pc, 1, input)).unwrap();
+                let sign = match <DenLayoutCircuit as EmulatedCircuitLayout<F, D, 2>>::OPERATIONS[0]
+                {
+                    EpOpcodewithInputLayout::Ep(EdOpcodeLayout::DEN(layout)) => layout.sign,
+                    _ => unreachable!(),
+                };
+                let operation = EdOpcode::DEN(self.a, self.b, sign);
+                tx.send((pc, 0, operation.generate_trace_row())).unwrap();
             });
         }
     }
 
     #[test]
-    fn test_arithmetic_stark_fpmul() {
+    fn test_arithmetic_stark_den() {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type S = ArithmeticStark<FpMulLayoutCircuit, 1, F, D>;
+        type S = ArithmeticStark<DenLayoutCircuit, 2, F, D>;
 
         let num_rows = 2u64.pow(16);
         let config = StarkConfig::standard_fast_config();
@@ -346,7 +381,7 @@ mod tests {
             let a: BigUint = rng.gen_biguint(256) % &p22519;
             let b = rng.gen_biguint(256) % &p22519;
 
-            quad_operations.push(FpMulInstruction::new(a, b));
+            quad_operations.push(DenlInstruction::new(a, b));
         }
 
         let stark = S::new();
@@ -391,5 +426,5 @@ mod tests {
 
         timing.print();
         recursive_data.verify(recursive_proof).unwrap();
-    } */
+    }
 }

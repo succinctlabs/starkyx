@@ -16,6 +16,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use quad::QuadLayout;
 
+use self::den::DenLayout;
 use self::fpmul::FpMulLayout;
 use super::{ArithmeticParser, Opcode, OpcodeLayout, WriteInputLayout};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
@@ -65,7 +66,8 @@ pub fn D_iter<F: Field>() -> impl Iterator<Item = F> {
 pub enum EdOpcodeLayout {
     Quad(QuadLayout),
     FpMul(FpMulLayout),
-    DEN,
+    DEN(DenLayout),
+    MULD,
 }
 
 /// The core Opcodes that comprise any Edwards curve operation.
@@ -87,6 +89,7 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpco
         match self {
             EdOpcodeLayout::Quad(quad) => quad.assign_row(trace_rows, row, row_index),
             EdOpcodeLayout::FpMul(fpmul) => fpmul.assign_row(trace_rows, row, row_index),
+            EdOpcodeLayout::DEN(den) => den.assign_row(trace_rows, row, row_index),
             _ => unimplemented!("Operation not supported"),
         }
     }
@@ -112,6 +115,9 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpco
             EdOpcodeLayout::FpMul(fpmul) => {
                 ArithmeticParser::fpmul_packed_generic_constraints(*fpmul, vars, yield_constr)
             }
+            EdOpcodeLayout::DEN(den) => {
+                ArithmeticParser::den_packed_generic_constraints(*den, vars, yield_constr)
+            }
             _ => unimplemented!("Operation not supported"),
         }
     }
@@ -129,6 +135,9 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpco
             EdOpcodeLayout::FpMul(fpmul) => {
                 ArithmeticParser::fpmul_ext_constraints(*fpmul, builder, vars, yield_constr)
             }
+            EdOpcodeLayout::DEN(den) => {
+                ArithmeticParser::den_ext_constraints(*den, builder, vars, yield_constr)
+            }
             _ => unimplemented!("Operation not supported"),
         }
     }
@@ -139,6 +148,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Opcode<F, D> for EdOpcode {
         match self {
             EdOpcode::Quad(a, b, c, d) => ArithmeticParser::quad_trace(a, b, c, d),
             EdOpcode::FpMul(a, b) => ArithmeticParser::fpmul_trace(a, b),
+            EdOpcode::DEN(a, b, sign) => ArithmeticParser::den_trace(a, b, sign),
             _ => unimplemented!("Operation not supported"),
         }
     }
