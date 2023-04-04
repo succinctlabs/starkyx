@@ -73,6 +73,7 @@ impl<L: EmulatedCircuitLayout<N>, const N: usize, F, const D: usize> ArithmeticS
 impl<const N: usize, L: EmulatedCircuitLayout<N>, F: RichField + Extendable<D>, const D: usize>
     ArithmeticStark<L, N, F, D>
 {
+    /// Generate the trace for the arithmetic circuit
     pub fn generate_trace(&self, program: Vec<(ArithmeticOp, usize)>) -> Vec<PolynomialValues<F>> {
         let num_operations = program.len();
         let num_rows = num_operations;

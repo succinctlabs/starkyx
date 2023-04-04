@@ -17,6 +17,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_maybe_rayon::*;
 
 use self::add::AddModLayout;
+use self::eddsa::{EdOpcode, EdOpcodeLayout};
 use self::mul::MulModLayout;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -73,13 +74,14 @@ impl Register {
 pub enum ArithmeticOp {
     AddMod(BigUint, BigUint, BigUint),
     MulMod(BigUint, BigUint, BigUint),
-    EdAdd(BigUint, BigUint),
+    EdCurveOp(EdOpcode),
 }
 
 #[derive(Debug, Clone)]
 pub enum ArithmeticLayout {
     Add(AddModLayout),
     Mul(MulModLayout),
+    EdCurve(EdOpcodeLayout),
 }
 
 impl ArithmeticLayout {
@@ -87,6 +89,7 @@ impl ArithmeticLayout {
         match self {
             ArithmeticLayout::Add(layout) => layout.allocation_registers(),
             ArithmeticLayout::Mul(layout) => layout.allocation_registers(),
+            _ => unimplemented!("Operation not supported"),
         }
     }
 
@@ -94,6 +97,7 @@ impl ArithmeticLayout {
         match self {
             ArithmeticLayout::Add(layout) => layout.assign_row(trace_rows, row, row_index),
             ArithmeticLayout::Mul(layout) => layout.assign_row(trace_rows, row, row_index),
+            _ => unimplemented!("Operation not supported"),
         }
     }
 }
@@ -148,7 +152,8 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
             }
             ArithmeticLayout::Mul(layout) => {
                 Self::mul_packed_generic_constraints(layout, vars, yield_constr)
-            } //_ => unimplemented!("Operation not supported"),
+            }
+            _ => unimplemented!("Operation not supported"),
         }
     }
     pub fn op_ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
@@ -163,7 +168,8 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
             }
             ArithmeticLayout::Mul(layout) => {
                 Self::mul_ext_circuit(layout, builder, vars, yield_constr)
-            } //_ => unimplemented!("Operation not supported"),
+            }
+            _ => unimplemented!("Operation not supported"),
         }
     }
 }
