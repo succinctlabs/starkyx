@@ -12,19 +12,26 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::util::transpose;
 use plonky2_maybe_rayon::*;
 
-use super::{ArithmeticLayout, ArithmeticOp, ArithmeticParser};
+use super::{ArithmeticLayout, ArithmeticOp, ArithmeticParser, OpcodeLayout};
 use crate::lookup::{eval_lookups, eval_lookups_circuit, permuted_cols};
 use crate::permutation::PermutationPair;
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 /// A layout for a circuit that emulates field operations
-pub trait EmulatedCircuitLayout<const NUM_OPERATIONS: usize>: Sized + Send + Sync {
+pub trait EmulatedCircuitLayout<
+    F: RichField + Extendable<D>,
+    const NUM_OPERATIONS: usize,
+    const D: usize,
+>: Sized + Send + Sync
+{
     const PUBLIC_INPUTS: usize;
     const NUM_ARITHMETIC_COLUMNS: usize;
     const ENTRY_COLUMN: usize;
     const TABLE_INDEX: usize;
-    const OPERATIONS: [ArithmeticLayout; NUM_OPERATIONS];
+
+    type Layouts: OpcodeLayout<F, D>;
+    const OPERATIONS: [Self::Layouts; NUM_OPERATIONS];
 
     /// Check that the operations allocations are consistent with total number of columns
     fn is_consistent(&self) -> bool {
@@ -36,7 +43,12 @@ pub trait EmulatedCircuitLayout<const NUM_OPERATIONS: usize>: Sized + Send + Syn
     }
 }
 
-pub const fn num_columns<L: EmulatedCircuitLayout<N>, const N: usize>() -> usize {
+pub const fn num_columns<
+    F: RichField + Extendable<D>,
+    L: EmulatedCircuitLayout<F, N, D>,
+    const N: usize,
+    const D: usize,
+>() -> usize {
     L::ENTRY_COLUMN + 1 + 3 * L::NUM_ARITHMETIC_COLUMNS
 }
 
@@ -48,7 +60,19 @@ pub struct ArithmeticStark<L, const N: usize, F, const D: usize> {
     _marker: PhantomData<(F, L)>,
 }
 
-impl<L: EmulatedCircuitLayout<N>, const N: usize, F, const D: usize> ArithmeticStark<L, N, F, D> {
+impl<
+        L: EmulatedCircuitLayout<F, N, D>,
+        const N: usize,
+        F: RichField + Extendable<D>,
+        const D: usize,
+    > ArithmeticStark<L, N, F, D>
+{
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+
     #[inline]
     pub const fn col_perm_index(i: usize) -> usize {
         2 * i + L::TABLE_INDEX + 1
@@ -70,8 +94,12 @@ impl<L: EmulatedCircuitLayout<N>, const N: usize, F, const D: usize> ArithmeticS
     }
 }
 
-impl<const N: usize, L: EmulatedCircuitLayout<N>, F: RichField + Extendable<D>, const D: usize>
-    ArithmeticStark<L, N, F, D>
+impl<
+        const N: usize,
+        L: EmulatedCircuitLayout<F, N, D>,
+        F: RichField + Extendable<D>,
+        const D: usize,
+    > ArithmeticStark<L, N, F, D>
 {
     /// Generate the trace for the arithmetic circuit
     pub fn generate_trace(&self, program: Vec<(ArithmeticOp, usize)>) -> Vec<PolynomialValues<F>> {
@@ -98,6 +126,13 @@ impl<const N: usize, L: EmulatedCircuitLayout<N>, F: RichField + Extendable<D>, 
         let mut trace_cols = transpose(&trace_rows);
         trace_cols.resize(Self::num_columns(), Vec::with_capacity(num_rows));
 
+        trace_cols[L::TABLE_INDEX]
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, x)| {
+                *x = F::from_canonical_usize(i);
+            });
+
         // Calculate the permutation and append permuted columbs to trace
         let (trace_values, perm_values) = trace_cols.split_at_mut(L::TABLE_INDEX + 1);
         (0..L::NUM_ARITHMETIC_COLUMNS)
@@ -116,8 +151,12 @@ impl<const N: usize, L: EmulatedCircuitLayout<N>, F: RichField + Extendable<D>, 
     }
 }
 
-impl<const N: usize, L: EmulatedCircuitLayout<N>, F: RichField + Extendable<D>, const D: usize>
-    Stark<F, D> for ArithmeticStark<L, N, F, D>
+impl<
+        const N: usize,
+        L: EmulatedCircuitLayout<F, N, D>,
+        F: RichField + Extendable<D>,
+        const D: usize,
+    > Stark<F, D> for ArithmeticStark<L, N, F, D>
 {
     const COLUMNS: usize = Self::num_columns();
     const PUBLIC_INPUTS: usize = L::PUBLIC_INPUTS;
@@ -131,7 +170,7 @@ impl<const N: usize, L: EmulatedCircuitLayout<N>, F: RichField + Extendable<D>, 
         P: PackedField<Scalar = FE>,
     {
         for layout in L::OPERATIONS {
-            ArithmeticParser::op_packed_generic_constraints(layout, vars, yield_constr);
+            layout.packed_generic_constraints(vars, yield_constr);
         }
         // lookp table values
         yield_constr.constraint_first_row(vars.local_values[L::TABLE_INDEX]);
@@ -156,7 +195,7 @@ impl<const N: usize, L: EmulatedCircuitLayout<N>, F: RichField + Extendable<D>, 
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
         for layout in L::OPERATIONS {
-            ArithmeticParser::op_ext_circuit(layout, builder, vars, yield_constr);
+            layout.ext_circuit_constraints(builder, vars, yield_constr);
         }
         // lookup table values
         yield_constr.constraint_first_row(builder, vars.local_values[L::TABLE_INDEX]);
@@ -217,11 +256,15 @@ mod tests {
     #[derive(Clone, Copy, Debug)]
     pub struct AddModLayoutCircuit;
 
-    impl EmulatedCircuitLayout<1> for AddModLayoutCircuit {
+    impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, 1, D>
+        for AddModLayoutCircuit
+    {
         const PUBLIC_INPUTS: usize = 0;
         const NUM_ARITHMETIC_COLUMNS: usize = add::NUM_ARITH_COLUMNS;
         const ENTRY_COLUMN: usize = 0;
         const TABLE_INDEX: usize = add::NUM_ARITH_COLUMNS;
+
+        type Layouts = ArithmeticLayout;
         const OPERATIONS: [ArithmeticLayout; 1] = [ArithmeticLayout::Add(add::AddModLayout::new(
             Register::Local(0, add::N_LIMBS),
             Register::Local(add::N_LIMBS, add::N_LIMBS),
@@ -306,11 +349,15 @@ mod tests {
     pub struct MulModLayoutCircuit;
 
     use crate::arithmetic::mul;
-    impl EmulatedCircuitLayout<1> for MulModLayoutCircuit {
+    impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, 1, D>
+        for MulModLayoutCircuit
+    {
         const PUBLIC_INPUTS: usize = 0;
         const NUM_ARITHMETIC_COLUMNS: usize = mul::NUM_ARITH_COLUMNS;
         const ENTRY_COLUMN: usize = 0;
         const TABLE_INDEX: usize = mul::NUM_ARITH_COLUMNS;
+
+        type Layouts = ArithmeticLayout;
         const OPERATIONS: [ArithmeticLayout; 1] = [ArithmeticLayout::Mul(mul::MulModLayout::new(
             Register::Local(0, mul::N_LIMBS),
             Register::Local(mul::N_LIMBS, mul::N_LIMBS),

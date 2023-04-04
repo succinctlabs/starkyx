@@ -1,8 +1,20 @@
 use num::{BigUint, Num, One};
+use plonky2::field::types::Field;
 
 pub mod denominator;
 pub mod ec_add;
 pub mod quad;
+
+use std::sync::mpsc::Sender;
+
+use plonky2::field::extension::{Extendable, FieldExtension};
+use plonky2::field::packed::PackedField;
+use plonky2::hash::hash_types::RichField;
+use plonky2::iop::ext_target::ExtensionTarget;
+use plonky2::plonk::circuit_builder::CircuitBuilder;
+use plonky2_maybe_rayon::*;
+
+use super::ArithmeticParser;
 
 pub const LIMB: u32 = 2u32.pow(16);
 
@@ -28,10 +40,30 @@ pub fn get_d() -> BigUint {
     .unwrap()
 }
 
+#[allow(non_snake_case)]
+#[inline]
+pub fn P_iter<F: Field>() -> impl Iterator<Item = F> {
+    P.iter().map(|&x| F::from_canonical_u16(x))
+}
+
+pub trait Ed25519Param<const N_LIMBS: usize> {
+    type F: Field;
+    const P: [Self::F; N_LIMBS];
+    const D: [Self::F; N_LIMBS];
+}
+
 /// Layoutds for the Opcodes that comprise any Edwards curve operation.
 #[derive(Debug, Clone, Copy)]
 pub enum EdOpcodeLayout {
     Quad(quad::QuadLayout),
+}
+
+impl EdOpcodeLayout {
+    pub fn assign_row<T: Copy>(&self, trace_rows: &mut [Vec<T>], row: &mut [T], row_index: usize) {
+        match self {
+            _ => unimplemented!("Operation not supported"),
+        }
+    }
 }
 
 /// The core Opcodes that comprise any Edwards curve operation.
@@ -42,6 +74,15 @@ pub enum EdOpcode {
 
     /// DEN(x_1, x_2, y_1, y_2, sign) = 1 + sign * D * (x_1 * x_2 * y_1 * y_2) mod p
     DEN(BigUint, BigUint, BigUint, BigUint, bool),
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
+    pub fn ed_opcode_trace(opcode: EdOpcode) -> Vec<F> {
+        match opcode {
+            EdOpcode::Quad(x1, x2, x3, x4) => Self::quad_trace(x1, x2, x3, x4),
+            _ => unimplemented!("Operation not supported"),
+        }
+    }
 }
 
 #[cfg(test)]

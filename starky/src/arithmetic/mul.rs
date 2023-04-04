@@ -101,7 +101,7 @@ impl MulModLayout {
         let input = Register::Local(0, 3 * N_LIMBS);
         let witness = Register::Local(
             self.carry.index(),
-            NUM_CARRY_COLUMNS + 2 * NUM_WITNESS_COLUMNS + 1,
+            NUM_CARRY_COLUMNS + 2 * NUM_WITNESS_COLUMNS,
         );
 
         (input, self.output, witness)
@@ -114,7 +114,7 @@ impl MulModLayout {
         input_reg.assign(trace_rows, input_slice, row_index);
         let output_slice = &mut row[3 * N_LIMBS..4 * N_LIMBS];
         output_reg.assign(trace_rows, output_slice, row_index);
-        let witness_slice = &mut row[4 * N_LIMBS..];
+        let witness_slice = &mut row[4 * N_LIMBS..NUM_ARITH_COLUMNS];
         witness_reg.assign(trace_rows, witness_slice, row_index);
     }
 }

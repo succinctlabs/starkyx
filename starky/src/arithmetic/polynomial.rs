@@ -166,6 +166,18 @@ impl<T: Clone> Polynomial<T> {
         }
     }
 
+    pub fn from_slice(coefficients: &[T]) -> Self {
+        Self {
+            coefficients: coefficients.to_vec(),
+        }
+    }
+
+    pub fn from_iter(coefficients: impl Iterator<Item = T>) -> Self {
+        Self {
+            coefficients: coefficients.collect(),
+        }
+    }
+
     pub fn from_polynomial<S>(p: Polynomial<S>) -> Self
     where
         S: Into<T>,

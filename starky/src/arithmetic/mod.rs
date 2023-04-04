@@ -110,6 +110,37 @@ impl Register {
     }
 }
 
+pub trait Opcode<F, const D: usize>: 'static + Sized + Send + Sync {
+    fn generate_trace(self) -> Vec<F>;
+}
+
+pub trait OpcodeLayout<F: RichField + Extendable<D>, const D: usize>:
+    'static + Sized + Send + Sync
+{
+    fn assign_row<T: Copy>(&self, trace_rows: &mut [Vec<T>], row: &mut [T], row_index: usize);
+
+    fn packed_generic_constraints<
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+    >(
+        &self,
+        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
+    ) where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>;
+
+    fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
+    );
+}
+
 #[derive(Debug, Clone)]
 pub enum ArithmeticOp {
     AddMod(BigUint, BigUint, BigUint),
@@ -121,22 +152,65 @@ pub enum ArithmeticOp {
 pub enum ArithmeticLayout {
     Add(AddModLayout),
     Mul(MulModLayout),
-    EdCurve(EdOpcodeLayout),
 }
 
-impl ArithmeticLayout {
-    pub fn allocation_registers(&self) -> (Register, Register, Register) {
+impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for ArithmeticLayout {
+    fn assign_row<T: Copy>(&self, trace_rows: &mut [Vec<T>], row: &mut [T], row_index: usize) {
         match self {
-            ArithmeticLayout::Add(layout) => layout.allocation_registers(),
-            ArithmeticLayout::Mul(layout) => layout.allocation_registers(),
+            ArithmeticLayout::Add(layout) => layout.assign_row(trace_rows, row, row_index),
+            ArithmeticLayout::Mul(layout) => layout.assign_row(trace_rows, row, row_index),
             _ => unimplemented!("Operation not supported"),
         }
     }
 
-    pub fn assign_row<T: Copy>(&self, trace_rows: &mut [Vec<T>], row: &mut [T], row_index: usize) {
+    fn packed_generic_constraints<
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+    >(
+        &self,
+        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
+    ) where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>,
+    {
         match self {
-            ArithmeticLayout::Add(layout) => layout.assign_row(trace_rows, row, row_index),
-            ArithmeticLayout::Mul(layout) => layout.assign_row(trace_rows, row, row_index),
+            ArithmeticLayout::Add(layout) => {
+                ArithmeticParser::add_packed_generic_constraints(*layout, vars, yield_constr)
+            }
+            ArithmeticLayout::Mul(layout) => {
+                ArithmeticParser::mul_packed_generic_constraints(*layout, vars, yield_constr)
+            }
+            _ => unimplemented!("Operation not supported"),
+        }
+    }
+
+    fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
+    ) {
+        match self {
+            ArithmeticLayout::Add(layout) => {
+                ArithmeticParser::add_ext_circuit(*layout, builder, vars, yield_constr)
+            }
+            ArithmeticLayout::Mul(layout) => {
+                ArithmeticParser::mul_ext_circuit(*layout, builder, vars, yield_constr)
+            }
+            _ => unimplemented!("Operation not supported"),
+        }
+    }
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> Opcode<F, D> for ArithmeticOp {
+    fn generate_trace(self) -> Vec<F> {
+        match self {
+            ArithmeticOp::AddMod(a, b, m) => ArithmeticParser::add_trace(a, b, m),
+            ArithmeticOp::MulMod(a, b, m) => ArithmeticParser::mul_trace(a, b, m),
             _ => unimplemented!("Operation not supported"),
         }
     }
@@ -155,47 +229,14 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         row: usize,
         op_index: usize,
         tx: Sender<(usize, usize, Vec<F>)>,
-        operation: ArithmeticOp,
+        operation: impl Opcode<F, D>,
     ) {
-        match operation {
-            ArithmeticOp::AddMod(a, b, m) => rayon::spawn(move || {
-                let mut row_vec = Self::add_trace(a, b, m);
-                row_vec.push(F::from_canonical_usize(row));
-                tx.send((row, op_index, row_vec)).unwrap()
-            }),
-            ArithmeticOp::MulMod(a, b, m) => rayon::spawn(move || {
-                let mut row_vec = Self::mul_trace(a, b, m);
-                row_vec.push(F::from_canonical_usize(row));
-                tx.send((row, op_index, row_vec)).unwrap()
-            }),
-            _ => unimplemented!("Operation not supported"),
-        }
+        rayon::spawn(move || {
+            let row_vec = operation.generate_trace();
+            tx.send((row, op_index, row_vec)).unwrap()
+        })
     }
 
-    pub fn op_packed_generic_constraints<
-        FE,
-        P,
-        const D2: usize,
-        const COLUMNS: usize,
-        const PUBLIC_INPUTS: usize,
-    >(
-        layout: ArithmeticLayout,
-        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
-    ) where
-        FE: FieldExtension<D2, BaseField = F>,
-        P: PackedField<Scalar = FE>,
-    {
-        match layout {
-            ArithmeticLayout::Add(layout) => {
-                Self::add_packed_generic_constraints(layout, vars, yield_constr)
-            }
-            ArithmeticLayout::Mul(layout) => {
-                Self::mul_packed_generic_constraints(layout, vars, yield_constr)
-            }
-            _ => unimplemented!("Operation not supported"),
-        }
-    }
     pub fn op_ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         layout: ArithmeticLayout,
         builder: &mut CircuitBuilder<F, D>,
