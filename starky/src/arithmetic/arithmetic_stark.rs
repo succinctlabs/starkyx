@@ -253,10 +253,8 @@ mod tests {
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
 
-    use crate::arithmetic::Opcode;
-
     use super::*;
-    use crate::arithmetic::{add, ArithmeticLayout, ArithmeticOp, Register};
+    use crate::arithmetic::{add, ArithmeticLayout, ArithmeticOp, Opcode, Register};
     use crate::config::StarkConfig;
     use crate::prover::prove;
     use crate::recursive_verifier::{

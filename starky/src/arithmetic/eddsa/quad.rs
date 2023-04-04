@@ -10,10 +10,8 @@ use crate::arithmetic::util::{extract_witness_and_shift, split_digits, to_field_
 use crate::arithmetic::{ArithmeticParser, Register};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-pub const N_LIMBS: usize = 16;
 pub const NUM_CARRY_LIMBS: usize = N_LIMBS;
 pub const NUM_WITNESS_LIMBS: usize = 2 * N_LIMBS - 2;
-const WITNESS_OFFSET: usize = 1usize << 20; // Witness offset
 const NUM_QUAD_COLUMNS: usize = 5 * N_LIMBS + NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS;
 
 /// A gadget to compute
@@ -334,8 +332,8 @@ mod tests {
     {
         fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {
             rayon::spawn(move || {
-            let operation = EdOpcode::Quad(self.a, self.b, self.c, self.d);
-            tx.send((pc, 0, operation.generate_trace_row())).unwrap();
+                let operation = EdOpcode::Quad(self.a, self.b, self.c, self.d);
+                tx.send((pc, 0, operation.generate_trace_row())).unwrap();
             });
         }
     }

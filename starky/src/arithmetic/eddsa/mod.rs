@@ -16,12 +16,15 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use quad::QuadLayout;
 
+use self::fpmul::FpMulLayout;
 use super::{ArithmeticParser, Opcode, OpcodeLayout};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 // General use constants
 
 pub const LIMB: u32 = 2u32.pow(16);
+pub const N_LIMBS: usize = 16;
+const WITNESS_OFFSET: usize = 1usize << 20; // Witness offset
 
 pub const P: [u16; 16] = [
     65517, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535,
@@ -55,7 +58,7 @@ pub fn P_iter<F: Field>() -> impl Iterator<Item = F> {
 #[derive(Debug, Clone, Copy)]
 pub enum EdOpcodeLayout {
     Quad(QuadLayout),
-    MUL4,
+    FpMul(FpMulLayout),
     DENX3,
     DENY3,
 }
@@ -64,6 +67,7 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpco
     fn assign_row<T: Copy>(&self, trace_rows: &mut [Vec<T>], row: &mut [T], row_index: usize) {
         match self {
             EdOpcodeLayout::Quad(quad) => quad.assign_row(trace_rows, row, row_index),
+            EdOpcodeLayout::FpMul(fpmul) => fpmul.assign_row(trace_rows, row, row_index),
             _ => unimplemented!("Operation not supported"),
         }
     }
@@ -86,6 +90,9 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpco
             EdOpcodeLayout::Quad(quad) => {
                 ArithmeticParser::quad_packed_generic_constraints(*quad, vars, yield_constr)
             }
+            EdOpcodeLayout::FpMul(fpmul) => {
+                ArithmeticParser::fpmul_packed_generic_constraints(*fpmul, vars, yield_constr)
+            }
             _ => unimplemented!("Operation not supported"),
         }
     }
@@ -100,6 +107,9 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpco
             EdOpcodeLayout::Quad(quad) => {
                 ArithmeticParser::quad_ext_constraints(*quad, builder, vars, yield_constr)
             }
+            EdOpcodeLayout::FpMul(fpmul) => {
+                ArithmeticParser::fpmul_ext_constraints(*fpmul, builder, vars, yield_constr)
+            }
             _ => unimplemented!("Operation not supported"),
         }
     }
@@ -110,6 +120,9 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpco
 pub enum EdOpcode {
     /// Quad(x_1, x_2, x_3, x_4) = (x_1 * x_2 + x_3 * x_4) mod p
     Quad(BigUint, BigUint, BigUint, BigUint),
+
+    // FpMul(x_1, x_2) = (x_1 * x_2) mod p
+    FpMul(BigUint, BigUint),
 
     /// DEN(x_1, x_2, y_1, y_2, sign) = 1 + sign * D * (x_1 * x_2 * y_1 * y_2) mod p
     DEN(BigUint, BigUint, BigUint, BigUint, bool),
@@ -128,6 +141,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Opcode<F, D> for EdOpcode {
     fn generate_trace_row(self) -> Vec<F> {
         match self {
             EdOpcode::Quad(a, b, c, d) => ArithmeticParser::quad_trace(a, b, c, d),
+            EdOpcode::FpMul(a, b) => ArithmeticParser::fpmul_trace(a, b),
             _ => unimplemented!("Operation not supported"),
         }
     }
