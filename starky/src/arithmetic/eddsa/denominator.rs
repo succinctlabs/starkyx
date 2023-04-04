@@ -9,5 +9,3 @@ use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps}
 use crate::arithmetic::util::{extract_witness_and_shift, split_digits, to_field_iter};
 use crate::arithmetic::{ArithmeticParser, Register};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
-
-

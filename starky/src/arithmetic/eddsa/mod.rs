@@ -1,28 +1,25 @@
 //! Stark circuits for the EdDSA signature scheme.
-//! 
-//! 
+//!
+//!
 
 use num::{BigUint, Num, One};
 use plonky2::field::types::Field;
 
 pub mod denominator;
 pub mod ec_add;
-pub mod quad;
 pub mod fpmul;
+pub mod quad;
 
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
+use quad::QuadLayout;
 
 use super::{ArithmeticParser, Opcode, OpcodeLayout};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-
-use quad::QuadLayout;
-
-
-// General use constants 
+// General use constants
 
 pub const LIMB: u32 = 2u32.pow(16);
 
@@ -54,7 +51,6 @@ pub fn P_iter<F: Field>() -> impl Iterator<Item = F> {
     P.iter().map(|&x| F::from_canonical_u16(x))
 }
 
-
 /// Layoutds for the Opcodes that comprise any Edwards curve operation.
 #[derive(Debug, Clone, Copy)]
 pub enum EdOpcodeLayout {
@@ -70,7 +66,6 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpco
             EdOpcodeLayout::Quad(quad) => quad.assign_row(trace_rows, row, row_index),
             _ => unimplemented!("Operation not supported"),
         }
-        
     }
 
     fn packed_generic_constraints<
@@ -104,7 +99,7 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpco
         match self {
             EdOpcodeLayout::Quad(quad) => {
                 ArithmeticParser::quad_ext_constraints(*quad, builder, vars, yield_constr)
-            },
+            }
             _ => unimplemented!("Operation not supported"),
         }
     }

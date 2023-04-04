@@ -3,8 +3,6 @@
 use core::marker::PhantomData;
 use std::sync::mpsc;
 
-use super::Instruction;
-
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::field::polynomial::PolynomialValues;
@@ -14,14 +12,15 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::util::transpose;
 use plonky2_maybe_rayon::*;
 
-use super::{ArithmeticParser, Opcode, OpcodeLayout};
+use super::{Instruction, OpcodeLayout};
 use crate::lookup::{eval_lookups, eval_lookups_circuit, permuted_cols};
 use crate::permutation::PermutationPair;
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 /// A layout for a circuit that emulates field operations
-pub trait EmulatedCircuitLayout<F : RichField + Extendable<D>, const D : usize, const N: usize>: Sized + Send + Sync
+pub trait EmulatedCircuitLayout<F: RichField + Extendable<D>, const D: usize, const N: usize>:
+    Sized + Send + Sync
 {
     const PUBLIC_INPUTS: usize;
     const NUM_ARITHMETIC_COLUMNS: usize;
@@ -112,7 +111,7 @@ impl<
     /// Generate the trace for the arithmetic circuit
     pub fn generate_trace(
         &self,
-        program: Vec<(impl Opcode<F, D>, usize)>,
+        program: Vec<impl Instruction<L, F, D, N>>,
     ) -> Vec<PolynomialValues<F>> {
         let num_operations = program.len();
         let num_rows = num_operations;
@@ -122,9 +121,9 @@ impl<
         // Collecte the trace rows which are processed in parallel
         let (tx, rx) = mpsc::channel();
 
-        for (i, (op, op_index)) in program.into_iter().enumerate() {
+        for (pc, instruction) in program.into_iter().enumerate() {
             let tx = tx.clone();
-            ArithmeticParser::<F, D>::op_trace_row(i, op_index, tx, op);
+            instruction.generate_trace(pc, tx);
         }
         drop(tx);
 
@@ -254,6 +253,8 @@ mod tests {
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
 
+    use crate::arithmetic::Opcode;
+
     use super::*;
     use crate::arithmetic::{add, ArithmeticLayout, ArithmeticOp, Register};
     use crate::config::StarkConfig;
@@ -285,6 +286,28 @@ mod tests {
         ))];
     }
 
+    #[derive(Debug, Clone)]
+    pub struct AddInstruction {
+        pub a: BigUint,
+        pub b: BigUint,
+        pub modulus: BigUint,
+    }
+
+    impl AddInstruction {
+        pub fn new(a: BigUint, b: BigUint, modulus: BigUint) -> Self {
+            Self { a, b, modulus }
+        }
+    }
+
+    impl<F: RichField + Extendable<D>, const D: usize> Instruction<AddModLayoutCircuit, F, D, 1>
+        for AddInstruction
+    {
+        fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {
+            let operation = ArithmeticOp::AddMod(self.a, self.b, self.modulus);
+            tx.send((pc, 0, operation.generate_trace_row())).unwrap();
+        }
+    }
+
     #[test]
     fn test_arithmetic_stark_add() {
         const D: usize = 2;
@@ -306,8 +329,7 @@ mod tests {
             let b = rng.gen_biguint(255) % &p22519;
             let p = p22519.clone();
 
-            let operation = ArithmeticOp::AddMod(a.clone(), b.clone(), p.clone());
-            additions.push((operation, 0));
+            additions.push(AddInstruction::new(a, b, p));
         }
 
         let stark = S {
@@ -381,6 +403,30 @@ mod tests {
         ))];
     }
 
+    #[derive(Debug, Clone)]
+    pub struct MulInstruction {
+        pub a: BigUint,
+        pub b: BigUint,
+        pub modulus: BigUint,
+    }
+
+    impl MulInstruction {
+        pub fn new(a: BigUint, b: BigUint, modulus: BigUint) -> Self {
+            Self { a, b, modulus }
+        }
+    }
+
+    impl<F: RichField + Extendable<D>, const D: usize> Instruction<MulModLayoutCircuit, F, D, 1>
+        for MulInstruction
+    {
+        fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {
+            rayon::spawn(move || {
+                let operation = ArithmeticOp::MulMod(self.a, self.b, self.modulus);
+                tx.send((pc, 0, operation.generate_trace_row())).unwrap();
+            });
+        }
+    }
+
     #[test]
     fn test_arithmetic_stark_mul() {
         const D: usize = 2;
@@ -402,8 +448,7 @@ mod tests {
             let b = rng.gen_biguint(255) % &p22519;
             let p = p22519.clone();
 
-            let operation = ArithmeticOp::MulMod(a.clone(), b.clone(), p.clone());
-            multiplication.push((operation, 0));
+            multiplication.push(MulInstruction::new(a, b, p));
         }
 
         let stark = S {

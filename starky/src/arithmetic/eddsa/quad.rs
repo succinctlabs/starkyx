@@ -252,14 +252,18 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::mpsc;
+
     use num::bigint::RandBigInt;
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
+    use plonky2_maybe_rayon::*;
 
     use super::*;
     use crate::arithmetic::arithmetic_stark::{ArithmeticStark, EmulatedCircuitLayout};
+    use crate::arithmetic::Instruction;
     use crate::config::StarkConfig;
     use crate::prover::prove;
     use crate::recursive_verifier::{
@@ -311,8 +315,33 @@ mod tests {
         const OPERATIONS: [EdOpcodeLayout; 1] = [EdOpcodeLayout::Quad(LAYOUT)];
     }
 
+    #[derive(Debug, Clone)]
+    pub struct QuadInstruction {
+        pub a: BigUint,
+        pub b: BigUint,
+        pub c: BigUint,
+        pub d: BigUint,
+    }
+
+    impl QuadInstruction {
+        pub fn new(a: BigUint, b: BigUint, c: BigUint, d: BigUint) -> Self {
+            Self { a, b, c, d }
+        }
+    }
+
+    impl<F: RichField + Extendable<D>, const D: usize> Instruction<QuadLayoutCircuit, F, D, 1>
+        for QuadInstruction
+    {
+        fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {
+            rayon::spawn(move || {
+            let operation = EdOpcode::Quad(self.a, self.b, self.c, self.d);
+            tx.send((pc, 0, operation.generate_trace_row())).unwrap();
+            });
+        }
+    }
+
     #[test]
-    fn test_quad_stark() {
+    fn test_arithmetic_stark_quad() {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
@@ -333,8 +362,7 @@ mod tests {
             let c = rng.gen_biguint(256) % &p22519;
             let d = rng.gen_biguint(256) % &p22519;
 
-            let operation = EdOpcode::Quad(a, b, c, d);
-            quad_operations.push((operation, 0));
+            quad_operations.push(QuadInstruction::new(a, b, c, d));
         }
 
         let stark = S::new();
