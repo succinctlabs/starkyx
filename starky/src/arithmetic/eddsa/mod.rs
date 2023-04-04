@@ -8,16 +8,18 @@ use plonky2::field::types::Field;
 pub mod den;
 pub mod ec_add;
 pub mod fpmul;
+pub mod muld;
 pub mod quad;
 
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use quad::QuadLayout;
 
 use self::den::DenLayout;
 use self::fpmul::FpMulLayout;
+use self::muld::MulDLayout;
+use self::quad::QuadLayout;
 use super::{ArithmeticParser, Opcode, OpcodeLayout, WriteInputLayout};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -67,7 +69,7 @@ pub enum EdOpcodeLayout {
     Quad(QuadLayout),
     FpMul(FpMulLayout),
     DEN(DenLayout),
-    MULD,
+    MULD(MulDLayout),
 }
 
 /// The core Opcodes that comprise any Edwards curve operation.
@@ -82,6 +84,9 @@ pub enum EdOpcode {
     /// DEN(a, b, sign) = a * (1 + sign * b)^{-1}
     /// In fact, we prove that a = b * result in the circuit
     DEN(BigUint, BigUint, bool),
+
+    // MULD(a) = ED * a
+    MULD(BigUint),
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpcodeLayout {
@@ -90,6 +95,7 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpco
             EdOpcodeLayout::Quad(quad) => quad.assign_row(trace_rows, row, row_index),
             EdOpcodeLayout::FpMul(fpmul) => fpmul.assign_row(trace_rows, row, row_index),
             EdOpcodeLayout::DEN(den) => den.assign_row(trace_rows, row, row_index),
+            EdOpcodeLayout::MULD(muld) => muld.assign_row(trace_rows, row, row_index),
             _ => unimplemented!("Operation not supported"),
         }
     }
@@ -118,6 +124,9 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpco
             EdOpcodeLayout::DEN(den) => {
                 ArithmeticParser::den_packed_generic_constraints(*den, vars, yield_constr)
             }
+            EdOpcodeLayout::MULD(muld) => {
+                ArithmeticParser::muld_packed_generic_constraints(*muld, vars, yield_constr)
+            }
             _ => unimplemented!("Operation not supported"),
         }
     }
@@ -138,6 +147,9 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpco
             EdOpcodeLayout::DEN(den) => {
                 ArithmeticParser::den_ext_constraints(*den, builder, vars, yield_constr)
             }
+            EdOpcodeLayout::MULD(muld) => {
+                ArithmeticParser::muld_ext_constraints(*muld, builder, vars, yield_constr)
+            }
             _ => unimplemented!("Operation not supported"),
         }
     }
@@ -149,6 +161,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Opcode<F, D> for EdOpcode {
             EdOpcode::Quad(a, b, c, d) => ArithmeticParser::quad_trace(a, b, c, d),
             EdOpcode::FpMul(a, b) => ArithmeticParser::fpmul_trace(a, b),
             EdOpcode::DEN(a, b, sign) => ArithmeticParser::den_trace(a, b, sign),
+            EdOpcode::MULD(a) => ArithmeticParser::muld_trace(a),
             _ => unimplemented!("Operation not supported"),
         }
     }
