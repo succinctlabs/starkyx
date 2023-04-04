@@ -123,7 +123,8 @@ impl<
 
         for (pc, instruction) in program.into_iter().enumerate() {
             let tx = tx.clone();
-            instruction.generate_trace(pc, tx);
+            let input = L::OPERATIONS[instruction.input_opcode()].read_input(&mut trace_rows, pc);
+            instruction.generate_trace(pc, input, tx);
         }
         drop(tx);
 
@@ -300,7 +301,16 @@ mod tests {
     impl<F: RichField + Extendable<D>, const D: usize> Instruction<AddModLayoutCircuit, F, D, 1>
         for AddInstruction
     {
-        fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {
+        fn input_opcode(&self) -> usize {
+            0
+        }
+
+        fn generate_trace(
+            self,
+            pc: usize,
+            input: Vec<F>,
+            tx: mpsc::Sender<(usize, usize, Vec<F>)>,
+        ) {
             let operation = ArithmeticOp::AddMod(self.a, self.b, self.modulus);
             tx.send((pc, 0, operation.generate_trace_row())).unwrap();
         }
@@ -417,7 +427,16 @@ mod tests {
     impl<F: RichField + Extendable<D>, const D: usize> Instruction<MulModLayoutCircuit, F, D, 1>
         for MulInstruction
     {
-        fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {
+        fn input_opcode(&self) -> usize {
+            0
+        }
+
+        fn generate_trace(
+            self,
+            pc: usize,
+            input: Vec<F>,
+            tx: mpsc::Sender<(usize, usize, Vec<F>)>,
+        ) {
             rayon::spawn(move || {
                 let operation = ArithmeticOp::MulMod(self.a, self.b, self.modulus);
                 tx.send((pc, 0, operation.generate_trace_row())).unwrap();

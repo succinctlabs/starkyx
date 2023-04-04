@@ -1,3 +1,5 @@
+use core::ops::Not;
+
 use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
@@ -12,16 +14,15 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub const NUM_CARRY_LIMBS: usize = N_LIMBS;
 pub const NUM_WITNESS_LIMBS: usize = 2 * N_LIMBS - 2;
-const NUM_QUAD_COLUMNS: usize = 5 * N_LIMBS + NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS;
+pub const NUM_DEN_COLUMNS: usize = 5 * N_LIMBS + NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS;
 
 /// A gadget to compute
 /// QUAD(x, y, z, w) = (a * b + c * d) mod p
 #[derive(Debug, Clone, Copy)]
-pub struct QuadLayout {
+pub struct DenLayout {
     a: Register,
     b: Register,
-    c: Register,
-    d: Register,
+    sign: bool,
     output: Register,
     witness: Register,
     carry: Register,
@@ -29,13 +30,12 @@ pub struct QuadLayout {
     witness_high: Register,
 }
 
-impl QuadLayout {
+impl DenLayout {
     #[inline]
     pub const fn new(
         a: Register,
         b: Register,
-        c: Register,
-        d: Register,
+        sign: bool,
         output: Register,
         witness: Register,
     ) -> Self {
@@ -60,8 +60,7 @@ impl QuadLayout {
         Self {
             a,
             b,
-            c,
-            d,
+            sign,
             output,
             witness,
             carry,
@@ -71,37 +70,15 @@ impl QuadLayout {
     }
 
     #[inline]
-    pub fn read_input<T: Copy + Default>(
-        &self,
-        trace_rows: &mut [Vec<T>],
-        row_index: usize,
-    ) -> Vec<T> {
-        let mut row = vec![T::default(); NUM_QUAD_COLUMNS];
-        self.a.read(trace_rows, &mut row[0..N_LIMBS], row_index);
-        self.b
-            .read(trace_rows, &mut row[N_LIMBS..2 * N_LIMBS], row_index);
-        self.c
-            .read(trace_rows, &mut row[2 * N_LIMBS..3 * N_LIMBS], row_index);
-        self.d
-            .read(trace_rows, &mut row[3 * N_LIMBS..4 * N_LIMBS], row_index);
-
-        row
-    }
-
-    #[inline]
     pub fn assign_row<T: Copy>(&self, trace_rows: &mut [Vec<T>], row: &mut [T], row_index: usize) {
-        //self.a.assign(trace_rows, &mut row[0..N_LIMBS], row_index);
-        //self.b
-        //    .assign(trace_rows, &mut row[N_LIMBS..2 * N_LIMBS], row_index);
-        //self.c
-        //    .assign(trace_rows, &mut row[2 * N_LIMBS..3 * N_LIMBS], row_index);
-        //self.d
-        //    .assign(trace_rows, &mut row[3 * N_LIMBS..4 * N_LIMBS], row_index);
+        self.a.assign(trace_rows, &mut row[0..N_LIMBS], row_index);
+        self.b
+            .assign(trace_rows, &mut row[N_LIMBS..2 * N_LIMBS], row_index);
         self.output
-            .assign(trace_rows, &mut row[0..N_LIMBS], row_index);
+            .assign(trace_rows, &mut row[2 * N_LIMBS..3 * N_LIMBS], row_index);
         self.witness.assign(
             trace_rows,
-            &mut row[N_LIMBS..N_LIMBS + NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS],
+            &mut row[3 * N_LIMBS..3 * N_LIMBS + NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS],
             row_index,
         )
     }
@@ -109,40 +86,46 @@ impl QuadLayout {
 
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     /// Returns a vector
-    /// [Input[4 * N_LIMBS], output[N_LIMBS], carry[NUM_CARRY_LIMBS], Witness_low[NUM_WITNESS_LIMBS], Witness_high[NUM_WITNESS_LIMBS]]
-    pub fn quad_trace(a: BigUint, b: BigUint, c: BigUint, d: BigUint) -> Vec<F> {
+    /// [Input[2 * N_LIMBS], output[N_LIMBS], carry[NUM_CARRY_LIMBS], Witness_low[NUM_WITNESS_LIMBS], Witness_high[NUM_WITNESS_LIMBS]]
+    pub fn den_trace(a: BigUint, b: BigUint, sign: bool) -> Vec<F> {
         let p = get_p();
-        let result = (&a * &b + &c * &d) % &p;
+
+        let b_signed = if sign { b.clone() } else { &p - &b };
+
+        let z = (1u32 + &b_signed) % &p;
+        let z_inverse = z.modpow(&(&p - 2u32), &p);
+        debug_assert_eq!(&z_inverse * &z % &p, BigUint::from(1u32));
+
+        let result = (&a * &z_inverse) % &p;
         debug_assert!(result < p);
-        let carry = (&a * &b + &c * &d - &result) / &p;
-        debug_assert!(carry < 2u32 * &p);
-        debug_assert_eq!(&carry * &p, &a * &b + &c * &d - &result);
+        let carry = (&z * &result - &a) / &p;
+        debug_assert!(carry < p);
+        debug_assert_eq!(&carry * &p, &z * &result - &a);
 
         // make polynomial limbs
         let p_a = Polynomial::<i64>::from_biguint_num(&a, 16, N_LIMBS);
         let p_b = Polynomial::<i64>::from_biguint_num(&b, 16, N_LIMBS);
-        let p_c = Polynomial::<i64>::from_biguint_num(&c, 16, N_LIMBS);
-        let p_d = Polynomial::<i64>::from_biguint_num(&d, 16, N_LIMBS);
         let p_p = Polynomial::<i64>::from_biguint_num(&p, 16, N_LIMBS);
+
+        let p_b_sign = &p_b * (if sign { 1 } else { -1 });
+        let p_z = &p_b_sign + 1;
 
         let p_result = Polynomial::<i64>::from_biguint_num(&result, 16, N_LIMBS);
         let p_carry = Polynomial::<i64>::from_biguint_num(&carry, 16, NUM_CARRY_LIMBS);
 
         // Compute the vanishing polynomial
-        let vanishing_poly = &p_a * &p_b + &p_c * &p_d - &p_result - &p_carry * &p_p;
+        let vanishing_poly = &p_z * &p_result - &p_a - &p_carry * &p_p;
         debug_assert_eq!(vanishing_poly.degree(), NUM_WITNESS_LIMBS);
 
         // Compute the witness
         let witness_shifted = extract_witness_and_shift(&vanishing_poly, WITNESS_OFFSET as u32);
         let (witness_low, witness_high) = split_digits::<F>(&witness_shifted);
 
-        let mut row = Vec::with_capacity(NUM_QUAD_COLUMNS);
+        let mut row = Vec::with_capacity(NUM_DEN_COLUMNS);
 
         // inputs
-        //row.extend(to_field_iter::<F>(&p_a));
-        //row.extend(to_field_iter::<F>(&p_b));
-        //row.extend(to_field_iter::<F>(&p_c));
-        //row.extend(to_field_iter::<F>(&p_d));
+        row.extend(to_field_iter::<F>(&p_a));
+        row.extend(to_field_iter::<F>(&p_b));
 
         // output
         row.extend(to_field_iter::<F>(&p_result));
@@ -153,16 +136,16 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
 
         row
     }
-
+    /*
     /// Quad generic constraints
-    pub fn quad_packed_generic_constraints<
+    pub fn den_packed_generic_constraints<
         FE,
         P,
         const D2: usize,
         const COLUMNS: usize,
         const PUBLIC_INPUTS: usize,
     >(
-        layout: QuadLayout,
+        layout: FpMulLayout,
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
@@ -172,8 +155,6 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         // get all the data
         let a = layout.a.packed_entries_slice(&vars);
         let b = layout.b.packed_entries_slice(&vars);
-        let c = layout.c.packed_entries_slice(&vars);
-        let d = layout.d.packed_entries_slice(&vars);
         let output = layout.output.packed_entries_slice(&vars);
 
         let carry = layout.carry.packed_entries_slice(&vars);
@@ -182,12 +163,10 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
 
         // Construct the expected vanishing polynmial
         let ab = PolynomialOps::mul(a, b);
-        let cd = PolynomialOps::mul(c, d);
-        let ab_plus_cd = PolynomialOps::add(&ab, &cd);
-        let ab_plus_cd_minus_output = PolynomialOps::sub(&ab_plus_cd, output);
+        let ab_minus_output = PolynomialOps::sub(&ab, output);
         let p_limbs = Polynomial::<FE>::from_iter(P_iter());
         let mul_times_carry = PolynomialOps::scalar_poly_mul(carry, p_limbs.as_slice());
-        let vanishing_poly = PolynomialOps::sub(&ab_plus_cd_minus_output, &mul_times_carry);
+        let vanishing_poly = PolynomialOps::sub(&ab_minus_output, &mul_times_carry);
 
         // reconstruct witness
 
@@ -212,8 +191,8 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         }
     }
 
-    pub fn quad_ext_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        layout: QuadLayout,
+    pub fn den_ext_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+        layout: FpMulLayout,
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
@@ -221,8 +200,6 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         // get all the data
         let a = layout.a.evaluation_targets(&vars);
         let b = layout.b.evaluation_targets(&vars);
-        let c = layout.c.evaluation_targets(&vars);
-        let d = layout.d.evaluation_targets(&vars);
         let output = layout.output.evaluation_targets(&vars);
 
         let carry = layout.carry.evaluation_targets(&vars);
@@ -231,14 +208,12 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
 
         // Construct the expected vanishing polynmial
         let ab = PolynomialGadget::mul_extension(builder, a, b);
-        let cd = PolynomialGadget::mul_extension(builder, c, d);
-        let ab_plus_cd = PolynomialGadget::add_extension(builder, &ab, &cd);
-        let ab_plus_cd_minus_output = PolynomialGadget::sub_extension(builder, &ab_plus_cd, output);
+        let ab_minus_output = PolynomialGadget::sub_extension(builder, &ab, output);
         let p_limbs =
             PolynomialGadget::constant_extension(builder, &P_iter().collect::<Vec<_>>()[..]);
         let mul_times_carry = PolynomialGadget::mul_extension(builder, carry, &p_limbs[..]);
         let vanishing_poly =
-            PolynomialGadget::sub_extension(builder, &ab_plus_cd_minus_output, &mul_times_carry);
+            PolynomialGadget::sub_extension(builder, &ab_minus_output, &mul_times_carry);
 
         // reconstruct witness
 
@@ -263,7 +238,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         for constr in constraint {
             yield_constr.constraint_transition(builder, constr);
         }
-    }
+    } */
 }
 
 #[cfg(test)]
@@ -271,7 +246,6 @@ mod tests {
     use std::sync::mpsc;
 
     use num::bigint::RandBigInt;
-    use plonky2::field::extension::flatten;
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
@@ -280,7 +254,6 @@ mod tests {
 
     use super::*;
     use crate::arithmetic::arithmetic_stark::{ArithmeticStark, EmulatedCircuitLayout};
-    use crate::arithmetic::util::field_limbs_to_biguint;
     use crate::arithmetic::Instruction;
     use crate::config::StarkConfig;
     use crate::prover::prove;
@@ -291,7 +264,7 @@ mod tests {
     use crate::verifier::verify_stark_proof;
 
     #[test]
-    fn test_quad_trace_generation() {
+    fn test_denn_trace_generation() {
         let num_tests = 1 << 5;
         let p = get_p();
         const D: usize = 2;
@@ -300,99 +273,65 @@ mod tests {
         for _ in 0..num_tests {
             let a = rand::thread_rng().gen_biguint(256) % &p;
             let b = rand::thread_rng().gen_biguint(256) & &p;
-            let c = rand::thread_rng().gen_biguint(256) & &p;
-            let d = rand::thread_rng().gen_biguint(256) & &p;
 
-            let _ =
-                ArithmeticParser::<F, 4>::quad_trace(a.clone(), b.clone(), c.clone(), d.clone());
+            let _ = ArithmeticParser::<F, 4>::den_trace(a.clone(), b.clone(), true);
         }
     }
 
-    #[derive(Clone, Copy, Debug)]
-    pub struct QuadLayoutCircuit;
+    /*
 
-    const EPLAYOUT: QuadLayout = QuadLayout::new(
+    #[derive(Clone, Copy, Debug)]
+    pub struct FpMulLayoutCircuit;
+
+    const LAYOUT: FpMulLayout = FpMulLayout::new(
         Register::Local(0, N_LIMBS),
         Register::Local(N_LIMBS, N_LIMBS),
         Register::Local(2 * N_LIMBS, N_LIMBS),
-        Register::Local(3 * N_LIMBS, N_LIMBS),
-        Register::Local(4 * N_LIMBS, N_LIMBS),
-        Register::Local(5 * N_LIMBS, NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS),
+        Register::Local(3 * N_LIMBS, NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS),
     );
 
-    const INLAYOUT: WriteInputLayout = WriteInputLayout::new(Register::Local(0, 4 * N_LIMBS));
-
-    impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, D, 2>
-        for QuadLayoutCircuit
+    impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, D, 1>
+        for FpMulLayoutCircuit
     {
         const PUBLIC_INPUTS: usize = 0;
         const ENTRY_COLUMN: usize = 0;
-        const NUM_ARITHMETIC_COLUMNS: usize = NUM_QUAD_COLUMNS;
-        const TABLE_INDEX: usize = NUM_QUAD_COLUMNS;
+        const NUM_ARITHMETIC_COLUMNS: usize = NUM_MUL_COLUMNS;
+        const TABLE_INDEX: usize = NUM_MUL_COLUMNS;
 
-        type Layouts = EpOpcodewithInputLayout;
+        type Layouts = EdOpcodeLayout;
 
-        const OPERATIONS: [EpOpcodewithInputLayout; 2] = [
-            EpOpcodewithInputLayout::Ep(EdOpcodeLayout::Quad(EPLAYOUT)),
-            EpOpcodewithInputLayout::Input(INLAYOUT),
-        ];
+        const OPERATIONS: [EdOpcodeLayout; 1] = [EdOpcodeLayout::FpMul(LAYOUT)];
     }
 
     #[derive(Debug, Clone)]
-    pub struct QuadInstruction {
-        a: BigUint,
-        b: BigUint,
-        c: BigUint,
-        d: BigUint,
+    pub struct FpMulInstruction {
+        pub a: BigUint,
+        pub b: BigUint,
     }
 
-    impl QuadInstruction {
-        pub fn new(a: BigUint, b: BigUint, c: BigUint, d: BigUint) -> Self {
-            Self { a, b, c, d }
+    impl FpMulInstruction {
+        pub fn new(a: BigUint, b: BigUint) -> Self {
+            Self { a, b }
         }
     }
 
-    impl<F: RichField + Extendable<D>, const D: usize> Instruction<QuadLayoutCircuit, F, D, 2>
-        for QuadInstruction
+    impl<F: RichField + Extendable<D>, const D: usize> Instruction<FpMulLayoutCircuit, F, D, 1>
+        for FpMulInstruction
     {
-        fn input_opcode(&self) -> usize {
-            0
-        }
-
-        fn generate_trace(
-            self,
-            pc: usize,
-            _input: Vec<F>,
-            tx: mpsc::Sender<(usize, usize, Vec<F>)>,
-        ) {
+        fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {
             rayon::spawn(move || {
-                let p_a = Polynomial::<F>::from_biguint_field(&self.a, 16, N_LIMBS);
-                let p_b = Polynomial::<F>::from_biguint_field(&self.b, 16, N_LIMBS);
-                let p_c = Polynomial::<F>::from_biguint_field(&self.c, 16, N_LIMBS);
-                let p_d = Polynomial::<F>::from_biguint_field(&self.d, 16, N_LIMBS);
-
-                let input = [
-                    p_a.into_vec(),
-                    p_b.into_vec(),
-                    p_c.into_vec(),
-                    p_d.into_vec(),
-                ]
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>();
-                tx.send((pc, 1, input)).unwrap();
-                let operation = EdOpcode::Quad(self.a, self.b, self.c, self.d);
-                tx.send((pc, 0, operation.generate_trace_row())).unwrap();
+            let operation = EdOpcode::FpMul(self.a, self.b);
+            tx.send((pc, 0, operation.generate_trace_row())).unwrap();
             });
         }
     }
 
     #[test]
-    fn test_arithmetic_stark_quad() {
+    fn test_arithmetic_stark_fpmul() {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type S = ArithmeticStark<QuadLayoutCircuit, 2, F, D>;
+        type S = ArithmeticStark<FpMulLayoutCircuit, 1, F, D>;
 
         let num_rows = 2u64.pow(16);
         let config = StarkConfig::standard_fast_config();
@@ -406,10 +345,8 @@ mod tests {
         for _ in 0..num_rows {
             let a: BigUint = rng.gen_biguint(256) % &p22519;
             let b = rng.gen_biguint(256) % &p22519;
-            let c = rng.gen_biguint(256) % &p22519;
-            let d = rng.gen_biguint(256) % &p22519;
 
-            quad_operations.push(QuadInstruction::new(a, b, c, d));
+            quad_operations.push(FpMulInstruction::new(a, b));
         }
 
         let stark = S::new();
@@ -454,5 +391,5 @@ mod tests {
 
         timing.print();
         recursive_data.verify(recursive_proof).unwrap();
-    }
+    } */
 }

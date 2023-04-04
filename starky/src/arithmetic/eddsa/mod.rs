@@ -5,7 +5,7 @@
 use num::{BigUint, Num, One};
 use plonky2::field::types::Field;
 
-pub mod denominator;
+pub mod den;
 pub mod ec_add;
 pub mod fpmul;
 pub mod quad;
@@ -17,7 +17,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use quad::QuadLayout;
 
 use self::fpmul::FpMulLayout;
-use super::{ArithmeticParser, Opcode, OpcodeLayout};
+use super::{ArithmeticParser, Opcode, OpcodeLayout, WriteInputLayout};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 // General use constants
@@ -54,17 +54,43 @@ pub fn P_iter<F: Field>() -> impl Iterator<Item = F> {
     P.iter().map(|&x| F::from_canonical_u16(x))
 }
 
+#[allow(non_snake_case)]
+#[inline]
+pub fn D_iter<F: Field>() -> impl Iterator<Item = F> {
+    ED.iter().map(|&x| F::from_canonical_u16(x))
+}
+
 /// Layoutds for the Opcodes that comprise any Edwards curve operation.
 #[derive(Debug, Clone, Copy)]
 pub enum EdOpcodeLayout {
     Quad(QuadLayout),
     FpMul(FpMulLayout),
-    DENX3,
-    DENY3,
+    DEN,
+}
+
+/// The core Opcodes that comprise any Edwards curve operation.
+#[derive(Debug, Clone)]
+pub enum EdOpcode {
+    /// Quad(x_1, x_2, x_3, x_4) = (x_1 * x_2 + x_3 * x_4) mod p
+    Quad(BigUint, BigUint, BigUint, BigUint),
+
+    // FpMul(x_1, x_2) = (x_1 * x_2) mod p
+    FpMul(BigUint, BigUint),
+
+    /// DEN(a, b, sign) = a * (1 + sign * b)^{-1}
+    /// In fact, we prove that a = b * result in the circuit
+    DEN(BigUint, BigUint, bool),
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpcodeLayout {
-    fn assign_row<T: Copy>(&self, trace_rows: &mut [Vec<T>], row: &mut [T], row_index: usize) {
+    fn read_input(&self, trace_rows: &mut [Vec<F>], row_index: usize) -> Vec<F> {
+        match self {
+            EdOpcodeLayout::Quad(quad) => quad.read_input(trace_rows, row_index),
+            EdOpcodeLayout::FpMul(fpmul) => vec![], //fpmul.read_input(trace_rows, row, row_index),
+            _ => unimplemented!("Operation not supported"),
+        }
+    }
+    fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
         match self {
             EdOpcodeLayout::Quad(quad) => quad.assign_row(trace_rows, row, row_index),
             EdOpcodeLayout::FpMul(fpmul) => fpmul.assign_row(trace_rows, row, row_index),
@@ -115,33 +141,81 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpco
     }
 }
 
-/// The core Opcodes that comprise any Edwards curve operation.
-#[derive(Debug, Clone)]
-pub enum EdOpcode {
-    /// Quad(x_1, x_2, x_3, x_4) = (x_1 * x_2 + x_3 * x_4) mod p
-    Quad(BigUint, BigUint, BigUint, BigUint),
+impl<F: RichField + Extendable<D>, const D: usize> Opcode<F, D> for EdOpcode {
+    fn generate_trace_row(self) -> Vec<F> {
+        match self {
+            EdOpcode::Quad(a, b, c, d) => ArithmeticParser::quad_trace(a, b, c, d),
+            EdOpcode::FpMul(a, b) => ArithmeticParser::fpmul_trace(a, b),
+            _ => unimplemented!("Operation not supported"),
+        }
+    }
+}
 
-    // FpMul(x_1, x_2) = (x_1 * x_2) mod p
-    FpMul(BigUint, BigUint),
+// Helper for testing
+pub enum EpOpcodewithInputLayout {
+    Ep(EdOpcodeLayout),
+    Input(WriteInputLayout),
+}
 
-    /// DEN(x_1, x_2, y_1, y_2, sign) = 1 + sign * D * (x_1 * x_2 * y_1 * y_2) mod p
-    DEN(BigUint, BigUint, BigUint, BigUint, bool),
+impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EpOpcodewithInputLayout {
+    fn read_input(&self, trace_rows: &mut [Vec<F>], row_index: usize) -> Vec<F> {
+        match self {
+            EpOpcodewithInputLayout::Ep(opcode) => opcode.read_input(trace_rows, row_index),
+            EpOpcodewithInputLayout::Input(opcode) => opcode.read_input(trace_rows, row_index),
+        }
+    }
+    fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
+        match self {
+            EpOpcodewithInputLayout::Ep(opcode) => opcode.assign_row(trace_rows, row, row_index),
+            EpOpcodewithInputLayout::Input(opcode) => opcode.assign_row(trace_rows, row, row_index),
+        }
+    }
+
+    fn packed_generic_constraints<
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+    >(
+        &self,
+        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
+    ) where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>,
+    {
+        match self {
+            EpOpcodewithInputLayout::Ep(opcode) => {
+                opcode.packed_generic_constraints(vars, yield_constr)
+            }
+            EpOpcodewithInputLayout::Input(opcode) => {
+                opcode.packed_generic_constraints(vars, yield_constr)
+            }
+        }
+    }
+
+    fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
+    ) {
+        match self {
+            EpOpcodewithInputLayout::Ep(opcode) => {
+                opcode.ext_circuit_constraints(builder, vars, yield_constr)
+            }
+            EpOpcodewithInputLayout::Input(opcode) => {
+                opcode.ext_circuit_constraints(builder, vars, yield_constr)
+            }
+        }
+    }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     pub fn ed_opcode_trace(opcode: EdOpcode) -> Vec<F> {
         match opcode {
             EdOpcode::Quad(x1, x2, x3, x4) => Self::quad_trace(x1, x2, x3, x4),
-            _ => unimplemented!("Operation not supported"),
-        }
-    }
-}
-
-impl<F: RichField + Extendable<D>, const D: usize> Opcode<F, D> for EdOpcode {
-    fn generate_trace_row(self) -> Vec<F> {
-        match self {
-            EdOpcode::Quad(a, b, c, d) => ArithmeticParser::quad_trace(a, b, c, d),
-            EdOpcode::FpMul(a, b) => ArithmeticParser::fpmul_trace(a, b),
             _ => unimplemented!("Operation not supported"),
         }
     }

@@ -471,6 +471,26 @@ impl<T: Add<Output = T> + Copy + Default> Add<&Polynomial<T>> for Polynomial<T> 
     }
 }
 
+impl<T: Mul<Output = T> + Add<Output = T> + AddAssign + Copy + Default> Add<T> for Polynomial<T> {
+    type Output = Polynomial<T>;
+
+    fn add(self, other: T) -> Polynomial<T> {
+        let mut coefficients = self.coefficients();
+        coefficients[0] += other;
+        Self::new_from_vec(coefficients)
+    }
+}
+
+impl<T: Mul<Output = T> + Add<Output = T> + AddAssign + Copy + Default> Add<T> for &Polynomial<T> {
+    type Output = Polynomial<T>;
+
+    fn add(self, other: T) -> Polynomial<T> {
+        let mut coefficients = self.coefficients();
+        coefficients[0] += other;
+        Polynomial::new_from_vec(coefficients)
+    }
+}
+
 impl<T: Neg<Output = T> + Copy> Neg for Polynomial<T> {
     type Output = Self;
 

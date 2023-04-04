@@ -1,5 +1,6 @@
 use num::{BigInt, BigUint, Zero};
-use plonky2::field::types::Field;
+use plonky2::field::types::{Field, Field64};
+use plonky2::hash::hash_types::RichField;
 
 use super::polynomial::Polynomial;
 
@@ -27,6 +28,15 @@ pub fn biguint_to_16_digits_field<F: Field>(x: &BigUint, num_digits: usize) -> V
 pub fn digits_to_biguint(digits: &[u16]) -> BigUint {
     let mut x = BigUint::zero();
     for (i, &digit) in digits.iter().enumerate() {
+        x += BigUint::from(digit) << (16 * i);
+    }
+    x
+}
+
+pub fn field_limbs_to_biguint<F: RichField>(limbs: &[F]) -> BigUint {
+    let mut x = BigUint::zero();
+    let digits = limbs.iter().map(|x| x.to_canonical_u64());
+    for (i, digit) in digits.enumerate() {
         x += BigUint::from(digit) << (16 * i);
     }
     x
