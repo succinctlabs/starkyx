@@ -36,10 +36,11 @@ pub fn digits_to_biguint(digits: &[u16]) -> BigUint {
 pub fn split_digits<F: Field>(
     slice: &[u32],
 ) -> (impl Iterator<Item = F> + '_, impl Iterator<Item = F> + '_) {
-    (         slice
-        .iter()
-        .map(|x| *x as u16)
-        .map(|x| F::from_canonical_u16(x)),
+    (
+        slice
+            .iter()
+            .map(|x| *x as u16)
+            .map(|x| F::from_canonical_u16(x)),
         slice
             .iter()
             .map(|x| (*x >> 16) as u16)
@@ -80,6 +81,14 @@ pub fn extract_witness_and_shift(vanishing_poly: &Polynomial<i64>, offset: u32) 
         .map(|x| x + offset as i64)
         .map(|x| u32::try_from(x).unwrap())
         .collect()
+}
+
+#[inline]
+pub fn to_field_iter<F: Field>(polynomial: &Polynomial<i64>) -> impl Iterator<Item = F> + '_ {
+    polynomial
+        .as_slice()
+        .iter()
+        .map(|x| F::from_canonical_u32(*x as u32))
 }
 
 #[cfg(test)]

@@ -11,7 +11,7 @@ pub const P: [u16; 16] = [
     65535, 65535, 32767,
 ];
 
-pub const D: [u16; 16] = [
+pub const ED: [u16; 16] = [
     30883, 4953, 19914, 30187, 55467, 16705, 2637, 112, 59544, 30585, 16505, 36039, 65139, 11119,
     27886, 20995,
 ];
@@ -73,9 +73,9 @@ mod tests {
         let p = BigUint::from(2u32).pow(255) - BigUint::from(19u32);
         assert_eq!((121666u32 * &d + 121665u32) % &p, BigUint::from(0u32));
         let d_limbs = util::bigint_into_u16_digits(&d, 16);
-        assert_eq!(d_limbs, D);
+        assert_eq!(d_limbs, ED);
 
-        let d_from_limbs = util::digits_to_biguint(&D);
+        let d_from_limbs = util::digits_to_biguint(&ED);
         assert_eq!(d, d_from_limbs);
         assert_eq!(d, get_d());
     }

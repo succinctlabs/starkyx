@@ -6,7 +6,7 @@ use alloc::vec;
 use core::marker::PhantomData;
 use std::sync::mpsc;
 
-use num::{BigInt, BigUint};
+use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::field::polynomial::PolynomialValues;
@@ -19,6 +19,7 @@ use plonky2_maybe_rayon::*;
 use super::{ArithmeticOp, ArithmeticParser, Register};
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
 use crate::arithmetic::util;
+use crate::arithmetic::util::to_field_iter;
 use crate::lookup::{eval_lookups, eval_lookups_circuit, permuted_cols};
 use crate::permutation::PermutationPair;
 use crate::stark::Stark;
@@ -147,34 +148,13 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         let p_res = Polynomial::<i64>::from_biguint_num(&result, 16, N_LIMBS);
         let p_c = Polynomial::<i64>::from_biguint_num(&carry, 16, N_LIMBS);
 
-        // Compute the witness polynomial
+        // Compute the vanishing polynomial
         let vanishing_poly = &p_a * &p_b - &p_res - &p_c * &p_m;
         debug_assert_eq!(vanishing_poly.degree(), 2 * N_LIMBS - 2);
 
         let witness_shifted =
             util::extract_witness_and_shift(&vanishing_poly, WITNESS_OFFSET as u32);
         let (witness_digit_low_f, witness_digit_high_f) = util::split_digits::<F>(&witness_shifted);
-
-        let p_a_f = p_a
-            .coefficients()
-            .into_iter()
-            .map(|x| F::from_canonical_u32(x as u32));
-        let p_b_f = p_b
-            .coefficients()
-            .into_iter()
-            .map(|x| F::from_canonical_u32(x as u32));
-        let p_m_f = p_m
-            .coefficients()
-            .into_iter()
-            .map(|x| F::from_canonical_u32(x as u32));
-        let p_res_f = p_res
-            .coefficients()
-            .into_iter()
-            .map(|x| F::from_canonical_u32(x as u32));
-        let p_c_f = p_c
-            .coefficients()
-            .into_iter()
-            .map(|x| F::from_canonical_u32(x as u32));
 
         // Make the row according to layout
         // input_1_index = 0;
@@ -183,12 +163,13 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         // output_index = 3 * N_LIMBS;
         // carry_index = 4 * N_LIMBS;
         // witness_index = 5 * N_LIMBS;
-        let mut row = Vec::with_capacity(NUM_ARITH_COLUMNS);
-        row.extend(p_a_f);
-        row.extend(p_b_f);
-        row.extend(p_m_f);
-        row.extend(p_res_f);
-        row.extend(p_c_f);
+        let mut row: Vec<F> = Vec::with_capacity(NUM_ARITH_COLUMNS);
+
+        row.extend(to_field_iter::<F>(&p_a));
+        row.extend(to_field_iter::<F>(&p_b));
+        row.extend(to_field_iter::<F>(&p_m));
+        row.extend(to_field_iter::<F>(&p_res));
+        row.extend(to_field_iter::<F>(&p_c));
         row.extend(witness_digit_low_f);
         row.extend(witness_digit_high_f);
 
