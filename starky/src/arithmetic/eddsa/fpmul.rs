@@ -282,10 +282,10 @@ mod tests {
         for FpMulInstruction
     {
         fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {
-            // rayon::spawn(move || {
+            rayon::spawn(move || {
             let operation = EdOpcode::FpMul(self.a, self.b);
             tx.send((pc, 0, operation.generate_trace_row())).unwrap();
-            // });
+            });
         }
     }
 
