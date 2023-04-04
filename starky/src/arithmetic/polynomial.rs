@@ -172,12 +172,6 @@ impl<T: Clone> Polynomial<T> {
         }
     }
 
-    pub fn from_iter(coefficients: impl Iterator<Item = T>) -> Self {
-        Self {
-            coefficients: coefficients.collect(),
-        }
-    }
-
     pub fn from_polynomial<S>(p: Polynomial<S>) -> Self
     where
         S: Into<T>,
@@ -210,6 +204,14 @@ impl<T: Clone> Polynomial<T> {
     pub fn constant(value: T) -> Self {
         Self {
             coefficients: vec![value],
+        }
+    }
+}
+
+impl<T> FromIterator<T> for Polynomial<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Self {
+            coefficients: iter.into_iter().collect(),
         }
     }
 }

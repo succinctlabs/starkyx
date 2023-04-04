@@ -18,7 +18,6 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_maybe_rayon::*;
 
 use self::add::AddModLayout;
-use self::eddsa::{EdOpcode, EdOpcodeLayout};
 use self::mul::MulModLayout;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -145,7 +144,6 @@ pub trait OpcodeLayout<F: RichField + Extendable<D>, const D: usize>:
 pub enum ArithmeticOp {
     AddMod(BigUint, BigUint, BigUint),
     MulMod(BigUint, BigUint, BigUint),
-    EdCurveOp(EdOpcode),
 }
 
 #[derive(Debug, Clone)]
@@ -159,7 +157,6 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for Arithm
         match self {
             ArithmeticLayout::Add(layout) => layout.assign_row(trace_rows, row, row_index),
             ArithmeticLayout::Mul(layout) => layout.assign_row(trace_rows, row, row_index),
-            _ => unimplemented!("Operation not supported"),
         }
     }
 
@@ -184,7 +181,6 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for Arithm
             ArithmeticLayout::Mul(layout) => {
                 ArithmeticParser::mul_packed_generic_constraints(*layout, vars, yield_constr)
             }
-            _ => unimplemented!("Operation not supported"),
         }
     }
 
@@ -201,7 +197,6 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for Arithm
             ArithmeticLayout::Mul(layout) => {
                 ArithmeticParser::mul_ext_circuit(*layout, builder, vars, yield_constr)
             }
-            _ => unimplemented!("Operation not supported"),
         }
     }
 }
@@ -211,7 +206,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Opcode<F, D> for ArithmeticOp
         match self {
             ArithmeticOp::AddMod(a, b, m) => ArithmeticParser::add_trace(a, b, m),
             ArithmeticOp::MulMod(a, b, m) => ArithmeticParser::mul_trace(a, b, m),
-            _ => unimplemented!("Operation not supported"),
         }
     }
 }
@@ -235,22 +229,5 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
             let row_vec = operation.generate_trace();
             tx.send((row, op_index, row_vec)).unwrap()
         })
-    }
-
-    pub fn op_ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        layout: ArithmeticLayout,
-        builder: &mut CircuitBuilder<F, D>,
-        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
-    ) {
-        match layout {
-            ArithmeticLayout::Add(layout) => {
-                Self::add_ext_circuit(layout, builder, vars, yield_constr)
-            }
-            ArithmeticLayout::Mul(layout) => {
-                Self::mul_ext_circuit(layout, builder, vars, yield_constr)
-            }
-            _ => unimplemented!("Operation not supported"),
-        }
     }
 }

@@ -12,7 +12,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::util::transpose;
 use plonky2_maybe_rayon::*;
 
-use super::{ArithmeticLayout, ArithmeticOp, ArithmeticParser, OpcodeLayout};
+use super::{ArithmeticParser, Opcode, OpcodeLayout};
 use crate::lookup::{eval_lookups, eval_lookups_circuit, permuted_cols};
 use crate::permutation::PermutationPair;
 use crate::stark::Stark;
@@ -94,6 +94,16 @@ impl<
     }
 }
 
+impl<L, const N: usize, F, const D: usize> Default for ArithmeticStark<L, N, F, D>
+where
+    L: EmulatedCircuitLayout<F, N, D>,
+    F: RichField + Extendable<D>,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<
         const N: usize,
         L: EmulatedCircuitLayout<F, N, D>,
@@ -102,7 +112,10 @@ impl<
     > ArithmeticStark<L, N, F, D>
 {
     /// Generate the trace for the arithmetic circuit
-    pub fn generate_trace(&self, program: Vec<(ArithmeticOp, usize)>) -> Vec<PolynomialValues<F>> {
+    pub fn generate_trace(
+        &self,
+        program: Vec<(impl Opcode<F, D>, usize)>,
+    ) -> Vec<PolynomialValues<F>> {
         let num_operations = program.len();
         let num_rows = num_operations;
 
@@ -244,7 +257,7 @@ mod tests {
     use plonky2::util::timing::TimingTree;
 
     use super::*;
-    use crate::arithmetic::{add, Register};
+    use crate::arithmetic::{add, ArithmeticLayout, ArithmeticOp, Register};
     use crate::config::StarkConfig;
     use crate::prover::prove;
     use crate::recursive_verifier::{

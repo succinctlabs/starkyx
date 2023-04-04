@@ -5,16 +5,13 @@ pub mod denominator;
 pub mod ec_add;
 pub mod quad;
 
-use std::sync::mpsc::Sender;
-
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
-use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2_maybe_rayon::*;
 
-use super::ArithmeticParser;
+use super::{ArithmeticParser, Opcode, OpcodeLayout};
+use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub const LIMB: u32 = 2u32.pow(16);
 
@@ -58,10 +55,44 @@ pub enum EdOpcodeLayout {
     Quad(quad::QuadLayout),
 }
 
-impl EdOpcodeLayout {
-    pub fn assign_row<T: Copy>(&self, trace_rows: &mut [Vec<T>], row: &mut [T], row_index: usize) {
+impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpcodeLayout {
+    fn assign_row<T: Copy>(&self, trace_rows: &mut [Vec<T>], row: &mut [T], row_index: usize) {
         match self {
-            _ => unimplemented!("Operation not supported"),
+            EdOpcodeLayout::Quad(quad) => quad.assign_row(trace_rows, row, row_index),
+        }
+    }
+
+    fn packed_generic_constraints<
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+    >(
+        &self,
+        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
+    ) where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>,
+    {
+        match self {
+            EdOpcodeLayout::Quad(quad) => {
+                ArithmeticParser::quad_packed_generic_constraints(*quad, vars, yield_constr)
+            }
+        }
+    }
+
+    fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
+    ) {
+        match self {
+            EdOpcodeLayout::Quad(quad) => {
+                ArithmeticParser::quad_ext_constraints(*quad, builder, vars, yield_constr)
+            }
         }
     }
 }
@@ -80,6 +111,15 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     pub fn ed_opcode_trace(opcode: EdOpcode) -> Vec<F> {
         match opcode {
             EdOpcode::Quad(x1, x2, x3, x4) => Self::quad_trace(x1, x2, x3, x4),
+            _ => unimplemented!("Operation not supported"),
+        }
+    }
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> Opcode<F, D> for EdOpcode {
+    fn generate_trace(self) -> Vec<F> {
+        match self {
+            EdOpcode::Quad(a, b, c, d) => ArithmeticParser::quad_trace(a, b, c, d),
             _ => unimplemented!("Operation not supported"),
         }
     }
