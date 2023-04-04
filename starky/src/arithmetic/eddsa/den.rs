@@ -1,5 +1,3 @@
-use core::ops::Not;
-
 use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
