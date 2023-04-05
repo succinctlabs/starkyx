@@ -73,7 +73,7 @@ impl MulDLayout {
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     /// Returns a vector
     /// [output[N_LIMBS], carry[NUM_CARRY_LIMBS], Witness_low[NUM_WITNESS_LIMBS], Witness_high[NUM_WITNESS_LIMBS]]
-    pub fn muld_trace(a: BigUint) -> Vec<F> {
+    pub fn muld_trace(a: BigUint) -> (Vec<F>, BigUint) {
         let p = get_p();
         let d = get_d();
         let result = (&a * &d) % &p;
@@ -107,7 +107,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         row.extend(witness_low);
         row.extend(witness_high);
 
-        row
+        (row, result)
     }
 
     /// Quad generic constraints
@@ -285,7 +285,8 @@ mod tests {
                 tx.send((pc, 1, input)).unwrap();
 
                 let operation = EdOpcode::MULD(self.a);
-                tx.send((pc, 0, operation.generate_trace_row())).unwrap();
+                let (trace_row, _) = operation.generate_trace_row();
+                tx.send((pc, 0, trace_row)).unwrap();
             });
         }
     }

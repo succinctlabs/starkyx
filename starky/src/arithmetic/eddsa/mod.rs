@@ -153,7 +153,9 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EdOpco
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Opcode<F, D> for EdOpcode {
-    fn generate_trace_row(self) -> Vec<F> {
+    type Output = BigUint;
+
+    fn generate_trace_row(self) -> (Vec<F>, Self::Output) {
         match self {
             EdOpcode::Quad(a, b, c, d) => ArithmeticParser::quad_trace(a, b, c, d),
             EdOpcode::FpMul(a, b) => ArithmeticParser::fpmul_trace(a, b),
@@ -214,15 +216,6 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for EpOpco
             EpOpcodewithInputLayout::Input(opcode) => {
                 opcode.ext_circuit_constraints(builder, vars, yield_constr)
             }
-        }
-    }
-}
-
-impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
-    pub fn ed_opcode_trace(opcode: EdOpcode) -> Vec<F> {
-        match opcode {
-            EdOpcode::Quad(x1, x2, x3, x4) => Self::quad_trace(x1, x2, x3, x4),
-            _ => unimplemented!("Operation not supported"),
         }
     }
 }

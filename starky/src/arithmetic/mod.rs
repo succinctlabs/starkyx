@@ -122,7 +122,8 @@ impl Register {
 }
 
 pub trait Opcode<F, const D: usize>: 'static + Sized + Send + Sync {
-    fn generate_trace_row(self) -> Vec<F>;
+    type Output: Clone + Send + Sync;
+    fn generate_trace_row(self) -> (Vec<F>, Self::Output);
 }
 
 pub trait Instruction<
@@ -264,11 +265,13 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for Arithm
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Opcode<F, D> for ArithmeticOp {
-    fn generate_trace_row(self) -> Vec<F> {
-        match self {
+    type Output = ();
+    fn generate_trace_row(self) -> (Vec<F>, ()) {
+        let trace_row = match self {
             ArithmeticOp::AddMod(a, b, m) => ArithmeticParser::add_trace(a, b, m),
             ArithmeticOp::MulMod(a, b, m) => ArithmeticParser::mul_trace(a, b, m),
-        }
+        };
+        (trace_row, ())
     }
 }
 

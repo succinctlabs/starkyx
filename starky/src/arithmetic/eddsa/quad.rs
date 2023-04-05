@@ -104,7 +104,7 @@ impl QuadLayout {
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     /// Returns a vector
     /// [Input[4 * N_LIMBS], output[N_LIMBS], carry[NUM_CARRY_LIMBS], Witness_low[NUM_WITNESS_LIMBS], Witness_high[NUM_WITNESS_LIMBS]]
-    pub fn quad_trace(a: BigUint, b: BigUint, c: BigUint, d: BigUint) -> Vec<F> {
+    pub fn quad_trace(a: BigUint, b: BigUint, c: BigUint, d: BigUint) -> (Vec<F>, BigUint) {
         let p = get_p();
         let result = (&a * &b + &c * &d) % &p;
         debug_assert!(result < p);
@@ -139,7 +139,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         row.extend(witness_low);
         row.extend(witness_high);
 
-        row
+        (row, result)
     }
 
     /// Quad generic constraints
@@ -359,7 +359,8 @@ mod tests {
                 .collect::<Vec<_>>();
                 tx.send((pc, 1, input)).unwrap();
                 let operation = EdOpcode::Quad(self.a, self.b, self.c, self.d);
-                tx.send((pc, 0, operation.generate_trace_row())).unwrap();
+                let (trace_row, _) = operation.generate_trace_row();
+                tx.send((pc, 0, trace_row)).unwrap();
             });
         }
     }

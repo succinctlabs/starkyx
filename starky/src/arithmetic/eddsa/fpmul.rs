@@ -13,7 +13,7 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 pub const NUM_CARRY_LIMBS: usize = N_LIMBS;
 pub const NUM_WITNESS_LIMBS: usize = 2 * N_LIMBS - 2;
 const NUM_MUL_COLUMNS: usize = 3 * N_LIMBS + NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS;
-pub const TOTAL_WITNESS_COLUMNS : usize = NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS;
+pub const TOTAL_WITNESS_COLUMNS: usize = NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS;
 
 /// A gadget to compute
 /// QUAD(x, y, z, w) = (a * b + c * d) mod p
@@ -75,7 +75,7 @@ impl FpMulLayout {
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     /// Returns a vector
     /// [Input[2 * N_LIMBS], output[N_LIMBS], carry[NUM_CARRY_LIMBS], Witness_low[NUM_WITNESS_LIMBS], Witness_high[NUM_WITNESS_LIMBS]]
-    pub fn fpmul_trace(a: BigUint, b: BigUint) -> Vec<F> {
+    pub fn fpmul_trace(a: BigUint, b: BigUint) -> (Vec<F>, BigUint) {
         let p = get_p();
         let result = (&a * &b) % &p;
         debug_assert!(result < p);
@@ -108,7 +108,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         row.extend(witness_low);
         row.extend(witness_high);
 
-        row
+        (row, result)
     }
 
     /// Quad generic constraints
@@ -292,7 +292,8 @@ mod tests {
 
                 tx.send((pc, 1, input)).unwrap();
                 let operation = EdOpcode::FpMul(self.a, self.b);
-                tx.send((pc, 0, operation.generate_trace_row())).unwrap();
+                let (trace_row, _) = operation.generate_trace_row();
+                tx.send((pc, 0, trace_row)).unwrap();
             });
         }
     }

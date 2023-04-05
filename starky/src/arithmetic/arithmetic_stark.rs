@@ -302,7 +302,8 @@ mod tests {
     {
         fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {
             let operation = ArithmeticOp::AddMod(self.a, self.b, self.modulus);
-            tx.send((pc, 0, operation.generate_trace_row())).unwrap();
+            let (trace_row, _) = operation.generate_trace_row();
+            tx.send((pc, 0, trace_row)).unwrap();
         }
     }
 
@@ -420,7 +421,8 @@ mod tests {
         fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {
             rayon::spawn(move || {
                 let operation = ArithmeticOp::MulMod(self.a, self.b, self.modulus);
-                tx.send((pc, 0, operation.generate_trace_row())).unwrap();
+                let (trace_row, _) = operation.generate_trace_row();
+                tx.send((pc, 0, trace_row)).unwrap();
             });
         }
     }

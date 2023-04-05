@@ -13,7 +13,7 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 pub const NUM_CARRY_LIMBS: usize = N_LIMBS;
 pub const NUM_WITNESS_LIMBS: usize = 2 * N_LIMBS - 2;
 pub const NUM_DEN_COLUMNS: usize = 3 * N_LIMBS + NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS;
-pub const TOTAL_WITNESS_COLUMNS : usize = NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS; 
+pub const TOTAL_WITNESS_COLUMNS: usize = NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS;
 
 #[derive(Debug, Clone, Copy)]
 pub struct DenLayout {
@@ -81,7 +81,7 @@ impl DenLayout {
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     /// Returns a vector
     /// [Input[2 * N_LIMBS], output[N_LIMBS], carry[NUM_CARRY_LIMBS], Witness_low[NUM_WITNESS_LIMBS], Witness_high[NUM_WITNESS_LIMBS]]
-    pub fn den_trace(a: BigUint, b: BigUint, sign: bool) -> Vec<F> {
+    pub fn den_trace(a: BigUint, b: BigUint, sign: bool) -> (Vec<F>, BigUint) {
         let p = get_p();
 
         let b_signed = if sign { b.clone() } else { &p - &b };
@@ -124,7 +124,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         row.extend(witness_low);
         row.extend(witness_high);
 
-        row
+        (row, result)
     }
 
     /// Quad generic constraints
@@ -353,7 +353,8 @@ mod tests {
                     _ => unreachable!(),
                 };
                 let operation = EdOpcode::DEN(self.a, self.b, sign);
-                tx.send((pc, 0, operation.generate_trace_row())).unwrap();
+                let (trace_row, _) = operation.generate_trace_row();
+                tx.send((pc, 0, trace_row)).unwrap();
             });
         }
     }
