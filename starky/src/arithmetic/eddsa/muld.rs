@@ -13,6 +13,7 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 pub const NUM_CARRY_LIMBS: usize = N_LIMBS;
 pub const NUM_WITNESS_LIMBS: usize = 2 * N_LIMBS - 2;
 const NUM_MUL_COLUMNS: usize = 3 * N_LIMBS + NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS;
+pub const TOTAL_WITNESS_COLUMNS: usize = NUM_CARRY_LIMBS + 2 * NUM_WITNESS_LIMBS;
 
 /// A gadget to compute
 /// QUAD(x, y, z, w) = (a * b + c * d) mod p
