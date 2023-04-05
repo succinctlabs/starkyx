@@ -373,11 +373,11 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<SimpleRowEcAddCir
     for SimpleRowEcAddInstruction
 {
     fn generate_trace(self, pc: usize, tx: Sender<(usize, usize, Vec<F>)>) {
-        rayon::spawn(move || {
-            ECAddInstruction::generate_trace_with_input(
-                &self.x_1, &self.y_1, &self.x_2, &self.y_2, pc, tx,
-            );
-        });
+        //rayon::spawn(move || {
+        ECAddInstruction::generate_trace_with_input(
+            &self.x_1, &self.y_1, &self.x_2, &self.y_2, pc, tx,
+        );
+        //});
     }
 }
 
@@ -440,5 +440,39 @@ mod tests {
         let proof =
             prove::<F, C, S, D>(stark, &config, trace, [], &mut TimingTree::default()).unwrap();
         verify_stark_proof(stark, proof.clone(), &config).unwrap();
+
+        // Verify recursive proof in a circuit
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
+
+        let degree_bits = proof.proof.recover_degree_bits(&config);
+        let virtual_proof =
+            add_virtual_stark_proof_with_pis(&mut recursive_builder, stark, &config, degree_bits);
+
+        recursive_builder.print_gate_counts(0);
+
+        let mut rec_pw = PartialWitness::new();
+        set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
+
+        verify_stark_proof_circuit::<F, C, S, D>(
+            &mut recursive_builder,
+            stark,
+            virtual_proof,
+            &config,
+        );
+
+        let recursive_data = recursive_builder.build::<C>();
+
+        let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
+        let recursive_proof = plonky2::plonk::prover::prove(
+            &recursive_data.prover_only,
+            &recursive_data.common,
+            rec_pw,
+            &mut timing,
+        )
+        .unwrap();
+
+        timing.print();
+        recursive_data.verify(recursive_proof).unwrap();
     }
 }
