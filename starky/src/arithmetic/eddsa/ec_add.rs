@@ -373,11 +373,11 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<SimpleRowEcAddCir
     for SimpleRowEcAddInstruction
 {
     fn generate_trace(self, pc: usize, tx: Sender<(usize, usize, Vec<F>)>) {
-        //rayon::spawn(move || {
-        ECAddInstruction::generate_trace_with_input(
-            &self.x_1, &self.y_1, &self.x_2, &self.y_2, pc, tx,
-        );
-        //});
+        rayon::spawn(move || {
+            ECAddInstruction::generate_trace_with_input(
+                &self.x_1, &self.y_1, &self.x_2, &self.y_2, pc, tx,
+            );
+        });
     }
 }
 
