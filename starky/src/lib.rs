@@ -19,6 +19,7 @@ pub mod permutation;
 pub mod proof;
 pub mod prover;
 pub mod recursive_verifier;
+pub mod sha256;
 pub mod stark;
 pub mod stark_testing;
 pub mod util;
