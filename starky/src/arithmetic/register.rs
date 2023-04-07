@@ -1,8 +1,7 @@
+use anyhow::{anyhow, Result};
 use plonky2::field::extension::FieldExtension;
 use plonky2::field::packed::PackedField;
 use plonky2::iop::ext_target::ExtensionTarget;
-
-use anyhow::{Result, anyhow};
 
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -12,7 +11,9 @@ pub enum Register {
     Next(usize, usize),
 }
 
-
+pub struct U16Array<const N: usize> {
+    register: Register,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum CellType {
@@ -20,18 +21,20 @@ pub enum CellType {
     Bit,
 }
 
-pub trait DataRegister : 'static + Sized + Send + Sync {
-    const CELL : Option<CellType>;
+pub trait DataRegister: 'static + Sized + Send + Sync {
+    const CELL: Option<CellType>;
 
     /// Returns an element of the field
-    /// 
+    ///
     /// Assumes register is of the correct size
-    fn from_raw_register(register : Register) -> Self;
+    fn from_raw_register(register: Register) -> Self;
+
+    fn into_raw_register(self) -> Register;
 
     /// Returns an element of the field
-    /// 
+    ///
     /// Checks that the register is of the correct size
-    fn from_register(register : Register) -> Result<Self> {
+    fn from_register(register: Register) -> Result<Self> {
         if register.len() != Self::size_of() {
             return Err(anyhow!("Invalid register length"));
         }
@@ -42,9 +45,43 @@ pub trait DataRegister : 'static + Sized + Send + Sync {
     fn size_of() -> usize;
 }
 
+
+
+pub struct WitnessData {
+    size: usize,
+    cell_type : Option<CellType>,
+}
+
+impl WitnessData {
+    pub fn u16(size : usize) -> Self {
+        WitnessData {
+            size,
+            cell_type: Some(CellType::U16)
+        }
+    }
+
+    pub fn bitarray(size: usize) -> Self {
+        WitnessData {
+            size,
+            cell_type: Some(CellType::Bit)
+        }
+    }
+
+    pub fn untyped(size : usize) -> Self {
+        WitnessData {
+            size,
+            cell_type: None
+        }
+    }
+    
+    pub fn destruct(self) -> (usize, Option<CellType>) {
+        (self.size, self.cell_type)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
-pub struct BitRegister {
-    register : Register
+pub struct BitArray<const N: usize> {
+    register: Register,
 }
 
 impl Register {
@@ -86,6 +123,14 @@ impl Register {
             Register::Next(index, length) => {
                 value.copy_from_slice(&mut trace_rows[row_index + 1][*index..*index + length]);
             }
+        }
+    }
+
+    #[inline]
+    pub fn shift_right(&mut self, shift: usize) {
+        match self {
+            Register::Local(index, _) => *index += shift,
+            Register::Next(index, _) => *index += shift,
         }
     }
 
@@ -141,17 +186,34 @@ impl Register {
     }
 }
 
+impl<const N: usize> DataRegister for BitArray<N> {
+    const CELL: Option<CellType> = Some(CellType::Bit);
 
-impl DataRegister for BitRegister {
-    const CELL : Option<CellType> = Some(CellType::Bit);
-
-    fn from_raw_register(register : Register) -> Self {
-        Self {
-            register
-        }
+    fn from_raw_register(register: Register) -> Self {
+        Self { register }
     }
 
     fn size_of() -> usize {
-        1
+        N
+    }
+
+    fn into_raw_register(self) -> Register {
+        self.register
+    }
+}
+
+impl<const N: usize> DataRegister for U16Array<N> {
+    const CELL: Option<CellType> = Some(CellType::U16);
+
+    fn from_raw_register(register: Register) -> Self {
+        Self { register }
+    }
+
+    fn size_of() -> usize {
+        N
+    }
+
+    fn into_raw_register(self) -> Register {
+        self.register
     }
 }

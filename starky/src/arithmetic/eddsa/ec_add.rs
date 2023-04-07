@@ -8,7 +8,6 @@ use plonky2_maybe_rayon::*;
 
 use super::*;
 use crate::arithmetic::circuit::EmulatedCircuitLayout;
-
 use crate::arithmetic::polynomial::Polynomial;
 use crate::arithmetic::{InstructionT, Register};
 

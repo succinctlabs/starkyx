@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-
 use std::sync::mpsc::Sender;
 
 use plonky2::field::extension::{Extendable, FieldExtension};
@@ -8,24 +7,13 @@ use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
+use super::Register;
 use crate::arithmetic::circuit::EmulatedCircuitLayout;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
-
-use super::Register;
 
 pub trait Opcode<F, const D: usize>: 'static + Sized + Send + Sync {
     type Output: Clone + Send + Sync;
     fn generate_trace_row(self) -> (Vec<F>, Self::Output);
-}
-
-pub trait Instruction<
-    L: EmulatedCircuitLayout<F, D, N>,
-    F: RichField + Extendable<D>,
-    const D: usize,
-    const N: usize,
->: 'static + Sized + Send + Sync
-{
-    fn generate_trace(self, pc: usize, tx: Sender<(usize, usize, Vec<F>)>);
 }
 
 pub trait OpcodeLayout<F: RichField + Extendable<D>, const D: usize>:
@@ -54,8 +42,6 @@ pub trait OpcodeLayout<F: RichField + Extendable<D>, const D: usize>:
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     );
 }
-
-
 
 pub struct WriteInputLayout {
     input: Register,
@@ -96,4 +82,3 @@ impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for WriteI
     ) {
     }
 }
-

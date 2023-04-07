@@ -1,19 +1,16 @@
 pub mod add;
 pub mod mul;
 
-
 pub use add::AddModLayout;
 pub use mul::MulModLayout;
-use super::*;
-use super::layout::OpcodeLayout;
-
 use num::BigUint;
-
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
+use super::layout::OpcodeLayout;
+use super::*;
 use crate::arithmetic::layout::Opcode;
 
 #[derive(Debug, Clone)]
@@ -22,14 +19,11 @@ pub enum ArithmeticLayout {
     Mul(MulModLayout),
 }
 
-
 #[derive(Debug, Clone)]
 pub enum ArithmeticOp {
     AddMod(BigUint, BigUint, BigUint),
     MulMod(BigUint, BigUint, BigUint),
 }
-
-
 
 impl<F: RichField + Extendable<D>, const D: usize> OpcodeLayout<F, D> for ArithmeticLayout {
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {

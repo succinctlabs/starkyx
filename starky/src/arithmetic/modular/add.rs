@@ -2,25 +2,20 @@
 //!
 //! The implementation based on a method used in Polygon starks
 
-use core::marker::PhantomData;
-use std::sync::mpsc;
-
+use anyhow::{anyhow, Result};
 use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
-use plonky2::field::polynomial::PolynomialValues;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2::util::transpose;
 use plonky2_maybe_rayon::*;
 
-use super::{ArithmeticOp, ArithmeticParser, Register};
+use super::{ArithmeticParser, Register};
+use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
+use crate::arithmetic::register::WitnessData;
 use crate::arithmetic::util::{self, to_field_iter};
-use crate::lookup::{eval_lookups, eval_lookups_circuit, permuted_cols};
-use crate::permutation::PermutationPair;
-use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub const N_LIMBS: usize = 16;
@@ -39,12 +34,6 @@ pub const NUM_COLUMNS: usize = 1 + NUM_ARITH_COLUMNS + 2 * NUM_ARITH_COLUMNS;
 pub const LOOKUP_SHIFT: usize = NUM_ARITH_COLUMNS + 1;
 pub const RANGE_MAX: usize = 1usize << 16; // Range check strict upper bound
 const WITNESS_OFFSET: usize = 1usize << 20; // Witness offset
-
-#[derive(Clone, Debug)]
-pub struct ArithmeticOpStark<F, const D: usize> {
-    layout: AddModLayout,
-    _marker: PhantomData<F>,
-}
 
 #[inline]
 pub const fn col_perm_index(i: usize) -> usize {
@@ -271,232 +260,116 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> ArithmeticOpStark<F, D> {
-    fn gen_trace(&self, program: Vec<ArithmeticOp>) -> Vec<PolynomialValues<F>> {
-        let num_operations = program.len();
-        let num_rows = num_operations;
-        let mut trace_rows = vec![Vec::with_capacity(NUM_ARITH_COLUMNS); num_rows];
-        //let mut trace_cols = vec![vec![F::ZERO;num_rows]; NUM_COLUMNS];
+#[derive(Debug, Clone, Copy)]
+pub struct AddModInstruction {
+    input_1: Register,
+    input_2: Register,
+    output: Register,
+    modulus: Register,
+    carry: Option<Register>,
+    witness_low: Option<Register>,
+    witness_high: Option<Register>,
+}
 
-        let (tx, rx) = mpsc::channel::<(usize, Vec<F>)>();
-
-        for (i, op) in program.into_iter().enumerate() {
-            let tx = tx.clone();
-            let ArithmeticOp::AddMod(a, b, m) = op else { panic!("Invalid op") };
-            rayon::spawn(move || {
-                let mut row = ArithmeticParser::<F, D>::add_trace(a, b, m);
-                row.push(F::from_canonical_usize(i));
-                tx.send((i, row)).unwrap();
-            });
+impl AddModInstruction {
+    pub fn new(input_1: Register, input_2: Register, output: Register, modulus: Register) -> Self {
+        Self {
+            input_1,
+            input_2,
+            output,
+            modulus,
+            carry: None,
+            witness_low: None,
+            witness_high: None,
         }
-        drop(tx);
+    }
 
-        // Collecte the trace rows which are processed in parallel
-        while let Ok((i, mut row)) = rx.recv() {
-            trace_rows[i].append(&mut row); // Append row to trace
-        }
-        // Transpose the trace to get the columns and resize to the correct size
-        let mut trace_cols = transpose(&trace_rows);
-        trace_cols.resize(NUM_COLUMNS, Vec::with_capacity(num_rows));
-
-        // Calculate the permutation and append permuted columbs to trace
-        let (trace_values, perm_values) = trace_cols.split_at_mut(NUM_ARITH_COLUMNS + 1);
-        (0..NUM_ARITH_COLUMNS)
-            .into_par_iter()
-            .map(|i| permuted_cols(&trace_values[i], &trace_values[NUM_ARITH_COLUMNS]))
-            .zip(perm_values.par_iter_mut().chunks(2))
-            .for_each(|((col_perm, table_perm), mut trace)| {
-                trace[0].extend(col_perm);
-                trace[1].extend(table_perm);
-            });
-
-        trace_cols
-            .into_par_iter()
-            .map(PolynomialValues::new)
-            .collect()
+    pub fn into_addmod_layout(&self) -> Result<AddModLayout> {
+        let carry = self.carry.ok_or(anyhow!("missing carry"))?;
+        let witness_low = self.witness_low.ok_or(anyhow!("missing witness_low"))?;
+        let witness_high = self.witness_high.ok_or(anyhow!("missing witness_high"))?;
+        Ok(AddModLayout {
+            input_1: self.input_1,
+            input_2: self.input_2,
+            output: self.output,
+            modulus: self.modulus,
+            carry: carry,
+            witness_low: witness_low,
+            witness_high: witness_high,
+        })
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for ArithmeticOpStark<F, D> {
-    const COLUMNS: usize = NUM_COLUMNS;
-    const PUBLIC_INPUTS: usize = 0;
+impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for AddModInstruction {
 
-    fn eval_packed_generic<FE, P, const D2: usize>(
+    fn witness_data(&self) -> WitnessData {
+        WitnessData::u16(NUM_ADD_WITNESS_COLUMNS)
+    }
+
+    fn shift_right(&mut self, _free_shift: usize, arithmetic_shift: usize) {
+        let shift = arithmetic_shift;
+        self.input_1.shift_right(shift);
+        self.input_2.shift_right(shift);
+        self.output.shift_right(shift);
+        self.modulus.shift_right(shift);
+        if let Some(carry) = self.carry.as_mut() {
+            carry.shift_right(shift);
+        }
+        if let Some(witness_low) = self.witness_low.as_mut() {
+            witness_low.shift_right(shift);
+        }
+        if let Some(witness_high) = self.witness_high.as_mut() {
+            witness_high.shift_right(shift);
+        }
+    }
+
+    fn set_witness(&mut self, register: Register) -> Result<()> {
+        let (start, length) = (register.index(), register.len());
+        if length != NUM_ADD_WITNESS_COLUMNS {
+            return Err(anyhow!("Invalid witness length"));
+        }
+        let mut index = start;
+        let carry = Register::Local(index, NUM_CARRY_COLUMNS);
+        index += NUM_CARRY_COLUMNS;
+        self.carry = Some(carry);
+        let witness_low = Register::Local(index, NUM_WTNESS_LOW_COLUMNS);
+        self.witness_low = Some(witness_low);
+        index += NUM_WTNESS_LOW_COLUMNS;
+        let witness_high = Register::Local(index, NUM_WTNESS_HIGH_COLUMNS);
+        self.witness_high = Some(witness_high);
+        Ok(())
+    }
+
+    fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
+        let layout = self.into_addmod_layout().unwrap();
+        layout.assign_row(trace_rows, row, row_index)
+    }
+
+    fn packed_generic_constraints<
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+    >(
         &self,
-        vars: StarkEvaluationVars<FE, P, { Self::COLUMNS }, { Self::PUBLIC_INPUTS }>,
+        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
-        ArithmeticParser::add_packed_generic_constraints(self.layout, vars, yield_constr);
-        // lookp table values
-        yield_constr.constraint_first_row(vars.local_values[NUM_ARITH_COLUMNS]);
-        let table_values_relation =
-            vars.local_values[NUM_ARITH_COLUMNS] + FE::ONE - vars.next_values[NUM_ARITH_COLUMNS];
-        yield_constr.constraint_transition(table_values_relation);
-        // permutations
-        for i in 0..NUM_ARITH_COLUMNS {
-            eval_lookups(vars, yield_constr, col_perm_index(i), table_perm_index(i));
-        }
+        let layout = self.into_addmod_layout().unwrap();
+        ArithmeticParser::add_packed_generic_constraints(layout, vars, yield_constr);
     }
 
-    fn eval_ext_circuit(
+    fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
         builder: &mut CircuitBuilder<F, D>,
-        vars: StarkEvaluationTargets<D, { Self::COLUMNS }, { Self::PUBLIC_INPUTS }>,
+        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        ArithmeticParser::add_ext_circuit(self.layout, builder, vars, yield_constr);
-        // lookup table values
-        yield_constr.constraint_first_row(builder, vars.local_values[NUM_ARITH_COLUMNS]);
-        let one = builder.constant_extension(F::Extension::ONE);
-        let table_plus_one = builder.add_extension(vars.local_values[NUM_ARITH_COLUMNS], one);
-        let table_relation =
-            builder.sub_extension(table_plus_one, vars.next_values[NUM_ARITH_COLUMNS]);
-        yield_constr.constraint_transition(builder, table_relation);
-        // lookup argumment
-        for i in 0..NUM_ARITH_COLUMNS {
-            eval_lookups_circuit(
-                builder,
-                vars,
-                yield_constr,
-                col_perm_index(i),
-                table_perm_index(i),
-            );
-        }
-    }
-
-    fn constraint_degree(&self) -> usize {
-        2
-    }
-
-    fn permutation_pairs(&self) -> Vec<PermutationPair> {
-        (0..NUM_ARITH_COLUMNS)
-            .flat_map(|i| {
-                [
-                    PermutationPair::singletons(i, col_perm_index(i)),
-                    PermutationPair::singletons(NUM_ARITH_COLUMNS, table_perm_index(i)),
-                ]
-            })
-            .collect()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use num::bigint::RandBigInt;
-    use plonky2::iop::witness::PartialWitness;
-    use plonky2::plonk::circuit_builder::CircuitBuilder;
-    use plonky2::plonk::circuit_data::CircuitConfig;
-    use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
-    use plonky2::util::timing::TimingTree;
-
-    use super::*;
-    use crate::config::StarkConfig;
-    use crate::prover::prove;
-    use crate::recursive_verifier::{
-        add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
-        verify_stark_proof_circuit,
-    };
-    use crate::verifier::verify_stark_proof;
-
-    #[test]
-    fn test_arithmetic_op_add() {
-        const D: usize = 2;
-        type C = PoseidonGoldilocksConfig;
-        type F = <C as GenericConfig<D>>::F;
-        type S = ArithmeticOpStark<F, D>;
-
-        let num_rows = 2u64.pow(16);
-        let config = StarkConfig::standard_fast_config();
-
-        let p22519 = BigUint::from(2u32).pow(255) - BigUint::from(19u32);
-
-        let mut rng = rand::thread_rng();
-
-        let mut additions = Vec::new();
-
-        let input_1_index = 0;
-        let input_2_index = N_LIMBS;
-        let modulus_index = 2 * N_LIMBS;
-        let output_index = 3 * N_LIMBS;
-        //let carry_index = 4 * N_LIMBS;
-        //let witness_low_index = 5 * N_LIMBS;
-        //let witness_high_index = witness_low_index + N_LIMBS - 1;
-
-        let layout = AddModLayout::new(
-            Register::Local(input_1_index, N_LIMBS),
-            Register::Local(input_2_index, N_LIMBS),
-            Register::Local(modulus_index, N_LIMBS),
-            Register::Local(output_index, N_LIMBS),
-            Register::Local(4 * N_LIMBS, NUM_ADD_WITNESS_COLUMNS),
-        );
-
-        for _ in 0..num_rows {
-            let a: BigUint = rng.gen_biguint(255) % &p22519;
-            let b = rng.gen_biguint(255) % &p22519;
-            let p = p22519.clone();
-
-            let operation = ArithmeticOp::AddMod(a.clone(), b.clone(), p.clone());
-            additions.push(operation);
-        }
-
-        let stark = S {
-            layout,
-            _marker: PhantomData,
-        };
-
-        let trace = stark.gen_trace(additions);
-
-        // Verify proof as a stark
-        let proof = prove::<F, C, S, D>(
-            stark.clone(),
-            &config,
-            trace,
-            [],
-            &mut TimingTree::default(),
-        )
-        .unwrap();
-        verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
-
-        // Verify recursive proof in a circuit
-        let config_rec = CircuitConfig::standard_recursion_config();
-        let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
-
-        let degree_bits = proof.proof.recover_degree_bits(&config);
-        let virtual_proof = add_virtual_stark_proof_with_pis(
-            &mut recursive_builder,
-            stark.clone(),
-            &config,
-            degree_bits,
-        );
-
-        recursive_builder.print_gate_counts(0);
-
-        let mut rec_pw = PartialWitness::new();
-        set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-
-        verify_stark_proof_circuit::<F, C, S, D>(
-            &mut recursive_builder,
-            stark,
-            virtual_proof,
-            &config,
-        );
-
-        let recursive_data = recursive_builder.build::<C>();
-
-        let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
-        let recursive_proof = plonky2::plonk::prover::prove(
-            &recursive_data.prover_only,
-            &recursive_data.common,
-            rec_pw,
-            &mut timing,
-        )
-        .unwrap();
-
-        timing.print();
-        recursive_data.verify(recursive_proof).unwrap();
+        let layout = self.into_addmod_layout().unwrap();
+        ArithmeticParser::add_ext_circuit(layout, builder, vars, yield_constr);
     }
 }

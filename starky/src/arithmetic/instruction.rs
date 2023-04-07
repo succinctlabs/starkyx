@@ -1,21 +1,35 @@
-
-use plonky2::field::extension::FieldExtension;
+use anyhow::Result;
+use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
-use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-
-use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 use super::Register;
+use super::register::{DataRegister, WitnessData};
+use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-pub trait Instruction<F: RichField + Extendable<D>, const D : usize> : 'static + Send + Sync {
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct InstructionID(pub String);
 
-    fn witness_size(&self) -> usize;
+#[derive(Clone, Debug)]
+pub struct LabeledInstruction<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize> {
+    label: InstructionID,
+    instruction: I,
+    _marker: core::marker::PhantomData<F>,
+}
 
-    fn shift_right(&mut self, shift : usize);
 
-    fn set_witness(&mut self, witness : Register);
+
+pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
+    'static + Send + Sync + Clone
+{
+    //fn generate_trace_row(&self, input: Option<Self::Input>) -> (Vec<F>, Option<Self::Output>);
+
+    fn shift_right(&mut self, free_shift: usize, arithmetic_shift : usize);
+
+    fn witness_data(&self) -> WitnessData;
+
+    fn set_witness(&mut self, witness: Register) -> Result<()>;
 
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize);
 
@@ -39,4 +53,20 @@ pub trait Instruction<F: RichField + Extendable<D>, const D : usize> : 'static +
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     );
+}
+
+impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
+    LabeledInstruction<I, F, D>
+{
+    pub fn new(label: InstructionID, instruction: I) -> Self {
+        Self {
+            label,
+            instruction,
+            _marker: core::marker::PhantomData,
+        }
+    }
+
+    pub fn destruct(self) -> (InstructionID, I) {
+        (self.label, self.instruction)
+    }
 }

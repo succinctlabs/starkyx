@@ -13,12 +13,12 @@ use plonky2::util::transpose;
 use plonky2_maybe_rayon::*;
 
 use super::layout::OpcodeLayout;
-use super::{InstructionT};
+use super::InstructionT;
+use crate::arithmetic::circuit::EmulatedCircuitLayout;
 use crate::lookup::{eval_lookups, eval_lookups_circuit, permuted_cols};
 use crate::permutation::PermutationPair;
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
-use crate::arithmetic::circuit::EmulatedCircuitLayout;
 
 /// A Stark for emulated field operations
 ///
@@ -223,11 +223,11 @@ mod tests {
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
-    use crate::arithmetic::layout::Opcode;
 
     use super::*;
-    use crate::arithmetic::Register;
+    use crate::arithmetic::layout::Opcode;
     use crate::arithmetic::modular::{add, ArithmeticLayout, ArithmeticOp};
+    use crate::arithmetic::Register;
     use crate::config::StarkConfig;
     use crate::prover::prove;
     use crate::recursive_verifier::{

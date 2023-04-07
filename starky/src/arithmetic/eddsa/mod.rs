@@ -7,10 +7,10 @@ use plonky2::field::types::Field;
 
 pub mod den;
 pub mod ec_add;
+pub mod field;
 pub mod fpmul;
 pub mod muld;
 pub mod quad;
-pub mod field;
 
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
@@ -21,7 +21,8 @@ use self::den::DenLayout;
 use self::fpmul::FpMulLayout;
 use self::muld::MulDLayout;
 use self::quad::QuadLayout;
-use super::{ArithmeticParser, layout::{Opcode, OpcodeLayout, WriteInputLayout}};
+use super::layout::{Opcode, OpcodeLayout, WriteInputLayout};
+use super::ArithmeticParser;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 // General use constants

@@ -266,8 +266,8 @@ mod tests {
     use plonky2_maybe_rayon::*;
 
     use super::*;
+    use crate::arithmetic::arithmetic_stark::ArithmeticStark;
     use crate::arithmetic::circuit::EmulatedCircuitLayout;
-    use crate::arithmetic::arithmetic_stark::{ArithmeticStark};
     use crate::arithmetic::InstructionT;
     use crate::config::StarkConfig;
     use crate::prover::prove;
