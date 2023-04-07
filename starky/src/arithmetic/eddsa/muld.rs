@@ -226,8 +226,9 @@ mod tests {
     use plonky2_maybe_rayon::*;
 
     use super::*;
-    use crate::arithmetic::arithmetic_stark::{ArithmeticStark, EmulatedCircuitLayout};
-    use crate::arithmetic::Instruction;
+    use crate::arithmetic::circuit::EmulatedCircuitLayout;
+    use crate::arithmetic::arithmetic_stark::{ArithmeticStark};
+    use crate::arithmetic::InstructionT;
     use crate::config::StarkConfig;
     use crate::prover::prove;
     use crate::recursive_verifier::{
@@ -274,7 +275,7 @@ mod tests {
         }
     }
 
-    impl<F: RichField + Extendable<D>, const D: usize> Instruction<MulDLayoutCircuit, F, D, 2>
+    impl<F: RichField + Extendable<D>, const D: usize> InstructionT<MulDLayoutCircuit, F, D, 2>
         for MulDInstruction
     {
         fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {

@@ -12,42 +12,13 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::util::transpose;
 use plonky2_maybe_rayon::*;
 
-use super::{Instruction, OpcodeLayout};
+use super::layout::OpcodeLayout;
+use super::{InstructionT};
 use crate::lookup::{eval_lookups, eval_lookups_circuit, permuted_cols};
 use crate::permutation::PermutationPair;
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
-
-/// A layout for a circuit that emulates field operations
-pub trait EmulatedCircuitLayout<F: RichField + Extendable<D>, const D: usize, const N: usize>:
-    Sized + Send + Sync
-{
-    const PUBLIC_INPUTS: usize;
-    const NUM_ARITHMETIC_COLUMNS: usize;
-    const ENTRY_COLUMN: usize;
-    const TABLE_INDEX: usize;
-
-    type Layouts: OpcodeLayout<F, D>;
-    const OPERATIONS: [Self::Layouts; N];
-
-    /// Check that the operations allocations are consistent with total number of columns
-    fn is_consistent(&self) -> bool {
-        assert_eq!(
-            Self::TABLE_INDEX,
-            Self::ENTRY_COLUMN + Self::NUM_ARITHMETIC_COLUMNS
-        );
-        true
-    }
-}
-
-pub const fn num_columns<
-    F: RichField + Extendable<D>,
-    L: EmulatedCircuitLayout<F, D, N>,
-    const N: usize,
-    const D: usize,
->() -> usize {
-    L::ENTRY_COLUMN + 1 + 3 * L::NUM_ARITHMETIC_COLUMNS
-}
+use crate::arithmetic::circuit::EmulatedCircuitLayout;
 
 /// A Stark for emulated field operations
 ///
@@ -111,7 +82,7 @@ impl<
     /// Generate the trace for the arithmetic circuit
     pub fn generate_trace(
         &self,
-        program: Vec<impl Instruction<L, F, D, N>>,
+        program: Vec<impl InstructionT<L, F, D, N>>,
     ) -> Vec<PolynomialValues<F>> {
         let num_operations = program.len();
         let num_rows = num_operations;
@@ -252,9 +223,11 @@ mod tests {
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
+    use crate::arithmetic::layout::Opcode;
 
     use super::*;
-    use crate::arithmetic::{add, ArithmeticLayout, ArithmeticOp, Opcode, Register};
+    use crate::arithmetic::Register;
+    use crate::arithmetic::modular::{add, ArithmeticLayout, ArithmeticOp};
     use crate::config::StarkConfig;
     use crate::prover::prove;
     use crate::recursive_verifier::{
@@ -297,7 +270,7 @@ mod tests {
         }
     }
 
-    impl<F: RichField + Extendable<D>, const D: usize> Instruction<AddModLayoutCircuit, F, D, 1>
+    impl<F: RichField + Extendable<D>, const D: usize> InstructionT<AddModLayoutCircuit, F, D, 1>
         for AddInstruction
     {
         fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {
@@ -380,7 +353,7 @@ mod tests {
     #[derive(Clone, Copy, Debug)]
     pub struct MulModLayoutCircuit;
 
-    use crate::arithmetic::mul;
+    use crate::arithmetic::modular::mul;
     impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, D, 1>
         for MulModLayoutCircuit
     {
@@ -415,7 +388,7 @@ mod tests {
         }
     }
 
-    impl<F: RichField + Extendable<D>, const D: usize> Instruction<MulModLayoutCircuit, F, D, 1>
+    impl<F: RichField + Extendable<D>, const D: usize> InstructionT<MulModLayoutCircuit, F, D, 1>
         for MulInstruction
     {
         fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {

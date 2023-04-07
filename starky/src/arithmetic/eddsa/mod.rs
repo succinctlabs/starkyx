@@ -21,7 +21,7 @@ use self::den::DenLayout;
 use self::fpmul::FpMulLayout;
 use self::muld::MulDLayout;
 use self::quad::QuadLayout;
-use super::{ArithmeticParser, Opcode, OpcodeLayout, WriteInputLayout};
+use super::{ArithmeticParser, layout::{Opcode, OpcodeLayout, WriteInputLayout}};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 // General use constants

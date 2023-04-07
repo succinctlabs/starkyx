@@ -1,7 +1,8 @@
 use super::*;
-use crate::arithmetic::arithmetic_stark::EmulatedCircuitLayout;
+use crate::arithmetic::circuit::EmulatedCircuitLayout;
+use crate::arithmetic::arithmetic_stark;
 use crate::arithmetic::polynomial::Polynomial;
-use crate::arithmetic::{Instruction, Register};
+use crate::arithmetic::{InstructionT, Register};
 
 
 //pub struct Field<const N_BITS : usize, const N_LIMBS : usize>(Register);

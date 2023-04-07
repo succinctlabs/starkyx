@@ -7,9 +7,10 @@ use std::sync::mpsc::Sender;
 use plonky2_maybe_rayon::*;
 
 use super::*;
-use crate::arithmetic::arithmetic_stark::EmulatedCircuitLayout;
+use crate::arithmetic::circuit::EmulatedCircuitLayout;
+
 use crate::arithmetic::polynomial::Polynomial;
-use crate::arithmetic::{Instruction, Register};
+use crate::arithmetic::{InstructionT, Register};
 
 const MUL_WITNESS: usize = fpmul::TOTAL_WITNESS_COLUMNS;
 const DEN_WITNESS: usize = den::TOTAL_WITNESS_COLUMNS;
@@ -251,20 +252,6 @@ impl ECAddChip {
 pub struct ECAddInstruction;
 
 impl ECAddInstruction {
-    fn generate_trace<F: RichField + Extendable<D>, const D: usize>(
-        x_1: &BigUint,
-        y_1: &BigUint,
-        x_2: &BigUint,
-        y_2: &BigUint,
-        pc: usize,
-        tx: Sender<(usize, usize, Vec<F>)>,
-    ) {
-        let p_x_1 = Polynomial::<F>::from_biguint_field(&x_1, 16, N_LIMBS);
-        let p_y_1 = Polynomial::<F>::from_biguint_field(&y_1, 16, N_LIMBS);
-        let p_x_2 = Polynomial::<F>::from_biguint_field(&x_2, 16, N_LIMBS);
-        let p_y_2 = Polynomial::<F>::from_biguint_field(&y_2, 16, N_LIMBS);
-    }
-
     fn generate_trace_with_input<F: RichField + Extendable<D>, const D: usize>(
         x_1: &BigUint,
         y_1: &BigUint,
@@ -369,7 +356,7 @@ impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, D, 9
     const OPERATIONS: [Self::Layouts; 9] = Self::OPERATIONS;
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> Instruction<SimpleRowEcAddCircuit, F, D, 9>
+impl<F: RichField + Extendable<D>, const D: usize> InstructionT<SimpleRowEcAddCircuit, F, D, 9>
     for SimpleRowEcAddInstruction
 {
     fn generate_trace(self, pc: usize, tx: Sender<(usize, usize, Vec<F>)>) {
