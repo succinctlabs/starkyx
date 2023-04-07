@@ -10,6 +10,7 @@ pub mod ec_add;
 pub mod fpmul;
 pub mod muld;
 pub mod quad;
+pub mod field;
 
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
