@@ -11,6 +11,7 @@ pub enum Register {
     Next(usize, usize),
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct U16Array<const N: usize> {
     register: Register,
 }
@@ -31,6 +32,8 @@ pub trait DataRegister: 'static + Sized + Send + Sync {
 
     fn into_raw_register(self) -> Register;
 
+    fn register_mut(&mut self) -> &mut Register;
+
     /// Returns an element of the field
     ///
     /// Checks that the register is of the correct size
@@ -45,35 +48,33 @@ pub trait DataRegister: 'static + Sized + Send + Sync {
     fn size_of() -> usize;
 }
 
-
-
 pub struct WitnessData {
     size: usize,
-    cell_type : Option<CellType>,
+    cell_type: Option<CellType>,
 }
 
 impl WitnessData {
-    pub fn u16(size : usize) -> Self {
+    pub fn u16(size: usize) -> Self {
         WitnessData {
             size,
-            cell_type: Some(CellType::U16)
+            cell_type: Some(CellType::U16),
         }
     }
 
     pub fn bitarray(size: usize) -> Self {
         WitnessData {
             size,
-            cell_type: Some(CellType::Bit)
+            cell_type: Some(CellType::Bit),
         }
     }
 
-    pub fn untyped(size : usize) -> Self {
+    pub fn untyped(size: usize) -> Self {
         WitnessData {
             size,
-            cell_type: None
+            cell_type: None,
         }
     }
-    
+
     pub fn destruct(self) -> (usize, Option<CellType>) {
         (self.size, self.cell_type)
     }
@@ -193,6 +194,10 @@ impl<const N: usize> DataRegister for BitArray<N> {
         Self { register }
     }
 
+    fn register_mut(&mut self) -> &mut Register {
+        &mut self.register
+    }
+
     fn size_of() -> usize {
         N
     }
@@ -207,6 +212,10 @@ impl<const N: usize> DataRegister for U16Array<N> {
 
     fn from_raw_register(register: Register) -> Self {
         Self { register }
+    }
+
+    fn register_mut(&mut self) -> &mut Register {
+        &mut self.register
     }
 
     fn size_of() -> usize {

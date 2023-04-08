@@ -16,8 +16,8 @@ use plonky2_maybe_rayon::*;
 
 use super::instruction::{Instruction, InstructionID, LabeledInstruction};
 use super::register::{CellType, DataRegister, WitnessData};
+use super::trace::{TraceGenerator, TraceHandle};
 use super::Register;
-use super::trace::{TraceHandle, TraceGenerator};
 use crate::arithmetic::circuit::{ChipParameters, StarkParameters};
 use crate::lookup::{eval_lookups, eval_lookups_circuit, permuted_cols};
 use crate::permutation::PermutationPair;
@@ -77,8 +77,8 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
 
     fn get_local_u16_memory(&mut self, size: usize) -> Result<Register> {
         let register = Register::Local(self.local_arithmetic_index, size);
-        self.local_index += size;
-        if self.local_index > L::NUM_ARITHMETIC_COLUMNS {
+        self.local_arithmetic_index += size;
+        if self.local_arithmetic_index > L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS {
             return Err(anyhow!("Local row u16 memory overflow"));
         }
         Ok(register)
@@ -86,8 +86,8 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
 
     fn get_next_u16_memory(&mut self, size: usize) -> Result<Register> {
         let register = Register::Next(self.next_arithmetic_index, size);
-        self.next_index += size;
-        if self.next_index > L::NUM_ARITHMETIC_COLUMNS {
+        self.local_arithmetic_index += size;
+        if self.local_arithmetic_index > L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS {
             return Err(anyhow!("Next row u16 memory overflow"));
         }
         Ok(register)
@@ -141,13 +141,14 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         }
         let (size, cell_type) = instruction.witness_data().destruct();
         let register = match cell_type {
-            Some(CellType::U16) => self.get_next_u16_memory(size)?,
+            Some(CellType::U16) => self.get_local_u16_memory(size)?,
             Some(CellType::Bit) => {
                 unimplemented!("Bit cells are not supported yet");
-                self.get_next_memory(size)?
+                self.get_local_memory(size)?
             }
-            None => self.get_next_memory(size)?,}; 
-        
+            None => self.get_local_memory(size)?,
+        };
+
         instruction.set_witness(register)?;
         self.instructions.push(instruction.into());
 
@@ -155,19 +156,23 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 
     /// Inserts a new subchip to the chip
-    /// 
-    /// Input: 
+    ///
+    /// Input:
     ///     - chip: The subchip to insert
     ///    - instruction_indices: A map from the instruction labels to the instruction indices in the subchip
     /// Returns an error if the instruction label already exists of if there is not enough memory
-    pub fn insert_chip<S: StarkParameters<F, D>>(&mut self, mut chip: Chip<S, F, D>, instruction_indices: BTreeMap<InstructionID, usize>,) -> Result<()>
+    pub fn insert_chip<S: StarkParameters<F, D>>(
+        &mut self,
+        mut chip: Chip<S, F, D>,
+        instruction_indices: BTreeMap<InstructionID, usize>,
+    ) -> Result<()>
     where
         S::Instruction: Into<L::Instruction>,
     {
-
         let length = self.instructions.len();
         let free_shift = std::cmp::max(self.local_index, self.next_index);
-        let arithmetic_shift = std::cmp::max(self.local_arithmetic_index, self.next_arithmetic_index);
+        let arithmetic_shift =
+            std::cmp::max(self.local_arithmetic_index, self.next_arithmetic_index);
         for (id, index) in instruction_indices {
             // Insert the instruction index to the chip map
             let existing_value = self.instruction_indices.insert(id, length + index);
@@ -182,16 +187,19 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         Ok(())
     }
 
-    /// Building the Stark
-    pub fn build(self) -> Chip<L, F, D> {
-        Chip {
-            instructions: self.instructions,
-            range_checks_idx: (
-                self.local_arithmetic_index,
-                self.local_arithmetic_index + L::NUM_ARITHMETIC_COLUMNS,
-            ),
-            table_index: self.local_arithmetic_index + L::NUM_ARITHMETIC_COLUMNS,
-        }
+    /// Build the chip
+    pub fn build(self) -> (Chip<L, F, D>, BTreeMap<InstructionID, usize>) {
+        (
+            Chip {
+                instructions: self.instructions,
+                range_checks_idx: (
+                    L::NUM_FREE_COLUMNS,
+                    L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS,
+                ),
+                table_index: L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS,
+            },
+            self.instruction_indices,
+        )
     }
 }
 
@@ -209,47 +217,46 @@ where
 impl<L, F, const D: usize> Chip<L, F, D>
 where
     L: ChipParameters<F, D>,
-    F: RichField + Extendable<D>, {
-
-        #[inline]
-        pub const fn table_index(&self) -> usize {
-            self.table_index
-        }
-
-        #[inline]
-        pub const fn num_columns_no_range_checks(&self) -> usize {
-            L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS
-        }
-
-        #[inline]
-        pub const fn num_range_checks(&self) -> usize {
-            self.range_checks_idx.1 - self.range_checks_idx.0
-        }
-
-        #[inline]
-        pub const fn col_perm_index(&self, i: usize) -> usize {
-            2 * i + self.table_index+ 1
-        }
-
-        #[inline]
-        pub const fn table_perm_index(&self, i: usize) -> usize {
-            2 * i + 1 + self.table_index + 1
-        }
-
-        #[inline]
-        pub const fn num_columns() -> usize {
-            1 + L::NUM_FREE_COLUMNS +3 * L::NUM_ARITHMETIC_COLUMNS
-        }
-        #[inline]
-        pub const fn arithmetic_range(&self) -> Range<usize> {
-            self.range_checks_idx.0..self.range_checks_idx.1
-        }
-
-        pub fn get(&self, index: usize) -> &L::Instruction {
-            &self.instructions[index]
-        }
-
+    F: RichField + Extendable<D>,
+{
+    #[inline]
+    pub const fn table_index(&self) -> usize {
+        self.table_index
     }
+
+    #[inline]
+    pub const fn num_columns_no_range_checks(&self) -> usize {
+        L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS
+    }
+
+    #[inline]
+    pub const fn num_range_checks(&self) -> usize {
+        L::NUM_ARITHMETIC_COLUMNS
+    }
+
+    #[inline]
+    pub const fn col_perm_index(&self, i: usize) -> usize {
+        2 * i + self.table_index + 1
+    }
+
+    #[inline]
+    pub const fn table_perm_index(&self, i: usize) -> usize {
+        2 * i + 1 + self.table_index + 1
+    }
+
+    #[inline]
+    pub const fn num_columns() -> usize {
+        1 + L::NUM_FREE_COLUMNS + 3 * L::NUM_ARITHMETIC_COLUMNS
+    }
+    #[inline]
+    pub const fn arithmetic_range(&self) -> Range<usize> {
+        self.range_checks_idx.0..self.range_checks_idx.1
+    }
+
+    pub fn get(&self, index: usize) -> &L::Instruction {
+        &self.instructions[index]
+    }
+}
 
 /// A Stark for emulated field operations
 ///
@@ -260,13 +267,10 @@ where
     L: StarkParameters<F, D>,
     F: RichField + Extendable<D>,
 {
-    chip : Chip<L, F, D>,
+    chip: Chip<L, F, D>,
 }
 
-
-impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize>
-    TestStark<L, F, D>
-{
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> TestStark<L, F, D> {
     /*     /// Generate the trace for the arithmetic circuit
     pub fn generate_trace(
         &self,
@@ -339,8 +343,8 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         }
         // lookp table values
         yield_constr.constraint_first_row(vars.local_values[self.chip.table_index]);
-        let table_values_relation =
-            vars.local_values[self.chip.table_index] + FE::ONE - vars.next_values[self.chip.table_index];
+        let table_values_relation = vars.local_values[self.chip.table_index] + FE::ONE
+            - vars.next_values[self.chip.table_index];
         yield_constr.constraint_transition(table_values_relation);
         // permutations
         for i in self.chip.arithmetic_range() {
@@ -387,11 +391,15 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     }
 
     fn permutation_pairs(&self) -> Vec<PermutationPair> {
-        self.chip.arithmetic_range()
+        self.chip
+            .arithmetic_range()
             .flat_map(|i| {
                 [
                     PermutationPair::singletons(i, self.chip.col_perm_index(i)),
-                    PermutationPair::singletons(self.chip.table_index, self.chip.table_perm_index(i)),
+                    PermutationPair::singletons(
+                        self.chip.table_index,
+                        self.chip.table_perm_index(i),
+                    ),
                 ]
             })
             .collect()
@@ -408,14 +416,18 @@ mod tests {
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
+    use plonky2_maybe_rayon::*;
 
     use super::*;
-    use crate::arithmetic::layout::Opcode;
     use crate::arithmetic::modular::add::{
-        AddModInstruction, NUM_ARITH_COLUMNS as NUM_ADD_COLUMNS, N_LIMBS as NUM_ADD_LIMBS,
+        AddModInstruction, NUM_ARITH_COLUMNS as NUM_ADD_COLUMNS, N_LIMBS as NUM_LIMBS,
+    };
+    use crate::arithmetic::modular::mul::{
+        MulModInstruction, NUM_ARITH_COLUMNS as NUM_MUL_COLUMNS,
     };
     use crate::arithmetic::register::U16Array;
-    use crate::arithmetic::Register;
+    use crate::arithmetic::trace::trace;
+    use crate::arithmetic::ArithmeticParser;
     use crate::config::StarkConfig;
     use crate::prover::prove;
     use crate::recursive_verifier::{
@@ -425,9 +437,9 @@ mod tests {
     use crate::verifier::verify_stark_proof;
 
     #[derive(Clone, Copy, Debug)]
-    pub struct AddTestParameters;
+    pub struct AddModTestParameters;
 
-    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for AddTestParameters {
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for AddModTestParameters {
         const NUM_ARITHMETIC_COLUMNS: usize = NUM_ADD_COLUMNS;
         const PUBLIC_INPUTS: usize = 0;
         const NUM_STARK_COLUMNS: usize = 0;
@@ -435,34 +447,125 @@ mod tests {
         type Instruction = AddModInstruction;
     }
 
-    #[derive(Clone, Copy, Debug)]
-    pub struct AddTrace;
-
-    //impl<F: RichField + Extendable<D>, const D: usize> TraceBuilder<AddTestParameters, F, D> for AddTrace {
-/* 
-        fn generate_trace(&self, _ :(), writer: &TraceWriter<AddTestParameters, F, D>)  {
-            let mut rng = rand::thread_rng();
-            let num_rows =  100;
-            let p22519 = BigUint::from(2u32).pow(255) - BigUint::from(19u32);
-
-            for i in 0..num_rows {
-                let a = rng.gen_biguint(256) % &p22519;
-                let b = rng.gen_biguint(256) % &p22519;
-                //writer.execute(i, InstructionID("addmod".into()), (a, b, p22519.clone()));
-            }
-
-        }
-    } */
-
     #[test]
     fn test_builder_add() {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type Element = U16Array<NUM_ADD_LIMBS>;
+        type U256 = U16Array<NUM_LIMBS>;
+        type S = TestStark<AddModTestParameters, F, D>;
 
         // Build the stark
-        let mut builder = ChipBuilder::<AddTestParameters, F, D>::new();
+        let mut builder = ChipBuilder::<AddModTestParameters, F, D>::new();
+
+        let a = builder.alloc_local::<U256>().unwrap();
+        let b = builder.alloc_local::<U256>().unwrap();
+        let out = builder.alloc_local::<U256>().unwrap();
+        let m = builder.alloc_local::<U256>().unwrap();
+
+        let add_instruction = AddModInstruction::new(a, b, m, out);
+        let add_id = InstructionID(['a', 'd', 'd', ' ', ' ', ' ']);
+        let add_labeled = LabeledInstruction::new(add_id.clone(), add_instruction);
+
+        builder.insert_instruction(add_labeled).unwrap();
+
+        let (chip, spec) = builder.build();
+
+        let (handle, generator) = trace::<F, D>(spec);
+
+        // Construct the trace
+        let num_rows = 2u64.pow(16);
+        let config = StarkConfig::standard_fast_config();
+
+        let p22519 = BigUint::from(2u32).pow(255) - BigUint::from(19u32);
+
+        let mut rng = rand::thread_rng();
+
+        for i in 0..num_rows {
+            let a = rng.gen_biguint(256) % &p22519;
+            let b = rng.gen_biguint(256) % &p22519;
+            let m = p22519.clone();
+            let h = handle.clone();
+            rayon::spawn(move || {
+                let row = ArithmeticParser::<F, D>::add_trace(a, b, m);
+                h.write(i as usize, add_id, row).unwrap();
+            });
+        }
+        drop(handle);
+
+        let trace = generator.generate_trace(&chip, num_rows as usize).unwrap();
+        let stark = TestStark { chip };
+
+        // Verify proof as a stark
+        let proof = prove::<F, C, S, D>(
+            stark.clone(),
+            &config,
+            trace,
+            [],
+            &mut TimingTree::default(),
+        )
+        .unwrap();
+        verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
+        // Verify recursive proof in a circuit
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
+
+        let degree_bits = proof.proof.recover_degree_bits(&config);
+        let virtual_proof = add_virtual_stark_proof_with_pis(
+            &mut recursive_builder,
+            stark.clone(),
+            &config,
+            degree_bits,
+        );
+
+        recursive_builder.print_gate_counts(0);
+
+        let mut rec_pw = PartialWitness::new();
+        set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
+
+        verify_stark_proof_circuit::<F, C, S, D>(
+            &mut recursive_builder,
+            stark,
+            virtual_proof,
+            &config,
+        );
+
+        let recursive_data = recursive_builder.build::<C>();
+
+        let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
+        let recursive_proof = plonky2::plonk::prover::prove(
+            &recursive_data.prover_only,
+            &recursive_data.common,
+            rec_pw,
+            &mut timing,
+        )
+        .unwrap();
+
+        timing.print();
+        recursive_data.verify(recursive_proof).unwrap();
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct MulModTestParameters;
+
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for MulModTestParameters {
+        const NUM_ARITHMETIC_COLUMNS: usize = NUM_MUL_COLUMNS;
+        const PUBLIC_INPUTS: usize = 0;
+        const NUM_STARK_COLUMNS: usize = 0;
+
+        type Instruction = MulModInstruction;
+    }
+
+    #[test]
+    fn test_builder_mul() {
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
+        type Element = U16Array<NUM_LIMBS>;
+        type S = TestStark<MulModTestParameters, F, D>;
+
+        // Build the stark
+        let mut builder = ChipBuilder::<MulModTestParameters, F, D>::new();
 
         let a = builder
             .alloc_local::<Element>()
@@ -481,14 +584,15 @@ mod tests {
             .unwrap()
             .into_raw_register();
 
-        let add_instruction = AddModInstruction::new(a, b, m, out);
-        let add_labeled =
-            LabeledInstruction::new(InstructionID(String::from("add")), add_instruction);
+        let add_instruction = MulModInstruction::new(a, b, m, out);
+        let add_id = InstructionID(['a', 'd', 'd', ' ', ' ', ' ']);
+        let add_labeled = LabeledInstruction::new(add_id, add_instruction);
 
         builder.insert_instruction(add_labeled).unwrap();
 
-        let chip = builder.build();
-        let stark = TestStark{chip};
+        let (chip, spec) = builder.build();
+
+        let (handle, generator) = trace::<F, D>(spec);
 
         // Construct the trace
         let num_rows = 2u64.pow(16);
@@ -500,99 +604,37 @@ mod tests {
 
         for i in 0..num_rows {
             let a = rng.gen_biguint(256) % &p22519;
-            let b = rng.gen_biguint(256) % &p22519; 
-        }
-    }
-
-    //impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for AddTestParameters {
-    //    const NUM_ARITHMETIC_COLUMNS: usize = add::NUM_ARITH_COLUMNS;
-    //    const PUBLIC_INPUTS: usize = 0;
-    //    const NUM_STARK_COLUMNS: usize = 0;
-    //}
-
-    /*   impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, D, 1>
-        for AddModLayoutCircuit
-    {
-        const PUBLIC_INPUTS: usize = 0;
-        const NUM_ARITHMETIC_COLUMNS: usize = add::NUM_ARITH_COLUMNS;
-        const ENTRY_COLUMN: usize = 0;
-        const TABLE_INDEX: usize = add::NUM_ARITH_COLUMNS;
-
-        type Layouts = ArithmeticLayout;
-        const OPERATIONS: [ArithmeticLayout; 1] = [ArithmeticLayout::Add(add::AddModLayout::new(
-            Register::Local(0, add::N_LIMBS),
-            Register::Local(add::N_LIMBS, add::N_LIMBS),
-            Register::Local(2 * add::N_LIMBS, add::N_LIMBS),
-            Register::Local(3 * add::N_LIMBS, add::N_LIMBS),
-            Register::Local(4 * add::N_LIMBS, add::NUM_ADD_WITNESS_COLUMNS),
-        ))];
-    } */
-    /*
-    #[derive(Debug, Clone)]
-    pub struct AddInstruction {
-        pub a: BigUint,
-        pub b: BigUint,
-        pub modulus: BigUint,
-    }
-
-    impl AddInstruction {
-        pub fn new(a: BigUint, b: BigUint, modulus: BigUint) -> Self {
-            Self { a, b, modulus }
-        }
-    }
-
-    impl<F: RichField + Extendable<D>, const D: usize> InstructionT<AddModLayoutCircuit, F, D, 1>
-        for AddInstruction
-    {
-        fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {
-            let operation = ArithmeticOp::AddMod(self.a, self.b, self.modulus);
-            let (trace_row, _) = operation.generate_trace_row();
-            tx.send((pc, 0, trace_row)).unwrap();
-        }
-    }
-
-    #[test]
-    fn test_arithmetic_stark_add() {
-        const D: usize = 2;
-        type C = PoseidonGoldilocksConfig;
-        type F = <C as GenericConfig<D>>::F;
-        type S = CompliedStark<AddModLayoutCircuit, 1, F, D>;
-
-        let num_rows = 2u64.pow(16);
-        let config = StarkConfig::standard_fast_config();
-
-        let p22519 = BigUint::from(2u32).pow(255) - BigUint::from(19u32);
-
-        let mut rng = rand::thread_rng();
-
-        let mut additions = Vec::new();
-
-        for _ in 0..num_rows {
-            let a: BigUint = rng.gen_biguint(255) % &p22519;
-            let b = rng.gen_biguint(255) % &p22519;
-            let p = p22519.clone();
-
-            additions.push(AddInstruction::new(a, b, p));
+            let b = rng.gen_biguint(256) % &p22519;
+            let row = ArithmeticParser::<F, D>::mul_trace(a, b, p22519.clone());
+            handle.write(i as usize, add_id.clone(), row).unwrap();
         }
 
-        let stark = S {
-            _marker: PhantomData,
-        };
+        drop(handle);
 
-        let trace = stark.generate_trace(additions);
+        let trace = generator.generate_trace(&chip, num_rows as usize).unwrap();
+        let stark = TestStark { chip };
 
         // Verify proof as a stark
-        let proof =
-            prove::<F, C, S, D>(stark, &config, trace, [], &mut TimingTree::default()).unwrap();
-        verify_stark_proof(stark, proof.clone(), &config).unwrap();
-
+        let proof = prove::<F, C, S, D>(
+            stark.clone(),
+            &config,
+            trace,
+            [],
+            &mut TimingTree::default(),
+        )
+        .unwrap();
+        verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
         // Verify recursive proof in a circuit
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
 
         let degree_bits = proof.proof.recover_degree_bits(&config);
-        let virtual_proof =
-            add_virtual_stark_proof_with_pis(&mut recursive_builder, stark, &config, degree_bits);
+        let virtual_proof = add_virtual_stark_proof_with_pis(
+            &mut recursive_builder,
+            stark.clone(),
+            &config,
+            degree_bits,
+        );
 
         recursive_builder.print_gate_counts(0);
 
@@ -619,125 +661,5 @@ mod tests {
 
         timing.print();
         recursive_data.verify(recursive_proof).unwrap();
-    } */
-    /*
-    #[derive(Clone, Copy, Debug)]
-    pub struct MulModLayoutCircuit;
-
-    use crate::arithmetic::modular::mul;
-    impl<F: RichField + Extendable<D>, const D: usize> EmulatedCircuitLayout<F, D, 1>
-        for MulModLayoutCircuit
-    {
-        const PUBLIC_INPUTS: usize = 0;
-        const NUM_ARITHMETIC_COLUMNS: usize = mul::NUM_ARITH_COLUMNS;
-        const ENTRY_COLUMN: usize = 0;
-        const TABLE_INDEX: usize = mul::NUM_ARITH_COLUMNS;
-
-        type Layouts = ArithmeticLayout;
-        const OPERATIONS: [ArithmeticLayout; 1] = [ArithmeticLayout::Mul(mul::MulModLayout::new(
-            Register::Local(0, mul::N_LIMBS),
-            Register::Local(mul::N_LIMBS, mul::N_LIMBS),
-            Register::Local(2 * mul::N_LIMBS, mul::N_LIMBS),
-            Register::Local(3 * mul::N_LIMBS, mul::NUM_OUTPUT_COLUMNS),
-            Register::Local(
-                4 * mul::N_LIMBS,
-                mul::NUM_CARRY_COLUMNS + mul::NUM_WITNESS_COLUMNS,
-            ),
-        ))];
     }
-
-    #[derive(Debug, Clone)]
-    pub struct MulInstruction {
-        pub a: BigUint,
-        pub b: BigUint,
-        pub modulus: BigUint,
-    }
-
-    impl MulInstruction {
-        pub fn new(a: BigUint, b: BigUint, modulus: BigUint) -> Self {
-            Self { a, b, modulus }
-        }
-    }
-
-    impl<F: RichField + Extendable<D>, const D: usize> InstructionT<MulModLayoutCircuit, F, D, 1>
-        for MulInstruction
-    {
-        fn generate_trace(self, pc: usize, tx: mpsc::Sender<(usize, usize, Vec<F>)>) {
-            rayon::spawn(move || {
-                let operation = ArithmeticOp::MulMod(self.a, self.b, self.modulus);
-                let (trace_row, _) = operation.generate_trace_row();
-                tx.send((pc, 0, trace_row)).unwrap();
-            });
-        }
-    }
-
-    #[test]
-    fn test_arithmetic_stark_mul() {
-        const D: usize = 2;
-        type C = PoseidonGoldilocksConfig;
-        type F = <C as GenericConfig<D>>::F;
-        type S = CompliedStark<MulModLayoutCircuit, 1, F, D>;
-
-        let num_rows = 2u64.pow(16);
-        let config = StarkConfig::standard_fast_config();
-
-        let p22519 = BigUint::from(2u32).pow(255) - BigUint::from(19u32);
-
-        let mut rng = rand::thread_rng();
-
-        let mut multiplication = Vec::new();
-
-        for _ in 0..num_rows {
-            let a: BigUint = rng.gen_biguint(255) % &p22519;
-            let b = rng.gen_biguint(255) % &p22519;
-            let p = p22519.clone();
-
-            multiplication.push(MulInstruction::new(a, b, p));
-        }
-
-        let stark = S {
-            _marker: PhantomData,
-        };
-
-        let trace = stark.generate_trace(multiplication);
-
-        // Verify proof as a stark
-        let proof =
-            prove::<F, C, S, D>(stark, &config, trace, [], &mut TimingTree::default()).unwrap();
-        verify_stark_proof(stark, proof.clone(), &config).unwrap();
-
-        // Verify recursive proof in a circuit
-        let config_rec = CircuitConfig::standard_recursion_config();
-        let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
-
-        let degree_bits = proof.proof.recover_degree_bits(&config);
-        let virtual_proof =
-            add_virtual_stark_proof_with_pis(&mut recursive_builder, stark, &config, degree_bits);
-
-        recursive_builder.print_gate_counts(0);
-
-        let mut rec_pw = PartialWitness::new();
-        set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-
-        verify_stark_proof_circuit::<F, C, S, D>(
-            &mut recursive_builder,
-            stark,
-            virtual_proof,
-            &config,
-        );
-
-        let recursive_data = recursive_builder.build::<C>();
-
-        let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
-        let recursive_proof = plonky2::plonk::prover::prove(
-            &recursive_data.prover_only,
-            &recursive_data.common,
-            rec_pw,
-            &mut timing,
-        )
-        .unwrap();
-
-        timing.print();
-        recursive_data.verify(recursive_proof).unwrap();
-    } */
 }

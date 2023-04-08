@@ -38,16 +38,16 @@ pub trait StarkParameters<F: RichField + Extendable<D>, const D: usize>:
 }
 
 /// A layout for a circuit that emulates field operations
-pub trait ChipParameters<F: RichField + Extendable<D>, const D: usize>: Sized + Send + Sync
+pub trait ChipParameters<F: RichField + Extendable<D>, const D: usize>:
+    Sized + Send + Sync
 {
     const NUM_ARITHMETIC_COLUMNS: usize;
     const NUM_FREE_COLUMNS: usize;
 
-    type Input : Clone + Send + Sync;
-    type Output : Clone + Send + Sync;
+    type Input: Clone + Send + Sync;
+    type Output: Clone + Send + Sync;
 
     type Instruction: Instruction<F, D>;
-
 }
 
 impl<F: RichField + Extendable<D>, const D: usize, T: StarkParameters<F, D>> ChipParameters<F, D>
@@ -55,9 +55,9 @@ impl<F: RichField + Extendable<D>, const D: usize, T: StarkParameters<F, D>> Chi
 {
     const NUM_ARITHMETIC_COLUMNS: usize = Self::NUM_ARITHMETIC_COLUMNS;
     const NUM_FREE_COLUMNS: usize = Self::NUM_STARK_COLUMNS;
-      
+
     type Input = ();
     type Output = ();
-    
+
     type Instruction = <Self as StarkParameters<F, D>>::Instruction;
 }

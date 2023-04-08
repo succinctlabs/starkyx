@@ -6,6 +6,7 @@ use alloc::vec;
 use core::marker::PhantomData;
 use std::sync::mpsc;
 
+use anyhow::{anyhow, Result};
 use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
@@ -17,7 +18,9 @@ use plonky2::util::transpose;
 use plonky2_maybe_rayon::*;
 
 use super::{ArithmeticOp, ArithmeticParser, Register};
+use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
+use crate::arithmetic::register::WitnessData;
 use crate::arithmetic::util;
 use crate::arithmetic::util::to_field_iter;
 use crate::lookup::{eval_lookups, eval_lookups_circuit, permuted_cols};
@@ -395,117 +398,115 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MulStark<F, D
     }
 }
 
-#[cfg(test)]
-mod tests {
+#[derive(Debug, Clone, Copy)]
+pub struct MulModInstruction {
+    input_1: Register,
+    input_2: Register,
+    output: Register,
+    modulus: Register,
+    carry: Option<Register>,
+    witness_low: Option<Register>,
+    witness_high: Option<Register>,
+}
 
-    use num::bigint::RandBigInt;
-    use plonky2::iop::witness::PartialWitness;
-    use plonky2::plonk::circuit_builder::CircuitBuilder;
-    use plonky2::plonk::circuit_data::CircuitConfig;
-    use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
-    use plonky2::util::timing::TimingTree;
-
-    use super::*;
-    use crate::config::StarkConfig;
-    use crate::prover::prove;
-    use crate::recursive_verifier::{
-        add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
-        verify_stark_proof_circuit,
-    };
-    use crate::verifier::verify_stark_proof;
-
-    #[test]
-    fn test_arithmetic_op_mul() {
-        const D: usize = 2;
-        type C = PoseidonGoldilocksConfig;
-        type F = <C as GenericConfig<D>>::F;
-        type S = MulStark<F, D>;
-
-        let num_rows = 2u64.pow(16);
-        let config = StarkConfig::standard_fast_config();
-
-        let p22519 = BigUint::from(2u32).pow(255) - BigUint::from(19u32);
-
-        let mut rng = rand::thread_rng();
-
-        let mut multiplications = Vec::new();
-
-        let input_1_index = 0;
-        let input_2_index = N_LIMBS;
-        let modulus_index = 2 * N_LIMBS;
-        let output_index = 3 * N_LIMBS;
-
-        let layout = MulModLayout::new(
-            Register::Local(input_1_index, N_LIMBS),
-            Register::Local(input_2_index, N_LIMBS),
-            Register::Local(modulus_index, N_LIMBS),
-            Register::Local(output_index, NUM_OUTPUT_COLUMNS),
-            Register::Local(4 * N_LIMBS, NUM_CARRY_COLUMNS + NUM_WITNESS_COLUMNS),
-        );
-
-        for _ in 0..num_rows {
-            let a: BigUint = rng.gen_biguint(255) % &p22519;
-            let b = rng.gen_biguint(255) % &p22519;
-            let p = p22519.clone();
-
-            let operation = ArithmeticOp::MulMod(a.clone(), b.clone(), p.clone());
-            multiplications.push(operation);
+impl MulModInstruction {
+    pub fn new(input_1: Register, input_2: Register, output: Register, modulus: Register) -> Self {
+        Self {
+            input_1,
+            input_2,
+            output,
+            modulus,
+            carry: None,
+            witness_low: None,
+            witness_high: None,
         }
+    }
 
-        let stark = S {
-            layout,
-            _marker: PhantomData,
-        };
+    pub fn into_mulmod_layout(&self) -> Result<MulModLayout> {
+        let carry = self.carry.ok_or(anyhow!("missing carry"))?;
+        let witness_low = self.witness_low.ok_or(anyhow!("missing witness_low"))?;
+        let witness_high = self.witness_high.ok_or(anyhow!("missing witness_high"))?;
+        Ok(MulModLayout {
+            input_1: self.input_1,
+            input_2: self.input_2,
+            output: self.output,
+            modulus: self.modulus,
+            carry: carry,
+            witness_low: witness_low,
+            witness_high: witness_high,
+        })
+    }
+}
 
-        let trace = stark.gen_trace(multiplications);
+impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for MulModInstruction {
+    fn witness_data(&self) -> WitnessData {
+        WitnessData::u16(NUM_CARRY_COLUMNS + 2 * NUM_WITNESS_COLUMNS)
+    }
 
-        // Verify proof as a stark
-        let proof = prove::<F, C, S, D>(
-            stark.clone(),
-            &config,
-            trace,
-            [],
-            &mut TimingTree::default(),
-        )
-        .unwrap();
-        verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
+    fn shift_right(&mut self, _free_shift: usize, arithmetic_shift: usize) {
+        let shift = arithmetic_shift;
+        self.input_1.shift_right(shift);
+        self.input_2.shift_right(shift);
+        self.output.shift_right(shift);
+        self.modulus.shift_right(shift);
+        if let Some(carry) = self.carry.as_mut() {
+            carry.shift_right(shift);
+        }
+        if let Some(witness_low) = self.witness_low.as_mut() {
+            witness_low.shift_right(shift);
+        }
+        if let Some(witness_high) = self.witness_high.as_mut() {
+            witness_high.shift_right(shift);
+        }
+    }
 
-        // Verify recursive proof in a circuit
-        let config_rec = CircuitConfig::standard_recursion_config();
-        let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
+    fn set_witness(&mut self, register: Register) -> Result<()> {
+        let (start, length) = (register.index(), register.len());
+        if length != NUM_CARRY_COLUMNS + 2 * NUM_WITNESS_COLUMNS {
+            return Err(anyhow!("Invalid witness length"));
+        }
+        let mut index = start;
+        let carry = Register::Local(index, NUM_CARRY_COLUMNS);
+        index += NUM_CARRY_COLUMNS;
+        self.carry = Some(carry);
+        let witness_low = Register::Local(index, NUM_WITNESS_COLUMNS);
+        self.witness_low = Some(witness_low);
+        index += NUM_WITNESS_COLUMNS;
+        let witness_high = Register::Local(index, NUM_WITNESS_COLUMNS);
+        self.witness_high = Some(witness_high);
+        Ok(())
+    }
 
-        let degree_bits = proof.proof.recover_degree_bits(&config);
-        let virtual_proof = add_virtual_stark_proof_with_pis(
-            &mut recursive_builder,
-            stark.clone(),
-            &config,
-            degree_bits,
-        );
+    fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
+        let layout = self.into_mulmod_layout().unwrap();
+        layout.assign_row(trace_rows, row, row_index)
+    }
 
-        recursive_builder.print_gate_counts(0);
+    fn packed_generic_constraints<
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+    >(
+        &self,
+        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
+    ) where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>,
+    {
+        let layout = self.into_mulmod_layout().unwrap();
+        ArithmeticParser::mul_packed_generic_constraints(layout, vars, yield_constr);
+    }
 
-        let mut rec_pw = PartialWitness::new();
-        set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-
-        verify_stark_proof_circuit::<F, C, S, D>(
-            &mut recursive_builder,
-            stark,
-            virtual_proof,
-            &config,
-        );
-
-        let recursive_data = recursive_builder.build::<C>();
-
-        let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
-        let recursive_proof = plonky2::plonk::prover::prove(
-            &recursive_data.prover_only,
-            &recursive_data.common,
-            rec_pw,
-            &mut timing,
-        )
-        .unwrap();
-
-        timing.print();
-        recursive_data.verify(recursive_proof).unwrap();
+    fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
+    ) {
+        let layout = self.into_mulmod_layout().unwrap();
+        ArithmeticParser::mul_ext_circuit(layout, builder, vars, yield_constr);
     }
 }

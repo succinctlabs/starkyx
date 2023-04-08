@@ -10,11 +10,13 @@ use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_maybe_rayon::*;
+use crate::arithmetic::builder::ChipBuilder;
 
 use super::{ArithmeticParser, Register};
+use crate::arithmetic::circuit::ChipParameters;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
-use crate::arithmetic::register::WitnessData;
+use crate::arithmetic::register::{WitnessData, U16Array, DataRegister};
 use crate::arithmetic::util::{self, to_field_iter};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -260,19 +262,20 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     }
 }
 
+type U256 = U16Array<N_LIMBS>;
 #[derive(Debug, Clone, Copy)]
 pub struct AddModInstruction {
-    input_1: Register,
-    input_2: Register,
-    output: Register,
-    modulus: Register,
+    input_1: U256,
+    input_2: U256,
+    output: U256,
+    modulus: U256,
     carry: Option<Register>,
     witness_low: Option<Register>,
     witness_high: Option<Register>,
 }
 
 impl AddModInstruction {
-    pub fn new(input_1: Register, input_2: Register, output: Register, modulus: Register) -> Self {
+    pub fn new(input_1: U256, input_2: U256, output: U256, modulus: U256) -> Self {
         Self {
             input_1,
             input_2,
@@ -289,10 +292,10 @@ impl AddModInstruction {
         let witness_low = self.witness_low.ok_or(anyhow!("missing witness_low"))?;
         let witness_high = self.witness_high.ok_or(anyhow!("missing witness_high"))?;
         Ok(AddModLayout {
-            input_1: self.input_1,
-            input_2: self.input_2,
-            output: self.output,
-            modulus: self.modulus,
+            input_1: self.input_1.into_raw_register(),
+            input_2: self.input_2.into_raw_register(),
+            output: self.output.into_raw_register(),
+            modulus: self.modulus.into_raw_register(),
             carry: carry,
             witness_low: witness_low,
             witness_high: witness_high,
@@ -301,17 +304,16 @@ impl AddModInstruction {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for AddModInstruction {
-
     fn witness_data(&self) -> WitnessData {
         WitnessData::u16(NUM_ADD_WITNESS_COLUMNS)
     }
 
     fn shift_right(&mut self, _free_shift: usize, arithmetic_shift: usize) {
         let shift = arithmetic_shift;
-        self.input_1.shift_right(shift);
-        self.input_2.shift_right(shift);
-        self.output.shift_right(shift);
-        self.modulus.shift_right(shift);
+        self.input_1.register_mut().shift_right(shift);
+        self.input_2.register_mut().shift_right(shift);
+        self.output.register_mut().shift_right(shift);
+        self.modulus.register_mut().shift_right(shift);
         if let Some(carry) = self.carry.as_mut() {
             carry.shift_right(shift);
         }
@@ -371,5 +373,35 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for AddModI
     ) {
         let layout = self.into_addmod_layout().unwrap();
         ArithmeticParser::add_ext_circuit(layout, builder, vars, yield_constr);
+    }
+}
+
+
+
+impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {}
+
+
+pub struct Bye<F: RichField + Extendable<D>, const D: usize>  {
+    a : Vec<Box<dyn FnOnce(&mut [Vec<F>], &mut [F], usize)>>
+}
+
+impl AddModInstruction {
+    fn make_assign<F : Copy>(&self) -> impl FnOnce(&mut [Vec<F>], &mut [F], usize) {
+        let layout = self.into_addmod_layout().unwrap();
+        move |trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize| {
+            layout.assign_row(trace_rows, row, row_index)
+        }
+    }
+}
+
+impl <F: RichField + Extendable<D>, const D: usize>  Bye<F, D> {
+    pub fn new() -> Self {
+        Self {
+            a : vec![]
+        }
+    }
+
+    pub fn add(&mut self, instruction : AddModInstruction) {
+        self.a.push(Box::new(instruction.make_assign()));
     }
 }
