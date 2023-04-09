@@ -5,7 +5,7 @@ use plonky2::iop::ext_target::ExtensionTarget;
 
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
 pub enum Register {
     Local(usize, usize),
     Next(usize, usize),
@@ -32,6 +32,8 @@ pub trait DataRegister: 'static + Sized + Send + Sync {
 
     fn into_raw_register(self) -> Register;
 
+    fn register(&self) -> &Register;
+
     fn register_mut(&mut self) -> &mut Register;
 
     /// Returns an element of the field
@@ -46,6 +48,14 @@ pub trait DataRegister: 'static + Sized + Send + Sync {
     }
 
     fn size_of() -> usize;
+
+    fn shift_right(&mut self, free_shift: usize, arithmetic_shift: usize) {
+        match Self::CELL {
+            Some(CellType::U16) => self.register_mut().shift_right(arithmetic_shift),
+            Some(CellType::Bit) => self.register_mut().shift_right(free_shift),
+            None => self.register_mut().shift_right(free_shift),
+        }
+    }
 }
 
 pub struct WitnessData {
@@ -119,10 +129,10 @@ impl Register {
     pub fn read<T: Copy>(&self, trace_rows: &mut [Vec<T>], value: &mut [T], row_index: usize) {
         match self {
             Register::Local(index, length) => {
-                value.copy_from_slice(&mut trace_rows[row_index][*index..*index + length]);
+                value.copy_from_slice(&trace_rows[row_index][*index..*index + length]);
             }
             Register::Next(index, length) => {
-                value.copy_from_slice(&mut trace_rows[row_index + 1][*index..*index + length]);
+                value.copy_from_slice(&trace_rows[row_index + 1][*index..*index + length]);
             }
         }
     }
@@ -132,6 +142,14 @@ impl Register {
         match self {
             Register::Local(index, _) => *index += shift,
             Register::Next(index, _) => *index += shift,
+        }
+    }
+
+    #[inline]
+    pub fn shift_right_owned(self, shift: usize) -> Self {
+        match self {
+            Register::Local(index, length) => Register::Local(index + shift, length),
+            Register::Next(index, length) => Register::Next(index + shift, length),
         }
     }
 
@@ -194,6 +212,10 @@ impl<const N: usize> DataRegister for BitArray<N> {
         Self { register }
     }
 
+    fn register(&self) -> &Register {
+        &self.register
+    }
+
     fn register_mut(&mut self) -> &mut Register {
         &mut self.register
     }
@@ -212,6 +234,10 @@ impl<const N: usize> DataRegister for U16Array<N> {
 
     fn from_raw_register(register: Register) -> Self {
         Self { register }
+    }
+
+    fn register(&self) -> &Register {
+        &self.register
     }
 
     fn register_mut(&mut self) -> &mut Register {

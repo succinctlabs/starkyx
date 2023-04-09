@@ -422,6 +422,10 @@ impl MulModInstruction {
         }
     }
 
+    pub fn memory_slice(&self) -> Vec<Register> {
+        vec![self.input_1, self.input_2, self.output, self.modulus]
+    }
+
     pub fn into_mulmod_layout(&self) -> Result<MulModLayout> {
         let carry = self.carry.ok_or(anyhow!("missing carry"))?;
         let witness_low = self.witness_low.ok_or(anyhow!("missing witness_low"))?;
@@ -431,16 +435,22 @@ impl MulModInstruction {
             input_2: self.input_2,
             output: self.output,
             modulus: self.modulus,
-            carry: carry,
-            witness_low: witness_low,
-            witness_high: witness_high,
+            carry,
+            witness_low,
+            witness_high,
         })
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for MulModInstruction {
-    fn witness_data(&self) -> WitnessData {
-        WitnessData::u16(NUM_CARRY_COLUMNS + 2 * NUM_WITNESS_COLUMNS)
+    fn witness_data(&self) -> Option<WitnessData> {
+        Some(WitnessData::u16(
+            NUM_CARRY_COLUMNS + 2 * NUM_WITNESS_COLUMNS,
+        ))
+    }
+
+    fn memory_vec(&self) -> Vec<Register> {
+        vec![self.input_1, self.input_2, self.output, self.modulus]
     }
 
     fn shift_right(&mut self, _free_shift: usize, arithmetic_shift: usize) {

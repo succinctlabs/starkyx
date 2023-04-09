@@ -2,28 +2,32 @@
 
 use alloc::collections::BTreeMap;
 use core::ops::Range;
-use std::sync::mpsc;
 
 use anyhow::{anyhow, Result};
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
-use plonky2::field::polynomial::PolynomialValues;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2::util::transpose;
-use plonky2_maybe_rayon::*;
 
-use super::instruction::{Instruction, InstructionID, LabeledInstruction};
-use super::register::{CellType, DataRegister, WitnessData};
-use super::trace::{TraceGenerator, TraceHandle};
+use super::instruction::{Instruction, WriteInstruction};
+use super::register::{CellType, DataRegister};
 use super::Register;
 use crate::arithmetic::circuit::{ChipParameters, StarkParameters};
-use crate::lookup::{eval_lookups, eval_lookups_circuit, permuted_cols};
+use crate::lookup::{eval_lookups, eval_lookups_circuit};
 use crate::permutation::PermutationPair;
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
+pub enum InsID {
+    Label(String),
+    MemID(Vec<Register>),
+    Write(Register),
+    WriteLabel(String),
+}
+
+#[derive(Clone, Debug)]
 pub struct ChipBuilder<L, F, const D: usize>
 where
     L: ChipParameters<F, D>,
@@ -33,8 +37,17 @@ where
     local_arithmetic_index: usize,
     next_arithmetic_index: usize,
     next_index: usize,
-    instruction_indices: BTreeMap<InstructionID, usize>,
+    instruction_indices: BTreeMap<InsID, usize>,
     instructions: Vec<L::Instruction>,
+    write_instructions: Vec<WriteInstruction>,
+}
+
+impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Default
+    for ChipBuilder<L, F, D>
+{
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
@@ -48,12 +61,13 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
             next_arithmetic_index: L::NUM_FREE_COLUMNS,
             instruction_indices: BTreeMap::new(),
             instructions: Vec::new(),
+            write_instructions: Vec::new(),
         }
     }
 
-    fn get_instruction(&self, id: InstructionID) -> Option<&L::Instruction> {
+    fn get_instruction_from_label(&self, label: &str) -> Option<&L::Instruction> {
         self.instruction_indices
-            .get(&id)
+            .get(&InsID::Label(String::from(label)))
             .map(|index| &self.instructions[*index])
     }
 
@@ -93,21 +107,13 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         Ok(register)
     }
 
-    fn register_cell_type(&mut self, cell_type: CellType, register: Register) -> Result<()> {
-        match cell_type {
-            CellType::U16 => {}
-            CellType::Bit => unimplemented!(),
-        }
-        Ok(())
-    }
-
     /// Allocates a new local row register and returns it
     pub fn alloc_local<T: DataRegister>(&mut self) -> Result<T> {
         let register = match T::CELL {
             Some(CellType::U16) => self.get_local_u16_memory(T::size_of())?,
             Some(CellType::Bit) => {
                 unimplemented!("Bit cells are not supported yet");
-                self.get_local_memory(T::size_of())?
+                //self.get_local_memory(T::size_of())?
             }
             None => self.get_local_memory(T::size_of())?,
         };
@@ -120,7 +126,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
             Some(CellType::U16) => self.get_next_u16_memory(T::size_of())?,
             Some(CellType::Bit) => {
                 unimplemented!("Bit cells are not supported yet");
-                self.get_next_memory(T::size_of())?
+                //self.get_next_memory(T::size_of())?
             }
             None => self.get_next_memory(T::size_of())?,
         };
@@ -128,30 +134,72 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 
     /// Inserts a new instruction to the chip
-    pub fn insert_instruction<T>(&mut self, instruction: LabeledInstruction<T, F, D>) -> Result<()>
-    where
-        T: Into<L::Instruction> + Instruction<F, D>,
-    {
-        let (label, mut instruction) = instruction.destruct();
+    pub fn write_data<T: DataRegister>(&mut self, data: &T) -> Result<()> {
+        let register = data.register();
+        let label = InsID::Write(*register);
         let existing_value = self
             .instruction_indices
-            .insert(label, self.instructions.len());
+            .insert(label, self.write_instructions.len());
         if existing_value.is_some() {
             return Err(anyhow!("Instruction label already exists"));
         }
-        let (size, cell_type) = instruction.witness_data().destruct();
-        let register = match cell_type {
-            Some(CellType::U16) => self.get_local_u16_memory(size)?,
-            Some(CellType::Bit) => {
-                unimplemented!("Bit cells are not supported yet");
-                self.get_local_memory(size)?
-            }
-            None => self.get_local_memory(size)?,
-        };
+        self.write_instructions.push(WriteInstruction(*register));
+        Ok(())
+    }
 
-        instruction.set_witness(register)?;
-        self.instructions.push(instruction.into());
+    /// Inserts a new instruction to the chip
+    pub fn write_labeled_data<T: DataRegister>(&mut self, data: &T, label: &str) -> Result<()> {
+        let register = data.register();
+        let label = InsID::WriteLabel(String::from(label));
+        let existing_value = self
+            .instruction_indices
+            .insert(label, self.write_instructions.len());
+        if existing_value.is_some() {
+            return Err(anyhow!("Instruction label already exists"));
+        }
+        self.write_instructions.push(WriteInstruction(*register));
+        Ok(())
+    }
 
+    pub fn insert_instruction(&mut self, instruction: L::Instruction) -> Result<()> {
+        let id = InsID::MemID(instruction.memory_vec());
+        let existing_value = self.instruction_indices.insert(id, self.instructions.len());
+        if existing_value.is_some() {
+            return Err(anyhow!("Instruction label already exists"));
+        }
+        self.insert_raw_instruction(instruction)
+    }
+
+    /// An instruction identified by its label
+    pub fn insert_labeled_instruction(
+        &mut self,
+        instruction: L::Instruction,
+        label: &str,
+    ) -> Result<()> {
+        let id = InsID::Label(String::from(label));
+        let existing_value = self.instruction_indices.insert(id, self.instructions.len());
+        if existing_value.is_some() {
+            return Err(anyhow!("Instruction label already exists"));
+        }
+        self.insert_raw_instruction(instruction)
+    }
+
+    fn insert_raw_instruction(&mut self, instruction: L::Instruction) -> Result<()> {
+        let mut inst = instruction;
+        if let Some(data) = inst.witness_data() {
+            let (size, cell_type) = data.destruct();
+            let register = match cell_type {
+                Some(CellType::U16) => self.get_local_u16_memory(size)?,
+                Some(CellType::Bit) => {
+                    unimplemented!("Bit cells are not supported yet");
+                    //self.get_local_memory(size)?
+                }
+                None => self.get_local_memory(size)?,
+            };
+
+            inst.set_witness(register)?;
+        }
+        self.instructions.push(inst);
         Ok(())
     }
 
@@ -160,38 +208,83 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     /// Input:
     ///     - chip: The subchip to insert
     ///    - instruction_indices: A map from the instruction labels to the instruction indices in the subchip
-    /// Returns an error if the instruction label already exists of if there is not enough memory
+    /// Returns:
+    /// .   - Returns an error if the instruction label already exists of if there is not enough memory
     pub fn insert_chip<S: StarkParameters<F, D>>(
         &mut self,
-        mut chip: Chip<S, F, D>,
-        instruction_indices: BTreeMap<InstructionID, usize>,
-    ) -> Result<()>
+        chip: Chip<S, F, D>,
+        instruction_indices: BTreeMap<InsID, usize>,
+    ) -> Result<Chip<L, F, D>>
     where
         S::Instruction: Into<L::Instruction>,
     {
+        let mut sub_chip = chip;
         let length = self.instructions.len();
         let free_shift = std::cmp::max(self.local_index, self.next_index);
         let arithmetic_shift =
             std::cmp::max(self.local_arithmetic_index, self.next_arithmetic_index);
         for (id, index) in instruction_indices {
-            // Insert the instruction index to the chip map
-            let existing_value = self.instruction_indices.insert(id, length + index);
             // Shift all the instructions to their new location
-            chip.instructions[index].shift_right(free_shift, arithmetic_shift);
+
+            let new_id = match id {
+                InsID::MemID(_) => {
+                    let instruction = &mut sub_chip.instructions[index];
+                    instruction.shift_right(free_shift, arithmetic_shift);
+                    InsID::MemID(instruction.memory_vec())
+                }
+                InsID::Label(label) => {
+                    let instruction = &mut sub_chip.instructions[index];
+                    instruction.shift_right(free_shift, arithmetic_shift);
+                    InsID::Label(label)
+                }
+                InsID::Write(_) => {
+                    let instruction = &mut sub_chip.write_instructions[index];
+                    <WriteInstruction as Instruction<F, D>>::shift_right(
+                        instruction,
+                        free_shift,
+                        arithmetic_shift,
+                    );
+                    InsID::Write(instruction.into_register())
+                }
+                InsID::WriteLabel(label) => {
+                    let instruction = &mut sub_chip.write_instructions[index];
+                    <WriteInstruction as Instruction<F, D>>::shift_right(
+                        instruction,
+                        free_shift,
+                        arithmetic_shift,
+                    );
+                    InsID::WriteLabel(label)
+                }
+            };
+            // Insert the instruction index to the chip map
+            let existing_value = self.instruction_indices.insert(new_id, length + index);
             if existing_value.is_some() {
-                return Err(anyhow!("Instruction label already exists"));
+                return Err(anyhow!("Conflicting instructions"));
             }
         }
-        let chip_instructions = chip.instructions.into_iter().map(Into::into);
-        self.instructions.extend(chip_instructions);
-        Ok(())
+        let chip_instructions = sub_chip
+            .instructions
+            .into_iter()
+            .map(Into::into)
+            .collect::<Vec<_>>();
+        self.instructions.extend_from_slice(&chip_instructions);
+        Ok(Chip {
+            instructions: chip_instructions,
+            write_instructions: sub_chip.write_instructions,
+            range_checks_idx: (
+                length + S::NUM_FREE_COLUMNS,
+                length + S::NUM_FREE_COLUMNS + S::NUM_ARITHMETIC_COLUMNS,
+            ),
+            table_index: L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS,
+        })
     }
 
     /// Build the chip
-    pub fn build(self) -> (Chip<L, F, D>, BTreeMap<InstructionID, usize>) {
+    pub fn build(self) -> (Chip<L, F, D>, BTreeMap<InsID, usize>) {
         (
             Chip {
                 instructions: self.instructions,
+                write_instructions: self.write_instructions,
                 range_checks_idx: (
                     L::NUM_FREE_COLUMNS,
                     L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS,
@@ -210,6 +303,7 @@ where
     F: RichField + Extendable<D>,
 {
     instructions: Vec<L::Instruction>,
+    write_instructions: Vec<WriteInstruction>,
     range_checks_idx: (usize, usize),
     table_index: usize,
 }
@@ -256,6 +350,10 @@ where
     pub fn get(&self, index: usize) -> &L::Instruction {
         &self.instructions[index]
     }
+
+    pub fn get_write(&self, index: usize) -> &WriteInstruction {
+        &self.write_instructions[index]
+    }
 }
 
 /// A Stark for emulated field operations
@@ -270,58 +368,14 @@ where
     chip: Chip<L, F, D>,
 }
 
-impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> TestStark<L, F, D> {
-    /*     /// Generate the trace for the arithmetic circuit
-    pub fn generate_trace(
-        &self,
-        program: Vec<impl InstructionT<L, F, D>>,
-    ) -> Vec<PolynomialValues<F>> {
-        let num_operations = program.len();
-        let num_rows = num_operations;
-
-        let mut trace_rows = vec![vec![F::ZERO; L::NUM_ARITHMETIC_COLUMNS + 1]; num_rows];
-
-        // Collecte the trace rows which are processed in parallel
-        let (tx, rx) = mpsc::channel();
-
-        for (pc, instruction) in program.into_iter().enumerate() {
-            let tx = tx.clone();
-            instruction.generate_trace(pc, tx);
-        }
-        drop(tx);
-
-        // Insert the trace rows into the trace
-        while let Ok((i, op_index, mut row)) = rx.recv() {
-            L::OPERATIONS[op_index].assign_row(&mut trace_rows, &mut row, i)
-        }
-
-        // Transpose the trace to get the columns and resize to the correct size
-        let mut trace_cols = transpose(&trace_rows);
-        trace_cols.resize(Self::num_columns(), Vec::with_capacity(num_rows));
-
-        trace_cols[L::TABLE_INDEX]
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(i, x)| {
-                *x = F::from_canonical_usize(i);
-            });
-
-        // Calculate the permutation and append permuted columbs to trace
-        let (trace_values, perm_values) = trace_cols.split_at_mut(L::TABLE_INDEX + 1);
-        (0..L::NUM_ARITHMETIC_COLUMNS)
-            .into_par_iter()
-            .map(|i| permuted_cols(&trace_values[i], &trace_values[L::TABLE_INDEX]))
-            .zip(perm_values.par_iter_mut().chunks(2))
-            .for_each(|((col_perm, table_perm), mut trace)| {
-                trace[0].extend(col_perm);
-                trace[1].extend(table_perm);
-            });
-
-        trace_cols
-            .into_par_iter()
-            .map(PolynomialValues::new)
-            .collect()
-    } */
+impl<L, F, const D: usize> TestStark<L, F, D>
+where
+    L: StarkParameters<F, D>,
+    F: RichField + Extendable<D>,
+{
+    pub fn new(chip: Chip<L, F, D>) -> Self {
+        Self { chip }
+    }
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Stark<F, D>
@@ -454,6 +508,7 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type U256 = U16Array<NUM_LIMBS>;
         type S = TestStark<AddModTestParameters, F, D>;
+        type L = AddModTestParameters;
 
         // Build the stark
         let mut builder = ChipBuilder::<AddModTestParameters, F, D>::new();
@@ -464,10 +519,7 @@ mod tests {
         let m = builder.alloc_local::<U256>().unwrap();
 
         let add_instruction = AddModInstruction::new(a, b, m, out);
-        let add_id = InstructionID(['a', 'd', 'd', ' ', ' ', ' ']);
-        let add_labeled = LabeledInstruction::new(add_id.clone(), add_instruction);
-
-        builder.insert_instruction(add_labeled).unwrap();
+        builder.insert_instruction(add_instruction).unwrap();
 
         let (chip, spec) = builder.build();
 
@@ -488,7 +540,7 @@ mod tests {
             let h = handle.clone();
             rayon::spawn(move || {
                 let row = ArithmeticParser::<F, D>::add_trace(a, b, m);
-                h.write(i as usize, add_id, row).unwrap();
+                h.write(i as usize, add_instruction, row).unwrap();
             });
         }
         drop(handle);
@@ -563,6 +615,7 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type Element = U16Array<NUM_LIMBS>;
         type S = TestStark<MulModTestParameters, F, D>;
+        type L = MulModTestParameters;
 
         // Build the stark
         let mut builder = ChipBuilder::<MulModTestParameters, F, D>::new();
@@ -584,11 +637,8 @@ mod tests {
             .unwrap()
             .into_raw_register();
 
-        let add_instruction = MulModInstruction::new(a, b, m, out);
-        let add_id = InstructionID(['a', 'd', 'd', ' ', ' ', ' ']);
-        let add_labeled = LabeledInstruction::new(add_id, add_instruction);
-
-        builder.insert_instruction(add_labeled).unwrap();
+        let mul_instruction = MulModInstruction::new(a, b, m, out);
+        builder.insert_instruction(mul_instruction).unwrap();
 
         let (chip, spec) = builder.build();
 
@@ -605,8 +655,12 @@ mod tests {
         for i in 0..num_rows {
             let a = rng.gen_biguint(256) % &p22519;
             let b = rng.gen_biguint(256) % &p22519;
-            let row = ArithmeticParser::<F, D>::mul_trace(a, b, p22519.clone());
-            handle.write(i as usize, add_id.clone(), row).unwrap();
+            let m = p22519.clone();
+            let h = handle.clone();
+            rayon::spawn(move || {
+                let row = ArithmeticParser::<F, D>::mul_trace(a, b, m);
+                h.write(i as usize, mul_instruction, row).unwrap();
+            });
         }
 
         drop(handle);

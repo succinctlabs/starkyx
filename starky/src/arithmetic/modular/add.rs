@@ -9,14 +9,11 @@ use plonky2::field::packed::PackedField;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2_maybe_rayon::*;
-use crate::arithmetic::builder::ChipBuilder;
 
 use super::{ArithmeticParser, Register};
-use crate::arithmetic::circuit::ChipParameters;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
-use crate::arithmetic::register::{WitnessData, U16Array, DataRegister};
+use crate::arithmetic::register::{DataRegister, U16Array, WitnessData};
 use crate::arithmetic::util::{self, to_field_iter};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -296,16 +293,25 @@ impl AddModInstruction {
             input_2: self.input_2.into_raw_register(),
             output: self.output.into_raw_register(),
             modulus: self.modulus.into_raw_register(),
-            carry: carry,
-            witness_low: witness_low,
-            witness_high: witness_high,
+            carry,
+            witness_low,
+            witness_high,
         })
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for AddModInstruction {
-    fn witness_data(&self) -> WitnessData {
-        WitnessData::u16(NUM_ADD_WITNESS_COLUMNS)
+    fn witness_data(&self) -> Option<WitnessData> {
+        Some(WitnessData::u16(NUM_ADD_WITNESS_COLUMNS))
+    }
+
+    fn memory_vec(&self) -> Vec<Register> {
+        vec![
+            *self.input_1.register(),
+            *self.input_2.register(),
+            *self.output.register(),
+            *self.modulus.register(),
+        ]
     }
 
     fn shift_right(&mut self, _free_shift: usize, arithmetic_shift: usize) {
@@ -376,32 +382,82 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for AddModI
     }
 }
 
-
-
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {}
-
-
-pub struct Bye<F: RichField + Extendable<D>, const D: usize>  {
-    a : Vec<Box<dyn FnOnce(&mut [Vec<F>], &mut [F], usize)>>
-}
-
 impl AddModInstruction {
-    fn make_assign<F : Copy>(&self) -> impl FnOnce(&mut [Vec<F>], &mut [F], usize) {
+    fn witness_data(&self) -> WitnessData {
+        WitnessData::u16(NUM_ADD_WITNESS_COLUMNS)
+    }
+
+    fn shift_right(&mut self, _free_shift: usize, arithmetic_shift: usize) {
+        let shift = arithmetic_shift;
+        self.input_1.register_mut().shift_right(shift);
+        self.input_2.register_mut().shift_right(shift);
+        self.output.register_mut().shift_right(shift);
+        self.modulus.register_mut().shift_right(shift);
+        if let Some(carry) = self.carry.as_mut() {
+            carry.shift_right(shift);
+        }
+        if let Some(witness_low) = self.witness_low.as_mut() {
+            witness_low.shift_right(shift);
+        }
+        if let Some(witness_high) = self.witness_high.as_mut() {
+            witness_high.shift_right(shift);
+        }
+    }
+
+    fn set_witness(&mut self, register: Register) -> Result<()> {
+        let (start, length) = (register.index(), register.len());
+        if length != NUM_ADD_WITNESS_COLUMNS {
+            return Err(anyhow!("Invalid witness length"));
+        }
+        let mut index = start;
+        let carry = Register::Local(index, NUM_CARRY_COLUMNS);
+        index += NUM_CARRY_COLUMNS;
+        self.carry = Some(carry);
+        let witness_low = Register::Local(index, NUM_WTNESS_LOW_COLUMNS);
+        self.witness_low = Some(witness_low);
+        index += NUM_WTNESS_LOW_COLUMNS;
+        let witness_high = Register::Local(index, NUM_WTNESS_HIGH_COLUMNS);
+        self.witness_high = Some(witness_high);
+        Ok(())
+    }
+
+    fn assign_row<F: Copy>(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
         let layout = self.into_addmod_layout().unwrap();
-        move |trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize| {
-            layout.assign_row(trace_rows, row, row_index)
-        }
-    }
-}
-
-impl <F: RichField + Extendable<D>, const D: usize>  Bye<F, D> {
-    pub fn new() -> Self {
-        Self {
-            a : vec![]
-        }
+        layout.assign_row(trace_rows, row, row_index)
     }
 
-    pub fn add(&mut self, instruction : AddModInstruction) {
-        self.a.push(Box::new(instruction.make_assign()));
+    fn packed_generic_constraints<
+        F: RichField + Extendable<D>,
+        const D: usize,
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+    >(
+        &self,
+        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
+    ) where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>,
+    {
+        let layout = self.into_addmod_layout().unwrap();
+        ArithmeticParser::add_packed_generic_constraints(layout, vars, yield_constr);
+    }
+
+    fn ext_circuit_constraints<
+        F: RichField + Extendable<D>,
+        const D: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+    >(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
+    ) {
+        let layout = self.into_addmod_layout().unwrap();
+        ArithmeticParser::add_ext_circuit(layout, builder, vars, yield_constr);
     }
 }

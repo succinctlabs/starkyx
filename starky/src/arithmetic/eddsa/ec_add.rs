@@ -260,10 +260,10 @@ impl ECAddInstruction {
         tx: Sender<(usize, usize, Vec<F>)>,
     ) {
         // Write input to trace
-        let p_x_1 = Polynomial::<F>::from_biguint_field(&x_1, 16, N_LIMBS);
-        let p_y_1 = Polynomial::<F>::from_biguint_field(&y_1, 16, N_LIMBS);
-        let p_x_2 = Polynomial::<F>::from_biguint_field(&x_2, 16, N_LIMBS);
-        let p_y_2 = Polynomial::<F>::from_biguint_field(&y_2, 16, N_LIMBS);
+        let p_x_1 = Polynomial::<F>::from_biguint_field(x_1, 16, N_LIMBS);
+        let p_y_1 = Polynomial::<F>::from_biguint_field(y_1, 16, N_LIMBS);
+        let p_x_2 = Polynomial::<F>::from_biguint_field(x_2, 16, N_LIMBS);
+        let p_y_2 = Polynomial::<F>::from_biguint_field(y_2, 16, N_LIMBS);
 
         let mut input = p_x_1.as_slice().to_vec();
         input.extend_from_slice(p_y_1.as_slice());
@@ -369,13 +369,13 @@ impl<F: RichField + Extendable<D>, const D: usize> InstructionT<SimpleRowEcAddCi
 
 #[cfg(test)]
 mod tests {
-    use num::bigint::RandBigInt;
+    //use num::bigint::RandBigInt;
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
-    use plonky2_maybe_rayon::*;
 
+    //use plonky2_maybe_rayon::*;
     use super::*;
     use crate::arithmetic::arithmetic_stark::ArithmeticStark;
     use crate::config::StarkConfig;

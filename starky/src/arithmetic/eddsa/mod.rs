@@ -62,7 +62,7 @@ pub fn P_iter<F: Field>() -> impl Iterator<Item = F> {
 #[allow(non_snake_case)]
 #[inline]
 pub fn D_iter<F: Field>() -> impl Iterator<Item = F> {
-    ED.iter().map(|&x| F::from_canonical_u16(x))
+    ED.into_iter().map(|x| F::from_canonical_u16(x))
 }
 
 /// Layoutds for the Opcodes that comprise any Edwards curve operation.

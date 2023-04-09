@@ -84,7 +84,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
     pub fn den_trace(a: BigUint, b: BigUint, sign: bool) -> (Vec<F>, BigUint) {
         let p = get_p();
 
-        let b_signed = if sign { b.clone() } else { &p - &b };
+        let b_signed = if sign { &b + 0u32 } else { &p - &b };
 
         let z = (&b_signed + 1u32) % &p;
         let z_inverse = z.modpow(&(&p - 2u32), &p);
@@ -101,7 +101,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
         let p_b = Polynomial::<i64>::from_biguint_num(&b, 16, N_LIMBS);
         let p_p = Polynomial::<i64>::from_biguint_num(&p, 16, N_LIMBS);
 
-        let p_b_sign = if sign { p_b.clone() } else { &p_p - &p_b };
+        let p_b_sign = if sign { p_b } else { &p_p - &p_b };
         let p_z = &p_b_sign + 1;
 
         let p_result = Polynomial::<i64>::from_biguint_num(&result, 16, N_LIMBS);
@@ -211,14 +211,16 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticParser<F, D> {
 
         if layout.sign {
             z[0] = builder.add_extension(b[0], one);
-            for i in 1..N_LIMBS {
-                z[i] = b[i];
-            }
+            z[1..N_LIMBS].copy_from_slice(&b[1..N_LIMBS]);
+            //for i in 1..N_LIMBS {
+            //    z[i] = b[i];
+            //}
         } else {
             z[0] = builder.add_extension(minus_b[0], one);
-            for i in 1..N_LIMBS {
-                z[i] = minus_b[i];
-            }
+            z[1..N_LIMBS].copy_from_slice(&minus_b[1..N_LIMBS]);
+            //for i in 1..N_LIMBS {
+            //    z[i] = minus_b[i];
+            //}
         }
 
         // Construct the expected vanishing polynmial

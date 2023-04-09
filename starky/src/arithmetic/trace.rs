@@ -8,30 +8,35 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::util::transpose;
 use plonky2_maybe_rayon::*;
 
+use super::builder::InsID;
 use super::circuit::ChipParameters;
-use super::instruction::{Instruction, InstructionID};
+use super::instruction::Instruction;
+use super::register::DataRegister;
 use crate::arithmetic::builder::Chip;
 use crate::lookup::permuted_cols;
 
 #[derive(Debug)]
-pub struct TraceHandle<F> {
-    tx: Sender<(usize, InstructionID, Vec<F>)>,
+pub struct TraceHandle<F, const D: usize>
+where
+    F: RichField + Extendable<D>,
+{
+    tx: Sender<(usize, InsID, Vec<F>)>,
 }
 
 #[derive(Debug)]
 pub struct TraceGenerator<F: RichField + Extendable<D>, const D: usize> {
-    spec: BTreeMap<InstructionID, usize>,
-    rx: Receiver<(usize, InstructionID, Vec<F>)>,
+    spec: BTreeMap<InsID, usize>,
+    rx: Receiver<(usize, InsID, Vec<F>)>,
 }
 
 pub fn trace<F: RichField + Extendable<D>, const D: usize>(
-    spec: BTreeMap<InstructionID, usize>,
-) -> (TraceHandle<F>, TraceGenerator<F, D>) {
+    spec: BTreeMap<InsID, usize>,
+) -> (TraceHandle<F, D>, TraceGenerator<F, D>) {
     let (tx, rx) = std::sync::mpsc::channel();
     (TraceHandle { tx }, TraceGenerator { spec, rx })
 }
 
-impl<F> Clone for TraceHandle<F> {
+impl<F: RichField + Extendable<D>, const D: usize> Clone for TraceHandle<F, D> {
     fn clone(&self) -> Self {
         Self {
             tx: self.tx.clone(),
@@ -39,25 +44,66 @@ impl<F> Clone for TraceHandle<F> {
     }
 }
 
-impl<F> TraceHandle<F> {
-    pub fn write(&self, row_index: usize, instruction: InstructionID, row: Vec<F>) -> Result<()> {
+impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
+    pub fn write<T: Instruction<F, D>>(
+        &self,
+        row_index: usize,
+        instruction: T,
+        row: Vec<F>,
+    ) -> Result<()> {
+        let id = InsID::MemID(instruction.memory_vec());
         self.tx
-            .send((row_index, instruction, row))
+            .send((row_index, id, row))
+            .map_err(|_| anyhow!("Failed to send row"))?;
+        Ok(())
+    }
+
+    pub fn write_labled<T: Instruction<F, D>>(
+        &self,
+        row_index: usize,
+        label: &str,
+        row: Vec<F>,
+    ) -> Result<()> {
+        let id = InsID::Label(String::from(label));
+        self.tx
+            .send((row_index, id, row))
+            .map_err(|_| anyhow!("Failed to send row"))?;
+        Ok(())
+    }
+
+    pub fn write_data<T: DataRegister>(
+        &self,
+        row_index: usize,
+        data: T,
+        row: Vec<F>,
+    ) -> Result<()> {
+        let id = InsID::Write(*data.register());
+        self.tx
+            .send((row_index, id, row))
+            .map_err(|_| anyhow!("Failed to send row"))?;
+        Ok(())
+    }
+
+    pub fn write_data_labled<T: Instruction<F, D>>(
+        &self,
+        row_index: usize,
+        label: &str,
+        row: Vec<F>,
+    ) -> Result<()> {
+        let id = InsID::WriteLabel(String::from(label));
+        self.tx
+            .send((row_index, id, row))
             .map_err(|_| anyhow!("Failed to send row"))?;
         Ok(())
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
-    pub fn generate_trace<L>(
+    pub fn generate_trace<L: ChipParameters<F, D>>(
         &self,
         chip: &Chip<L, F, D>,
         row_capacity: usize,
-    ) -> Result<Vec<PolynomialValues<F>>>
-    where
-        F: RichField + Extendable<D>,
-        L: ChipParameters<F, D>,
-    {
+    ) -> Result<Vec<PolynomialValues<F>>> {
         // Initiaze the trace with capacity given by the user
         let num_cols = chip.num_columns_no_range_checks();
         let mut trace_rows = vec![vec![F::ZERO; num_cols + 1]; row_capacity];
@@ -67,8 +113,24 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
                 .spec
                 .get(&id)
                 .ok_or_else(|| anyhow!("Invalid instruction"))?;
-            chip.get(*op_index)
-                .assign_row(&mut trace_rows, &mut row, row_index)
+            match id {
+                InsID::MemID(_) => {
+                    chip.get(*op_index)
+                        .assign_row(&mut trace_rows, &mut row, row_index)
+                }
+                InsID::Label(_) => {
+                    chip.get(*op_index)
+                        .assign_row(&mut trace_rows, &mut row, row_index)
+                }
+                InsID::Write(_) => {
+                    chip.get_write(*op_index)
+                        .assign_row(&mut trace_rows, &mut row, row_index)
+                }
+                InsID::WriteLabel(_) => {
+                    chip.get_write(*op_index)
+                        .assign_row(&mut trace_rows, &mut row, row_index)
+                }
+            };
         }
 
         // Transpose the trace to get the columns and resize to the correct size

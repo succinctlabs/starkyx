@@ -1,14 +1,11 @@
 #![allow(dead_code)]
 
-use std::sync::mpsc::Sender;
-
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::Register;
-use crate::arithmetic::circuit::EmulatedCircuitLayout;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub trait Opcode<F, const D: usize>: 'static + Sized + Send + Sync {
