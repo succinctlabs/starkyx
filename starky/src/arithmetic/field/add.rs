@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
@@ -10,10 +10,9 @@ use crate::arithmetic::builder::ChipBuilder;
 use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
-use crate::arithmetic::register::{DataRegister, WitnessData};
+use crate::arithmetic::register::{DataRegister, Register, WitnessData};
 use crate::arithmetic::trace::TraceHandle;
 use crate::arithmetic::util::{extract_witness_and_shift, split_digits, to_field_iter};
-use crate::arithmetic::Register;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Debug, Clone, Copy)]
@@ -132,6 +131,7 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
                     Self::NUM_WITNESS_HIGH_LIMBS,
                 ),
             ),
+            _ => return Err(anyhow!("Invalid witness register")),
         };
         self.carry = Some(carry);
         self.witness_low = Some(witness_low);
@@ -379,7 +379,6 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type Fp = Fp25519;
-        type FMul = FpAdd<Fp25519Param, 16>;
         type S = TestStark<FpAddTest, F, D>;
 
         // build the stark

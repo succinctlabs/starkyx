@@ -4,8 +4,7 @@ use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::register::WitnessData;
-use super::Register;
+use super::register::{Register, WitnessData};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:

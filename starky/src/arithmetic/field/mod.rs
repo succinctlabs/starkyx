@@ -10,13 +10,12 @@ use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 
 use self::add::FpAdd;
-use self::mul::FpMul;
+use self::mul::{FpMul, FpMulConst};
 use self::quad::FpQuad;
 use super::instruction::Instruction;
 use super::polynomial::Polynomial;
 use super::trace::TraceHandle;
-use crate::arithmetic::register::{CellType, DataRegister, U16Array};
-use crate::arithmetic::Register;
+use crate::arithmetic::register::{CellType, DataRegister, Register, U16Array};
 
 pub const LIMB: u32 = 2u32.pow(16);
 
@@ -103,6 +102,7 @@ pub enum FpInstruction<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> {
     Add(FpAdd<P, N_LIMBS>),
     Mul(FpMul<P, N_LIMBS>),
     Quad(FpQuad<P, N_LIMBS>),
+    MulConst(FpMulConst<P, N_LIMBS>),
 }
 
 impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> From<FpAdd<P, N_LIMBS>>
@@ -137,6 +137,9 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
             FpInstruction::Add(add) => <FpAdd<FP, N> as Instruction<F, D>>::memory_vec(add),
             FpInstruction::Mul(mul) => <FpMul<FP, N> as Instruction<F, D>>::memory_vec(mul),
             FpInstruction::Quad(quad) => <FpQuad<FP, N> as Instruction<F, D>>::memory_vec(quad),
+            FpInstruction::MulConst(mul_const) => {
+                <FpMulConst<FP, N> as Instruction<F, D>>::memory_vec(mul_const)
+            }
         }
     }
 
@@ -145,6 +148,9 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
             FpInstruction::Add(add) => <FpAdd<FP, N> as Instruction<F, D>>::witness_data(add),
             FpInstruction::Mul(mul) => <FpMul<FP, N> as Instruction<F, D>>::witness_data(mul),
             FpInstruction::Quad(quad) => <FpQuad<FP, N> as Instruction<F, D>>::witness_data(quad),
+            FpInstruction::MulConst(mul_const) => {
+                <FpMulConst<FP, N> as Instruction<F, D>>::witness_data(mul_const)
+            }
         }
     }
 
@@ -159,6 +165,9 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
             FpInstruction::Quad(quad) => {
                 <FpQuad<FP, N> as Instruction<F, D>>::set_witness(quad, witness)
             }
+            FpInstruction::MulConst(mul_const) => {
+                <FpMulConst<FP, N> as Instruction<F, D>>::set_witness(mul_const, witness)
+            }
         }
     }
 
@@ -172,6 +181,11 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
             }
             FpInstruction::Quad(quad) => {
                 <FpQuad<FP, N> as Instruction<F, D>>::assign_row(quad, trace_rows, row, row_index)
+            }
+            FpInstruction::MulConst(mul_const) => {
+                <FpMulConst<FP, N> as Instruction<F, D>>::assign_row(
+                    mul_const, trace_rows, row, row_index,
+                )
             }
         }
     }
@@ -212,6 +226,13 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
                     yield_constr,
                 )
             }
+            FpInstruction::MulConst(mul_const) => {
+                <FpMulConst<FP, N> as Instruction<F, D>>::packed_generic_constraints(
+                    mul_const,
+                    vars,
+                    yield_constr,
+                )
+            }
         }
     }
 
@@ -241,6 +262,14 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
             FpInstruction::Quad(quad) => {
                 <FpQuad<FP, N> as Instruction<F, D>>::ext_circuit_constraints(
                     quad,
+                    builder,
+                    vars,
+                    yield_constr,
+                )
+            }
+            FpInstruction::MulConst(mul_const) => {
+                <FpMulConst<FP, N> as Instruction<F, D>>::ext_circuit_constraints(
+                    mul_const,
                     builder,
                     vars,
                     yield_constr,
@@ -285,7 +314,7 @@ mod tests {
     }
 
     #[test]
-    fn test_fpquad_instructions() {
+    fn test_instructions_fpquad() {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;

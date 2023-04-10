@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
@@ -12,10 +12,9 @@ use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::field::modulus_field_iter;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
-use crate::arithmetic::register::{DataRegister, WitnessData};
+use crate::arithmetic::register::{DataRegister, Register, WitnessData};
 use crate::arithmetic::trace::TraceHandle;
 use crate::arithmetic::util::{extract_witness_and_shift, split_digits, to_field_iter};
-use crate::arithmetic::Register;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Debug, Clone, Copy)]
@@ -69,7 +68,7 @@ impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> Den<P, N_LIMBS> {
         }
     }
 
-    const fn num_den_columns() -> usize {
+    pub const fn num_den_columns() -> usize {
         3 * N_LIMBS
             + Self::NUM_CARRY_LIMBS
             + Self::NUM_WITNESS_LOW_LIMBS
@@ -112,6 +111,7 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
                     Self::NUM_WITNESS_HIGH_LIMBS,
                 ),
             ),
+            _ => return Err(anyhow!("Invalid witness register")),
         };
         self.carry = Some(carry);
         self.witness_low = Some(witness_low);
@@ -301,8 +301,8 @@ impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> Den<P, N_LIMBS> {
         debug_assert_eq!(&carry * &p, &z * &result - a);
 
         // make polynomial limbs
-        let p_a = Polynomial::<i64>::from_biguint_num(&a, 16, N_LIMBS);
-        let p_b = Polynomial::<i64>::from_biguint_num(&b, 16, N_LIMBS);
+        let p_a = Polynomial::<i64>::from_biguint_num(a, 16, N_LIMBS);
+        let p_b = Polynomial::<i64>::from_biguint_num(b, 16, N_LIMBS);
         let p_p = Polynomial::<i64>::from_biguint_num(&p, 16, N_LIMBS);
 
         let p_b_sign = if sign { p_b } else { &p_p - &p_b };
@@ -333,7 +333,7 @@ impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> Den<P, N_LIMBS> {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
-    pub fn write_den<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize>(
+    pub fn write_ed_den<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize>(
         &self,
         row_index: usize,
         a_int: &BigUint,
@@ -386,7 +386,6 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type Fp = Fp25519;
-        type FMul = Den<Fp25519Param, 16>;
         type S = TestStark<DenTest, F, D>;
 
         // build the stark
@@ -418,7 +417,7 @@ mod tests {
                 handle.write_field(i as usize, &a_int, a).unwrap();
                 handle.write_field(i as usize, &b_int, b).unwrap();
                 handle
-                    .write_den(i as usize, &a_int, &b_int, sign, den_ins)
+                    .write_ed_den(i as usize, &a_int, &b_int, sign, den_ins)
                     .unwrap();
             });
         }

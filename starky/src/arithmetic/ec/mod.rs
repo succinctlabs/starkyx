@@ -8,7 +8,6 @@ use plonky2::hash::hash_types::RichField;
 use crate::arithmetic::builder::ChipBuilder;
 use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::field::{FieldParameters, FieldRegister};
-use crate::arithmetic::polynomial::Polynomial;
 use crate::arithmetic::trace::TraceHandle;
 
 pub const LIMB: u32 = 2u32.pow(16);
@@ -18,12 +17,13 @@ pub trait EllipticCurveParameters<const N_LIMBS: usize>: Send + Sync + Copy + 's
 }
 
 #[derive(Debug, Clone)]
-pub struct Point {
+pub struct PointBigint {
     pub x: BigUint,
     pub y: BigUint,
 }
 
-impl Point {
+impl PointBigint {
+    #[allow(dead_code)]
     fn new(x: BigUint, y: BigUint) -> Self {
         Self { x, y }
     }
@@ -32,8 +32,8 @@ impl Point {
 #[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]
 pub struct PointRegister<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize> {
-    X: FieldRegister<E::FieldParam, N_LIMBS>,
-    Y: FieldRegister<E::FieldParam, N_LIMBS>,
+    x: FieldRegister<E::FieldParam, N_LIMBS>,
+    y: FieldRegister<E::FieldParam, N_LIMBS>,
 }
 
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
@@ -42,7 +42,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     ) -> Result<PointRegister<E, N_LIMBS>> {
         let x = self.alloc_local::<FieldRegister<E::FieldParam, N_LIMBS>>()?;
         let y = self.alloc_local::<FieldRegister<E::FieldParam, N_LIMBS>>()?;
-        Ok(PointRegister { X: x, Y: y })
+        Ok(PointRegister { x, y })
     }
 
     pub fn alloc_next_ec_point<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize>(
@@ -50,27 +50,28 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     ) -> Result<PointRegister<E, N_LIMBS>> {
         let x = self.alloc_next::<FieldRegister<E::FieldParam, N_LIMBS>>()?;
         let y = self.alloc_next::<FieldRegister<E::FieldParam, N_LIMBS>>()?;
-        Ok(PointRegister { X: x, Y: y })
+        Ok(PointRegister { x, y })
     }
 
     pub fn write_ec_point<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize>(
         &mut self,
         data: &PointRegister<E, N_LIMBS>,
     ) -> Result<()> {
-        self.write_data(&data.X)?;
-        self.write_data(&data.Y)?;
+        self.write_data(&data.x)?;
+        self.write_data(&data.y)?;
         Ok(())
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
-    fn write_ec_point<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize>(
+    #[allow(dead_code)]
+    fn write_ec_point<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize>(
         &self,
         row_index: usize,
-        a_int: &BigUint,
-        a: FieldRegister<P, N_LIMBS>,
+        point: &PointBigint,
+        data: &PointRegister<E, N_LIMBS>,
     ) -> Result<()> {
-        let p_a = Polynomial::<F>::from_biguint_field(a_int, 16, 16);
-        self.write_data(row_index, a, p_a.into_vec())
+        self.write_field(row_index, &point.x, data.x)?;
+        self.write_field(row_index, &point.y, data.y)
     }
 }

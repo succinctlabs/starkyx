@@ -9,6 +9,10 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 pub enum Register {
     Local(usize, usize),
     Next(usize, usize),
+
+    // Not sure if these are needed
+    First(usize, usize),
+    Last(usize, usize),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -91,6 +95,8 @@ impl Register {
         match self {
             Register::Local(index, length) => (*index, *index + length),
             Register::Next(index, length) => (*index, *index + length),
+            Register::First(index, length) => (*index, *index + length),
+            Register::Last(index, length) => (*index, *index + length),
         }
     }
 
@@ -99,6 +105,8 @@ impl Register {
         match self {
             Register::Local(index, _) => *index,
             Register::Next(index, _) => *index,
+            Register::First(index, _) => *index,
+            Register::Last(index, _) => *index,
         }
     }
 
@@ -107,6 +115,8 @@ impl Register {
         match self {
             Register::Local(_, length) => *length,
             Register::Next(_, length) => *length,
+            Register::First(_, length) => *length,
+            Register::Last(_, length) => *length,
         }
     }
 
@@ -124,22 +134,7 @@ impl Register {
             Register::Next(index, length) => {
                 value.copy_from_slice(&trace_rows[row_index + 1][*index..*index + length]);
             }
-        }
-    }
-
-    #[inline]
-    pub fn shift_right(&mut self, shift: usize) {
-        match self {
-            Register::Local(index, _) => *index += shift,
-            Register::Next(index, _) => *index += shift,
-        }
-    }
-
-    #[inline]
-    pub fn shift_right_owned(self, shift: usize) -> Self {
-        match self {
-            Register::Local(index, length) => Register::Local(index + shift, length),
-            Register::Next(index, length) => Register::Next(index + shift, length),
+            _ => panic!("Cannot read from a non-local register"),
         }
     }
 
@@ -151,6 +146,12 @@ impl Register {
             }
             Register::Next(index, length) => {
                 trace_rows[row_index + 1][*index..*index + length].copy_from_slice(value);
+            }
+            Register::First(index, length) => {
+                trace_rows[0][*index..*index + length].copy_from_slice(value);
+            }
+            Register::Last(index, length) => {
+                trace_rows[trace_rows.len() - 1][*index..*index + length].copy_from_slice(value);
             }
         }
     }
@@ -175,6 +176,37 @@ impl Register {
         match self {
             Register::Local(index, length) => &vars.local_values[*index..*index + length],
             Register::Next(index, length) => &vars.next_values[*index..*index + length],
+            _ => panic!("Cannot read from a non-local register"),
+        }
+    }
+
+    #[inline]
+    pub fn packed_entries<
+        F,
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+    >(
+        &self,
+        vars: &StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
+    ) -> Vec<P>
+    where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>,
+    {
+        match self {
+            Register::Local(index, length) => vars.local_values[*index..*index + length].to_vec(),
+            Register::Next(index, length) => vars.next_values[*index..*index + length].to_vec(),
+            Register::First(index, length) => vars.public_inputs[*index..*index + length]
+                .iter()
+                .map(|x| P::from(*x))
+                .collect(),
+            Register::Last(index, length) => vars.public_inputs[*index..*index + length]
+                .iter()
+                .map(|x| P::from(*x))
+                .collect(),
         }
     }
 
@@ -191,6 +223,8 @@ impl Register {
         match self {
             Register::Local(index, length) => &vars.local_values[*index..*index + length],
             Register::Next(index, length) => &vars.next_values[*index..*index + length],
+            Register::First(index, length) => &vars.public_inputs[*index..*index + length],
+            Register::Last(index, length) => &vars.public_inputs[*index..*index + length],
         }
     }
 }

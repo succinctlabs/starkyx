@@ -7,33 +7,10 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::instruction::{Instruction, WriteInstruction};
-use super::layout::OpcodeLayout;
 use crate::lookup::{eval_lookups, eval_lookups_circuit};
 use crate::permutation::PermutationPair;
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
-
-/// A layout for a circuit that emulates field operations
-pub trait EmulatedCircuitLayout<F: RichField + Extendable<D>, const D: usize, const N: usize>:
-    Sized + Send + Sync
-{
-    const PUBLIC_INPUTS: usize;
-    const NUM_ARITHMETIC_COLUMNS: usize;
-    const ENTRY_COLUMN: usize;
-    const TABLE_INDEX: usize;
-
-    type Layouts: OpcodeLayout<F, D>;
-    const OPERATIONS: [Self::Layouts; N];
-
-    /// Check that the operations allocations are consistent with total number of columns
-    fn is_consistent(&self) -> bool {
-        assert_eq!(
-            Self::TABLE_INDEX,
-            Self::ENTRY_COLUMN + Self::NUM_ARITHMETIC_COLUMNS
-        );
-        true
-    }
-}
 
 /// A layout for a circuit that emulates field operations
 pub trait ChipParameters<F: RichField + Extendable<D>, const D: usize>:
