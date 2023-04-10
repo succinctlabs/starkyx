@@ -100,25 +100,25 @@ impl MulModLayout {
     }
 
     #[inline]
-    pub fn allocation_registers(&self) -> (Register, Register, Register) {
-        let input = Register::Local(0, 3 * N_LIMBS);
-        let witness = Register::Local(
-            self.carry.index(),
-            NUM_CARRY_COLUMNS + 2 * NUM_WITNESS_COLUMNS,
-        );
-
-        (input, self.output, witness)
-    }
-
-    #[inline]
     pub fn assign_row<T: Copy>(&self, trace_rows: &mut [Vec<T>], row: &mut [T], row_index: usize) {
-        let (input_reg, output_reg, witness_reg) = self.allocation_registers();
-        let input_slice = &mut row[0..3 * N_LIMBS];
-        input_reg.assign(trace_rows, input_slice, row_index);
+        let input1_slice = &mut row[0..N_LIMBS];
+        self.input_1.assign(trace_rows, input1_slice, row_index);
+        let input2_slice = &mut row[N_LIMBS..2 * N_LIMBS];
+        self.input_2.assign(trace_rows, input2_slice, row_index);
+        let modulus_slice = &mut row[2 * N_LIMBS..3 * N_LIMBS];
+        self.modulus.assign(trace_rows, modulus_slice, row_index);
         let output_slice = &mut row[3 * N_LIMBS..4 * N_LIMBS];
-        output_reg.assign(trace_rows, output_slice, row_index);
-        let witness_slice = &mut row[4 * N_LIMBS..NUM_ARITH_COLUMNS];
-        witness_reg.assign(trace_rows, witness_slice, row_index);
+        self.output.assign(trace_rows, output_slice, row_index);
+        let carry_slice = &mut row[4 * N_LIMBS..4 * N_LIMBS + NUM_CARRY_COLUMNS];
+        self.carry.assign(trace_rows, carry_slice, row_index);
+        let witness_low_slice = &mut row[4 * N_LIMBS + NUM_CARRY_COLUMNS
+            ..4 * N_LIMBS + NUM_WITNESS_COLUMNS + NUM_CARRY_COLUMNS];
+        self.witness_low
+            .assign(trace_rows, witness_low_slice, row_index);
+        let witness_high_slice = &mut row[4 * N_LIMBS + NUM_CARRY_COLUMNS + NUM_WITNESS_COLUMNS
+            ..4 * N_LIMBS + NUM_CARRY_COLUMNS + NUM_WITNESS_COLUMNS + NUM_WITNESS_COLUMNS];
+        self.witness_high
+            .assign(trace_rows, witness_high_slice, row_index);
     }
 }
 
@@ -404,9 +404,9 @@ pub struct MulModInstruction {
     input_2: Register,
     output: Register,
     modulus: Register,
-    carry: Option<Register>,
-    witness_low: Option<Register>,
-    witness_high: Option<Register>,
+    pub(crate) carry: Option<Register>,
+    pub(crate) witness_low: Option<Register>,
+    pub(crate) witness_high: Option<Register>,
 }
 
 impl MulModInstruction {

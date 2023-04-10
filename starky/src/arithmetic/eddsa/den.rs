@@ -269,7 +269,7 @@ mod tests {
 
     use super::*;
     use crate::arithmetic::arithmetic_stark::ArithmeticStark;
-    use crate::arithmetic::circuit::EmulatedCircuitLayout;
+    use crate::arithmetic::chip::EmulatedCircuitLayout;
     use crate::arithmetic::InstructionT;
     use crate::config::StarkConfig;
     use crate::prover::prove;

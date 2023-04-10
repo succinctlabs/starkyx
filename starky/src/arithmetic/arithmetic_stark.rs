@@ -14,7 +14,7 @@ use plonky2_maybe_rayon::*;
 
 use super::layout::OpcodeLayout;
 use super::InstructionT;
-use crate::arithmetic::circuit::EmulatedCircuitLayout;
+use crate::arithmetic::chip::EmulatedCircuitLayout;
 use crate::lookup::{eval_lookups, eval_lookups_circuit, permuted_cols};
 use crate::permutation::PermutationPair;
 use crate::stark::Stark;

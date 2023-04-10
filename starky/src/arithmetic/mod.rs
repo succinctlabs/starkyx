@@ -2,8 +2,10 @@
 
 pub mod arithmetic_stark;
 pub mod builder;
-pub mod circuit;
+pub mod chip;
+pub mod ec;
 pub mod eddsa;
+pub mod field;
 pub mod instruction;
 pub mod layout;
 pub mod modular;
@@ -18,7 +20,7 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 pub use register::Register;
 
-use crate::arithmetic::circuit::EmulatedCircuitLayout;
+use crate::arithmetic::chip::EmulatedCircuitLayout;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub trait InstructionT<

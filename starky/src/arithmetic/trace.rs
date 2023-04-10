@@ -9,10 +9,10 @@ use plonky2::util::transpose;
 use plonky2_maybe_rayon::*;
 
 use super::builder::InsID;
-use super::circuit::ChipParameters;
+use super::chip::ChipParameters;
 use super::instruction::Instruction;
 use super::register::DataRegister;
-use crate::arithmetic::builder::Chip;
+use crate::arithmetic::chip::Chip;
 use crate::lookup::permuted_cols;
 
 #[derive(Debug)]
@@ -115,21 +115,21 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
                 .ok_or_else(|| anyhow!("Invalid instruction"))?;
             match id {
                 InsID::MemID(_) => {
-                    chip.get(*op_index)
-                        .assign_row(&mut trace_rows, &mut row, row_index)
+                    chip.instructions[*op_index].assign_row(&mut trace_rows, &mut row, row_index)
                 }
                 InsID::Label(_) => {
-                    chip.get(*op_index)
-                        .assign_row(&mut trace_rows, &mut row, row_index)
+                    chip.instructions[*op_index].assign_row(&mut trace_rows, &mut row, row_index)
                 }
-                InsID::Write(_) => {
-                    chip.get_write(*op_index)
-                        .assign_row(&mut trace_rows, &mut row, row_index)
-                }
-                InsID::WriteLabel(_) => {
-                    chip.get_write(*op_index)
-                        .assign_row(&mut trace_rows, &mut row, row_index)
-                }
+                InsID::Write(_) => chip.write_instructions[*op_index].assign_row(
+                    &mut trace_rows,
+                    &mut row,
+                    row_index,
+                ),
+                InsID::WriteLabel(_) => chip.write_instructions[*op_index].assign_row(
+                    &mut trace_rows,
+                    &mut row,
+                    row_index,
+                ),
             };
         }
 

@@ -2,6 +2,8 @@
 //!
 //! The implementation based on a method used in Polygon starks
 
+use alloc::collections::BTreeMap;
+
 use anyhow::{anyhow, Result};
 use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
@@ -11,9 +13,12 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::{ArithmeticParser, Register};
+use crate::arithmetic::builder::{ChipBuilder, InsID};
+use crate::arithmetic::chip::{Chip, ChipParameters};
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
 use crate::arithmetic::register::{DataRegister, U16Array, WitnessData};
+use crate::arithmetic::trace::TraceHandle;
 use crate::arithmetic::util::{self, to_field_iter};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -23,10 +28,10 @@ pub const NUM_INPUT_COLUMNS: usize = 2 * N_LIMBS;
 pub const NUM_OUTPUT_COLUMNS: usize = N_LIMBS;
 pub const NUM_MODULUS_COLUMNS: usize = N_LIMBS;
 pub const NUM_CARRY_COLUMNS: usize = N_LIMBS;
-pub const NUM_WTNESS_LOW_COLUMNS: usize = N_LIMBS - 1;
-pub const NUM_WTNESS_HIGH_COLUMNS: usize = N_LIMBS - 1;
+pub const NUM_WITNESS_LOW_COLUMNS: usize = N_LIMBS - 1;
+pub const NUM_WITNESS_HIGH_COLUMNS: usize = N_LIMBS - 1;
 pub const NUM_ADD_WITNESS_COLUMNS: usize =
-    NUM_CARRY_COLUMNS + NUM_WTNESS_LOW_COLUMNS + NUM_WTNESS_HIGH_COLUMNS;
+    NUM_CARRY_COLUMNS + NUM_WITNESS_LOW_COLUMNS + NUM_WITNESS_HIGH_COLUMNS;
 
 pub const NUM_ARITH_COLUMNS: usize = 6 * N_LIMBS - 1 + N_LIMBS - 1;
 pub const NUM_COLUMNS: usize = 1 + NUM_ARITH_COLUMNS + 2 * NUM_ARITH_COLUMNS;
@@ -69,15 +74,15 @@ impl AddModLayout {
         debug_assert_eq!(output.len(), N_LIMBS);
         debug_assert_eq!(
             witness.len(),
-            NUM_CARRY_COLUMNS + NUM_WTNESS_LOW_COLUMNS + NUM_WTNESS_HIGH_COLUMNS
+            NUM_CARRY_COLUMNS + NUM_WITNESS_LOW_COLUMNS + NUM_WITNESS_HIGH_COLUMNS
         );*/
 
         let (w_start, _) = witness.get_range();
         let carry = Register::Local(w_start, NUM_CARRY_COLUMNS);
-        let witness_low = Register::Local(w_start + NUM_CARRY_COLUMNS, NUM_WTNESS_LOW_COLUMNS);
+        let witness_low = Register::Local(w_start + NUM_CARRY_COLUMNS, NUM_WITNESS_LOW_COLUMNS);
         let witness_high = Register::Local(
-            w_start + NUM_CARRY_COLUMNS + NUM_WTNESS_LOW_COLUMNS,
-            NUM_WTNESS_HIGH_COLUMNS,
+            w_start + NUM_CARRY_COLUMNS + NUM_WITNESS_LOW_COLUMNS,
+            NUM_WITNESS_HIGH_COLUMNS,
         );
 
         Self {
@@ -92,21 +97,25 @@ impl AddModLayout {
     }
 
     #[inline]
-    pub fn allocation_registers(&self) -> (Register, Register, Register) {
-        let input = Register::Local(self.input_1.index(), 3 * N_LIMBS);
-        let witness = Register::Local(self.carry.index(), NUM_ADD_WITNESS_COLUMNS);
-        (input, self.output, witness)
-    }
-
-    #[inline]
     pub fn assign_row<T: Copy>(&self, trace_rows: &mut [Vec<T>], row: &mut [T], row_index: usize) {
-        let (input_reg, output_reg, witness_reg) = self.allocation_registers();
-        let input_slice = &mut row[0..3 * N_LIMBS];
-        input_reg.assign(trace_rows, input_slice, row_index);
+        let input1_slice = &mut row[0..N_LIMBS];
+        self.input_1.assign(trace_rows, input1_slice, row_index);
+        let input2_slice = &mut row[N_LIMBS..2 * N_LIMBS];
+        self.input_2.assign(trace_rows, input2_slice, row_index);
+        let modulus_slice = &mut row[2 * N_LIMBS..3 * N_LIMBS];
+        self.modulus.assign(trace_rows, modulus_slice, row_index);
         let output_slice = &mut row[3 * N_LIMBS..4 * N_LIMBS];
-        output_reg.assign(trace_rows, output_slice, row_index);
-        let witness_slice = &mut row[4 * N_LIMBS..NUM_ARITH_COLUMNS];
-        witness_reg.assign(trace_rows, witness_slice, row_index);
+        self.output.assign(trace_rows, output_slice, row_index);
+        let carry_slice = &mut row[4 * N_LIMBS..4 * N_LIMBS + NUM_CARRY_COLUMNS];
+        self.carry.assign(trace_rows, carry_slice, row_index);
+        let witness_low_slice = &mut row[4 * N_LIMBS + NUM_CARRY_COLUMNS
+            ..4 * N_LIMBS + NUM_WITNESS_LOW_COLUMNS + NUM_CARRY_COLUMNS];
+        self.witness_low
+            .assign(trace_rows, witness_low_slice, row_index);
+        let witness_high_slice = &mut row[4 * N_LIMBS + NUM_CARRY_COLUMNS + NUM_WITNESS_LOW_COLUMNS
+            ..4 * N_LIMBS + NUM_CARRY_COLUMNS + NUM_WITNESS_LOW_COLUMNS + NUM_WITNESS_HIGH_COLUMNS];
+        self.witness_high
+            .assign(trace_rows, witness_high_slice, row_index);
     }
 }
 
@@ -340,10 +349,10 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for AddModI
         let carry = Register::Local(index, NUM_CARRY_COLUMNS);
         index += NUM_CARRY_COLUMNS;
         self.carry = Some(carry);
-        let witness_low = Register::Local(index, NUM_WTNESS_LOW_COLUMNS);
+        let witness_low = Register::Local(index, NUM_WITNESS_LOW_COLUMNS);
         self.witness_low = Some(witness_low);
-        index += NUM_WTNESS_LOW_COLUMNS;
-        let witness_high = Register::Local(index, NUM_WTNESS_HIGH_COLUMNS);
+        index += NUM_WITNESS_LOW_COLUMNS;
+        let witness_high = Register::Local(index, NUM_WITNESS_HIGH_COLUMNS);
         self.witness_high = Some(witness_high);
         Ok(())
     }
@@ -413,10 +422,10 @@ impl AddModInstruction {
         let carry = Register::Local(index, NUM_CARRY_COLUMNS);
         index += NUM_CARRY_COLUMNS;
         self.carry = Some(carry);
-        let witness_low = Register::Local(index, NUM_WTNESS_LOW_COLUMNS);
+        let witness_low = Register::Local(index, NUM_WITNESS_LOW_COLUMNS);
         self.witness_low = Some(witness_low);
-        index += NUM_WTNESS_LOW_COLUMNS;
-        let witness_high = Register::Local(index, NUM_WTNESS_HIGH_COLUMNS);
+        index += NUM_WITNESS_LOW_COLUMNS;
+        let witness_high = Register::Local(index, NUM_WITNESS_HIGH_COLUMNS);
         self.witness_high = Some(witness_high);
         Ok(())
     }
@@ -459,5 +468,54 @@ impl AddModInstruction {
     ) {
         let layout = self.into_addmod_layout().unwrap();
         ArithmeticParser::add_ext_circuit(layout, builder, vars, yield_constr);
+    }
+}
+
+pub struct AddModChipParam<F, const D: usize> {
+    _marker: core::marker::PhantomData<F>,
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for AddModChipParam<F, D> {
+    const NUM_ARITHMETIC_COLUMNS: usize = NUM_ARITH_COLUMNS;
+    const NUM_FREE_COLUMNS: usize = 0;
+
+    type Instruction = AddModInstruction;
+}
+
+#[derive(Clone, Debug, Copy)]
+pub struct AddModChip;
+
+impl AddModChip {
+    pub fn new<F: RichField + Extendable<D>, const D: usize>(
+    ) -> (Chip<AddModChipParam<F, D>, F, D>, BTreeMap<InsID, usize>) {
+        let mut builder = ChipBuilder::new();
+
+        let a = builder.alloc_local::<U256>().unwrap();
+        let b = builder.alloc_local::<U256>().unwrap();
+        let out = builder.alloc_local::<U256>().unwrap();
+        let m = builder.alloc_local::<U256>().unwrap();
+
+        let add_instruction = AddModInstruction::new(a, b, m, out);
+        builder.insert_instruction(add_instruction).unwrap();
+
+        builder.build()
+    }
+
+    pub fn add_instruction<F: RichField + Extendable<D>, const D: usize>(
+        chip: &Chip<AddModChipParam<F, D>, F, D>,
+    ) -> AddModInstruction {
+        chip.instructions[0]
+    }
+
+    pub fn write_trace<F: RichField + Extendable<D>, const D: usize>(
+        add_inst: AddModInstruction,
+        a: BigUint,
+        b: BigUint,
+        modulus: BigUint,
+        pc: usize,
+        handle: &TraceHandle<F, D>,
+    ) -> Result<()> {
+        let trace_row = ArithmeticParser::<F, D>::add_trace(a, b, modulus);
+        handle.write(pc, add_inst, trace_row)
     }
 }
