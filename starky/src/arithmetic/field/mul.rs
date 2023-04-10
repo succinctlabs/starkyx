@@ -6,9 +6,12 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::*;
+use crate::arithmetic::builder::ChipBuilder;
+use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
 use crate::arithmetic::register::{DataRegister, WitnessData};
+use crate::arithmetic::trace::TraceHandle;
 use crate::arithmetic::util::{extract_witness_and_shift, split_digits, to_field_iter};
 use crate::arithmetic::Register;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
@@ -21,6 +24,22 @@ pub struct FpMul<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> {
     carry: Option<Register>,
     witness_low: Option<Register>,
     witness_high: Option<Register>,
+}
+
+impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
+    pub fn fpmul<P: FieldParameters<N>, const N: usize>(
+        &mut self,
+        a: &FieldRegister<P, N>,
+        b: &FieldRegister<P, N>,
+        result: &FieldRegister<P, N>,
+    ) -> Result<FpMul<P, N>>
+    where
+        L::Instruction: From<FpMul<P, N>>,
+    {
+        let instr = FpMul::new(*a, *b, *result);
+        self.insert_instruction(instr.into())?;
+        Ok(instr)
+    }
 }
 
 impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> FpMul<P, N_LIMBS> {
@@ -81,19 +100,8 @@ impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> FpMul<P, N_LIMBS> {
 impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldParameters<N>>
     Instruction<F, D> for FpMul<FP, N>
 {
-    fn shift_right(&mut self, free_shift: usize, arithmetic_shift: usize) {
-        self.a.shift_right(free_shift, arithmetic_shift);
-        self.b.shift_right(free_shift, arithmetic_shift);
-        self.result.shift_right(free_shift, arithmetic_shift);
-        if let Some(mut c) = self.carry {
-            c.shift_right(arithmetic_shift);
-        }
-        if let Some(mut w) = self.witness_low {
-            w.shift_right(arithmetic_shift);
-        }
-        if let Some(mut w) = self.witness_high {
-            w.shift_right(arithmetic_shift);
-        }
+    fn shift_right(&mut self, _free_shift: usize, _arithmetic_shift: usize) {
+        unimplemented!("FpMul::shift_right");
     }
 
     fn memory_vec(&self) -> Vec<Register> {
@@ -312,6 +320,17 @@ impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> FpMul<P, N_LIMBS> {
 
         (row, result)
     }
+
+    pub fn write<F: RichField + Extendable<D>, const D: usize>(
+        &self,
+        a: BigUint,
+        b: BigUint,
+        handle: TraceHandle<F, D>,
+        row_index: usize,
+    ) -> Result<()> {
+        let (row, _) = Self::trace_row::<F, D>(a, b);
+        handle.write(row_index, *self, row)
+    }
 }
 
 #[cfg(test)]
@@ -363,8 +382,9 @@ mod tests {
         let b = builder.alloc_local::<Fp>().unwrap();
         let result = builder.alloc_local::<Fp>().unwrap();
 
-        let ab = FMul::new(a, b, result);
-        builder.insert_instruction(ab).unwrap();
+        //let ab = FMul::new(a, b, result);
+        //builder.insert_instruction(ab).unwrap();
+        let ab_ins = builder.fpmul(&a, &b, &result).unwrap();
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
 
@@ -388,8 +408,7 @@ mod tests {
                 handle.write_data(i as usize, a, p_a.into_vec()).unwrap();
                 handle.write_data(i as usize, b, p_b.into_vec()).unwrap();
 
-                let (row, _) = FMul::trace_row::<F, D>(a_int, b_int);
-                handle.write(i as usize, ab, row).unwrap();
+                ab_ins.write(a_int, b_int, handle, i as usize).unwrap();
             });
         }
         drop(handle);

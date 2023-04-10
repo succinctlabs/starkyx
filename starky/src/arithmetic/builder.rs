@@ -801,10 +801,10 @@ mod tests {
 
             let h = handle.clone();
             rayon::spawn(move || {
-            let add_row = ArithmeticParser::<F, D>::add_trace(a, b, m);
-            h.write(i as usize, sub_add_inst, add_row).unwrap();
-            let mul_row = ArithmeticParser::<F, D>::mul_trace(a2, b2, m2);
-            h.write(i as usize, sub_mul_inst, mul_row).unwrap();
+                let add_row = ArithmeticParser::<F, D>::add_trace(a, b, m);
+                h.write(i as usize, sub_add_inst, add_row).unwrap();
+                let mul_row = ArithmeticParser::<F, D>::mul_trace(a2, b2, m2);
+                h.write(i as usize, sub_mul_inst, mul_row).unwrap();
             });
         }
         drop(handle);
