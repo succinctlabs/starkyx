@@ -1,6 +1,8 @@
 //! Edwards curves
 
+pub mod add;
 pub mod den;
+pub mod instructions;
 
 use num::Zero;
 

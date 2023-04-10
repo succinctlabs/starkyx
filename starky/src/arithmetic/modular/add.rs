@@ -2,8 +2,6 @@
 //!
 //! The implementation based on a method used in Polygon starks
 
-use alloc::collections::BTreeMap;
-
 use anyhow::{anyhow, Result};
 use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
@@ -13,12 +11,10 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::{ArithmeticParser, Register};
-use crate::arithmetic::builder::{ChipBuilder, InsID};
-use crate::arithmetic::chip::{Chip, ChipParameters};
+use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
 use crate::arithmetic::register::{DataRegister, U16Array, WitnessData};
-use crate::arithmetic::trace::TraceHandle;
 use crate::arithmetic::util::{self, to_field_iter};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -446,42 +442,4 @@ impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for AddM
     const NUM_FREE_COLUMNS: usize = 0;
 
     type Instruction = AddModInstruction;
-}
-
-#[derive(Clone, Debug, Copy)]
-pub struct AddModChip;
-
-impl AddModChip {
-    pub fn new<F: RichField + Extendable<D>, const D: usize>(
-    ) -> (Chip<AddModChipParam<F, D>, F, D>, BTreeMap<InsID, usize>) {
-        let mut builder = ChipBuilder::new();
-
-        let a = builder.alloc_local::<U256>().unwrap();
-        let b = builder.alloc_local::<U256>().unwrap();
-        let out = builder.alloc_local::<U256>().unwrap();
-        let m = builder.alloc_local::<U256>().unwrap();
-
-        let add_instruction = AddModInstruction::new(a, b, m, out);
-        builder.insert_instruction(add_instruction).unwrap();
-
-        builder.build()
-    }
-
-    pub fn add_instruction<F: RichField + Extendable<D>, const D: usize>(
-        chip: &Chip<AddModChipParam<F, D>, F, D>,
-    ) -> AddModInstruction {
-        chip.instructions[0]
-    }
-
-    pub fn write_trace<F: RichField + Extendable<D>, const D: usize>(
-        add_inst: AddModInstruction,
-        a: BigUint,
-        b: BigUint,
-        modulus: BigUint,
-        pc: usize,
-        handle: &TraceHandle<F, D>,
-    ) -> Result<()> {
-        let trace_row = ArithmeticParser::<F, D>::add_trace(a, b, modulus);
-        handle.write(pc, add_inst, trace_row)
-    }
 }

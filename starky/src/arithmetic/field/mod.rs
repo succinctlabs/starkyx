@@ -34,7 +34,7 @@ pub trait FieldParameters<const N_LIMBS: usize>: Send + Sync + Copy + 'static {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
-    fn write_field<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize>(
+    pub fn write_field<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize>(
         &self,
         row_index: usize,
         a_int: &BigUint,

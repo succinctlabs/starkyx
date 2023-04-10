@@ -279,10 +279,10 @@ impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> FpQuad<P, N_LIMBS> {
         debug_assert_eq!(&carry * &p, a * b + c * d - &result);
 
         // make polynomial limbs
-        let p_a = Polynomial::<i64>::from_biguint_num(&a, 16, N_LIMBS);
-        let p_b = Polynomial::<i64>::from_biguint_num(&b, 16, N_LIMBS);
-        let p_c = Polynomial::<i64>::from_biguint_num(&c, 16, N_LIMBS);
-        let p_d = Polynomial::<i64>::from_biguint_num(&d, 16, N_LIMBS);
+        let p_a = Polynomial::<i64>::from_biguint_num(a, 16, N_LIMBS);
+        let p_b = Polynomial::<i64>::from_biguint_num(b, 16, N_LIMBS);
+        let p_c = Polynomial::<i64>::from_biguint_num(c, 16, N_LIMBS);
+        let p_d = Polynomial::<i64>::from_biguint_num(d, 16, N_LIMBS);
         let p_p = Polynomial::<i64>::from_biguint_num(&p, 16, N_LIMBS);
 
         let p_result = Polynomial::<i64>::from_biguint_num(&result, 16, N_LIMBS);

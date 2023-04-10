@@ -1,1 +1,481 @@
+use anyhow::Result;
+use num::BigUint;
+use plonky2::field::extension::{Extendable, FieldExtension};
+use plonky2::field::packed::PackedField;
+use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
+use plonky2::plonk::circuit_builder::CircuitBuilder;
 
+use super::*;
+use crate::arithmetic::builder::ChipBuilder;
+use crate::arithmetic::chip::ChipParameters;
+use crate::arithmetic::field::modulus_field_iter;
+use crate::arithmetic::instruction::Instruction;
+use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
+use crate::arithmetic::register::{DataRegister, WitnessData};
+use crate::arithmetic::trace::TraceHandle;
+use crate::arithmetic::util::{extract_witness_and_shift, split_digits, to_field_iter};
+use crate::arithmetic::Register;
+use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
+
+#[derive(Debug, Clone, Copy)]
+pub struct Den<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> {
+    a: FieldRegister<P, N_LIMBS>,
+    b: FieldRegister<P, N_LIMBS>,
+    sign: bool,
+    result: FieldRegister<P, N_LIMBS>,
+    carry: Option<Register>,
+    witness_low: Option<Register>,
+    witness_high: Option<Register>,
+}
+
+impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
+    pub fn ed_den<P: FieldParameters<N>, const N: usize>(
+        &mut self,
+        a: &FieldRegister<P, N>,
+        b: &FieldRegister<P, N>,
+        sign: bool,
+        result: &FieldRegister<P, N>,
+    ) -> Result<Den<P, N>>
+    where
+        L::Instruction: From<Den<P, N>>,
+    {
+        let instr = Den::new(*a, *b, sign, *result);
+        self.insert_instruction(instr.into())?;
+        Ok(instr)
+    }
+}
+
+impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> Den<P, N_LIMBS> {
+    const NUM_CARRY_LIMBS: usize = N_LIMBS;
+    pub const NUM_WITNESS_LOW_LIMBS: usize = 2 * N_LIMBS - 2;
+    pub const NUM_WITNESS_HIGH_LIMBS: usize = 2 * N_LIMBS - 2;
+
+    #[inline]
+    pub const fn new(
+        a: FieldRegister<P, N_LIMBS>,
+        b: FieldRegister<P, N_LIMBS>,
+        sign: bool,
+        result: FieldRegister<P, N_LIMBS>,
+    ) -> Self {
+        Self {
+            a,
+            b,
+            sign,
+            result,
+            carry: None,
+            witness_low: None,
+            witness_high: None,
+        }
+    }
+
+    const fn num_den_columns() -> usize {
+        3 * N_LIMBS
+            + Self::NUM_CARRY_LIMBS
+            + Self::NUM_WITNESS_LOW_LIMBS
+            + Self::NUM_WITNESS_HIGH_LIMBS
+    }
+}
+
+impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldParameters<N>>
+    Instruction<F, D> for Den<FP, N>
+{
+    fn memory_vec(&self) -> Vec<Register> {
+        vec![
+            *self.a.register(),
+            *self.b.register(),
+            *self.result.register(),
+        ]
+    }
+
+    fn witness_data(&self) -> Option<WitnessData> {
+        Some(WitnessData::u16(
+            Self::NUM_CARRY_LIMBS + Self::NUM_WITNESS_LOW_LIMBS + Self::NUM_WITNESS_HIGH_LIMBS,
+        ))
+    }
+
+    fn set_witness(&mut self, witness: Register) -> Result<()> {
+        let (carry, witness_low, witness_high) = match witness {
+            Register::Local(index, _) => (
+                Register::Local(index, Self::NUM_CARRY_LIMBS),
+                Register::Local(index + Self::NUM_CARRY_LIMBS, Self::NUM_WITNESS_LOW_LIMBS),
+                Register::Local(
+                    index + Self::NUM_CARRY_LIMBS + Self::NUM_WITNESS_LOW_LIMBS,
+                    Self::NUM_WITNESS_HIGH_LIMBS,
+                ),
+            ),
+            Register::Next(index, _) => (
+                Register::Next(index, Self::NUM_CARRY_LIMBS),
+                Register::Next(index + Self::NUM_CARRY_LIMBS, Self::NUM_WITNESS_LOW_LIMBS),
+                Register::Next(
+                    index + Self::NUM_CARRY_LIMBS + Self::NUM_WITNESS_LOW_LIMBS,
+                    Self::NUM_WITNESS_HIGH_LIMBS,
+                ),
+            ),
+        };
+        self.carry = Some(carry);
+        self.witness_low = Some(witness_low);
+        self.witness_high = Some(witness_high);
+
+        Ok(())
+    }
+
+    fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
+        let mut index = 0;
+        self.result
+            .register()
+            .assign(trace_rows, &mut row[index..N], row_index);
+        index += N;
+        self.carry.unwrap().assign(
+            trace_rows,
+            &mut row[index..index + Self::NUM_CARRY_LIMBS],
+            row_index,
+        );
+        index += Self::NUM_CARRY_LIMBS;
+        self.witness_low.unwrap().assign(
+            trace_rows,
+            &mut row[index..index + Self::NUM_WITNESS_LOW_LIMBS],
+            row_index,
+        );
+        index += Self::NUM_WITNESS_LOW_LIMBS;
+        self.witness_high.unwrap().assign(
+            trace_rows,
+            &mut row[index..index + Self::NUM_WITNESS_HIGH_LIMBS],
+            row_index,
+        );
+    }
+
+    fn packed_generic_constraints<
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+    >(
+        &self,
+        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
+    ) where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>,
+    {
+        // get all the data
+        let a = self.a.register().packed_entries_slice(&vars);
+        let b = self.b.register().packed_entries_slice(&vars);
+        let result = self.result.register().packed_entries_slice(&vars);
+
+        let carry = self.carry.unwrap().packed_entries_slice(&vars);
+        let witness_low = self.witness_low.unwrap().packed_entries_slice(&vars);
+        let witness_high = self.witness_high.unwrap().packed_entries_slice(&vars);
+
+        let p_limbs = Polynomial::<FE>::from_iter(modulus_field_iter::<FE, FP, N>());
+        let p_p = Polynomial::<P>::from_polynomial(p_limbs.clone());
+
+        // z = sign*b + 1
+        let minus_b = PolynomialOps::sub(p_p.as_slice(), b);
+        let mut z = if self.sign { b.to_vec() } else { minus_b };
+        z[0] += P::from(FE::ONE);
+
+        let res_z = PolynomialOps::mul(result, &z);
+        let res_z_minus_a = PolynomialOps::sub(&res_z, a);
+        let mul_times_carry = PolynomialOps::scalar_poly_mul(carry, p_limbs.as_slice());
+        let vanishing_poly = PolynomialOps::sub(&res_z_minus_a, &mul_times_carry);
+
+        // reconstruct witness
+
+        let limb = FE::from_canonical_u32(LIMB);
+
+        // Reconstruct and shift back the witness polynomial
+        let w_shifted = witness_low
+            .iter()
+            .zip(witness_high.iter())
+            .map(|(x, y)| *x + (*y * limb));
+
+        let offset = FE::from_canonical_u32(FP::WITNESS_OFFSET as u32);
+        let w = w_shifted.map(|x| x - offset).collect::<Vec<P>>();
+
+        // Multiply by (x-2^16) and make the constraint
+        let root_monomial: &[P] = &[P::from(-limb), P::from(P::Scalar::ONE)];
+        let witness_times_root = PolynomialOps::mul(&w, root_monomial);
+
+        //debug_assert!(vanishing_poly.len() == witness_times_root.len());
+        for i in 0..vanishing_poly.len() {
+            yield_constr.constraint_transition(vanishing_poly[i] - witness_times_root[i]);
+        }
+    }
+
+    fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
+    ) {
+        // get all the data
+        let a = self.a.register().evaluation_targets(&vars);
+        let b = self.b.register().evaluation_targets(&vars);
+        let result = self.result.register().evaluation_targets(&vars);
+
+        let carry = self.carry.unwrap().evaluation_targets(&vars);
+        let witness_low = self.witness_low.unwrap().evaluation_targets(&vars);
+        let witness_high = self.witness_high.unwrap().evaluation_targets(&vars);
+
+        let p_limbs = PolynomialGadget::constant_extension(
+            builder,
+            &modulus_field_iter::<F::Extension, FP, N>().collect::<Vec<_>>(),
+        );
+
+        let minus_b = PolynomialGadget::sub_extension(builder, &p_limbs, b);
+        let mut z = builder.add_virtual_extension_targets(N);
+        let one = builder.constant_extension(F::Extension::ONE);
+
+        if self.sign {
+            z[0] = builder.add_extension(b[0], one);
+            z[1..N].copy_from_slice(&b[1..N]);
+            //for i in 1..N_LIMBS {
+            //    z[i] = b[i];
+            //}
+        } else {
+            z[0] = builder.add_extension(minus_b[0], one);
+            z[1..N].copy_from_slice(&minus_b[1..N]);
+            //for i in 1..N_LIMBS {
+            //    z[i] = minus_b[i];
+            //}
+        }
+
+        // Construct the expected vanishing polynmial
+        let res_z = PolynomialGadget::mul_extension(builder, result, &z);
+        let res_z_minus_a = PolynomialGadget::sub_extension(builder, &res_z, a);
+        let mul_times_carry = PolynomialGadget::mul_extension(builder, carry, &p_limbs[..]);
+        let vanishing_poly =
+            PolynomialGadget::sub_extension(builder, &res_z_minus_a, &mul_times_carry);
+
+        // reconstruct witness
+
+        // Reconstruct and shift back the witness polynomial
+        let limb_const = F::Extension::from_canonical_u32(2u32.pow(16));
+        let limb = builder.constant_extension(limb_const);
+        let w_high_times_limb =
+            PolynomialGadget::ext_scalar_mul_extension(builder, witness_high, &limb);
+        let w_shifted = PolynomialGadget::add_extension(builder, witness_low, &w_high_times_limb);
+        let offset =
+            builder.constant_extension(F::Extension::from_canonical_u32(FP::WITNESS_OFFSET as u32));
+        let w = PolynomialGadget::sub_constant_extension(builder, &w_shifted, &offset);
+
+        // Multiply by (x-2^16) and make the constraint
+        let neg_limb = builder.constant_extension(-limb_const);
+        let root_monomial = &[neg_limb, builder.constant_extension(F::Extension::ONE)];
+        let witness_times_root =
+            PolynomialGadget::mul_extension(builder, w.as_slice(), root_monomial);
+
+        let constraint =
+            PolynomialGadget::sub_extension(builder, &vanishing_poly, &witness_times_root);
+        for constr in constraint {
+            yield_constr.constraint_transition(builder, constr);
+        }
+    }
+}
+
+impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> Den<P, N_LIMBS> {
+    /// Trace row for fp_mul operation
+    ///
+    /// Returns a vector
+    /// [Input[2 * N_LIMBS], output[N_LIMBS], carry[NUM_CARRY_LIMBS], Witness_low[NUM_WITNESS_LIMBS], Witness_high[NUM_WITNESS_LIMBS]]
+    pub fn trace_row<F: RichField + Extendable<D>, const D: usize>(
+        a: &BigUint,
+        b: &BigUint,
+        sign: bool,
+    ) -> (Vec<F>, BigUint) {
+        let p = P::modulus_biguint();
+
+        let minus_b_int = &p - b;
+        let b_signed = if sign { b } else { &minus_b_int };
+
+        let z = (b_signed + 1u32) % &p;
+        let z_inverse = z.modpow(&(&p - 2u32), &p);
+        debug_assert_eq!(&z_inverse * &z % &p, BigUint::from(1u32));
+
+        let result = (a * &z_inverse) % &p;
+        debug_assert!(result < p);
+        let carry = (&result * &z - a) / &p;
+        debug_assert!(carry < p);
+        debug_assert_eq!(&carry * &p, &z * &result - a);
+
+        // make polynomial limbs
+        let p_a = Polynomial::<i64>::from_biguint_num(&a, 16, N_LIMBS);
+        let p_b = Polynomial::<i64>::from_biguint_num(&b, 16, N_LIMBS);
+        let p_p = Polynomial::<i64>::from_biguint_num(&p, 16, N_LIMBS);
+
+        let p_b_sign = if sign { p_b } else { &p_p - &p_b };
+        let p_z = &p_b_sign + 1;
+
+        let p_result = Polynomial::<i64>::from_biguint_num(&result, 16, N_LIMBS);
+        let p_carry = Polynomial::<i64>::from_biguint_num(&carry, 16, Self::NUM_CARRY_LIMBS);
+
+        // Compute the vanishing polynomial
+        let vanishing_poly = &p_z * &p_result - &p_a - &p_carry * &p_p;
+        debug_assert_eq!(vanishing_poly.degree(), Self::NUM_WITNESS_LOW_LIMBS);
+
+        // Compute the witness
+        let witness_shifted = extract_witness_and_shift(&vanishing_poly, P::WITNESS_OFFSET as u32);
+        let (witness_low, witness_high) = split_digits::<F>(&witness_shifted);
+
+        let mut row = Vec::with_capacity(Self::num_den_columns());
+
+        // output
+        row.extend(to_field_iter::<F>(&p_result));
+        // carry and witness
+        row.extend(to_field_iter::<F>(&p_carry));
+        row.extend(witness_low);
+        row.extend(witness_high);
+
+        (row, result)
+    }
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
+    pub fn write_den<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize>(
+        &self,
+        row_index: usize,
+        a_int: &BigUint,
+        b_int: &BigUint,
+        sign: bool,
+        instruction: Den<P, N_LIMBS>,
+    ) -> Result<BigUint> {
+        let (row, result) = Den::<P, N_LIMBS>::trace_row::<F, D>(a_int, b_int, sign);
+        self.write(row_index, instruction, row)?;
+        Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use num::bigint::RandBigInt;
+    use plonky2::iop::witness::PartialWitness;
+    use plonky2::plonk::circuit_data::CircuitConfig;
+    use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+    use plonky2::util::timing::TimingTree;
+    use plonky2_maybe_rayon::*;
+    use rand::thread_rng;
+
+    use super::*;
+    use crate::arithmetic::builder::ChipBuilder;
+    use crate::arithmetic::chip::{ChipParameters, TestStark};
+    use crate::arithmetic::field::{Fp25519, Fp25519Param};
+    use crate::arithmetic::trace::trace;
+    use crate::config::StarkConfig;
+    use crate::prover::prove;
+    use crate::recursive_verifier::{
+        add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
+        verify_stark_proof_circuit,
+    };
+    use crate::verifier::verify_stark_proof;
+
+    #[derive(Clone, Debug, Copy)]
+    struct DenTest;
+
+    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for DenTest {
+        const NUM_ARITHMETIC_COLUMNS: usize = Den::<Fp25519Param, 16>::num_den_columns();
+        const NUM_FREE_COLUMNS: usize = 0;
+
+        type Instruction = Den<Fp25519Param, 16>;
+    }
+
+    #[test]
+    fn test_ed_den() {
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
+        type Fp = Fp25519;
+        type FMul = Den<Fp25519Param, 16>;
+        type S = TestStark<DenTest, F, D>;
+
+        // build the stark
+        let mut builder = ChipBuilder::<DenTest, F, D>::new();
+
+        let a = builder.alloc_local::<Fp>().unwrap();
+        let b = builder.alloc_local::<Fp>().unwrap();
+        let sign = true;
+        let result = builder.alloc_local::<Fp>().unwrap();
+
+        let den_ins = builder.ed_den(&a, &b, sign, &result).unwrap();
+        builder.write_data(&a).unwrap();
+        builder.write_data(&b).unwrap();
+
+        let (chip, spec) = builder.build();
+
+        // Construct the trace
+        let num_rows = 2u64.pow(16);
+        let (handle, generator) = trace::<F, D>(spec);
+
+        let p = Fp25519Param::modulus_biguint();
+
+        let mut rng = thread_rng();
+        for i in 0..num_rows {
+            let a_int: BigUint = rng.gen_biguint(256) % &p;
+            let b_int = rng.gen_biguint(256) % &p;
+            let handle = handle.clone();
+            rayon::spawn(move || {
+                handle.write_field(i as usize, &a_int, a).unwrap();
+                handle.write_field(i as usize, &b_int, b).unwrap();
+                handle
+                    .write_den(i as usize, &a_int, &b_int, sign, den_ins)
+                    .unwrap();
+            });
+        }
+        drop(handle);
+
+        let trace = generator.generate_trace(&chip, num_rows as usize).unwrap();
+
+        let config = StarkConfig::standard_fast_config();
+        let stark = TestStark::new(chip);
+
+        // Verify proof as a stark
+        let proof = prove::<F, C, S, D>(
+            stark.clone(),
+            &config,
+            trace,
+            [],
+            &mut TimingTree::default(),
+        )
+        .unwrap();
+        verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
+
+        // Verify recursive proof in a circuit
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
+
+        let degree_bits = proof.proof.recover_degree_bits(&config);
+        let virtual_proof = add_virtual_stark_proof_with_pis(
+            &mut recursive_builder,
+            stark.clone(),
+            &config,
+            degree_bits,
+        );
+
+        recursive_builder.print_gate_counts(0);
+
+        let mut rec_pw = PartialWitness::new();
+        set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
+
+        verify_stark_proof_circuit::<F, C, S, D>(
+            &mut recursive_builder,
+            stark,
+            virtual_proof,
+            &config,
+        );
+
+        let recursive_data = recursive_builder.build::<C>();
+
+        let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
+        let recursive_proof = plonky2::plonk::prover::prove(
+            &recursive_data.prover_only,
+            &recursive_data.common,
+            rec_pw,
+            &mut timing,
+        )
+        .unwrap();
+
+        timing.print();
+        recursive_data.verify(recursive_proof).unwrap();
+    }
+}

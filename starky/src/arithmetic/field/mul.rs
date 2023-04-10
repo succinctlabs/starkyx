@@ -69,32 +69,6 @@ impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> FpMul<P, N_LIMBS> {
             + Self::NUM_WITNESS_LOW_LIMBS
             + Self::NUM_WITNESS_HIGH_LIMBS
     }
-
-    #[inline]
-    pub fn assign_row<T: Copy>(&self, trace_rows: &mut [Vec<T>], row: &mut [T], row_index: usize) {
-        let mut index = 0;
-        self.result
-            .register()
-            .assign(trace_rows, &mut row[index..N_LIMBS], row_index);
-        index += N_LIMBS;
-        self.carry.unwrap().assign(
-            trace_rows,
-            &mut row[index..index + Self::NUM_CARRY_LIMBS],
-            row_index,
-        );
-        index += Self::NUM_CARRY_LIMBS;
-        self.witness_low.unwrap().assign(
-            trace_rows,
-            &mut row[index..index + Self::NUM_WITNESS_LOW_LIMBS],
-            row_index,
-        );
-        index += Self::NUM_WITNESS_LOW_LIMBS;
-        self.witness_high.unwrap().assign(
-            trace_rows,
-            &mut row[index..index + Self::NUM_WITNESS_HIGH_LIMBS],
-            row_index,
-        );
-    }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldParameters<N>>
@@ -287,8 +261,8 @@ impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> FpMul<P, N_LIMBS> {
         debug_assert_eq!(&carry * &p, a * b - &result);
 
         // make polynomial limbs
-        let p_a = Polynomial::<i64>::from_biguint_num(&a, 16, N_LIMBS);
-        let p_b = Polynomial::<i64>::from_biguint_num(&b, 16, N_LIMBS);
+        let p_a = Polynomial::<i64>::from_biguint_num(a, 16, N_LIMBS);
+        let p_b = Polynomial::<i64>::from_biguint_num(b, 16, N_LIMBS);
         let p_p = Polynomial::<i64>::from_biguint_num(&p, 16, N_LIMBS);
 
         let p_result = Polynomial::<i64>::from_biguint_num(&result, 16, N_LIMBS);
@@ -391,6 +365,106 @@ mod tests {
         let a = builder.alloc_local::<Fp>().unwrap();
         let b = builder.alloc_local::<Fp>().unwrap();
         let result = builder.alloc_local::<Fp>().unwrap();
+
+        //let ab = FMul::new(a, b, result);
+        //builder.insert_instruction(ab).unwrap();
+        let ab_ins = builder.fpmul(&a, &b, &result).unwrap();
+        builder.write_data(&a).unwrap();
+        builder.write_data(&b).unwrap();
+
+        let (chip, spec) = builder.build();
+
+        // Construct the trace
+        let num_rows = 2u64.pow(16);
+        let (handle, generator) = trace::<F, D>(spec);
+
+        let p = Fp25519Param::modulus_biguint();
+
+        let mut rng = thread_rng();
+        for i in 0..num_rows {
+            let a_int: BigUint = rng.gen_biguint(256) % &p;
+            let b_int = rng.gen_biguint(256) % &p;
+            let handle = handle.clone();
+            rayon::spawn(move || {
+                handle.write_field(i as usize, &a_int, a).unwrap();
+                handle.write_field(i as usize, &b_int, b).unwrap();
+                handle
+                    .write_fpmul(i as usize, &a_int, &b_int, ab_ins)
+                    .unwrap();
+            });
+        }
+        drop(handle);
+
+        let trace = generator.generate_trace(&chip, num_rows as usize).unwrap();
+
+        let config = StarkConfig::standard_fast_config();
+        let stark = TestStark::new(chip);
+
+        // Verify proof as a stark
+        let proof = prove::<F, C, S, D>(
+            stark.clone(),
+            &config,
+            trace,
+            [],
+            &mut TimingTree::default(),
+        )
+        .unwrap();
+        verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
+
+        // Verify recursive proof in a circuit
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
+
+        let degree_bits = proof.proof.recover_degree_bits(&config);
+        let virtual_proof = add_virtual_stark_proof_with_pis(
+            &mut recursive_builder,
+            stark.clone(),
+            &config,
+            degree_bits,
+        );
+
+        recursive_builder.print_gate_counts(0);
+
+        let mut rec_pw = PartialWitness::new();
+        set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
+
+        verify_stark_proof_circuit::<F, C, S, D>(
+            &mut recursive_builder,
+            stark,
+            virtual_proof,
+            &config,
+        );
+
+        let recursive_data = recursive_builder.build::<C>();
+
+        let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
+        let recursive_proof = plonky2::plonk::prover::prove(
+            &recursive_data.prover_only,
+            &recursive_data.common,
+            rec_pw,
+            &mut timing,
+        )
+        .unwrap();
+
+        timing.print();
+        recursive_data.verify(recursive_proof).unwrap();
+    }
+
+    #[test]
+    fn test_fpmul_multi_row() {
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
+        type Fp = Fp25519;
+        type FMul = FpMul<Fp25519Param, 16>;
+        type S = TestStark<FpMulTest, F, D>;
+
+        // build the stark
+        let mut builder = ChipBuilder::<FpMulTest, F, D>::new();
+
+        let a = builder.alloc_local::<Fp>().unwrap();
+        let b = builder.alloc_local::<Fp>().unwrap();
+        let result = builder.alloc_next::<Fp>().unwrap();
 
         //let ab = FMul::new(a, b, result);
         //builder.insert_instruction(ab).unwrap();
