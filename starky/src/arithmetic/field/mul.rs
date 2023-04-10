@@ -100,10 +100,6 @@ impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> FpMul<P, N_LIMBS> {
 impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldParameters<N>>
     Instruction<F, D> for FpMul<FP, N>
 {
-    fn shift_right(&mut self, _free_shift: usize, _arithmetic_shift: usize) {
-        unimplemented!("FpMul::shift_right");
-    }
-
     fn memory_vec(&self) -> Vec<Register> {
         vec![
             *self.a.register(),
@@ -242,7 +238,7 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
         let ab_minus_result = PolynomialGadget::sub_extension(builder, &ab, result);
         let p_limbs = PolynomialGadget::constant_extension(
             builder,
-            &modulus_field_iter::<F::Extension, FP, N>().collect::<Vec<_>>()[..],
+            &modulus_field_iter::<F::Extension, FP, N>().collect::<Vec<_>>(),
         );
         let mul_times_carry = PolynomialGadget::mul_extension(builder, carry, &p_limbs[..]);
         let vanishing_poly =
@@ -280,15 +276,15 @@ impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> FpMul<P, N_LIMBS> {
     /// Returns a vector
     /// [Input[2 * N_LIMBS], output[N_LIMBS], carry[NUM_CARRY_LIMBS], Witness_low[NUM_WITNESS_LIMBS], Witness_high[NUM_WITNESS_LIMBS]]
     pub fn trace_row<F: RichField + Extendable<D>, const D: usize>(
-        a: BigUint,
-        b: BigUint,
+        a: &BigUint,
+        b: &BigUint,
     ) -> (Vec<F>, BigUint) {
         let p = P::modulus_biguint();
-        let result = (&a * &b) % &p;
+        let result = (a * b) % &p;
         debug_assert!(result < p);
-        let carry = (&a * &b - &result) / &p;
+        let carry = (a * b - &result) / &p;
         debug_assert!(carry < p);
-        debug_assert_eq!(&carry * &p, &a * &b - &result);
+        debug_assert_eq!(&carry * &p, a * b - &result);
 
         // make polynomial limbs
         let p_a = Polynomial::<i64>::from_biguint_num(&a, 16, N_LIMBS);
@@ -328,8 +324,22 @@ impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> FpMul<P, N_LIMBS> {
         handle: TraceHandle<F, D>,
         row_index: usize,
     ) -> Result<()> {
-        let (row, _) = Self::trace_row::<F, D>(a, b);
+        let (row, _) = Self::trace_row::<F, D>(&a, &b);
         handle.write(row_index, *self, row)
+    }
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
+    pub fn write_fpmul<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize>(
+        &self,
+        row_index: usize,
+        a_int: &BigUint,
+        b_int: &BigUint,
+        instruction: FpMul<P, N_LIMBS>,
+    ) -> Result<BigUint> {
+        let (row, result) = FpMul::<P, N_LIMBS>::trace_row::<F, D>(a_int, b_int);
+        self.write(row_index, instruction, row)?;
+        Ok(result)
     }
 }
 
@@ -402,13 +412,11 @@ mod tests {
             let b_int = rng.gen_biguint(256) % &p;
             let handle = handle.clone();
             rayon::spawn(move || {
-                let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
-                let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
-
-                handle.write_data(i as usize, a, p_a.into_vec()).unwrap();
-                handle.write_data(i as usize, b, p_b.into_vec()).unwrap();
-
-                ab_ins.write(a_int, b_int, handle, i as usize).unwrap();
+                handle.write_field(i as usize, &a_int, a).unwrap();
+                handle.write_field(i as usize, &b_int, b).unwrap();
+                handle
+                    .write_fpmul(i as usize, &a_int, &b_int, ab_ins)
+                    .unwrap();
             });
         }
         drop(handle);

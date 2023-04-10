@@ -13,8 +13,6 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
 {
     //fn generate_trace_row(&self, input: Option<Self::Input>) -> (Vec<F>, Option<Self::Output>);
 
-    fn shift_right(&mut self, free_shift: usize, arithmetic_shift: usize);
-
     fn memory_vec(&self) -> Vec<Register>;
 
     fn witness_data(&self) -> Option<WitnessData>;
@@ -56,8 +54,6 @@ impl WriteInstruction {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for WriteInstruction {
-    fn shift_right(&mut self, _free_shift: usize, _arithmetic_shift: usize) {}
-
     fn witness_data(&self) -> Option<WitnessData> {
         None
     }

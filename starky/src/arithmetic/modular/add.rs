@@ -323,23 +323,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for AddModI
         ]
     }
 
-    fn shift_right(&mut self, _free_shift: usize, arithmetic_shift: usize) {
-        let shift = arithmetic_shift;
-        self.input_1.register_mut().shift_right(shift);
-        self.input_2.register_mut().shift_right(shift);
-        self.output.register_mut().shift_right(shift);
-        self.modulus.register_mut().shift_right(shift);
-        if let Some(carry) = self.carry.as_mut() {
-            carry.shift_right(shift);
-        }
-        if let Some(witness_low) = self.witness_low.as_mut() {
-            witness_low.shift_right(shift);
-        }
-        if let Some(witness_high) = self.witness_high.as_mut() {
-            witness_high.shift_right(shift);
-        }
-    }
-
     fn set_witness(&mut self, register: Register) -> Result<()> {
         let (start, length) = (register.index(), register.len());
         if length != NUM_ADD_WITNESS_COLUMNS {
@@ -394,23 +377,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for AddModI
 impl AddModInstruction {
     fn witness_data(&self) -> WitnessData {
         WitnessData::u16(NUM_ADD_WITNESS_COLUMNS)
-    }
-
-    fn shift_right(&mut self, _free_shift: usize, arithmetic_shift: usize) {
-        let shift = arithmetic_shift;
-        self.input_1.register_mut().shift_right(shift);
-        self.input_2.register_mut().shift_right(shift);
-        self.output.register_mut().shift_right(shift);
-        self.modulus.register_mut().shift_right(shift);
-        if let Some(carry) = self.carry.as_mut() {
-            carry.shift_right(shift);
-        }
-        if let Some(witness_low) = self.witness_low.as_mut() {
-            witness_low.shift_right(shift);
-        }
-        if let Some(witness_high) = self.witness_high.as_mut() {
-            witness_high.shift_right(shift);
-        }
     }
 
     fn set_witness(&mut self, register: Register) -> Result<()> {

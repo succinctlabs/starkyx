@@ -7,7 +7,6 @@ use plonky2::field::types::Field;
 
 pub mod den;
 pub mod ec_add;
-pub mod field;
 pub mod fpmul;
 pub mod muld;
 pub mod quad;

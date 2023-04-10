@@ -34,8 +34,6 @@ pub trait DataRegister: 'static + Sized + Send + Sync {
 
     fn register(&self) -> &Register;
 
-    fn register_mut(&mut self) -> &mut Register;
-
     /// Returns an element of the field
     ///
     /// Checks that the register is of the correct size
@@ -48,14 +46,6 @@ pub trait DataRegister: 'static + Sized + Send + Sync {
     }
 
     fn size_of() -> usize;
-
-    fn shift_right(&mut self, free_shift: usize, arithmetic_shift: usize) {
-        match Self::CELL {
-            Some(CellType::U16) => self.register_mut().shift_right(arithmetic_shift),
-            Some(CellType::Bit) => self.register_mut().shift_right(free_shift),
-            None => self.register_mut().shift_right(free_shift),
-        }
-    }
 }
 
 pub struct WitnessData {
@@ -216,10 +206,6 @@ impl<const N: usize> DataRegister for BitArray<N> {
         &self.register
     }
 
-    fn register_mut(&mut self) -> &mut Register {
-        &mut self.register
-    }
-
     fn size_of() -> usize {
         N
     }
@@ -238,10 +224,6 @@ impl<const N: usize> DataRegister for U16Array<N> {
 
     fn register(&self) -> &Register {
         &self.register
-    }
-
-    fn register_mut(&mut self) -> &mut Register {
-        &mut self.register
     }
 
     fn size_of() -> usize {
