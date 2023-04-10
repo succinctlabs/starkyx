@@ -296,10 +296,7 @@ impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> FpMul<P, N_LIMBS> {
 
         // Compute the vanishing polynomial
         let vanishing_poly = &p_a * &p_b - &p_result - &p_carry * &p_p;
-        debug_assert_eq!(
-            vanishing_poly.degree(),
-            Self::NUM_WITNESS_LOW_LIMBS + Self::NUM_WITNESS_HIGH_LIMBS
-        );
+        debug_assert_eq!(vanishing_poly.degree(), Self::NUM_WITNESS_LOW_LIMBS);
 
         // Compute the witness
         let witness_shifted = extract_witness_and_shift(&vanishing_poly, P::WITNESS_OFFSET as u32);
@@ -585,10 +582,7 @@ impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> FpMulConst<P, N_LIMBS> {
 
         // Compute the vanishing polynomial
         let vanishing_poly = &p_a * &p_c - &p_result - &p_carry * &p_p;
-        debug_assert_eq!(
-            vanishing_poly.degree(),
-            Self::NUM_WITNESS_LOW_LIMBS + Self::NUM_WITNESS_HIGH_LIMBS
-        );
+        debug_assert_eq!(vanishing_poly.degree(), Self::NUM_WITNESS_LOW_LIMBS);
 
         // Compute the witness
         let witness_shifted = extract_witness_and_shift(&vanishing_poly, P::WITNESS_OFFSET as u32);
@@ -627,7 +621,7 @@ mod tests {
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
-    use plonky2_maybe_rayon::*;
+    //use plonky2_maybe_rayon::*;
     use rand::thread_rng;
 
     use super::*;
@@ -686,12 +680,12 @@ mod tests {
         for i in 0..num_rows {
             let a_int: BigUint = rng.gen_biguint(256) % &p;
             let b_int = rng.gen_biguint(256) % &p;
-            let handle = handle.clone();
-            rayon::spawn(move || {
-                handle.write_field(i, &a_int, a).unwrap();
-                handle.write_field(i, &b_int, b).unwrap();
-                handle.write_fpmul(i, &a_int, &b_int, ab_ins).unwrap();
-            });
+            //let handle = handle.clone();
+            //rayon::spawn(move || {
+            handle.write_field(i, &a_int, a).unwrap();
+            handle.write_field(i, &b_int, b).unwrap();
+            handle.write_fpmul(i, &a_int, &b_int, ab_ins).unwrap();
+            //});
         }
         drop(handle);
 
@@ -898,12 +892,12 @@ mod tests {
         let mut rng = thread_rng();
         for i in 0..num_rows {
             let a_int: BigUint = rng.gen_biguint(256) % &p;
-            let handle = handle.clone();
-            rayon::spawn(move || {
-                handle.write_field(i, &a_int, a).unwrap();
-                let res = handle.write_fpmul_const(i, &a_int, ac_ins).unwrap();
-                assert_eq!(res, a_int);
-            });
+            //let handle = handle.clone();
+            //rayon::spawn(move || {
+            handle.write_field(i, &a_int, a).unwrap();
+            let res = handle.write_fpmul_const(i, &a_int, ac_ins).unwrap();
+            assert_eq!(res, a_int);
+            //});
         }
         drop(handle);
 

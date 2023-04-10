@@ -347,7 +347,7 @@ mod tests {
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
-    use plonky2_maybe_rayon::*;
+    //use plonky2_maybe_rayon::*;
     use rand::thread_rng;
 
     use super::*;
@@ -406,14 +406,14 @@ mod tests {
         for i in 0..num_rows {
             let a_int: BigUint = rng.gen_biguint(256) % &p;
             let b_int = rng.gen_biguint(256) % &p;
-            let handle = handle.clone();
-            rayon::spawn(move || {
-                handle.write_field(i as usize, &a_int, a).unwrap();
-                handle.write_field(i as usize, &b_int, b).unwrap();
-                handle
-                    .write_fpadd(i as usize, &a_int, &b_int, a_add_b_ins)
-                    .unwrap();
-            });
+            //let handle = handle.clone();
+            //rayon::spawn(move || {
+            handle.write_field(i as usize, &a_int, a).unwrap();
+            handle.write_field(i as usize, &b_int, b).unwrap();
+            handle
+                .write_fpadd(i as usize, &a_int, &b_int, a_add_b_ins)
+                .unwrap();
+            //});
         }
         drop(handle);
 

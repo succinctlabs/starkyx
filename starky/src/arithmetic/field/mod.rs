@@ -287,7 +287,7 @@ mod tests {
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
-    use plonky2_maybe_rayon::*;
+    //use plonky2_maybe_rayon::*;
     use rand::thread_rng;
 
     use super::*;
@@ -350,16 +350,16 @@ mod tests {
             let b_int = rng.gen_biguint(256) % &p;
             let c_int = rng.gen_biguint(256) % &p;
             let d_int = rng.gen_biguint(256) % &p;
-            let handle = handle.clone();
-            rayon::spawn(move || {
-                handle.write_field(i as usize, &a_int, a).unwrap();
-                handle.write_field(i as usize, &b_int, b).unwrap();
-                handle.write_field(i as usize, &c_int, c).unwrap();
-                handle.write_field(i as usize, &d_int, d).unwrap();
-                handle
-                    .write_fpquad(i as usize, &a_int, &b_int, &c_int, &d_int, quad)
-                    .unwrap();
-            });
+            //let handle = handle.clone();
+            //rayon::spawn(move || {
+            handle.write_field(i as usize, &a_int, a).unwrap();
+            handle.write_field(i as usize, &b_int, b).unwrap();
+            handle.write_field(i as usize, &c_int, c).unwrap();
+            handle.write_field(i as usize, &d_int, d).unwrap();
+            handle
+                .write_fpquad(i as usize, &a_int, &b_int, &c_int, &d_int, quad)
+                .unwrap();
+            //});
         }
         drop(handle);
 

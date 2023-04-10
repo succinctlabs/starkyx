@@ -119,7 +119,8 @@ mod tests {
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
-    use plonky2_maybe_rayon::*;
+
+    //use plonky2_maybe_rayon::*;
 
     //use rand::thread_rng;
     use super::*;
@@ -190,14 +191,14 @@ mod tests {
         for i in 0..num_rows {
             let P_int = B.clone();
             let Q_int = B.clone();
-            let handle = handle.clone();
-            rayon::spawn(move || {
-                handle.write_ec_point(i as usize, &P_int, &P).unwrap();
-                handle.write_ec_point(i as usize, &Q_int, &Q).unwrap();
-                let _R = handle
-                    .write_ed_add(i as usize, &P_int, &Q_int, ed_data)
-                    .unwrap();
-            });
+            //let handle = handle.clone();
+            //rayon::spawn(move || {
+            handle.write_ec_point(i as usize, &P_int, &P).unwrap();
+            handle.write_ec_point(i as usize, &Q_int, &Q).unwrap();
+            let _R = handle
+                .write_ed_add(i as usize, &P_int, &Q_int, ed_data)
+                .unwrap();
+            //});
         }
         drop(handle);
 
