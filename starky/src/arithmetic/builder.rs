@@ -1,7 +1,7 @@
 //! An abstraction of Starks for emulated field operations handling all the range_checks
 //!
 //!
-//! TODO: Might be worth adding "alloc_below" for builder (not sure).
+//!
 
 use alloc::collections::BTreeMap;
 

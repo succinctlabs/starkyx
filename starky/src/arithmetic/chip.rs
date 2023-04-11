@@ -1,3 +1,12 @@
+//! A chip for emulating field operations
+//! 
+//! This chip handles the range checks for the limbs, allocating table columns for input, output,
+//! and witness values. 
+//! 
+
+
+
+
 use core::ops::Range;
 
 use plonky2::field::extension::{Extendable, FieldExtension};

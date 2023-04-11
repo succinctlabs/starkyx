@@ -1,3 +1,10 @@
+//! Instruction trait
+//! 
+//! The instruction trait represents the interface of a microcomand in a chip. It is the 
+//! lowest level of abstraction in the arithmetic module.
+
+
+
 use anyhow::Result;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
