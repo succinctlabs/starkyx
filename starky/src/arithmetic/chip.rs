@@ -12,7 +12,7 @@ use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::instruction::{Instruction, WriteInstruction};
+use super::instruction::{Instruction, TypeConstraint, WriteInstruction};
 use crate::lookup::{eval_lookups, eval_lookups_circuit};
 use crate::permutation::PermutationPair;
 use crate::stark::Stark;
@@ -36,6 +36,7 @@ where
 {
     pub(crate) instructions: Vec<L::Instruction>,
     pub(crate) write_instructions: Vec<WriteInstruction>,
+    pub(crate) type_constraints: Vec<TypeConstraint>,
     pub(crate) range_checks_idx: (usize, usize),
     pub(crate) table_index: usize,
 }
@@ -48,6 +49,11 @@ where
     #[inline]
     pub const fn table_index(&self) -> usize {
         self.table_index
+    }
+
+    #[inline]
+    pub const fn relative_table_index(&self) -> usize {
+        self.table_index - L::NUM_FREE_COLUMNS
     }
 
     #[inline]
@@ -67,12 +73,12 @@ where
 
     #[inline]
     pub const fn col_perm_index(&self, i: usize) -> usize {
-        2 * i + self.table_index + 1
+        2 * (i - self.range_checks_idx.0) + self.table_index + 1
     }
 
     #[inline]
     pub const fn table_perm_index(&self, i: usize) -> usize {
-        2 * i + 1 + self.table_index + 1
+        2 * (i - self.range_checks_idx.0) + 1 + self.table_index + 1
     }
 
     #[inline]
@@ -82,6 +88,94 @@ where
     #[inline]
     pub const fn arithmetic_range(&self) -> Range<usize> {
         self.range_checks_idx.0..self.range_checks_idx.1
+    }
+
+    #[inline]
+    pub const fn permutations_range(&self) -> Range<usize> {
+        L::NUM_FREE_COLUMNS..Self::num_columns()
+    }
+
+    fn eval_packed_generic<
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+    >(
+        &self,
+        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
+    ) where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>,
+    {
+        for inst in self.instructions.iter() {
+            inst.packed_generic_constraints(vars, yield_constr);
+        }
+        for consr in self.type_constraints.iter() {
+            consr.packed_generic_constraints(vars, yield_constr);
+        }
+        // lookp table values
+        yield_constr.constraint_first_row(vars.local_values[self.table_index]);
+        let table_values_relation =
+            vars.local_values[self.table_index] + FE::ONE - vars.next_values[self.table_index];
+        yield_constr.constraint_transition(table_values_relation);
+        // permutations
+        for i in self.arithmetic_range() {
+            eval_lookups(
+                vars,
+                yield_constr,
+                self.col_perm_index(i),
+                self.table_perm_index(i),
+            );
+        }
+    }
+
+    fn eval_ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
+    ) {
+        for inst in self.instructions.iter() {
+            inst.ext_circuit_constraints(builder, vars, yield_constr);
+        }
+        for consr in self.type_constraints.iter() {
+            consr.ext_circuit_constraints(builder, vars, yield_constr);
+        }
+        // lookup table values
+        yield_constr.constraint_first_row(builder, vars.local_values[self.table_index]);
+        let one = builder.constant_extension(F::Extension::ONE);
+        let table_plus_one = builder.add_extension(vars.local_values[self.table_index], one);
+        let table_relation =
+            builder.sub_extension(table_plus_one, vars.next_values[self.table_index]);
+        yield_constr.constraint_transition(builder, table_relation);
+
+        // lookup argumment
+        for i in self.arithmetic_range() {
+            eval_lookups_circuit(
+                builder,
+                vars,
+                yield_constr,
+                self.col_perm_index(i),
+                self.table_perm_index(i),
+            );
+        }
+    }
+
+    fn constraint_degree(&self) -> usize {
+        2
+    }
+
+    fn permutation_pairs(&self) -> Vec<PermutationPair> {
+        self.arithmetic_range()
+            .flat_map(|i| {
+                [
+                    PermutationPair::singletons(i, self.col_perm_index(i)),
+                    PermutationPair::singletons(self.table_index, self.table_perm_index(i)),
+                ]
+            })
+            .collect()
     }
 }
 
@@ -121,23 +215,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Star
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
-        for layout in self.chip.instructions.iter() {
-            layout.packed_generic_constraints(vars, yield_constr);
-        }
-        // lookp table values
-        yield_constr.constraint_first_row(vars.local_values[self.chip.table_index]);
-        let table_values_relation = vars.local_values[self.chip.table_index] + FE::ONE
-            - vars.next_values[self.chip.table_index];
-        yield_constr.constraint_transition(table_values_relation);
-        // permutations
-        for i in self.chip.arithmetic_range() {
-            eval_lookups(
-                vars,
-                yield_constr,
-                self.chip.col_perm_index(i),
-                self.chip.table_perm_index(i),
-            );
-        }
+        self.chip.eval_packed_generic(vars, yield_constr)
     }
 
     fn eval_ext_circuit(
@@ -146,45 +224,14 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Star
         vars: StarkEvaluationTargets<D, { Self::COLUMNS }, { Self::PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        for layout in self.chip.instructions.iter() {
-            layout.ext_circuit_constraints(builder, vars, yield_constr);
-        }
-        // lookup table values
-        yield_constr.constraint_first_row(builder, vars.local_values[self.chip.table_index]);
-        let one = builder.constant_extension(F::Extension::ONE);
-        let table_plus_one = builder.add_extension(vars.local_values[self.chip.table_index], one);
-        let table_relation =
-            builder.sub_extension(table_plus_one, vars.next_values[self.chip.table_index]);
-        yield_constr.constraint_transition(builder, table_relation);
-
-        // lookup argumment
-        for i in self.chip.arithmetic_range() {
-            eval_lookups_circuit(
-                builder,
-                vars,
-                yield_constr,
-                self.chip.col_perm_index(i),
-                self.chip.table_perm_index(i),
-            );
-        }
+        self.chip.eval_ext_circuit(builder, vars, yield_constr)
     }
 
     fn constraint_degree(&self) -> usize {
-        2
+        self.chip.constraint_degree()
     }
 
     fn permutation_pairs(&self) -> Vec<PermutationPair> {
-        self.chip
-            .arithmetic_range()
-            .flat_map(|i| {
-                [
-                    PermutationPair::singletons(i, self.chip.col_perm_index(i)),
-                    PermutationPair::singletons(
-                        self.chip.table_index,
-                        self.chip.table_perm_index(i),
-                    ),
-                ]
-            })
-            .collect()
+        self.chip.permutation_pairs()
     }
 }

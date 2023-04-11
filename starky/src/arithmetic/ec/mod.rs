@@ -42,6 +42,12 @@ pub struct AffinePointRegister<E: EllipticCurveParameters<N_LIMBS>, const N_LIMB
 }
 
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
+    pub fn alloc_ec_point<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize>(
+        &mut self,
+    ) -> Result<AffinePointRegister<E, N_LIMBS>> {
+        self.alloc_local_ec_point()
+    }
+
     pub fn alloc_local_ec_point<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize>(
         &mut self,
     ) -> Result<AffinePointRegister<E, N_LIMBS>> {

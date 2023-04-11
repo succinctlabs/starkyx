@@ -89,7 +89,19 @@ pub struct BitArray<const N: usize> {
     register: Register,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct BitRegister {
+    register: Register,
+}
+
 impl Register {
+    pub fn next(&self) -> Self {
+        match self {
+            Register::Local(index, length) => Register::Next(*index, *length),
+            _ => panic!("Invalid register type for the next register"),
+        }
+    }
+
     #[inline]
     pub const fn get_range(&self) -> (usize, usize) {
         match self {
@@ -226,6 +238,26 @@ impl Register {
             Register::First(index, length) => &vars.public_inputs[*index..*index + length],
             Register::Last(index, length) => &vars.public_inputs[*index..*index + length],
         }
+    }
+}
+
+impl DataRegister for BitRegister {
+    const CELL: Option<CellType> = Some(CellType::Bit);
+
+    fn from_raw_register(register: Register) -> Self {
+        Self { register }
+    }
+
+    fn register(&self) -> &Register {
+        &self.register
+    }
+
+    fn size_of() -> usize {
+        1
+    }
+
+    fn into_raw_register(self) -> Register {
+        self.register
     }
 }
 

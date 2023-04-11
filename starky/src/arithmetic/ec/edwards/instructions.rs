@@ -1,5 +1,6 @@
 use den::Den;
 
+use super::add::FromEdwardsAdd;
 use super::*;
 use crate::arithmetic::field::add::FpAdd;
 use crate::arithmetic::field::mul::{FpMul, FpMulConst};
@@ -248,4 +249,9 @@ impl<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize> From<Den<E::FieldParam
     fn from(den: Den<E::FieldParam, N_LIMBS>) -> Self {
         EdWardsMicroInstruction::Den(den)
     }
+}
+
+impl<E: EdwardsParameters<N>, const N: usize> FromEdwardsAdd<E, N>
+    for EdWardsMicroInstruction<E, N>
+{
 }

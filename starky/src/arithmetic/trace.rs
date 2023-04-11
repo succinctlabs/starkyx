@@ -136,14 +136,6 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         // Transpose the trace to get the columns and resize to the correct size
         let mut trace_cols = transpose(&trace_rows);
 
-        // if there are no range checks, return the trace
-        if chip.num_range_checks() == 0 {
-            return Ok(trace_cols
-                .into_par_iter()
-                .map(PolynomialValues::new)
-                .collect());
-        }
-
         // Resize the trace columns to include the range checks
         trace_cols.resize(
             Chip::<L, F, D>::num_columns(),
@@ -158,11 +150,20 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
                 *x = F::from_canonical_usize(i);
             });
 
+        // if there are no range checks, return the trace
+        if chip.num_range_checks() == 0 {
+            return Ok(trace_cols
+                .into_par_iter()
+                .map(PolynomialValues::new)
+                .collect());
+        }
+
         // Calculate the permutation and append permuted columbs to trace
-        let (trace_values, perm_values) = trace_cols.split_at_mut(chip.table_index() + 1);
+        let (trace_values, perm_values) =
+            trace_cols[chip.permutations_range()].split_at_mut(chip.relative_table_index() + 1);
         (0..L::NUM_ARITHMETIC_COLUMNS)
             .into_par_iter()
-            .map(|i| permuted_cols(&trace_values[i], &trace_values[chip.table_index()]))
+            .map(|i| permuted_cols(&trace_values[i], &trace_values[chip.relative_table_index()]))
             .zip(perm_values.par_iter_mut().chunks(2))
             .for_each(|((col_perm, table_perm), mut trace)| {
                 trace[0].extend(col_perm);

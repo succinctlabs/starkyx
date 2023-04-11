@@ -9,8 +9,9 @@ use anyhow::{anyhow, Result};
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
+use super::bool::ConstraintBool;
 use super::chip::{Chip, ChipParameters};
-use super::instruction::{Instruction, WriteInstruction};
+use super::instruction::{Instruction, TypeConstraint, WriteInstruction};
 use super::register::{CellType, DataRegister, Register};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
@@ -34,6 +35,7 @@ where
     instruction_indices: BTreeMap<InsID, usize>,
     instructions: Vec<L::Instruction>,
     write_instructions: Vec<WriteInstruction>,
+    type_constraints: Vec<TypeConstraint>,
 }
 
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Default
@@ -56,6 +58,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
             instruction_indices: BTreeMap::new(),
             instructions: Vec::new(),
             write_instructions: Vec::new(),
+            type_constraints: Vec::new(),
         }
     }
 
@@ -106,8 +109,10 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         let register = match T::CELL {
             Some(CellType::U16) => self.get_local_u16_memory(T::size_of())?,
             Some(CellType::Bit) => {
-                unimplemented!("Bit cells are not supported yet");
-                //self.get_local_memory(T::size_of())?
+                let reg = self.get_local_memory(T::size_of())?;
+                let consr = TypeConstraint::Bool(ConstraintBool(reg));
+                self.type_constraints.push(consr);
+                reg
             }
             None => self.get_local_memory(T::size_of())?,
         };
@@ -119,8 +124,10 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         let register = match T::CELL {
             Some(CellType::U16) => self.get_next_u16_memory(T::size_of())?,
             Some(CellType::Bit) => {
-                unimplemented!("Bit cells are not supported yet");
-                //self.get_next_memory(T::size_of())?
+                let reg = self.get_next_memory(T::size_of())?;
+                let consr = TypeConstraint::Bool(ConstraintBool(reg));
+                self.type_constraints.push(consr);
+                reg
             }
             None => self.get_next_memory(T::size_of())?,
         };
@@ -203,6 +210,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
             Chip {
                 instructions: self.instructions,
                 write_instructions: self.write_instructions,
+                type_constraints: self.type_constraints,
                 range_checks_idx: (
                     L::NUM_FREE_COLUMNS,
                     L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS,
