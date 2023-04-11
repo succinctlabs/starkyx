@@ -169,17 +169,18 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
         let witness_high = self.witness_high.unwrap().packed_entries_slice(&vars);
 
         let p_limbs = Polynomial::<FE>::from_iter(modulus_field_iter::<FE, FP, N>());
-        let p_p = Polynomial::<P>::from_polynomial(p_limbs.clone());
 
-        // z = sign*b + 1
-        let minus_b = PolynomialOps::sub(p_p.as_slice(), b);
-        let mut z = if self.sign { b.to_vec() } else { minus_b };
-        z[0] += P::from(FE::ONE);
-
-        let res_z = PolynomialOps::mul(result, &z);
-        let res_z_minus_a = PolynomialOps::sub(&res_z, a);
+        // equation_lhs = if sign { b * result + result} else { b * result + a}
+        let equation_lhs = if self.sign {
+            PolynomialOps::add(&PolynomialOps::mul(&b, &result), &result)
+        } else {
+            PolynomialOps::add(&PolynomialOps::mul(&b, &result), &a)
+        };
+        // let equation_rhs = if sign { a } else { result };
+        let equation_rhs = if self.sign {a} else {result};
+        let lhs_minus_rhs = PolynomialOps::sub(&equation_lhs, &equation_rhs);
         let mul_times_carry = PolynomialOps::scalar_poly_mul(carry, p_limbs.as_slice());
-        let vanishing_poly = PolynomialOps::sub(&res_z_minus_a, &mul_times_carry);
+        let vanishing_poly = PolynomialOps::sub(&lhs_minus_rhs, &mul_times_carry);
 
         // reconstruct witness
 
@@ -224,30 +225,39 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
             &modulus_field_iter::<F::Extension, FP, N>().collect::<Vec<_>>(),
         );
 
-        let minus_b = PolynomialGadget::sub_extension(builder, &p_limbs, b);
-        let mut z = builder.add_virtual_extension_targets(N);
-        let one = builder.constant_extension(F::Extension::ONE);
+        // let minus_b = PolynomialGadget::sub_extension(builder, &p_limbs, b);
+        // let mut z = builder.add_virtual_extension_targets(N);
+        // let one = builder.constant_extension(F::Extension::ONE);
 
-        if self.sign {
-            z[0] = builder.add_extension(b[0], one);
-            z[1..N].copy_from_slice(&b[1..N]);
-            //for i in 1..N_LIMBS {
-            //    z[i] = b[i];
-            //}
-        } else {
-            z[0] = builder.add_extension(minus_b[0], one);
-            z[1..N].copy_from_slice(&minus_b[1..N]);
-            //for i in 1..N_LIMBS {
-            //    z[i] = minus_b[i];
-            //}
-        }
+        // if self.sign {
+        //     z[0] = builder.add_extension(b[0], one);
+        //     z[1..N].copy_from_slice(&b[1..N]);
+        //     //for i in 1..N_LIMBS {
+        //     //    z[i] = b[i];
+        //     //}
+        // } else {
+        //     z[0] = builder.add_extension(minus_b[0], one);
+        //     z[1..N].copy_from_slice(&minus_b[1..N]);
+        //     //for i in 1..N_LIMBS {
+        //     //    z[i] = minus_b[i];
+        //     //}
+        // }
+
+        // equation_lhs = if sign { b * result + result} else { b * result + a}
+        let b_times_res = PolynomialGadget::mul_extension(builder, b, result);
+        let equation_lhs = if self.sign { PolynomialGadget::add_extension(builder, &b_times_res, &result)
+                } else {
+                    PolynomialGadget::add_extension(builder, &b_times_res, &a)
+        };
+        let equation_rhs = if self.sign { a } else { result };
+        let lhs_minus_rhs = PolynomialGadget::sub_extension(builder, &equation_lhs, &equation_rhs);
 
         // Construct the expected vanishing polynmial
-        let res_z = PolynomialGadget::mul_extension(builder, result, &z);
-        let res_z_minus_a = PolynomialGadget::sub_extension(builder, &res_z, a);
+        // let res_z = PolynomialGadget::mul_extension(builder, result, &z);
+        // let res_z_minus_a = PolynomialGadget::sub_extension(builder, &res_z, a);
         let mul_times_carry = PolynomialGadget::mul_extension(builder, carry, &p_limbs[..]);
         let vanishing_poly =
-            PolynomialGadget::sub_extension(builder, &res_z_minus_a, &mul_times_carry);
+            PolynomialGadget::sub_extension(builder, &lhs_minus_rhs, &mul_times_carry);
 
         // reconstruct witness
 
@@ -290,29 +300,38 @@ impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> Den<P, N_LIMBS> {
         let minus_b_int = &p - b;
         let b_signed = if sign { b } else { &minus_b_int };
 
-        let z = (b_signed + 1u32) % &p;
-        let z_inverse = z.modpow(&(&p - 2u32), &p);
-        debug_assert_eq!(&z_inverse * &z % &p, BigUint::from(1u32));
+        let denominator = (b_signed + 1u32) % &p;
+        let den_inv = denominator.modpow(&(&p - 2u32), &p);
+        debug_assert_eq!(&den_inv * &denominator % &p, BigUint::from(1u32));
 
-        let result = (a * &z_inverse) % &p;
+        let result = (a * &den_inv) % &p;
         debug_assert!(result < p);
-        let carry = (&result * &z - a) / &p;
+
+        let equation_lhs = if sign {
+            b * &result + &result
+        } else {
+            b * &result + a
+        };
+        let equation_rhs = if sign { a.clone() } else { result.clone() };
+
+        let carry = (&equation_lhs - &equation_rhs) / &p;
         debug_assert!(carry < p);
-        debug_assert_eq!(&carry * &p, &z * &result - a);
+        debug_assert_eq!(&carry * &p, &equation_lhs - &equation_rhs);
 
         // make polynomial limbs
         let p_a = Polynomial::<i64>::from_biguint_num(a, 16, N_LIMBS);
         let p_b = Polynomial::<i64>::from_biguint_num(b, 16, N_LIMBS);
         let p_p = Polynomial::<i64>::from_biguint_num(&p, 16, N_LIMBS);
 
-        let p_b_sign = if sign { p_b } else { &p_p - &p_b };
-        let p_z = &p_b_sign + 1;
-
         let p_result = Polynomial::<i64>::from_biguint_num(&result, 16, N_LIMBS);
         let p_carry = Polynomial::<i64>::from_biguint_num(&carry, 16, Self::NUM_CARRY_LIMBS);
 
         // Compute the vanishing polynomial
-        let vanishing_poly = &p_z * &p_result - &p_a - &p_carry * &p_p;
+        let vanishing_poly = if sign {
+            &p_b * &p_result + &p_result - &p_a - &p_carry * &p_p
+        } else {
+            &p_b * &p_result + &p_a - &p_result - &p_carry * &p_p
+        };
         debug_assert_eq!(vanishing_poly.degree(), Self::NUM_WITNESS_LOW_LIMBS);
 
         // Compute the witness
@@ -393,7 +412,7 @@ mod tests {
 
         let a = builder.alloc_local::<Fp>().unwrap();
         let b = builder.alloc_local::<Fp>().unwrap();
-        let sign = true;
+        let sign = false;
         let result = builder.alloc_local::<Fp>().unwrap();
 
         let den_ins = builder.ed_den(&a, &b, sign, &result).unwrap();

@@ -16,7 +16,7 @@ pub trait EllipticCurveParameters<const N_LIMBS: usize>: Send + Sync + Copy + 's
     type FieldParam: FieldParameters<N_LIMBS>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PointBigint {
     pub x: BigUint,
     pub y: BigUint,

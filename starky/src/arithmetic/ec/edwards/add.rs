@@ -166,7 +166,6 @@ mod tests {
         let ed_data = builder.ed_add::<E, 16>(&P, &Q, &R).unwrap();
         builder.write_ec_point(&P).unwrap();
         builder.write_ec_point(&Q).unwrap();
-        builder.write_ec_point(&R).unwrap();
 
         let (chip, spec) = builder.build();
 
@@ -187,17 +186,22 @@ mod tests {
         .unwrap();
 
         let B = PointBigint { x: B_x, y: B_y };
+        let identity = PointBigint {
+            x: BigUint::from(0u32),
+            y: BigUint::from(1u32),
+        };
 
         for i in 0..num_rows {
             let P_int = B.clone();
-            let Q_int = B.clone();
+            let Q_int = identity.clone();
             //let handle = handle.clone();
             //rayon::spawn(move || {
             handle.write_ec_point(i as usize, &P_int, &P).unwrap();
             handle.write_ec_point(i as usize, &Q_int, &Q).unwrap();
-            let _R = handle
+            let R = handle
                 .write_ed_add(i as usize, &P_int, &Q_int, ed_data)
                 .unwrap();
+            //assert_eq!(R, P_int);
             //});
         }
         drop(handle);

@@ -1,11 +1,8 @@
 //! A chip for emulating field operations
-//! 
+//!
 //! This chip handles the range checks for the limbs, allocating table columns for input, output,
-//! and witness values. 
-//! 
-
-
-
+//! and witness values.
+//!
 
 use core::ops::Range;
 

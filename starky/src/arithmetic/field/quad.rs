@@ -401,9 +401,10 @@ mod tests {
             handle.write_field(i as usize, &b_int, b).unwrap();
             handle.write_field(i as usize, &c_int, c).unwrap();
             handle.write_field(i as usize, &d_int, d).unwrap();
-            handle
+            let result = handle
                 .write_fpquad(i as usize, &a_int, &b_int, &c_int, &d_int, quad)
                 .unwrap();
+            assert_eq!(result, (a_int * b_int + c_int * d_int) % &p);
             //});
         }
         drop(handle);
