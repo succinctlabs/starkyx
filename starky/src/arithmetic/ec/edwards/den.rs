@@ -172,13 +172,13 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
 
         // equation_lhs = if sign { b * result + result} else { b * result + a}
         let equation_lhs = if self.sign {
-            PolynomialOps::add(&PolynomialOps::mul(&b, &result), &result)
+            PolynomialOps::add(&PolynomialOps::mul(b, result), result)
         } else {
-            PolynomialOps::add(&PolynomialOps::mul(&b, &result), &a)
+            PolynomialOps::add(&PolynomialOps::mul(b, result), a)
         };
         // let equation_rhs = if sign { a } else { result };
-        let equation_rhs = if self.sign {a} else {result};
-        let lhs_minus_rhs = PolynomialOps::sub(&equation_lhs, &equation_rhs);
+        let equation_rhs = if self.sign { a } else { result };
+        let lhs_minus_rhs = PolynomialOps::sub(&equation_lhs, equation_rhs);
         let mul_times_carry = PolynomialOps::scalar_poly_mul(carry, p_limbs.as_slice());
         let vanishing_poly = PolynomialOps::sub(&lhs_minus_rhs, &mul_times_carry);
 
@@ -225,32 +225,15 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
             &modulus_field_iter::<F::Extension, FP, N>().collect::<Vec<_>>(),
         );
 
-        // let minus_b = PolynomialGadget::sub_extension(builder, &p_limbs, b);
-        // let mut z = builder.add_virtual_extension_targets(N);
-        // let one = builder.constant_extension(F::Extension::ONE);
-
-        // if self.sign {
-        //     z[0] = builder.add_extension(b[0], one);
-        //     z[1..N].copy_from_slice(&b[1..N]);
-        //     //for i in 1..N_LIMBS {
-        //     //    z[i] = b[i];
-        //     //}
-        // } else {
-        //     z[0] = builder.add_extension(minus_b[0], one);
-        //     z[1..N].copy_from_slice(&minus_b[1..N]);
-        //     //for i in 1..N_LIMBS {
-        //     //    z[i] = minus_b[i];
-        //     //}
-        // }
-
         // equation_lhs = if sign { b * result + result} else { b * result + a}
         let b_times_res = PolynomialGadget::mul_extension(builder, b, result);
-        let equation_lhs = if self.sign { PolynomialGadget::add_extension(builder, &b_times_res, &result)
-                } else {
-                    PolynomialGadget::add_extension(builder, &b_times_res, &a)
+        let equation_lhs = if self.sign {
+            PolynomialGadget::add_extension(builder, &b_times_res, result)
+        } else {
+            PolynomialGadget::add_extension(builder, &b_times_res, a)
         };
         let equation_rhs = if self.sign { a } else { result };
-        let lhs_minus_rhs = PolynomialGadget::sub_extension(builder, &equation_lhs, &equation_rhs);
+        let lhs_minus_rhs = PolynomialGadget::sub_extension(builder, &equation_lhs, equation_rhs);
 
         // Construct the expected vanishing polynmial
         // let res_z = PolynomialGadget::mul_extension(builder, result, &z);
@@ -435,10 +418,18 @@ mod tests {
             //rayon::spawn(move || {
             handle.write_field(i as usize, &a_int, a).unwrap();
             handle.write_field(i as usize, &b_int, b).unwrap();
-            handle
+            let res = handle
                 .write_ed_den(i as usize, &a_int, &b_int, sign, den_ins)
                 .unwrap();
             //});
+            if sign {
+                assert_eq!(res, (a_int * (1u32 + b_int).modpow(&(&p - 2u32), &p)) % &p);
+            } else {
+                assert_eq!(
+                    res,
+                    (a_int * (1u32 + &p - b_int).modpow(&(&p - 2u32), &p)) % &p
+                );
+            }
         }
         drop(handle);
 

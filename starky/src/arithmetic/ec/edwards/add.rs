@@ -12,9 +12,9 @@ use crate::arithmetic::trace::TraceHandle;
 #[allow(non_snake_case)]
 #[allow(dead_code)]
 pub struct EcAddData<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize> {
-    P: PointRegister<E, N_LIMBS>,
-    Q: PointRegister<E, N_LIMBS>,
-    R: PointRegister<E, N_LIMBS>,
+    P: AffinePointRegister<E, N_LIMBS>,
+    Q: AffinePointRegister<E, N_LIMBS>,
+    R: AffinePointRegister<E, N_LIMBS>,
     XNUM: FpQuad<E::FieldParam, N_LIMBS>,
     YNUM: FpQuad<E::FieldParam, N_LIMBS>,
     PXPY: FpMul<E::FieldParam, N_LIMBS>,
@@ -39,9 +39,9 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     #[allow(non_snake_case)]
     pub fn ed_add<E: EdwardsParameters<N>, const N: usize>(
         &mut self,
-        P: &PointRegister<E, N>,
-        Q: &PointRegister<E, N>,
-        result: &PointRegister<E, N>,
+        P: &AffinePointRegister<E, N>,
+        Q: &AffinePointRegister<E, N>,
+        result: &AffinePointRegister<E, N>,
     ) -> Result<EcAddData<E, N>>
     where
         L::Instruction: From<FpMul<E::FieldParam, N>>
@@ -89,10 +89,10 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
     pub fn write_ed_add<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize>(
         &self,
         row_index: usize,
-        P: &PointBigint,
-        Q: &PointBigint,
+        P: &AffinePoint<E, N_LIMBS>,
+        Q: &AffinePoint<E, N_LIMBS>,
         chip_data: EcAddData<E, N_LIMBS>,
-    ) -> Result<PointBigint> {
+    ) -> Result<AffinePoint<E, N_LIMBS>> {
         let x_num = self.write_fpquad(row_index, &P.x, &Q.y, &Q.x, &P.y, chip_data.XNUM)?;
         let y_num = self.write_fpquad(row_index, &P.y, &Q.y, &P.x, &Q.x, chip_data.YNUM)?;
 
@@ -105,24 +105,22 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
         let r_x = self.write_ed_den(row_index, &x_num, &dxy, true, chip_data.XDEN)?;
         let r_y = self.write_ed_den(row_index, &y_num, &dxy, false, chip_data.YDEN)?;
 
-        Ok(PointBigint { x: r_x, y: r_y })
+        Ok(AffinePoint::new(r_x, r_y))
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    //use num::bigint::RandBigInt;
-    use num::Num;
+    use num::bigint::RandBigInt;
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
+    use plonky2_maybe_rayon::*;
+    use rand::thread_rng;
 
-    //use plonky2_maybe_rayon::*;
-
-    //use rand::thread_rng;
     use super::*;
     use crate::arithmetic::builder::ChipBuilder;
     use crate::arithmetic::chip::{ChipParameters, TestStark};
@@ -174,35 +172,26 @@ mod tests {
         let num_rows = 2u64.pow(16);
         let (handle, generator) = trace::<F, D>(spec);
 
-        let B_x = BigUint::from_str_radix(
-            "15112221349535400772501151409588531511454012693041857206046113283949847762202",
-            10,
-        )
-        .unwrap();
-        let B_y = BigUint::from_str_radix(
-            "46316835694926478169428394003475163141307993866256225615783033603165251855960",
-            10,
-        )
-        .unwrap();
+        let base = E::generator();
 
-        let B = PointBigint { x: B_x, y: B_y };
-        let identity = PointBigint {
-            x: BigUint::from(0u32),
-            y: BigUint::from(1u32),
-        };
-
+        let mut rng = thread_rng();
+        let a = rng.gen_biguint(256);
+        let b = rng.gen_biguint(256);
+        let P_int = &base * &a;
+        let Q_int = &base * &b;
         for i in 0..num_rows {
-            let P_int = B.clone();
-            let Q_int = identity.clone();
-            //let handle = handle.clone();
-            //rayon::spawn(move || {
-            handle.write_ec_point(i as usize, &P_int, &P).unwrap();
-            handle.write_ec_point(i as usize, &Q_int, &Q).unwrap();
-            let R = handle
-                .write_ed_add(i as usize, &P_int, &Q_int, ed_data)
-                .unwrap();
-            assert_eq!(R, P_int);
-            //});
+            let P_int = P_int.clone();
+            let Q_int = Q_int.clone();
+            let R_exp = &P_int + &Q_int;
+            let handle = handle.clone();
+            rayon::spawn(move || {
+                handle.write_ec_point(i as usize, &P_int, &P).unwrap();
+                handle.write_ec_point(i as usize, &Q_int, &Q).unwrap();
+                let R = handle
+                    .write_ed_add(i as usize, &P_int, &Q_int, ed_data)
+                    .unwrap();
+                assert_eq!(R, R_exp);
+            });
         }
         drop(handle);
 

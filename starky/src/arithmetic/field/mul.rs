@@ -684,7 +684,8 @@ mod tests {
             //rayon::spawn(move || {
             handle.write_field(i, &a_int, a).unwrap();
             handle.write_field(i, &b_int, b).unwrap();
-            handle.write_fpmul(i, &a_int, &b_int, ab_ins).unwrap();
+            let res = handle.write_fpmul(i, &a_int, &b_int, ab_ins).unwrap();
+            assert_eq!(res, (a_int * b_int) % &p);
             //});
         }
         drop(handle);

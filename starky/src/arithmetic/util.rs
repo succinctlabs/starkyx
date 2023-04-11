@@ -103,6 +103,17 @@ pub fn to_field_iter<F: Field>(polynomial: &Polynomial<i64>) -> impl Iterator<It
         .map(|x| F::from_canonical_u32(*x as u32))
 }
 
+pub fn biguint_to_bits_le(integer: &BigUint) -> Vec<bool> {
+    let byte_vec = integer.to_bytes_le();
+    let mut bits = Vec::new();
+    for byte in byte_vec {
+        for i in 0..8 {
+            bits.push(byte & (1 << i) != 0);
+        }
+    }
+    bits
+}
+
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
@@ -124,6 +135,22 @@ mod tests {
             let x_out = digits_to_biguint(&x_limbs);
 
             assert_eq!(x, x_out)
+        }
+    }
+
+    #[test]
+    fn test_into_bits_le() {
+        let mut rng = thread_rng();
+        for _ in 0..100 {
+            let x = rng.gen_biguint(256);
+            let bits = biguint_to_bits_le(&x);
+            let mut x_out = BigUint::from(0u32);
+            for (i, bit) in bits.iter().enumerate() {
+                if *bit {
+                    x_out += BigUint::from(1u32) << i;
+                }
+            }
+            assert_eq!(x, x_out);
         }
     }
 }
