@@ -154,7 +154,7 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type E = Ed25519Parameters;
         type S = TestStark<EdAddTest, F, D>;
-        
+
         let _ = env_logger::builder().is_test(true).try_init();
         // build the stark
         let mut builder = ChipBuilder::<EdAddTest, F, D>::new();
@@ -178,42 +178,48 @@ mod tests {
         let mut timing = TimingTree::new("Ed_Add row", log::Level::Debug);
 
         let trace = timed!(timing, "generate trace", {
-        for i in 0..256usize {
-            let handle = handle.clone();
-            let base = base.clone();
-            rayon::spawn(move || {
-            let mut rng = thread_rng();
-            let a = rng.gen_biguint(256);
-            let b = rng.gen_biguint(256);
-            let P_int = &base * &a;
-            let Q_int = &base * &b;
-            let R_exp = &P_int + &Q_int;
-            
-            for j in 0..256usize {
-                handle.write_ec_point(256 * i + j, &P_int, &P).unwrap();
-                handle.write_ec_point(256 * i + j, &Q_int, &Q).unwrap();
-                let R = handle
-                    .write_ed_add(256 * i + j, &P_int, &Q_int, ed_data)
-                    .unwrap();
-                assert_eq!(R, R_exp);
-            }
-        });
-        }
-        drop(handle);
+            for i in 0..256usize {
+                let handle = handle.clone();
+                let base = base.clone();
+                rayon::spawn(move || {
+                    let mut rng = thread_rng();
+                    let a = rng.gen_biguint(256);
+                    let b = rng.gen_biguint(256);
+                    let P_int = &base * &a;
+                    let Q_int = &base * &b;
+                    let R_exp = &P_int + &Q_int;
 
-        generator.generate_trace(&chip, num_rows as usize).unwrap()});
+                    for j in 0..256usize {
+                        handle.write_ec_point(256 * i + j, &P_int, &P).unwrap();
+                        handle.write_ec_point(256 * i + j, &Q_int, &Q).unwrap();
+                        let R = handle
+                            .write_ed_add(256 * i + j, &P_int, &Q_int, ed_data)
+                            .unwrap();
+                        assert_eq!(R, R_exp);
+                    }
+                });
+            }
+            drop(handle);
+
+            generator.generate_trace(&chip, num_rows as usize).unwrap()
+        });
 
         let config = StarkConfig::standard_fast_config();
         let stark = TestStark::new(chip);
 
         // Verify proof as a stark
-        let proof = timed!(timing, "generate stark proof", prove::<F, C, S, D>(
-            stark.clone(),
-            &config,
-            trace,
-            [],
-            &mut TimingTree::default(),)
-            .unwrap());
+        let proof = timed!(
+            timing,
+            "generate stark proof",
+            prove::<F, C, S, D>(
+                stark.clone(),
+                &config,
+                trace,
+                [],
+                &mut TimingTree::default(),
+            )
+            .unwrap()
+        );
         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
 
         // Verify recursive proof in a circuit
@@ -242,13 +248,17 @@ mod tests {
 
         let recursive_data = recursive_builder.build::<C>();
 
-        let recursive_proof = timed!(timing, "generate recursive proof", plonky2::plonk::prover::prove(
-            &recursive_data.prover_only,
-            &recursive_data.common,
-            rec_pw,
-            &mut TimingTree::default(),
-        )
-        .unwrap());
+        let recursive_proof = timed!(
+            timing,
+            "generate recursive proof",
+            plonky2::plonk::prover::prove(
+                &recursive_data.prover_only,
+                &recursive_data.common,
+                rec_pw,
+                &mut TimingTree::default(),
+            )
+            .unwrap()
+        );
 
         timing.print();
         recursive_data.verify(recursive_proof).unwrap();

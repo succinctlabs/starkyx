@@ -381,7 +381,7 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type Fp = Fp25519;
         type S = TestStark<FpAddTest, F, D>;
-        
+
         let _ = env_logger::builder().is_test(true).try_init();
         // build the stark
         let mut builder = ChipBuilder::<FpAddTest, F, D>::new();
@@ -403,40 +403,44 @@ mod tests {
         let (handle, generator) = trace::<F, D>(spec);
 
         let p = Fp25519Param::modulus_biguint();
-         
+
         let mut timing = TimingTree::new("stark_proof", log::Level::Debug);
 
         let trace = timed!(timing, "generate trace", {
-        let mut rng = thread_rng();
-        for i in 0..num_rows {
-            let a_int: BigUint = rng.gen_biguint(256) % &p;
-            let b_int = rng.gen_biguint(256) % &p;
-            //let handle = handle.clone();
-            //rayon::spawn(move || {
-            handle.write_field(i as usize, &a_int, a).unwrap();
-            handle.write_field(i as usize, &b_int, b).unwrap();
-            handle
-                .write_fpadd(i as usize, &a_int, &b_int, a_add_b_ins)
-                .unwrap();
-            //});
-        }
-        drop(handle);
+            let mut rng = thread_rng();
+            for i in 0..num_rows {
+                let a_int: BigUint = rng.gen_biguint(256) % &p;
+                let b_int = rng.gen_biguint(256) % &p;
+                //let handle = handle.clone();
+                //rayon::spawn(move || {
+                handle.write_field(i as usize, &a_int, a).unwrap();
+                handle.write_field(i as usize, &b_int, b).unwrap();
+                handle
+                    .write_fpadd(i as usize, &a_int, &b_int, a_add_b_ins)
+                    .unwrap();
+                //});
+            }
+            drop(handle);
 
-        generator.generate_trace(&chip, num_rows as usize).unwrap()
-    });
+            generator.generate_trace(&chip, num_rows as usize).unwrap()
+        });
 
         let config = StarkConfig::standard_fast_config();
         let stark = TestStark::new(chip);
 
         // Verify proof as a stark
-        let proof = timed!(timing, "generate proof", prove::<F, C, S, D>(
-            stark.clone(),
-            &config,
-            trace,
-            [],
-            &mut TimingTree::default(),
-        )
-        .unwrap());
+        let proof = timed!(
+            timing,
+            "generate proof",
+            prove::<F, C, S, D>(
+                stark.clone(),
+                &config,
+                trace,
+                [],
+                &mut TimingTree::default(),
+            )
+            .unwrap()
+        );
 
         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
 
@@ -466,15 +470,23 @@ mod tests {
 
         let recursive_data = recursive_builder.build::<C>();
 
-        let recursive_proof = timed!(timing, "generate recursive proof", plonky2::plonk::prover::prove(
-            &recursive_data.prover_only,
-            &recursive_data.common,
-            rec_pw,
-            &mut TimingTree::default(),
-        )
-        .unwrap());
+        let recursive_proof = timed!(
+            timing,
+            "generate recursive proof",
+            plonky2::plonk::prover::prove(
+                &recursive_data.prover_only,
+                &recursive_data.common,
+                rec_pw,
+                &mut TimingTree::default(),
+            )
+            .unwrap()
+        );
 
-        timed!(timing, "verify recursive proof", recursive_data.verify(recursive_proof).unwrap());
+        timed!(
+            timing,
+            "verify recursive proof",
+            recursive_data.verify(recursive_proof).unwrap()
+        );
         timing.print();
     }
 }
