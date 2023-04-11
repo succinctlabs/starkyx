@@ -26,7 +26,7 @@ pub enum CellType {
     Bit,
 }
 
-pub trait DataRegister: 'static + Sized + Send + Sync {
+pub trait DataRegister: 'static + Sized + Clone + Send + Sync {
     const CELL: Option<CellType>;
 
     /// Returns an element of the field
