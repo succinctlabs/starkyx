@@ -175,24 +175,36 @@ mod tests {
         let base = E::generator();
 
         let mut rng = thread_rng();
-        let a = rng.gen_biguint(256);
-        let b = rng.gen_biguint(256);
-        let P_int = &base * &a;
-        let Q_int = &base * &b;
-        for i in 0..num_rows {
-            let P_int = P_int.clone();
-            let Q_int = Q_int.clone();
+        for i in 0..256usize {
+            let a = rng.gen_biguint(256);
+            let b = rng.gen_biguint(256);
+            let P_int = &base * &a;
+            let Q_int = &base * &b;
             let R_exp = &P_int + &Q_int;
-            let handle = handle.clone();
-            rayon::spawn(move || {
-                handle.write_ec_point(i as usize, &P_int, &P).unwrap();
-                handle.write_ec_point(i as usize, &Q_int, &Q).unwrap();
+
+            for j in 0..256usize {
+                handle.write_ec_point(256 * i + j, &P_int, &P).unwrap();
+                handle.write_ec_point(256 * i + j, &Q_int, &Q).unwrap();
                 let R = handle
-                    .write_ed_add(i as usize, &P_int, &Q_int, ed_data)
+                    .write_ed_add(256 * i + j, &P_int, &Q_int, ed_data)
                     .unwrap();
                 assert_eq!(R, R_exp);
-            });
+            }
         }
+        // for i in 0..num_rows {
+        //     let P_int = P_int.clone();
+        //     let Q_int = Q_int.clone();
+        //     let R_exp = &P_int + &Q_int;
+        //     let handle = handle.clone();
+        //     rayon::spawn(move || {
+        //         handle.write_ec_point(i as usize, &P_int, &P).unwrap();
+        //         handle.write_ec_point(i as usize, &Q_int, &Q).unwrap();
+        //         let R = handle
+        //             .write_ed_add(i as usize, &P_int, &Q_int, ed_data)
+        //             .unwrap();
+        //         assert_eq!(R, R_exp);
+        //     });
+        // }
         drop(handle);
 
         let trace = generator.generate_trace(&chip, num_rows as usize).unwrap();
