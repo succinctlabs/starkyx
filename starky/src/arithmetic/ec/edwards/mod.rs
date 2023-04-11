@@ -4,6 +4,7 @@ pub mod add;
 pub mod bigint_operations;
 pub mod den;
 pub mod instructions;
+pub mod scalar_mul;
 
 use num::{Num, Zero};
 
