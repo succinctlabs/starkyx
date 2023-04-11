@@ -88,8 +88,8 @@ mod tests {
     pub struct BoolTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for BoolTest {
-        const NUM_ARITHMETIC_COLUMNS: usize = 16;
-        const NUM_FREE_COLUMNS: usize = 1;
+        const NUM_ARITHMETIC_COLUMNS: usize = 1;
+        const NUM_FREE_COLUMNS: usize = 2;
 
         type Instruction = super::ConstraintBool;
     }
@@ -103,26 +103,31 @@ mod tests {
 
         let mut builder = ChipBuilder::<BoolTest, F, D>::new();
 
-        let bit = builder.alloc_local::<BitRegister>().unwrap();
-        builder.write_data(&bit).unwrap();
+        let bit_one = builder.alloc_local::<BitRegister>().unwrap();
+        builder.write_data(&bit_one).unwrap();
+        let bit_zero = builder.alloc_local::<BitRegister>().unwrap();
+        builder.write_data(&bit_zero).unwrap();
 
-        let dummy = builder.alloc_local::<U16Array<16>>().unwrap();
+        let dummy = builder.alloc_local::<U16Array<1>>().unwrap();
         builder.write_data(&dummy).unwrap();
 
         let (chip, spec) = builder.build();
+
+        // Test successful proof
         // Construct the trace
-        let num_rows = 2u64.pow(8) as usize;
-        let (handle, generator) = trace::<F, D>(spec);
+        let num_rows = 2u64.pow(5) as usize;
+        let (handle, generator) = trace::<F, D>(spec.clone());
         for i in 0..num_rows {
-            handle.write_data(i, bit, vec![F::ONE]).unwrap();
-            handle.write_data(i, dummy, vec![F::ZERO; 16]).unwrap();
+            handle.write_data(i, bit_one, vec![F::ONE]).unwrap();
+            handle.write_data(i, bit_zero, vec![F::ZERO]).unwrap();
+            handle.write_data(i, dummy, vec![F::ZERO; 1]).unwrap();
         }
         drop(handle);
 
         let trace = generator.generate_trace(&chip, num_rows as usize).unwrap();
 
         let config = StarkConfig::standard_fast_config();
-        let stark = TestStark::new(chip);
+        let stark = TestStark::new(chip.clone());
 
         // Verify proof as a stark
         let proof = prove::<F, C, S, D>(
@@ -172,8 +177,35 @@ mod tests {
 
         recursive_data.verify(recursive_proof).unwrap();
 
-        // test succesfull proof
-
         // test unsuccesfull proof
+        // Construct the trace
+        let num_rows = 2u64.pow(5) as usize;
+        let (handle, generator) = crate::arithmetic::trace::trace::<F, D>(spec);
+        for i in 0..num_rows {
+            handle.write_data(i, bit_zero, vec![F::ZERO]).unwrap();
+            handle
+                .write_data(i, bit_one, vec![F::ONE + F::ONE])
+                .unwrap();
+            handle.write_data(i, dummy, vec![F::ZERO; 1]).unwrap();
+        }
+        drop(handle);
+
+        let trace = generator.generate_trace(&chip, num_rows as usize).unwrap();
+
+        let config = StarkConfig::standard_fast_config();
+        let stark = TestStark::new(chip);
+
+        // Verify proof as a stark
+        let proof = prove::<F, C, S, D>(
+            stark.clone(),
+            &config,
+            trace,
+            [],
+            &mut TimingTree::default(),
+        )
+        .unwrap();
+
+        let res = verify_stark_proof(stark.clone(), proof.clone(), &config);
+        assert!(res.is_err())
     }
 }
