@@ -201,7 +201,7 @@ mod tests {
             let R = handle
                 .write_ed_add(i as usize, &P_int, &Q_int, ed_data)
                 .unwrap();
-            //assert_eq!(R, P_int);
+            assert_eq!(R, P_int);
             //});
         }
         drop(handle);
