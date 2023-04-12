@@ -103,7 +103,7 @@ pub fn to_field_iter<F: Field>(polynomial: &Polynomial<i64>) -> impl Iterator<It
         .map(|x| F::from_canonical_u32(*x as u32))
 }
 
-pub fn biguint_to_bits_le(integer: &BigUint) -> Vec<bool> {
+pub fn biguint_to_bits_le(integer: &BigUint, num_bits: usize) -> Vec<bool> {
     let byte_vec = integer.to_bytes_le();
     let mut bits = Vec::new();
     for byte in byte_vec {
@@ -111,6 +111,12 @@ pub fn biguint_to_bits_le(integer: &BigUint) -> Vec<bool> {
             bits.push(byte & (1 << i) != 0);
         }
     }
+    debug_assert!(
+        bits.len() <= num_bits,
+        "Number too large to fit in {} digits",
+        num_bits
+    );
+    bits.resize(num_bits, false);
     bits
 }
 
@@ -143,7 +149,7 @@ mod tests {
         let mut rng = thread_rng();
         for _ in 0..100 {
             let x = rng.gen_biguint(256);
-            let bits = biguint_to_bits_le(&x);
+            let bits = biguint_to_bits_le(&x, 256);
             let mut x_out = BigUint::from(0u32);
             for (i, bit) in bits.iter().enumerate() {
                 if *bit {

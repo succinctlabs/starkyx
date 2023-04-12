@@ -201,7 +201,7 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
 
         //debug_assert!(vanishing_poly.len() == witness_times_root.len());
         for i in 0..vanishing_poly.len() {
-            yield_constr.constraint_transition(vanishing_poly[i] - witness_times_root[i]);
+            yield_constr.constraint(vanishing_poly[i] - witness_times_root[i]);
         }
     }
 
@@ -263,7 +263,7 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
         let constraint =
             PolynomialGadget::sub_extension(builder, &vanishing_poly, &witness_times_root);
         for constr in constraint {
-            yield_constr.constraint_transition(builder, constr);
+            yield_constr.constraint(builder, constr);
         }
     }
 }

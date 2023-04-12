@@ -5,6 +5,7 @@ use num::BigUint;
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
+use super::register::DataRegister;
 use crate::arithmetic::builder::ChipBuilder;
 use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::field::{FieldParameters, FieldRegister};
@@ -84,5 +85,21 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
     ) -> Result<()> {
         self.write_field(row_index, &point.x, data.x)?;
         self.write_field(row_index, &point.y, data.y)
+    }
+}
+
+impl<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize> AffinePointRegister<E, N_LIMBS> {
+    pub fn next(&self) -> Self {
+        Self {
+            x: self.x.next(),
+            y: self.y.next(),
+        }
+    }
+
+    pub fn from_field_registers(
+        x: FieldRegister<E::FieldParam, N_LIMBS>,
+        y: FieldRegister<E::FieldParam, N_LIMBS>,
+    ) -> Self {
+        Self { x, y }
     }
 }

@@ -65,7 +65,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for Constra
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Selector<T> {
     bit: BitRegister,
     true_value: T,
@@ -76,7 +76,7 @@ pub struct Selector<T> {
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
     pub fn selector<T: Copy>(
         &mut self,
-        bit: BitRegister,
+        bit: &BitRegister,
         a: &T,
         b: &T,
         result: &T,
@@ -84,7 +84,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     where
         L::Instruction: From<Selector<T>>,
     {
-        let instr = Selector::new(bit, *a, *b, *result);
+        let instr = Selector::new(*bit, *a, *b, *result);
         self.insert_instruction(instr.into())?;
         Ok(instr)
     }
@@ -103,7 +103,7 @@ impl<T> Selector<T> {
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
     #[allow(dead_code)]
-    fn write_bit(&self, row_index: usize, bit: bool, data: &BitRegister) -> Result<()> {
+    pub fn write_bit(&self, row_index: usize, bit: bool, data: &BitRegister) -> Result<()> {
         self.write_data(row_index, *data, vec![F::from_canonical_u16(bit as u16)])
     }
 }
@@ -349,7 +349,7 @@ mod tests {
         builder.write_data(&y).unwrap();
         let result = builder.alloc_local::<U16Array<1>>().unwrap();
 
-        let sel = builder.selector(bit, &x, &y, &result).unwrap();
+        let sel = builder.selector(&bit, &x, &y, &result).unwrap();
 
         let (chip, spec) = builder.build();
 

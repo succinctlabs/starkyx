@@ -12,7 +12,7 @@ use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::instruction::{Instruction, TypeConstraint, WriteInstruction};
+use super::instruction::{EqualityConstraint, Instruction, WriteInstruction};
 use crate::lookup::{eval_lookups, eval_lookups_circuit};
 use crate::permutation::PermutationPair;
 use crate::stark::Stark;
@@ -36,7 +36,7 @@ where
 {
     pub(crate) instructions: Vec<L::Instruction>,
     pub(crate) write_instructions: Vec<WriteInstruction>,
-    pub(crate) type_constraints: Vec<TypeConstraint>,
+    pub(crate) constraints: Vec<EqualityConstraint>,
     pub(crate) range_checks_idx: (usize, usize),
     pub(crate) table_index: usize,
 }
@@ -112,7 +112,7 @@ where
         for inst in self.instructions.iter() {
             inst.packed_generic_constraints(vars, yield_constr);
         }
-        for consr in self.type_constraints.iter() {
+        for consr in self.constraints.iter() {
             consr.packed_generic_constraints(vars, yield_constr);
         }
         // lookp table values
@@ -140,7 +140,7 @@ where
         for inst in self.instructions.iter() {
             inst.ext_circuit_constraints(builder, vars, yield_constr);
         }
-        for consr in self.type_constraints.iter() {
+        for consr in self.constraints.iter() {
             consr.ext_circuit_constraints(builder, vars, yield_constr);
         }
         // lookup table values

@@ -2,6 +2,7 @@ use den::Den;
 
 use super::add::FromEdwardsAdd;
 use super::*;
+use crate::arithmetic::bool::Selector;
 use crate::arithmetic::field::add::FpAdd;
 use crate::arithmetic::field::mul::{FpMul, FpMulConst};
 use crate::arithmetic::field::quad::FpQuad;
@@ -15,6 +16,7 @@ pub enum EdWardsMicroInstruction<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: u
     FpMul(FpMul<E::FieldParam, N_LIMBS>),
     FpQuad(FpQuad<E::FieldParam, N_LIMBS>),
     FpMulConst(FpMulConst<E::FieldParam, N_LIMBS>),
+    Selector(Selector<FieldRegister<E::FieldParam, N_LIMBS>>),
 }
 
 impl<E: EdwardsParameters<N>, F: RichField + Extendable<D>, const D: usize, const N: usize>
@@ -36,6 +38,11 @@ impl<E: EdwardsParameters<N>, F: RichField + Extendable<D>, const D: usize, cons
             }
             EdWardsMicroInstruction::FpMulConst(fp_mul_const) => {
                 <FpMulConst<E::FieldParam, N> as Instruction<F, D>>::memory_vec(fp_mul_const)
+            }
+            EdWardsMicroInstruction::Selector(selector) => {
+                <Selector<FieldRegister<E::FieldParam, N>> as Instruction<F, D>>::memory_vec(
+                    selector,
+                )
             }
         }
     }
@@ -70,6 +77,11 @@ impl<E: EdwardsParameters<N>, F: RichField + Extendable<D>, const D: usize, cons
                     row_index,
                 )
             }
+            EdWardsMicroInstruction::Selector(selector) => {
+                <Selector<FieldRegister<E::FieldParam, N>> as Instruction<F, D>>::assign_row(
+                    selector, trace_rows, row, row_index,
+                )
+            }
         }
     }
 
@@ -89,6 +101,11 @@ impl<E: EdwardsParameters<N>, F: RichField + Extendable<D>, const D: usize, cons
             }
             EdWardsMicroInstruction::FpMulConst(fp_mul_const) => {
                 <FpMulConst<E::FieldParam, N> as Instruction<F, D>>::witness_data(fp_mul_const)
+            }
+            EdWardsMicroInstruction::Selector(selector) => {
+                <Selector<FieldRegister<E::FieldParam, N>> as Instruction<F, D>>::witness_data(
+                    selector,
+                )
             }
         }
     }
@@ -111,6 +128,11 @@ impl<E: EdwardsParameters<N>, F: RichField + Extendable<D>, const D: usize, cons
                 <FpMulConst<E::FieldParam, N> as Instruction<F, D>>::set_witness(
                     fp_mul_const,
                     witness,
+                )
+            }
+            EdWardsMicroInstruction::Selector(selector) => {
+                <Selector<FieldRegister<E::FieldParam, N>> as Instruction<F, D>>::set_witness(
+                    selector, witness,
                 )
             }
         }
@@ -163,6 +185,11 @@ impl<E: EdwardsParameters<N>, F: RichField + Extendable<D>, const D: usize, cons
                     yield_constr,
                 )
             }
+            EdWardsMicroInstruction::Selector(selector) => <Selector<
+                FieldRegister<E::FieldParam, N>,
+            > as Instruction<F, D>>::packed_generic_constraints(
+                selector, vars, yield_constr
+            ),
         }
     }
 
@@ -207,6 +234,11 @@ impl<E: EdwardsParameters<N>, F: RichField + Extendable<D>, const D: usize, cons
                     yield_constr,
                 )
             }
+            EdWardsMicroInstruction::Selector(selector) => <Selector<
+                FieldRegister<E::FieldParam, N>,
+            > as Instruction<F, D>>::ext_circuit_constraints(
+                selector, builder, vars, yield_constr
+            ),
         }
     }
 }
@@ -248,6 +280,14 @@ impl<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize> From<Den<E::FieldParam
 {
     fn from(den: Den<E::FieldParam, N_LIMBS>) -> Self {
         EdWardsMicroInstruction::Den(den)
+    }
+}
+
+impl<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize>
+    From<Selector<FieldRegister<E::FieldParam, N_LIMBS>>> for EdWardsMicroInstruction<E, N_LIMBS>
+{
+    fn from(selector: Selector<FieldRegister<E::FieldParam, N_LIMBS>>) -> Self {
+        EdWardsMicroInstruction::Selector(selector)
     }
 }
 

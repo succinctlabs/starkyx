@@ -48,9 +48,14 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
     );
 }
 
+/// Constraints don't have any writing data or witness
+///
+/// These are only used to generate constrains and can therefore
+/// be held separate from instructions and all hold the same type.
 #[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum TypeConstraint {
+pub enum EqualityConstraint {
     Bool(ConstraintBool),
+    Equal(Register, Register),
 }
 
 #[derive(Clone, Debug, Copy)]
@@ -105,36 +110,42 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for WriteIn
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for TypeConstraint {
+impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for EqualityConstraint {
     fn witness_data(&self) -> Option<WitnessData> {
         match self {
-            TypeConstraint::Bool(constraint) => {
+            EqualityConstraint::Bool(constraint) => {
                 <ConstraintBool as Instruction<F, D>>::witness_data(constraint)
             }
+            EqualityConstraint::Equal(_a, _b) => None,
         }
     }
 
     fn memory_vec(&self) -> Vec<Register> {
         match self {
-            TypeConstraint::Bool(constraint) => {
+            EqualityConstraint::Bool(constraint) => {
                 <ConstraintBool as Instruction<F, D>>::memory_vec(constraint)
             }
+            EqualityConstraint::Equal(_a, _b) => vec![],
         }
     }
 
     fn set_witness(&mut self, _witness: Register) -> Result<()> {
         match self {
-            TypeConstraint::Bool(constraint) => {
+            EqualityConstraint::Bool(constraint) => {
                 <ConstraintBool as Instruction<F, D>>::set_witness(constraint, _witness)
             }
+            EqualityConstraint::Equal(_a, _b) => Ok(()),
         }
     }
 
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
         match self {
-            TypeConstraint::Bool(constraint) => <ConstraintBool as Instruction<F, D>>::assign_row(
-                constraint, trace_rows, row, row_index,
-            ),
+            EqualityConstraint::Bool(constraint) => {
+                <ConstraintBool as Instruction<F, D>>::assign_row(
+                    constraint, trace_rows, row, row_index,
+                )
+            }
+            EqualityConstraint::Equal(_, _) => {}
         }
     }
 
@@ -153,12 +164,25 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for TypeCon
         P: PackedField<Scalar = FE>,
     {
         match self {
-            TypeConstraint::Bool(constraint) => {
+            EqualityConstraint::Bool(constraint) => {
                 <ConstraintBool as Instruction<F, D>>::packed_generic_constraints(
                     constraint,
                     vars,
                     yield_constr,
                 )
+            }
+            EqualityConstraint::Equal(a, b) => {
+                let a_vals = a.packed_entries_slice(&vars);
+                let b_vals = b.packed_entries_slice(&vars);
+                if let (Register::Local(_, _), Register::Local(_, _)) = (a, b) {
+                    for (&a, &b) in a_vals.iter().zip(b_vals.iter()) {
+                        yield_constr.constraint(a - b);
+                    }
+                } else {
+                    for (&a, &b) in a_vals.iter().zip(b_vals.iter()) {
+                        yield_constr.constraint_transition(a - b);
+                    }
+                }
             }
         }
     }
@@ -170,13 +194,28 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for TypeCon
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
         match self {
-            TypeConstraint::Bool(constraint) => {
+            EqualityConstraint::Bool(constraint) => {
                 <ConstraintBool as Instruction<F, D>>::ext_circuit_constraints(
                     constraint,
                     builder,
                     vars,
                     yield_constr,
                 )
+            }
+            EqualityConstraint::Equal(a, b) => {
+                let a_vals = a.evaluation_targets(&vars);
+                let b_vals = b.evaluation_targets(&vars);
+                if let (Register::Local(_, _), Register::Local(_, _)) = (a, b) {
+                    for (&a, &b) in a_vals.iter().zip(b_vals.iter()) {
+                        let constr = builder.sub_extension(a, b);
+                        yield_constr.constraint(builder, constr);
+                    }
+                } else {
+                    for (&a, &b) in a_vals.iter().zip(b_vals.iter()) {
+                        let constr = builder.sub_extension(a, b);
+                        yield_constr.constraint_transition(builder, constr);
+                    }
+                }
             }
         }
     }

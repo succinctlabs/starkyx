@@ -8,14 +8,14 @@ use crate::arithmetic::field::FieldParameters;
 use crate::arithmetic::util::biguint_to_bits_le;
 
 impl<E: EdwardsParameters<N>, const N: usize> AffinePoint<E, N> {
-    fn neutral() -> Self {
+    pub fn neutral() -> Self {
         Self::new(BigUint::from(0u32), BigUint::from(1u32))
     }
 
     fn scalar_mul(&self, scalar: &BigUint) -> Self {
         let mut result = Self::neutral();
         let mut temp = self.clone();
-        let bits = biguint_to_bits_le(scalar);
+        let bits = biguint_to_bits_le(scalar, E::num_scalar_bits());
         for bit in bits {
             if bit {
                 result = &result + &temp;

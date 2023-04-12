@@ -17,12 +17,18 @@ pub trait EdwardsParameters<const N_LIMBS: usize>: EllipticCurveParameters<N_LIM
     /// Returns the canonical generator
     fn generator() -> AffinePoint<Self, N_LIMBS>;
 
+    fn prime_group_order() -> BigUint;
+
     fn d_biguint() -> BigUint {
         let mut modulus = BigUint::zero();
         for (i, limb) in Self::D.iter().enumerate() {
             modulus += BigUint::from(*limb) << (16 * i);
         }
         modulus
+    }
+
+    fn num_scalar_bits() -> usize {
+        N_LIMBS * 16
     }
 }
 
@@ -38,6 +44,10 @@ impl EdwardsParameters<16> for Ed25519Parameters {
         30883, 4953, 19914, 30187, 55467, 16705, 2637, 112, 59544, 30585, 16505, 36039, 65139,
         11119, 27886, 20995,
     ];
+
+    fn prime_group_order() -> BigUint {
+        BigUint::from(2u32).pow(252) + BigUint::from(27742317777372353535851937790883648493u128)
+    }
 
     fn generator() -> AffinePoint<Self, 16> {
         let x = BigUint::from_str_radix(

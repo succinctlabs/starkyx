@@ -49,6 +49,10 @@ pub trait DataRegister: 'static + Sized + Clone + Send + Sync {
         Ok(Self::from_raw_register(register))
     }
 
+    fn next(&self) -> Self {
+        Self::from_raw_register(self.register().next())
+    }
+
     fn size_of() -> usize;
 }
 
@@ -95,6 +99,14 @@ pub struct BitRegister {
 }
 
 impl Register {
+    #[inline]
+    pub fn is_next(&self) -> bool {
+        match self {
+            Register::Next(_, _) => true,
+            _ => false,
+        }
+    }
+
     pub fn next(&self) -> Self {
         match self {
             Register::Local(index, length) => Register::Next(*index, *length),

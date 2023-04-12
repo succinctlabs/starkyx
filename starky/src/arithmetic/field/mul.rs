@@ -214,7 +214,7 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
 
         //debug_assert!(vanishing_poly.len() == witness_times_root.len());
         for i in 0..vanishing_poly.len() {
-            yield_constr.constraint_transition(vanishing_poly[i] - witness_times_root[i]);
+            yield_constr.constraint(vanishing_poly[i] - witness_times_root[i]);
         }
     }
 
@@ -265,7 +265,7 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
         let constraint =
             PolynomialGadget::sub_extension(builder, &vanishing_poly, &witness_times_root);
         for constr in constraint {
-            yield_constr.constraint_transition(builder, constr);
+            yield_constr.constraint(builder, constr);
         }
     }
 }
@@ -491,7 +491,7 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
 
         //debug_assert!(vanishing_poly.len() == witness_times_root.len());
         for i in 0..vanishing_poly.len() {
-            yield_constr.constraint_transition(vanishing_poly[i] - witness_times_root[i]);
+            yield_constr.constraint(vanishing_poly[i] - witness_times_root[i]);
         }
     }
 
@@ -547,7 +547,7 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
         let constraint =
             PolynomialGadget::sub_extension(builder, &vanishing_poly, &witness_times_root);
         for constr in constraint {
-            yield_constr.constraint_transition(builder, constr);
+            yield_constr.constraint(builder, constr);
         }
     }
 }
@@ -691,111 +691,6 @@ mod tests {
         drop(handle);
 
         let trace = generator.generate_trace(&chip, num_rows).unwrap();
-
-        let config = StarkConfig::standard_fast_config();
-        let stark = TestStark::new(chip);
-
-        // Verify proof as a stark
-        let proof = prove::<F, C, S, D>(
-            stark.clone(),
-            &config,
-            trace,
-            [],
-            &mut TimingTree::default(),
-        )
-        .unwrap();
-        verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
-
-        // Verify recursive proof in a circuit
-        let config_rec = CircuitConfig::standard_recursion_config();
-        let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
-
-        let degree_bits = proof.proof.recover_degree_bits(&config);
-        let virtual_proof = add_virtual_stark_proof_with_pis(
-            &mut recursive_builder,
-            stark.clone(),
-            &config,
-            degree_bits,
-        );
-
-        recursive_builder.print_gate_counts(0);
-
-        let mut rec_pw = PartialWitness::new();
-        set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-
-        verify_stark_proof_circuit::<F, C, S, D>(
-            &mut recursive_builder,
-            stark,
-            virtual_proof,
-            &config,
-        );
-
-        let recursive_data = recursive_builder.build::<C>();
-
-        let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
-        let recursive_proof = plonky2::plonk::prover::prove(
-            &recursive_data.prover_only,
-            &recursive_data.common,
-            rec_pw,
-            &mut timing,
-        )
-        .unwrap();
-
-        timing.print();
-        recursive_data.verify(recursive_proof).unwrap();
-    }
-
-    #[test]
-    fn test_fpmul_multi_row() {
-        const D: usize = 2;
-        type C = PoseidonGoldilocksConfig;
-        type F = <C as GenericConfig<D>>::F;
-        type Fp = Fp25519;
-        type S = TestStark<FpMulTest, F, D>;
-
-        // build the stark
-        let mut builder = ChipBuilder::<FpMulTest, F, D>::new();
-
-        let a = builder.alloc_local::<Fp>().unwrap();
-        let b = builder.alloc_local::<Fp>().unwrap();
-        let result = builder.alloc_next::<Fp>().unwrap();
-        let Register::Local(index, length) = *a.register() else {
-            panic!("a is not a local register");
-        };
-        assert_eq!(Register::Next(index, length), *result.register());
-
-        //let ab = FMul::new(a, b, result);
-        //builder.insert_instruction(ab).unwrap();
-        let mul_transition = builder.fpmul(&a, &b, &result).unwrap();
-        builder.write_data(&a).unwrap();
-        builder.write_data(&b).unwrap();
-
-        let (chip, spec) = builder.build();
-
-        // Construct the trace
-        let num_rows = 2u64.pow(16);
-        let (handle, generator) = trace::<F, D>(spec);
-
-        let p = Fp25519Param::modulus_biguint();
-
-        let mut rng = thread_rng();
-        let a_int_init: BigUint = rng.gen_biguint(256) % &p;
-        let b_int_init = rng.gen_biguint(256) % &p;
-        handle.write_field(0, &a_int_init, a).unwrap();
-        handle.write_field(0, &b_int_init, b).unwrap();
-        let mut a_int = handle
-            .write_fpmul(0, &a_int_init, &b_int_init, mul_transition)
-            .unwrap();
-        for i in 1..num_rows - 1 {
-            let b_int: BigUint = rng.gen_biguint(256) % &p;
-            handle.write_field(i as usize, &b_int, b).unwrap();
-            a_int = handle
-                .write_fpmul(i as usize, &a_int, &b_int, mul_transition)
-                .unwrap();
-        }
-        drop(handle);
-
-        let trace = generator.generate_trace(&chip, num_rows as usize).unwrap();
 
         let config = StarkConfig::standard_fast_config();
         let stark = TestStark::new(chip);

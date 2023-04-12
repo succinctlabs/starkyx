@@ -26,12 +26,15 @@ pub struct EcAddData<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize> {
 }
 
 impl<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize> EcAddData<E, N_LIMBS> {
-    pub const fn num_ed_add_columns() -> usize {
-        6 * N_LIMBS
-            + 2 * (FpQuad::<E::FieldParam, N_LIMBS>::num_quad_columns() - 4 * N_LIMBS)
+    pub const fn num_ed_add_witness_columns() -> usize {
+        2 * (FpQuad::<E::FieldParam, N_LIMBS>::num_quad_columns() - 4 * N_LIMBS)
             + 3 * (FpMul::<E::FieldParam, N_LIMBS>::num_mul_columns() - 2 * N_LIMBS)
             + 2 * (FpMulConst::<E::FieldParam, N_LIMBS>::num_mul_const_columns() - N_LIMBS)
             + 2 * (Den::<E::FieldParam, N_LIMBS>::num_den_columns() - 3 * N_LIMBS)
+    }
+
+    pub const fn num_ed_add_columns() -> usize {
+        6 * N_LIMBS + Self::num_ed_add_witness_columns()
     }
 
     pub const fn num_ed_double_columns() -> usize {
