@@ -268,7 +268,7 @@ mod tests {
         const NUM_ARITHMETIC_COLUMNS: usize = 2 * 16;
         const NUM_FREE_COLUMNS: usize = 1;
 
-        type Instruction = FpMul<Fp25519Param, 16>;
+        type Instruction = FpMul<Fp25519Param>;
     }
 
     #[test]

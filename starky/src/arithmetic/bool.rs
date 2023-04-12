@@ -213,7 +213,7 @@ mod tests {
         const NUM_ARITHMETIC_COLUMNS: usize = 3;
         const NUM_FREE_COLUMNS: usize = 2;
 
-        type Instruction = Selector<U16Array<1>>;
+        type Instruction = Selector<U16Array>;
     }
 
     #[test]
@@ -230,7 +230,7 @@ mod tests {
         let bit_zero = builder.alloc_local::<BitRegister>().unwrap();
         builder.write_data(&bit_zero).unwrap();
 
-        let dummy = builder.alloc_local::<U16Array<1>>().unwrap();
+        let dummy = builder.alloc_local::<BitRegister>().unwrap();
         builder.write_data(&dummy).unwrap();
 
         let (chip, spec) = builder.build();
@@ -343,11 +343,11 @@ mod tests {
         let bit = builder.alloc_local::<BitRegister>().unwrap();
         builder.write_data(&bit).unwrap();
 
-        let x = builder.alloc_local::<U16Array<1>>().unwrap();
+        let x = builder.alloc_local::<U16Array>().unwrap();
         builder.write_data(&x).unwrap();
-        let y = builder.alloc_local::<U16Array<1>>().unwrap();
+        let y = builder.alloc_local::<U16Array>().unwrap();
         builder.write_data(&y).unwrap();
-        let result = builder.alloc_local::<U16Array<1>>().unwrap();
+        let result = builder.alloc_local::<U16Array>().unwrap();
 
         let sel = builder.selector(&bit, &x, &y, &result).unwrap();
 

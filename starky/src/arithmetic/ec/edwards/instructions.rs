@@ -10,39 +10,37 @@ use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::register::Register;
 
 #[derive(Debug, Clone, Copy)]
-pub enum EdWardsMicroInstruction<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize> {
-    Den(Den<E::FieldParam, N_LIMBS>),
-    FpAdd(FpAdd<E::FieldParam, N_LIMBS>),
-    FpMul(FpMul<E::FieldParam, N_LIMBS>),
-    FpQuad(FpQuad<E::FieldParam, N_LIMBS>),
-    FpMulConst(FpMulConst<E::FieldParam, N_LIMBS>),
-    Selector(Selector<FieldRegister<E::FieldParam, N_LIMBS>>),
+pub enum EdWardsMicroInstruction<E: EdwardsParameters> {
+    Den(Den<E::FieldParam>),
+    FpAdd(FpAdd<E::FieldParam>),
+    FpMul(FpMul<E::FieldParam>),
+    FpQuad(FpQuad<E::FieldParam>),
+    FpMulConst(FpMulConst<E::FieldParam>),
+    Selector(Selector<FieldRegister<E::FieldParam>>),
 }
 
-impl<E: EdwardsParameters<N>, F: RichField + Extendable<D>, const D: usize, const N: usize>
-    Instruction<F, D> for EdWardsMicroInstruction<E, N>
+impl<E: EdwardsParameters, F: RichField + Extendable<D>, const D: usize> Instruction<F, D>
+    for EdWardsMicroInstruction<E>
 {
     fn memory_vec(&self) -> Vec<Register> {
         match self {
             EdWardsMicroInstruction::Den(den) => {
-                <Den<E::FieldParam, N> as Instruction<F, D>>::memory_vec(den)
+                <Den<E::FieldParam> as Instruction<F, D>>::memory_vec(den)
             }
             EdWardsMicroInstruction::FpAdd(fp_add) => {
-                <FpAdd<E::FieldParam, N> as Instruction<F, D>>::memory_vec(fp_add)
+                <FpAdd<E::FieldParam> as Instruction<F, D>>::memory_vec(fp_add)
             }
             EdWardsMicroInstruction::FpMul(fp_mul) => {
-                <FpMul<E::FieldParam, N> as Instruction<F, D>>::memory_vec(fp_mul)
+                <FpMul<E::FieldParam> as Instruction<F, D>>::memory_vec(fp_mul)
             }
             EdWardsMicroInstruction::FpQuad(fp_quad) => {
-                <FpQuad<E::FieldParam, N> as Instruction<F, D>>::memory_vec(fp_quad)
+                <FpQuad<E::FieldParam> as Instruction<F, D>>::memory_vec(fp_quad)
             }
             EdWardsMicroInstruction::FpMulConst(fp_mul_const) => {
-                <FpMulConst<E::FieldParam, N> as Instruction<F, D>>::memory_vec(fp_mul_const)
+                <FpMulConst<E::FieldParam> as Instruction<F, D>>::memory_vec(fp_mul_const)
             }
             EdWardsMicroInstruction::Selector(selector) => {
-                <Selector<FieldRegister<E::FieldParam, N>> as Instruction<F, D>>::memory_vec(
-                    selector,
-                )
+                <Selector<FieldRegister<E::FieldParam>> as Instruction<F, D>>::memory_vec(selector)
             }
         }
     }
@@ -50,27 +48,27 @@ impl<E: EdwardsParameters<N>, F: RichField + Extendable<D>, const D: usize, cons
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
         match self {
             EdWardsMicroInstruction::Den(den) => {
-                <Den<E::FieldParam, N> as Instruction<F, D>>::assign_row(
+                <Den<E::FieldParam> as Instruction<F, D>>::assign_row(
                     den, trace_rows, row, row_index,
                 )
             }
             EdWardsMicroInstruction::FpAdd(fp_add) => {
-                <FpAdd<E::FieldParam, N> as Instruction<F, D>>::assign_row(
+                <FpAdd<E::FieldParam> as Instruction<F, D>>::assign_row(
                     fp_add, trace_rows, row, row_index,
                 )
             }
             EdWardsMicroInstruction::FpMul(fp_mul) => {
-                <FpMul<E::FieldParam, N> as Instruction<F, D>>::assign_row(
+                <FpMul<E::FieldParam> as Instruction<F, D>>::assign_row(
                     fp_mul, trace_rows, row, row_index,
                 )
             }
             EdWardsMicroInstruction::FpQuad(fp_quad) => {
-                <FpQuad<E::FieldParam, N> as Instruction<F, D>>::assign_row(
+                <FpQuad<E::FieldParam> as Instruction<F, D>>::assign_row(
                     fp_quad, trace_rows, row, row_index,
                 )
             }
             EdWardsMicroInstruction::FpMulConst(fp_mul_const) => {
-                <FpMulConst<E::FieldParam, N> as Instruction<F, D>>::assign_row(
+                <FpMulConst<E::FieldParam> as Instruction<F, D>>::assign_row(
                     fp_mul_const,
                     trace_rows,
                     row,
@@ -78,7 +76,7 @@ impl<E: EdwardsParameters<N>, F: RichField + Extendable<D>, const D: usize, cons
                 )
             }
             EdWardsMicroInstruction::Selector(selector) => {
-                <Selector<FieldRegister<E::FieldParam, N>> as Instruction<F, D>>::assign_row(
+                <Selector<FieldRegister<E::FieldParam>> as Instruction<F, D>>::assign_row(
                     selector, trace_rows, row, row_index,
                 )
             }
@@ -88,22 +86,22 @@ impl<E: EdwardsParameters<N>, F: RichField + Extendable<D>, const D: usize, cons
     fn witness_data(&self) -> Option<crate::arithmetic::register::WitnessData> {
         match self {
             EdWardsMicroInstruction::Den(den) => {
-                <Den<E::FieldParam, N> as Instruction<F, D>>::witness_data(den)
+                <Den<E::FieldParam> as Instruction<F, D>>::witness_data(den)
             }
             EdWardsMicroInstruction::FpAdd(fp_add) => {
-                <FpAdd<E::FieldParam, N> as Instruction<F, D>>::witness_data(fp_add)
+                <FpAdd<E::FieldParam> as Instruction<F, D>>::witness_data(fp_add)
             }
             EdWardsMicroInstruction::FpMul(fp_mul) => {
-                <FpMul<E::FieldParam, N> as Instruction<F, D>>::witness_data(fp_mul)
+                <FpMul<E::FieldParam> as Instruction<F, D>>::witness_data(fp_mul)
             }
             EdWardsMicroInstruction::FpQuad(fp_quad) => {
-                <FpQuad<E::FieldParam, N> as Instruction<F, D>>::witness_data(fp_quad)
+                <FpQuad<E::FieldParam> as Instruction<F, D>>::witness_data(fp_quad)
             }
             EdWardsMicroInstruction::FpMulConst(fp_mul_const) => {
-                <FpMulConst<E::FieldParam, N> as Instruction<F, D>>::witness_data(fp_mul_const)
+                <FpMulConst<E::FieldParam> as Instruction<F, D>>::witness_data(fp_mul_const)
             }
             EdWardsMicroInstruction::Selector(selector) => {
-                <Selector<FieldRegister<E::FieldParam, N>> as Instruction<F, D>>::witness_data(
+                <Selector<FieldRegister<E::FieldParam>> as Instruction<F, D>>::witness_data(
                     selector,
                 )
             }
@@ -113,25 +111,22 @@ impl<E: EdwardsParameters<N>, F: RichField + Extendable<D>, const D: usize, cons
     fn set_witness(&mut self, witness: Register) -> Result<()> {
         match self {
             EdWardsMicroInstruction::Den(den) => {
-                <Den<E::FieldParam, N> as Instruction<F, D>>::set_witness(den, witness)
+                <Den<E::FieldParam> as Instruction<F, D>>::set_witness(den, witness)
             }
             EdWardsMicroInstruction::FpAdd(fp_add) => {
-                <FpAdd<E::FieldParam, N> as Instruction<F, D>>::set_witness(fp_add, witness)
+                <FpAdd<E::FieldParam> as Instruction<F, D>>::set_witness(fp_add, witness)
             }
             EdWardsMicroInstruction::FpMul(fp_mul) => {
-                <FpMul<E::FieldParam, N> as Instruction<F, D>>::set_witness(fp_mul, witness)
+                <FpMul<E::FieldParam> as Instruction<F, D>>::set_witness(fp_mul, witness)
             }
             EdWardsMicroInstruction::FpQuad(fp_quad) => {
-                <FpQuad<E::FieldParam, N> as Instruction<F, D>>::set_witness(fp_quad, witness)
+                <FpQuad<E::FieldParam> as Instruction<F, D>>::set_witness(fp_quad, witness)
             }
             EdWardsMicroInstruction::FpMulConst(fp_mul_const) => {
-                <FpMulConst<E::FieldParam, N> as Instruction<F, D>>::set_witness(
-                    fp_mul_const,
-                    witness,
-                )
+                <FpMulConst<E::FieldParam> as Instruction<F, D>>::set_witness(fp_mul_const, witness)
             }
             EdWardsMicroInstruction::Selector(selector) => {
-                <Selector<FieldRegister<E::FieldParam, N>> as Instruction<F, D>>::set_witness(
+                <Selector<FieldRegister<E::FieldParam>> as Instruction<F, D>>::set_witness(
                     selector, witness,
                 )
             }
@@ -154,39 +149,39 @@ impl<E: EdwardsParameters<N>, F: RichField + Extendable<D>, const D: usize, cons
     {
         match self {
             EdWardsMicroInstruction::Den(den) => {
-                <Den<E::FieldParam, N> as Instruction<F, D>>::packed_generic_constraints(
+                <Den<E::FieldParam> as Instruction<F, D>>::packed_generic_constraints(
                     den,
                     vars,
                     yield_constr,
                 )
             }
-            EdWardsMicroInstruction::FpAdd(fp_add) => <FpAdd<E::FieldParam, N> as Instruction<
+            EdWardsMicroInstruction::FpAdd(fp_add) => <FpAdd<E::FieldParam> as Instruction<
                 F,
                 D,
             >>::packed_generic_constraints(
                 fp_add, vars, yield_constr
             ),
-            EdWardsMicroInstruction::FpMul(fp_mul) => <FpMul<E::FieldParam, N> as Instruction<
+            EdWardsMicroInstruction::FpMul(fp_mul) => <FpMul<E::FieldParam> as Instruction<
                 F,
                 D,
             >>::packed_generic_constraints(
                 fp_mul, vars, yield_constr
             ),
-            EdWardsMicroInstruction::FpQuad(fp_quad) => <FpQuad<E::FieldParam, N> as Instruction<
+            EdWardsMicroInstruction::FpQuad(fp_quad) => <FpQuad<E::FieldParam> as Instruction<
                 F,
                 D,
             >>::packed_generic_constraints(
                 fp_quad, vars, yield_constr
             ),
             EdWardsMicroInstruction::FpMulConst(fp_mul_const) => {
-                <FpMulConst<E::FieldParam, N> as Instruction<F, D>>::packed_generic_constraints(
+                <FpMulConst<E::FieldParam> as Instruction<F, D>>::packed_generic_constraints(
                     fp_mul_const,
                     vars,
                     yield_constr,
                 )
             }
             EdWardsMicroInstruction::Selector(selector) => <Selector<
-                FieldRegister<E::FieldParam, N>,
+                FieldRegister<E::FieldParam>,
             > as Instruction<F, D>>::packed_generic_constraints(
                 selector, vars, yield_constr
             ),
@@ -201,33 +196,33 @@ impl<E: EdwardsParameters<N>, F: RichField + Extendable<D>, const D: usize, cons
     ) {
         match self {
             EdWardsMicroInstruction::Den(den) => {
-                <Den<E::FieldParam, N> as Instruction<F, D>>::ext_circuit_constraints(
+                <Den<E::FieldParam> as Instruction<F, D>>::ext_circuit_constraints(
                     den,
                     builder,
                     vars,
                     yield_constr,
                 )
             }
-            EdWardsMicroInstruction::FpAdd(fp_add) => <FpAdd<E::FieldParam, N> as Instruction<
+            EdWardsMicroInstruction::FpAdd(fp_add) => <FpAdd<E::FieldParam> as Instruction<
                 F,
                 D,
             >>::ext_circuit_constraints(
                 fp_add, builder, vars, yield_constr
             ),
-            EdWardsMicroInstruction::FpMul(fp_mul) => <FpMul<E::FieldParam, N> as Instruction<
+            EdWardsMicroInstruction::FpMul(fp_mul) => <FpMul<E::FieldParam> as Instruction<
                 F,
                 D,
             >>::ext_circuit_constraints(
                 fp_mul, builder, vars, yield_constr
             ),
-            EdWardsMicroInstruction::FpQuad(fp_quad) => <FpQuad<E::FieldParam, N> as Instruction<
+            EdWardsMicroInstruction::FpQuad(fp_quad) => <FpQuad<E::FieldParam> as Instruction<
                 F,
                 D,
             >>::ext_circuit_constraints(
                 fp_quad, builder, vars, yield_constr
             ),
             EdWardsMicroInstruction::FpMulConst(fp_mul_const) => {
-                <FpMulConst<E::FieldParam, N> as Instruction<F, D>>::ext_circuit_constraints(
+                <FpMulConst<E::FieldParam> as Instruction<F, D>>::ext_circuit_constraints(
                     fp_mul_const,
                     builder,
                     vars,
@@ -235,7 +230,7 @@ impl<E: EdwardsParameters<N>, F: RichField + Extendable<D>, const D: usize, cons
                 )
             }
             EdWardsMicroInstruction::Selector(selector) => <Selector<
-                FieldRegister<E::FieldParam, N>,
+                FieldRegister<E::FieldParam>,
             > as Instruction<F, D>>::ext_circuit_constraints(
                 selector, builder, vars, yield_constr
             ),
@@ -243,55 +238,42 @@ impl<E: EdwardsParameters<N>, F: RichField + Extendable<D>, const D: usize, cons
     }
 }
 
-impl<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize> From<FpMul<E::FieldParam, N_LIMBS>>
-    for EdWardsMicroInstruction<E, N_LIMBS>
-{
-    fn from(fp_mul: FpMul<E::FieldParam, N_LIMBS>) -> Self {
+impl<E: EdwardsParameters> From<FpMul<E::FieldParam>> for EdWardsMicroInstruction<E> {
+    fn from(fp_mul: FpMul<E::FieldParam>) -> Self {
         EdWardsMicroInstruction::FpMul(fp_mul)
     }
 }
 
-impl<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize> From<FpAdd<E::FieldParam, N_LIMBS>>
-    for EdWardsMicroInstruction<E, N_LIMBS>
-{
-    fn from(fp_add: FpAdd<E::FieldParam, N_LIMBS>) -> Self {
+impl<E: EdwardsParameters> From<FpAdd<E::FieldParam>> for EdWardsMicroInstruction<E> {
+    fn from(fp_add: FpAdd<E::FieldParam>) -> Self {
         EdWardsMicroInstruction::FpAdd(fp_add)
     }
 }
 
-impl<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize> From<FpQuad<E::FieldParam, N_LIMBS>>
-    for EdWardsMicroInstruction<E, N_LIMBS>
-{
-    fn from(fp_quad: FpQuad<E::FieldParam, N_LIMBS>) -> Self {
+impl<E: EdwardsParameters> From<FpQuad<E::FieldParam>> for EdWardsMicroInstruction<E> {
+    fn from(fp_quad: FpQuad<E::FieldParam>) -> Self {
         EdWardsMicroInstruction::FpQuad(fp_quad)
     }
 }
 
-impl<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize> From<FpMulConst<E::FieldParam, N_LIMBS>>
-    for EdWardsMicroInstruction<E, N_LIMBS>
-{
-    fn from(fp_mul_const: FpMulConst<E::FieldParam, N_LIMBS>) -> Self {
+impl<E: EdwardsParameters> From<FpMulConst<E::FieldParam>> for EdWardsMicroInstruction<E> {
+    fn from(fp_mul_const: FpMulConst<E::FieldParam>) -> Self {
         EdWardsMicroInstruction::FpMulConst(fp_mul_const)
     }
 }
 
-impl<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize> From<Den<E::FieldParam, N_LIMBS>>
-    for EdWardsMicroInstruction<E, N_LIMBS>
-{
-    fn from(den: Den<E::FieldParam, N_LIMBS>) -> Self {
+impl<E: EdwardsParameters> From<Den<E::FieldParam>> for EdWardsMicroInstruction<E> {
+    fn from(den: Den<E::FieldParam>) -> Self {
         EdWardsMicroInstruction::Den(den)
     }
 }
 
-impl<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize>
-    From<Selector<FieldRegister<E::FieldParam, N_LIMBS>>> for EdWardsMicroInstruction<E, N_LIMBS>
+impl<E: EdwardsParameters> From<Selector<FieldRegister<E::FieldParam>>>
+    for EdWardsMicroInstruction<E>
 {
-    fn from(selector: Selector<FieldRegister<E::FieldParam, N_LIMBS>>) -> Self {
+    fn from(selector: Selector<FieldRegister<E::FieldParam>>) -> Self {
         EdWardsMicroInstruction::Selector(selector)
     }
 }
 
-impl<E: EdwardsParameters<N>, const N: usize> FromEdwardsAdd<E, N>
-    for EdWardsMicroInstruction<E, N>
-{
-}
+impl<E: EdwardsParameters> FromEdwardsAdd<E> for EdWardsMicroInstruction<E> {}
