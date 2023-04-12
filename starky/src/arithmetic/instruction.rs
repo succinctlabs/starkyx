@@ -63,27 +63,26 @@ pub enum StandardInstruction<F, const D: usize> {
 
 impl<F, const D: usize> StandardInstruction<F, D> {
     pub fn includes_next(&self) -> bool {
-        match self {
+        matches!(
+            self,
             StandardInstruction::Add(
                 Register::Local(_, _),
                 Register::Local(_, _),
                 Register::Local(_, _),
-            ) => true,
-            StandardInstruction::AddConst(Register::Local(_, _), _, Register::Local(_, _)) => true,
-            StandardInstruction::Sub(
-                Register::Local(_, _),
-                Register::Local(_, _),
-                Register::Local(_, _),
-            ) => true,
-            StandardInstruction::SubConst(Register::Local(_, _), _, Register::Local(_, _)) => true,
-            StandardInstruction::Mul(
-                Register::Local(_, _),
-                Register::Local(_, _),
-                Register::Local(_, _),
-            ) => true,
-            StandardInstruction::MulConst(Register::Local(_, _), _, Register::Local(_, _)) => true,
-            _ => false,
-        }
+            ) | StandardInstruction::AddConst(Register::Local(_, _), _, Register::Local(_, _))
+                | StandardInstruction::Sub(
+                    Register::Local(_, _),
+                    Register::Local(_, _),
+                    Register::Local(_, _),
+                )
+                | StandardInstruction::SubConst(Register::Local(_, _), _, Register::Local(_, _))
+                | StandardInstruction::Mul(
+                    Register::Local(_, _),
+                    Register::Local(_, _),
+                    Register::Local(_, _),
+                )
+                | StandardInstruction::MulConst(Register::Local(_, _), _, Register::Local(_, _))
+        )
     }
 }
 
@@ -110,7 +109,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for Standar
         }
     }
 
-    fn set_witness(&mut self, witness: Register) -> Result<()> {
+    fn set_witness(&mut self, _witness: Register) -> Result<()> {
         Ok(())
     }
 

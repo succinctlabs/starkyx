@@ -53,8 +53,8 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         let result_plus_temp = self.alloc_ec_point()?;
         self.write_data(scalar_bit)?;
 
-        let add = self.ed_add(&result, &temp, &result_plus_temp)?;
-        let double = self.ed_double(&temp, &temp_next)?;
+        let add = self.ed_add(result, temp, &result_plus_temp)?;
+        let double = self.ed_double(temp, temp_next)?;
 
         let selector_x =
             self.selector(scalar_bit, &result_plus_temp.x, &result.x, &result_next.x)?;
@@ -66,7 +66,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
             result_next: *result_next,
             temp: *temp,
             temp_next: *temp_next,
-            scalar_bit: scalar_bit.clone(),
+            scalar_bit: *scalar_bit,
             add,
             double,
             selector_x,
