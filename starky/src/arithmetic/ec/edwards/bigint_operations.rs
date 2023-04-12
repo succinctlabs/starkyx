@@ -7,7 +7,7 @@ use super::EdwardsParameters;
 use crate::arithmetic::field::FieldParameters;
 use crate::arithmetic::util::biguint_to_bits_le;
 
-impl<E: EdwardsParameters<N>, const N: usize> AffinePoint<E, N> {
+impl<E: EdwardsParameters> AffinePoint<E> {
     pub fn neutral() -> Self {
         Self::new(BigUint::from(0u32), BigUint::from(1u32))
     }
@@ -26,10 +26,10 @@ impl<E: EdwardsParameters<N>, const N: usize> AffinePoint<E, N> {
     }
 }
 
-impl<E: EdwardsParameters<N>, const N: usize> Add<&AffinePoint<E, N>> for &AffinePoint<E, N> {
-    type Output = AffinePoint<E, N>;
+impl<E: EdwardsParameters> Add<&AffinePoint<E>> for &AffinePoint<E> {
+    type Output = AffinePoint<E>;
 
-    fn add(self, other: &AffinePoint<E, N>) -> AffinePoint<E, N> {
+    fn add(self, other: &AffinePoint<E>) -> AffinePoint<E> {
         let p = E::FieldParam::modulus_biguint();
         let x_3n = (&self.x * &other.y + &self.y * &other.x) % &p;
         let y_3n = (&self.y * &other.y + &self.x * &other.x) % &p;
@@ -47,42 +47,42 @@ impl<E: EdwardsParameters<N>, const N: usize> Add<&AffinePoint<E, N>> for &Affin
     }
 }
 
-impl<E: EdwardsParameters<N>, const N: usize> Add<AffinePoint<E, N>> for AffinePoint<E, N> {
-    type Output = AffinePoint<E, N>;
+impl<E: EdwardsParameters> Add<AffinePoint<E>> for AffinePoint<E> {
+    type Output = AffinePoint<E>;
 
-    fn add(self, other: AffinePoint<E, N>) -> AffinePoint<E, N> {
+    fn add(self, other: AffinePoint<E>) -> AffinePoint<E> {
         &self + &other
     }
 }
 
-impl<E: EdwardsParameters<N>, const N: usize> Add<&AffinePoint<E, N>> for AffinePoint<E, N> {
-    type Output = AffinePoint<E, N>;
+impl<E: EdwardsParameters> Add<&AffinePoint<E>> for AffinePoint<E> {
+    type Output = AffinePoint<E>;
 
-    fn add(self, other: &AffinePoint<E, N>) -> AffinePoint<E, N> {
+    fn add(self, other: &AffinePoint<E>) -> AffinePoint<E> {
         &self + other
     }
 }
 
-impl<E: EdwardsParameters<N>, const N: usize> Mul<&BigUint> for &AffinePoint<E, N> {
-    type Output = AffinePoint<E, N>;
+impl<E: EdwardsParameters> Mul<&BigUint> for &AffinePoint<E> {
+    type Output = AffinePoint<E>;
 
-    fn mul(self, scalar: &BigUint) -> AffinePoint<E, N> {
+    fn mul(self, scalar: &BigUint) -> AffinePoint<E> {
         self.scalar_mul(scalar)
     }
 }
 
-impl<E: EdwardsParameters<N>, const N: usize> Mul<BigUint> for &AffinePoint<E, N> {
-    type Output = AffinePoint<E, N>;
+impl<E: EdwardsParameters> Mul<BigUint> for &AffinePoint<E> {
+    type Output = AffinePoint<E>;
 
-    fn mul(self, scalar: BigUint) -> AffinePoint<E, N> {
+    fn mul(self, scalar: BigUint) -> AffinePoint<E> {
         self.scalar_mul(&scalar)
     }
 }
 
-impl<E: EdwardsParameters<N>, const N: usize> Mul<BigUint> for AffinePoint<E, N> {
-    type Output = AffinePoint<E, N>;
+impl<E: EdwardsParameters> Mul<BigUint> for AffinePoint<E> {
+    type Output = AffinePoint<E>;
 
-    fn mul(self, scalar: BigUint) -> AffinePoint<E, N> {
+    fn mul(self, scalar: BigUint) -> AffinePoint<E> {
         self.scalar_mul(&scalar)
     }
 }
@@ -100,7 +100,7 @@ mod tests {
     #[test]
     fn test_bigint_ed_add() {
         type E = Ed25519Parameters;
-        let netural = AffinePoint::<E, 16>::neutral();
+        let netural = AffinePoint::<E>::neutral();
         let base = E::generator();
 
         assert_eq!(&base + &netural, base);
@@ -114,7 +114,7 @@ mod tests {
         let base = E::generator();
 
         let d = E::d_biguint();
-        let p = <E as EllipticCurveParameters<16>>::FieldParam::modulus_biguint();
+        let p = <E as EllipticCurveParameters>::FieldParam::modulus_biguint();
         assert_eq!((d * 121666u32) % &p, (&p - 121665u32) % &p);
 
         let mut rng = thread_rng();

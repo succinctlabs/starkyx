@@ -13,18 +13,18 @@ use crate::arithmetic::trace::TraceHandle;
 
 pub const LIMB: u32 = 2u32.pow(16);
 
-pub trait EllipticCurveParameters<const N_LIMBS: usize>: Send + Sync + Copy + 'static {
-    type FieldParam: FieldParameters<N_LIMBS>;
+pub trait EllipticCurveParameters: Send + Sync + Copy + 'static {
+    type FieldParam: FieldParameters;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AffinePoint<E: EllipticCurveParameters<N>, const N: usize> {
+pub struct AffinePoint<E: EllipticCurveParameters> {
     pub x: BigUint,
     pub y: BigUint,
     _marker: std::marker::PhantomData<E>,
 }
 
-impl<E: EllipticCurveParameters<N>, const N: usize> AffinePoint<E, N> {
+impl<E: EllipticCurveParameters> AffinePoint<E> {
     #[allow(dead_code)]
     fn new(x: BigUint, y: BigUint) -> Self {
         Self {
@@ -37,37 +37,35 @@ impl<E: EllipticCurveParameters<N>, const N: usize> AffinePoint<E, N> {
 
 #[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]
-pub struct AffinePointRegister<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize> {
-    x: FieldRegister<E::FieldParam, N_LIMBS>,
-    y: FieldRegister<E::FieldParam, N_LIMBS>,
+pub struct AffinePointRegister<E: EllipticCurveParameters> {
+    x: FieldRegister<E::FieldParam>,
+    y: FieldRegister<E::FieldParam>,
 }
 
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
-    pub fn alloc_ec_point<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize>(
-        &mut self,
-    ) -> Result<AffinePointRegister<E, N_LIMBS>> {
+    pub fn alloc_ec_point<E: EllipticCurveParameters>(&mut self) -> Result<AffinePointRegister<E>> {
         self.alloc_local_ec_point()
     }
 
-    pub fn alloc_local_ec_point<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize>(
+    pub fn alloc_local_ec_point<E: EllipticCurveParameters>(
         &mut self,
-    ) -> Result<AffinePointRegister<E, N_LIMBS>> {
-        let x = self.alloc_local::<FieldRegister<E::FieldParam, N_LIMBS>>()?;
-        let y = self.alloc_local::<FieldRegister<E::FieldParam, N_LIMBS>>()?;
+    ) -> Result<AffinePointRegister<E>> {
+        let x = self.alloc_local::<FieldRegister<E::FieldParam>>()?;
+        let y = self.alloc_local::<FieldRegister<E::FieldParam>>()?;
         Ok(AffinePointRegister { x, y })
     }
 
-    pub fn alloc_next_ec_point<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize>(
+    pub fn alloc_next_ec_point<E: EllipticCurveParameters>(
         &mut self,
-    ) -> Result<AffinePointRegister<E, N_LIMBS>> {
-        let x = self.alloc_next::<FieldRegister<E::FieldParam, N_LIMBS>>()?;
-        let y = self.alloc_next::<FieldRegister<E::FieldParam, N_LIMBS>>()?;
+    ) -> Result<AffinePointRegister<E>> {
+        let x = self.alloc_next::<FieldRegister<E::FieldParam>>()?;
+        let y = self.alloc_next::<FieldRegister<E::FieldParam>>()?;
         Ok(AffinePointRegister { x, y })
     }
 
-    pub fn write_ec_point<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize>(
+    pub fn write_ec_point<E: EllipticCurveParameters>(
         &mut self,
-        data: &AffinePointRegister<E, N_LIMBS>,
+        data: &AffinePointRegister<E>,
     ) -> Result<()> {
         self.write_data(&data.x)?;
         self.write_data(&data.y)?;
@@ -77,18 +75,18 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
     #[allow(dead_code)]
-    fn write_ec_point<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize>(
+    fn write_ec_point<E: EllipticCurveParameters>(
         &self,
         row_index: usize,
-        point: &AffinePoint<E, N_LIMBS>,
-        data: &AffinePointRegister<E, N_LIMBS>,
+        point: &AffinePoint<E>,
+        data: &AffinePointRegister<E>,
     ) -> Result<()> {
         self.write_field(row_index, &point.x, data.x)?;
         self.write_field(row_index, &point.y, data.y)
     }
 }
 
-impl<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize> AffinePointRegister<E, N_LIMBS> {
+impl<E: EllipticCurveParameters> AffinePointRegister<E> {
     pub fn next(&self) -> Self {
         Self {
             x: self.x.next(),
@@ -97,8 +95,8 @@ impl<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize> AffinePointRegis
     }
 
     pub fn from_field_registers(
-        x: FieldRegister<E::FieldParam, N_LIMBS>,
-        y: FieldRegister<E::FieldParam, N_LIMBS>,
+        x: FieldRegister<E::FieldParam>,
+        y: FieldRegister<E::FieldParam>,
     ) -> Self {
         Self { x, y }
     }

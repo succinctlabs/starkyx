@@ -18,26 +18,26 @@ use crate::arithmetic::util::{extract_witness_and_shift, split_digits, to_field_
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Debug, Clone, Copy)]
-pub struct Den<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> {
-    a: FieldRegister<P, N_LIMBS>,
-    b: FieldRegister<P, N_LIMBS>,
+pub struct Den<P: FieldParameters> {
+    a: FieldRegister<P>,
+    b: FieldRegister<P>,
     sign: bool,
-    result: FieldRegister<P, N_LIMBS>,
+    result: FieldRegister<P>,
     carry: Option<Register>,
     witness_low: Option<Register>,
     witness_high: Option<Register>,
 }
 
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
-    pub fn ed_den<P: FieldParameters<N>, const N: usize>(
+    pub fn ed_den<P: FieldParameters>(
         &mut self,
-        a: &FieldRegister<P, N>,
-        b: &FieldRegister<P, N>,
+        a: &FieldRegister<P>,
+        b: &FieldRegister<P>,
         sign: bool,
-        result: &FieldRegister<P, N>,
-    ) -> Result<Den<P, N>>
+        result: &FieldRegister<P>,
+    ) -> Result<Den<P>>
     where
-        L::Instruction: From<Den<P, N>>,
+        L::Instruction: From<Den<P>>,
     {
         let instr = Den::new(*a, *b, sign, *result);
         self.insert_instruction(instr.into())?;
@@ -45,17 +45,17 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 }
 
-impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> Den<P, N_LIMBS> {
-    const NUM_CARRY_LIMBS: usize = N_LIMBS;
-    pub const NUM_WITNESS_LOW_LIMBS: usize = 2 * N_LIMBS - 2;
-    pub const NUM_WITNESS_HIGH_LIMBS: usize = 2 * N_LIMBS - 2;
+impl<P: FieldParameters> Den<P> {
+    const NUM_CARRY_LIMBS: usize = P::NB_LIMBS;
+    pub const NUM_WITNESS_LOW_LIMBS: usize = 2 * P::NB_LIMBS - 2;
+    pub const NUM_WITNESS_HIGH_LIMBS: usize = 2 * P::NB_LIMBS - 2;
 
     #[inline]
     pub const fn new(
-        a: FieldRegister<P, N_LIMBS>,
-        b: FieldRegister<P, N_LIMBS>,
+        a: FieldRegister<P>,
+        b: FieldRegister<P>,
         sign: bool,
-        result: FieldRegister<P, N_LIMBS>,
+        result: FieldRegister<P>,
     ) -> Self {
         Self {
             a,
@@ -69,15 +69,15 @@ impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> Den<P, N_LIMBS> {
     }
 
     pub const fn num_den_columns() -> usize {
-        3 * N_LIMBS
+        3 * P::NB_LIMBS
             + Self::NUM_CARRY_LIMBS
             + Self::NUM_WITNESS_LOW_LIMBS
             + Self::NUM_WITNESS_HIGH_LIMBS
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldParameters<N>>
-    Instruction<F, D> for Den<FP, N>
+impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
+    for Den<P>
 {
     fn memory_vec(&self) -> Vec<Register> {
         vec![
@@ -124,8 +124,8 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
         let mut index = 0;
         self.result
             .register()
-            .assign(trace_rows, &mut row[index..N], row_index);
-        index += N;
+            .assign(trace_rows, &mut row[index..P::NB_LIMBS], row_index);
+        index += P::NB_LIMBS;
         self.carry.unwrap().assign(
             trace_rows,
             &mut row[index..index + Self::NUM_CARRY_LIMBS],
@@ -147,17 +147,17 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
 
     fn packed_generic_constraints<
         FE,
-        P,
+        PF,
         const D2: usize,
         const COLUMNS: usize,
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
+        vars: StarkEvaluationVars<FE, PF, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<PF>,
     ) where
         FE: FieldExtension<D2, BaseField = F>,
-        P: PackedField<Scalar = FE>,
+        PF: PackedField<Scalar = FE>,
     {
         // get all the data
         let a = self.a.register().packed_entries_slice(&vars);
@@ -168,7 +168,7 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
         let witness_low = self.witness_low.unwrap().packed_entries_slice(&vars);
         let witness_high = self.witness_high.unwrap().packed_entries_slice(&vars);
 
-        let p_limbs = Polynomial::<FE>::from_iter(modulus_field_iter::<FE, FP, N>());
+        let p_limbs = Polynomial::<FE>::from_iter(modulus_field_iter::<FE, P>());
 
         // equation_lhs = if sign { b * result + result} else { b * result + a}
         let equation_lhs = if self.sign {
@@ -192,11 +192,11 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
             .zip(witness_high.iter())
             .map(|(x, y)| *x + (*y * limb));
 
-        let offset = FE::from_canonical_u32(FP::WITNESS_OFFSET as u32);
-        let w = w_shifted.map(|x| x - offset).collect::<Vec<P>>();
+        let offset = FE::from_canonical_u32(P::WITNESS_OFFSET as u32);
+        let w = w_shifted.map(|x| x - offset).collect::<Vec<PF>>();
 
         // Multiply by (x-2^16) and make the constraint
-        let root_monomial: &[P] = &[P::from(-limb), P::from(P::Scalar::ONE)];
+        let root_monomial: &[PF] = &[PF::from(-limb), PF::from(PF::Scalar::ONE)];
         let witness_times_root = PolynomialOps::mul(&w, root_monomial);
 
         //debug_assert!(vanishing_poly.len() == witness_times_root.len());
@@ -222,7 +222,7 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
 
         let p_limbs = PolynomialGadget::constant_extension(
             builder,
-            &modulus_field_iter::<F::Extension, FP, N>().collect::<Vec<_>>(),
+            &modulus_field_iter::<F::Extension, P>().collect::<Vec<_>>(),
         );
 
         // equation_lhs = if sign { b * result + result} else { b * result + a}
@@ -251,7 +251,7 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
             PolynomialGadget::ext_scalar_mul_extension(builder, witness_high, &limb);
         let w_shifted = PolynomialGadget::add_extension(builder, witness_low, &w_high_times_limb);
         let offset =
-            builder.constant_extension(F::Extension::from_canonical_u32(FP::WITNESS_OFFSET as u32));
+            builder.constant_extension(F::Extension::from_canonical_u32(P::WITNESS_OFFSET as u32));
         let w = PolynomialGadget::sub_constant_extension(builder, &w_shifted, &offset);
 
         // Multiply by (x-2^16) and make the constraint
@@ -268,7 +268,7 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
     }
 }
 
-impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> Den<P, N_LIMBS> {
+impl<P: FieldParameters> Den<P> {
     /// Trace row for fp_mul operation
     ///
     /// Returns a vector
@@ -302,11 +302,11 @@ impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> Den<P, N_LIMBS> {
         debug_assert_eq!(&carry * &p, &equation_lhs - &equation_rhs);
 
         // make polynomial limbs
-        let p_a = Polynomial::<i64>::from_biguint_num(a, 16, N_LIMBS);
-        let p_b = Polynomial::<i64>::from_biguint_num(b, 16, N_LIMBS);
-        let p_p = Polynomial::<i64>::from_biguint_num(&p, 16, N_LIMBS);
+        let p_a = Polynomial::<i64>::from_biguint_num(a, 16, P::NB_LIMBS);
+        let p_b = Polynomial::<i64>::from_biguint_num(b, 16, P::NB_LIMBS);
+        let p_p = Polynomial::<i64>::from_biguint_num(&p, 16, P::NB_LIMBS);
 
-        let p_result = Polynomial::<i64>::from_biguint_num(&result, 16, N_LIMBS);
+        let p_result = Polynomial::<i64>::from_biguint_num(&result, 16, P::NB_LIMBS);
         let p_carry = Polynomial::<i64>::from_biguint_num(&carry, 16, Self::NUM_CARRY_LIMBS);
 
         // Compute the vanishing polynomial
@@ -335,15 +335,15 @@ impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> Den<P, N_LIMBS> {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
-    pub fn write_ed_den<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize>(
+    pub fn write_ed_den<P: FieldParameters>(
         &self,
         row_index: usize,
         a_int: &BigUint,
         b_int: &BigUint,
         sign: bool,
-        instruction: Den<P, N_LIMBS>,
+        instruction: Den<P>,
     ) -> Result<BigUint> {
-        let (row, result) = Den::<P, N_LIMBS>::trace_row::<F, D>(a_int, b_int, sign);
+        let (row, result) = Den::<P>::trace_row::<F, D>(a_int, b_int, sign);
         self.write(row_index, instruction, row)?;
         Ok(result)
     }
@@ -376,10 +376,10 @@ mod tests {
     struct DenTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for DenTest {
-        const NUM_ARITHMETIC_COLUMNS: usize = Den::<Fp25519Param, 16>::num_den_columns();
+        const NUM_ARITHMETIC_COLUMNS: usize = Den::<Fp25519Param>::num_den_columns();
         const NUM_FREE_COLUMNS: usize = 0;
 
-        type Instruction = Den<Fp25519Param, 16>;
+        type Instruction = Den<Fp25519Param>;
     }
 
     #[test]
