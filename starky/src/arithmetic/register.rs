@@ -101,10 +101,7 @@ pub struct BitRegister {
 impl Register {
     #[inline]
     pub fn is_next(&self) -> bool {
-        match self {
-            Register::Next(_, _) => true,
-            _ => false,
-        }
+        matches!(self, Register::Next(_, _))
     }
 
     pub fn next(&self) -> Self {

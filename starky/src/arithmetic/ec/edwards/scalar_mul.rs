@@ -8,7 +8,6 @@ use crate::arithmetic::register::BitRegister;
 use crate::arithmetic::util::biguint_to_bits_le;
 
 #[derive(Clone, Copy)]
-#[allow(non_snake_case)]
 #[allow(dead_code)]
 pub struct EdScalarMulData<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize> {
     result: AffinePointRegister<E, N_LIMBS>,
@@ -33,14 +32,14 @@ impl<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize> EdScalarMulData<E, N_L
 }
 
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
-    /// This function implements the double-and-add algorithm for scalar multiplication.
+    /// This function implements one step of the double-and-add algorithm for scalar multiplication.
     ///
     /// The function performs the following operation:
     ///     Add a write option for the bits to scalar_bit
     ///     Asserts Result_next = if scalar_bit == 1 then result + temp else Result
     ///     Asserts temp_next = temp + temp
     ///
-    pub fn ed_double_and_add<E: EdwardsParameters<N>, const N: usize>(
+    pub fn ed_double_and_add_step<E: EdwardsParameters<N>, const N: usize>(
         &mut self,
         scalar_bit: &BitRegister,
         result: &AffinePointRegister<E, N>,
@@ -81,7 +80,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
     ///
     /// Assumes the scalar is already reduced modulo the order of the curve group
     #[allow(non_snake_case)]
-    pub fn write_ed_double_and_add<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize>(
+    pub fn write_scalar_mul<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize>(
         &self,
         starting_row: usize,
         scalar: &BigUint,
@@ -154,7 +153,6 @@ mod tests {
         type Instruction = EdWardsMicroInstruction<Ed25519Parameters, 16>;
     }
 
-    #[allow(non_snake_case)]
     #[test]
     fn test_ed_double_and_add() {
         const D: usize = 2;
@@ -162,30 +160,13 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type E = Ed25519Parameters;
         type S = TestStark<EdScalarMulTest, F, D>;
-        type FieldPar = <E as EllipticCurveParameters<16>>::FieldParam;
 
         let _ = env_logger::builder().is_test(true).try_init();
         // build the stark
         let mut builder = ChipBuilder::<EdScalarMulTest, F, D>::new();
 
-        let n_limbs = 16;
-
-        //let res = builder.alloc_ec_point::<E, 16>().unwrap();
-        //let temp = builder.alloc_ec_point::<E, 16>().unwrap();
-        let res_x = FieldRegister::<FieldPar, 16>::from_raw_register(
-            builder.get_local_memory(n_limbs).unwrap(),
-        );
-        let res_y = FieldRegister::<FieldPar, 16>::from_raw_register(
-            builder.get_local_memory(n_limbs).unwrap(),
-        );
-        let res = AffinePointRegister::<E, 16>::from_field_registers(res_x, res_y);
-        let temp_x = FieldRegister::<FieldPar, 16>::from_raw_register(
-            builder.get_local_memory(n_limbs).unwrap(),
-        );
-        let temp_y = FieldRegister::<FieldPar, 16>::from_raw_register(
-            builder.get_local_memory(n_limbs).unwrap(),
-        );
-        let temp = AffinePointRegister::<E, 16>::from_field_registers(temp_x, temp_y);
+        let res = builder.alloc_unchecked_ec_point().unwrap();
+        let temp = builder.alloc_unchecked_ec_point().unwrap();
 
         let res_next = builder.alloc_ec_point::<E, 16>().unwrap();
         let temp_next = builder.alloc_ec_point::<E, 16>().unwrap();
@@ -193,7 +174,7 @@ mod tests {
         let bit = builder.alloc_local::<BitRegister>().unwrap();
 
         let ed_data = builder
-            .ed_double_and_add(&bit, &res, &res_next, &temp, &temp_next)
+            .ed_double_and_add_step(&bit, &res, &res_next, &temp, &temp_next)
             .unwrap();
         builder.write_ec_point(&res).unwrap();
         builder.write_ec_point(&temp).unwrap();
@@ -224,13 +205,7 @@ mod tests {
                         .unwrap();
 
                     let (_res, _temp) = handle
-                        .write_ed_double_and_add(
-                            256 * i,
-                            &scalar,
-                            &res_int,
-                            &temp_int,
-                            ed_data,
-                        )
+                        .write_scalar_mul(256 * i, &scalar, &res_int, &temp_int, ed_data)
                         .unwrap();
                 });
             }

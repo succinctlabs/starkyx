@@ -43,10 +43,28 @@ pub struct AffinePointRegister<E: EllipticCurveParameters<N_LIMBS>, const N_LIMB
 }
 
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
+    /// Allocates registers for an affine elliptic curve point.
+    ///
+    /// The entries are range-checked to be less than 2^16.
     pub fn alloc_ec_point<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize>(
         &mut self,
     ) -> Result<AffinePointRegister<E, N_LIMBS>> {
         self.alloc_local_ec_point()
+    }
+
+    /// Allocates registers for a next affine elliptic curve point without range-checking.
+    pub fn alloc_unchecked_ec_point<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize>(
+        &mut self,
+    ) -> Result<AffinePointRegister<E, N_LIMBS>> {
+        let x = FieldRegister::<E::FieldParam, N_LIMBS>::from_raw_register(
+            self.get_local_memory(N_LIMBS).unwrap(),
+        );
+        let y = FieldRegister::<E::FieldParam, N_LIMBS>::from_raw_register(
+            self.get_local_memory(N_LIMBS).unwrap(),
+        );
+        Ok(AffinePointRegister::<E, N_LIMBS>::from_field_registers(
+            x, y,
+        ))
     }
 
     pub fn alloc_local_ec_point<E: EllipticCurveParameters<N_LIMBS>, const N_LIMBS: usize>(
