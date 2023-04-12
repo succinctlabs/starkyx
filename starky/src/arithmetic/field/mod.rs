@@ -48,7 +48,10 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
 }
 
 pub fn modulus_field_iter<F: Field, P: FieldParameters>() -> impl Iterator<Item = F> {
-    P::MODULUS.into_iter().map(|x| F::from_canonical_u16(x))
+    P::MODULUS
+        .into_iter()
+        .map(|x| F::from_canonical_u16(x))
+        .take(P::NB_LIMBS)
 }
 
 #[derive(Debug, Clone, Copy)]

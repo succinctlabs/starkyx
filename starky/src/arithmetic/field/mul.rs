@@ -455,6 +455,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         let c = self
             .c
             .into_iter()
+            .take(P::NB_LIMBS)
             .map(FE::from_canonical_u16)
             .map(PF::from)
             .collect::<Vec<_>>();
