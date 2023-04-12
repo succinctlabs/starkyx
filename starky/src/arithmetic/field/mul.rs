@@ -763,7 +763,14 @@ mod tests {
         type S = TestStark<FpMulConstTest, F, D>;
 
         let mut c: [u16; MAX_NB_LIMBS] = [0; MAX_NB_LIMBS];
-        c[0] = 1;
+        c[0] = 100;
+        c[1] = 2;
+        c[2] = 30000;
+
+        let mut c_bigint = BigUint::zero();
+        for i in 0..MAX_NB_LIMBS {
+            c_bigint += BigUint::from(c[i]) << (i * 16);
+        }
 
         // build the stark
         let mut builder = ChipBuilder::<FpMulConstTest, F, D>::new();
@@ -791,7 +798,7 @@ mod tests {
             //rayon::spawn(move || {
             handle.write_field(i, &a_int, a).unwrap();
             let res = handle.write_fpmul_const(i, &a_int, ac_ins).unwrap();
-            assert_eq!(res, a_int);
+            assert_eq!(res, (c_bigint.clone() * a_int) % &p);
             //});
         }
         drop(handle);

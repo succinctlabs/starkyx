@@ -302,8 +302,7 @@ impl DataRegister for U16Array {
     }
 
     fn size_of() -> usize {
-        // TODO: FIX
-        32
+        panic!("Cannot get size of U16Array")
     }
 
     fn into_raw_register(self) -> Register {
