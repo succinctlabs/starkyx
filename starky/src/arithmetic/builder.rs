@@ -272,7 +272,7 @@ mod tests {
     use crate::arithmetic::builder::ChipBuilder;
     use crate::arithmetic::chip::{ChipParameters, TestStark};
     use crate::arithmetic::field::mul::FpMul;
-    use crate::arithmetic::field::{Fp25519Param};
+    use crate::arithmetic::field::Fp25519Param;
     use crate::arithmetic::register::Element;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
@@ -310,7 +310,7 @@ mod tests {
         builder.write_data(&b).unwrap();
         builder.write_data(&c).unwrap();
 
-        let _ = builder.mul(a, b, c);
+        builder.mul(a, b, c);
 
         let (chip, spec) = builder.build();
 
