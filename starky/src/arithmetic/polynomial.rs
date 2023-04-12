@@ -166,6 +166,12 @@ impl<T: Clone> Polynomial<T> {
         }
     }
 
+    pub fn from_slice(coefficients: &[T]) -> Self {
+        Self {
+            coefficients: coefficients.to_vec(),
+        }
+    }
+
     pub fn from_polynomial<S>(p: Polynomial<S>) -> Self
     where
         S: Into<T>,
@@ -198,6 +204,14 @@ impl<T: Clone> Polynomial<T> {
     pub fn constant(value: T) -> Self {
         Self {
             coefficients: vec![value],
+        }
+    }
+}
+
+impl<T> FromIterator<T> for Polynomial<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Self {
+            coefficients: iter.into_iter().collect(),
         }
     }
 }
@@ -454,6 +468,26 @@ impl<T: Add<Output = T> + Copy + Default> Add<&Polynomial<T>> for Polynomial<T> 
 
     fn add(self, other: &Polynomial<T>) -> Polynomial<T> {
         Polynomial::new_from_vec(PolynomialOps::add(self.as_slice(), other.as_slice()))
+    }
+}
+
+impl<T: Mul<Output = T> + Add<Output = T> + AddAssign + Copy + Default> Add<T> for Polynomial<T> {
+    type Output = Polynomial<T>;
+
+    fn add(self, other: T) -> Polynomial<T> {
+        let mut coefficients = self.coefficients();
+        coefficients[0] += other;
+        Self::new_from_vec(coefficients)
+    }
+}
+
+impl<T: Mul<Output = T> + Add<Output = T> + AddAssign + Copy + Default> Add<T> for &Polynomial<T> {
+    type Output = Polynomial<T>;
+
+    fn add(self, other: T) -> Polynomial<T> {
+        let mut coefficients = self.coefficients();
+        coefficients[0] += other;
+        Polynomial::new_from_vec(coefficients)
     }
 }
 
