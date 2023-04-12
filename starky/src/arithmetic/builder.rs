@@ -11,15 +11,14 @@ use plonky2::hash::hash_types::RichField;
 
 use super::bool::ConstraintBool;
 use super::chip::{Chip, ChipParameters};
-use super::instruction::{EqualityConstraint, Instruction, WriteInstruction};
+use super::instruction::{EqualityConstraint, Instruction, StandardInstruction, WriteInstruction};
 use super::register::{CellType, DataRegister, Register};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub enum InsID {
-    Label(String),
-    MemID(Vec<Register>),
+    CustomInstruction(Vec<Register>),
+    StandardInstruction(Vec<Register>),
     Write(Register),
-    WriteLabel(String),
 }
 
 #[derive(Clone, Debug)]
@@ -34,6 +33,7 @@ where
     next_index: usize,
     instruction_indices: BTreeMap<InsID, usize>,
     instructions: Vec<L::Instruction>,
+    standard_instructions: Vec<StandardInstruction<F, D>>,
     write_instructions: Vec<WriteInstruction>,
     constraints: Vec<EqualityConstraint>,
 }
@@ -57,15 +57,10 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
             next_arithmetic_index: L::NUM_FREE_COLUMNS,
             instruction_indices: BTreeMap::new(),
             instructions: Vec::new(),
+            standard_instructions: Vec::new(),
             write_instructions: Vec::new(),
             constraints: Vec::new(),
         }
-    }
-
-    fn _get_instruction_from_label(&self, label: &str) -> Option<&L::Instruction> {
-        self.instruction_indices
-            .get(&InsID::Label(String::from(label)))
-            .map(|index| &self.instructions[*index])
     }
 
     pub fn get_local_memory(&mut self, size: usize) -> Result<Register> {
@@ -149,9 +144,9 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 
     /// Inserts a new instruction to the chip
-    pub fn write_labeled_data<T: DataRegister>(&mut self, data: &T, label: &str) -> Result<()> {
-        let register = data.register();
-        let label = InsID::WriteLabel(String::from(label));
+    pub fn write_raw_register<T: DataRegister>(&mut self, data: &Register) -> Result<()> {
+        let register = data;
+        let label = InsID::Write(*register);
         let existing_value = self
             .instruction_indices
             .insert(label, self.write_instructions.len());
@@ -164,21 +159,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
 
     /// Registers a new instruction to the chip.
     pub fn insert_instruction(&mut self, instruction: L::Instruction) -> Result<()> {
-        let id = InsID::MemID(instruction.memory_vec());
-        let existing_value = self.instruction_indices.insert(id, self.instructions.len());
-        if existing_value.is_some() {
-            return Err(anyhow!("Instruction label already exists"));
-        }
-        self.insert_raw_instruction(instruction)
-    }
-
-    /// Registers a new instruction identified by a user-specified label
-    pub fn insert_labeled_instruction(
-        &mut self,
-        instruction: L::Instruction,
-        label: &str,
-    ) -> Result<()> {
-        let id = InsID::Label(String::from(label));
+        let id = InsID::CustomInstruction(instruction.memory_vec());
         let existing_value = self.instruction_indices.insert(id, self.instructions.len());
         if existing_value.is_some() {
             return Err(anyhow!("Instruction label already exists"));
@@ -224,6 +205,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
             Chip {
                 instructions: self.instructions,
                 write_instructions: self.write_instructions,
+                standard_instructions: self.standard_instructions,
                 constraints: self.constraints,
                 range_checks_idx: (
                     L::NUM_FREE_COLUMNS,
@@ -236,22 +218,62 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 }
 
+// Implement methods for the basic operations
+
+impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
+    fn insert_standard_instruction(
+        &mut self,
+        instruction: StandardInstruction<F, D>,
+    ) -> Result<()> {
+        let id = InsID::StandardInstruction(instruction.memory_vec());
+        let existing_value = self.instruction_indices.insert(id, self.instructions.len());
+        if existing_value.is_some() {
+            return Err(anyhow!("Instruction label already exists"));
+        }
+        self.standard_instructions.push(instruction);
+        Ok(())
+    }
+
+    pub fn add<T: DataRegister>(&mut self, a: T, b: T, output: T) {
+        let a = a.register();
+        let b = b.register();
+        let output = output.register();
+        let instruction = StandardInstruction::Add(*a, *b, *output);
+        self.insert_standard_instruction(instruction).unwrap();
+    }
+
+    pub fn sub<T: DataRegister>(&mut self, a: T, b: T, output: T) {
+        let a = a.register();
+        let b = b.register();
+        let output = output.register();
+        let instruction = StandardInstruction::Sub(*a, *b, *output);
+        self.insert_standard_instruction(instruction).unwrap();
+    }
+
+    pub fn mul<T: DataRegister>(&mut self, a: T, b: T, output: T) {
+        let a = a.register();
+        let b = b.register();
+        let output = output.register();
+        let instruction = StandardInstruction::Mul(*a, *b, *output);
+        self.insert_standard_instruction(instruction).unwrap();
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use num::bigint::RandBigInt;
+    use plonky2::field::types::Sample;
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
-    //use plonky2_maybe_rayon::*;
-    use rand::thread_rng;
 
     use super::*;
     use crate::arithmetic::builder::ChipBuilder;
     use crate::arithmetic::chip::{ChipParameters, TestStark};
     use crate::arithmetic::field::mul::FpMul;
-    use crate::arithmetic::field::{FieldParameters, Fp25519, Fp25519Param};
+    use crate::arithmetic::field::{Fp25519Param};
+    use crate::arithmetic::register::Element;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;
@@ -265,29 +287,30 @@ mod tests {
     struct AssertEqualTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for AssertEqualTest {
-        const NUM_ARITHMETIC_COLUMNS: usize = 2 * 16;
-        const NUM_FREE_COLUMNS: usize = 1;
+        const NUM_ARITHMETIC_COLUMNS: usize = 0;
+        const NUM_FREE_COLUMNS: usize = 3 * 16;
 
         type Instruction = FpMul<Fp25519Param, 16>;
     }
 
     #[test]
-    fn test_builder_assert_equal() {
+    fn test_builder_basic() {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type Fp = Fp25519;
         type S = TestStark<AssertEqualTest, F, D>;
 
         // build the stark
         let mut builder = ChipBuilder::<AssertEqualTest, F, D>::new();
 
-        let a = builder.alloc_local::<Fp>().unwrap();
-        let b = builder.alloc_local::<Fp>().unwrap();
+        let a = builder.alloc_local::<Element>().unwrap();
+        let b = builder.alloc_local::<Element>().unwrap();
+        let c = builder.alloc_local::<Element>().unwrap();
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
+        builder.write_data(&c).unwrap();
 
-        builder.assert_equal(&a, &b);
+        let _ = builder.mul(a, b, c);
 
         let (chip, spec) = builder.build();
 
@@ -295,16 +318,13 @@ mod tests {
         let num_rows = 2u64.pow(16) as usize;
         let (handle, generator) = trace::<F, D>(spec);
 
-        let p = Fp25519Param::modulus_biguint();
-
-        let mut rng = thread_rng();
         for i in 0..num_rows {
-            let a_int = rng.gen_biguint(256) % &p;
-            //let handle = handle.clone();
-            //rayon::spawn(move || {
-            handle.write_field(i, &a_int, a).unwrap();
-            handle.write_field(i, &a_int, b).unwrap();
-            //});
+            let a_val = F::rand();
+            let b_val = F::rand();
+            let c_val = a_val * b_val;
+            handle.write_data(i, a, vec![a_val]).unwrap();
+            handle.write_data(i, b, vec![b_val]).unwrap();
+            handle.write_data(i, c, vec![c_val]).unwrap();
         }
         drop(handle);
 

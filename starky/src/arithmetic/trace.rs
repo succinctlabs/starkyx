@@ -10,8 +10,8 @@ use plonky2_maybe_rayon::*;
 
 use super::builder::InsID;
 use super::chip::ChipParameters;
-use super::instruction::Instruction;
-use super::register::DataRegister;
+use super::instruction::{Instruction, StandardInstruction};
+use super::register::{DataRegister, Register};
 use crate::arithmetic::chip::Chip;
 use crate::lookup::permuted_cols;
 
@@ -51,20 +51,20 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
         instruction: T,
         row: Vec<F>,
     ) -> Result<()> {
-        let id = InsID::MemID(instruction.memory_vec());
+        let id = InsID::CustomInstruction(instruction.memory_vec());
         self.tx
             .send((row_index, id, row))
             .map_err(|_| anyhow!("Failed to send row"))?;
         Ok(())
     }
 
-    pub fn write_labled<T: Instruction<F, D>>(
+    pub fn write_standard(
         &self,
         row_index: usize,
-        label: &str,
+        instruction: StandardInstruction<F, D>,
         row: Vec<F>,
     ) -> Result<()> {
-        let id = InsID::Label(String::from(label));
+        let id = InsID::StandardInstruction(instruction.memory_vec());
         self.tx
             .send((row_index, id, row))
             .map_err(|_| anyhow!("Failed to send row"))?;
@@ -84,13 +84,8 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
         Ok(())
     }
 
-    pub fn write_data_labled<T: Instruction<F, D>>(
-        &self,
-        row_index: usize,
-        label: &str,
-        row: Vec<F>,
-    ) -> Result<()> {
-        let id = InsID::WriteLabel(String::from(label));
+    pub fn write_unsafe_raw(&self, row_index: usize, data: &Register, row: Vec<F>) -> Result<()> {
+        let id = InsID::Write(*data);
         self.tx
             .send((row_index, id, row))
             .map_err(|_| anyhow!("Failed to send row"))?;
@@ -114,18 +109,15 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
                 .get(&id)
                 .ok_or_else(|| anyhow!("Invalid instruction"))?;
             match id {
-                InsID::MemID(_) => {
+                InsID::CustomInstruction(_) => {
                     chip.instructions[*op_index].assign_row(&mut trace_rows, &mut row, row_index)
                 }
-                InsID::Label(_) => {
-                    chip.instructions[*op_index].assign_row(&mut trace_rows, &mut row, row_index)
-                }
-                InsID::Write(_) => chip.write_instructions[*op_index].assign_row(
+                InsID::StandardInstruction(_) => chip.standard_instructions[*op_index].assign_row(
                     &mut trace_rows,
                     &mut row,
                     row_index,
                 ),
-                InsID::WriteLabel(_) => chip.write_instructions[*op_index].assign_row(
+                InsID::Write(_) => chip.write_instructions[*op_index].assign_row(
                     &mut trace_rows,
                     &mut row,
                     row_index,
