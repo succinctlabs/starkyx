@@ -12,7 +12,7 @@ use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::instruction::{EqualityConstraint, Instruction, WriteInstruction};
+use super::instruction::{EqualityConstraint, Instruction, StandardInstruction, WriteInstruction};
 use crate::lookup::{eval_lookups, eval_lookups_circuit};
 use crate::permutation::PermutationPair;
 use crate::stark::Stark;
@@ -36,6 +36,7 @@ where
 {
     pub(crate) instructions: Vec<L::Instruction>,
     pub(crate) write_instructions: Vec<WriteInstruction>,
+    pub(crate) standard_instructions: Vec<StandardInstruction<F, D>>,
     pub(crate) constraints: Vec<EqualityConstraint>,
     pub(crate) range_checks_idx: (usize, usize),
     pub(crate) table_index: usize,
@@ -112,6 +113,9 @@ where
         for inst in self.instructions.iter() {
             inst.packed_generic_constraints(vars, yield_constr);
         }
+        for insr in self.standard_instructions.iter() {
+            insr.packed_generic_constraints(vars, yield_constr);
+        }
         for consr in self.constraints.iter() {
             consr.packed_generic_constraints(vars, yield_constr);
         }
@@ -139,6 +143,9 @@ where
     ) {
         for inst in self.instructions.iter() {
             inst.ext_circuit_constraints(builder, vars, yield_constr);
+        }
+        for insr in self.standard_instructions.iter() {
+            insr.ext_circuit_constraints(builder, vars, yield_constr);
         }
         for consr in self.constraints.iter() {
             consr.ext_circuit_constraints(builder, vars, yield_constr);
