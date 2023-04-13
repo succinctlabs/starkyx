@@ -7,7 +7,7 @@ use crate::arithmetic::field::add::FpAdd;
 use crate::arithmetic::field::mul::{FpMul, FpMulConst};
 use crate::arithmetic::field::quad::FpQuad;
 use crate::arithmetic::instruction::Instruction;
-use crate::arithmetic::register::Register;
+use crate::arithmetic::register::MemorySlice;
 
 #[derive(Debug, Clone, Copy)]
 pub enum EdWardsMicroInstruction<E: EdwardsParameters> {
@@ -22,7 +22,7 @@ pub enum EdWardsMicroInstruction<E: EdwardsParameters> {
 impl<E: EdwardsParameters, F: RichField + Extendable<D>, const D: usize> Instruction<F, D>
     for EdWardsMicroInstruction<E>
 {
-    fn memory_vec(&self) -> Vec<Register> {
+    fn memory_vec(&self) -> Vec<MemorySlice> {
         match self {
             EdWardsMicroInstruction::Den(den) => {
                 <Den<E::FieldParam> as Instruction<F, D>>::memory_vec(den)
@@ -108,7 +108,7 @@ impl<E: EdwardsParameters, F: RichField + Extendable<D>, const D: usize> Instruc
         }
     }
 
-    fn set_witness(&mut self, witness: Register) -> Result<()> {
+    fn set_witness(&mut self, witness: MemorySlice) -> Result<()> {
         match self {
             EdWardsMicroInstruction::Den(den) => {
                 <Den<E::FieldParam> as Instruction<F, D>>::set_witness(den, witness)

@@ -6,7 +6,7 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
-pub enum Register {
+pub enum MemorySlice {
     Local(usize, usize),
     Next(usize, usize),
 
@@ -17,7 +17,7 @@ pub enum Register {
 
 #[derive(Debug, Clone, Copy)]
 pub struct U16Array {
-    register: Register,
+    register: MemorySlice,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -26,22 +26,22 @@ pub enum CellType {
     Bit,
 }
 
-pub trait DataRegister: 'static + Sized + Clone + Send + Sync {
+pub trait Register: 'static + Sized + Clone + Send + Sync {
     const CELL: Option<CellType>;
 
     /// Returns an element of the field
     ///
     /// Assumes register is of the correct size
-    fn from_raw_register(register: Register) -> Self;
+    fn from_raw_register(register: MemorySlice) -> Self;
 
-    fn into_raw_register(self) -> Register;
+    fn into_raw_register(self) -> MemorySlice;
 
-    fn register(&self) -> &Register;
+    fn register(&self) -> &MemorySlice;
 
     /// Returns an element of the field
     ///
     /// Checks that the register is of the correct size
-    fn from_register(register: Register) -> Result<Self> {
+    fn from_register(register: MemorySlice) -> Result<Self> {
         if register.len() != Self::size_of() {
             return Err(anyhow!("Invalid register length"));
         }
@@ -89,20 +89,20 @@ impl WitnessData {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Element(Register);
+pub struct ElementRegister(MemorySlice);
 
-impl DataRegister for Element {
+impl Register for ElementRegister {
     const CELL: Option<CellType> = None;
 
-    fn from_raw_register(register: Register) -> Self {
-        Element(register)
+    fn from_raw_register(register: MemorySlice) -> Self {
+        ElementRegister(register)
     }
 
-    fn into_raw_register(self) -> Register {
+    fn into_raw_register(self) -> MemorySlice {
         self.0
     }
 
-    fn register(&self) -> &Register {
+    fn register(&self) -> &MemorySlice {
         &self.0
     }
 
@@ -113,23 +113,23 @@ impl DataRegister for Element {
 
 #[derive(Debug, Clone, Copy)]
 pub struct BitArray<const N: usize> {
-    register: Register,
+    register: MemorySlice,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct BitRegister {
-    register: Register,
+    register: MemorySlice,
 }
 
-impl Register {
+impl MemorySlice {
     #[inline]
     pub fn is_next(&self) -> bool {
-        matches!(self, Register::Next(_, _))
+        matches!(self, MemorySlice::Next(_, _))
     }
 
     pub fn next(&self) -> Self {
         match self {
-            Register::Local(index, length) => Register::Next(*index, *length),
+            MemorySlice::Local(index, length) => MemorySlice::Next(*index, *length),
             _ => panic!("Invalid register type for the next register"),
         }
     }
@@ -137,30 +137,30 @@ impl Register {
     #[inline]
     pub const fn get_range(&self) -> (usize, usize) {
         match self {
-            Register::Local(index, length) => (*index, *index + length),
-            Register::Next(index, length) => (*index, *index + length),
-            Register::First(index, length) => (*index, *index + length),
-            Register::Last(index, length) => (*index, *index + length),
+            MemorySlice::Local(index, length) => (*index, *index + length),
+            MemorySlice::Next(index, length) => (*index, *index + length),
+            MemorySlice::First(index, length) => (*index, *index + length),
+            MemorySlice::Last(index, length) => (*index, *index + length),
         }
     }
 
     #[inline]
     pub const fn index(&self) -> usize {
         match self {
-            Register::Local(index, _) => *index,
-            Register::Next(index, _) => *index,
-            Register::First(index, _) => *index,
-            Register::Last(index, _) => *index,
+            MemorySlice::Local(index, _) => *index,
+            MemorySlice::Next(index, _) => *index,
+            MemorySlice::First(index, _) => *index,
+            MemorySlice::Last(index, _) => *index,
         }
     }
 
     #[inline]
     pub const fn len(&self) -> usize {
         match self {
-            Register::Local(_, length) => *length,
-            Register::Next(_, length) => *length,
-            Register::First(_, length) => *length,
-            Register::Last(_, length) => *length,
+            MemorySlice::Local(_, length) => *length,
+            MemorySlice::Next(_, length) => *length,
+            MemorySlice::First(_, length) => *length,
+            MemorySlice::Last(_, length) => *length,
         }
     }
 
@@ -172,10 +172,10 @@ impl Register {
     #[inline]
     pub fn read<T: Copy>(&self, trace_rows: &mut [Vec<T>], value: &mut [T], row_index: usize) {
         match self {
-            Register::Local(index, length) => {
+            MemorySlice::Local(index, length) => {
                 value.copy_from_slice(&trace_rows[row_index][*index..*index + length]);
             }
-            Register::Next(index, length) => {
+            MemorySlice::Next(index, length) => {
                 value.copy_from_slice(&trace_rows[row_index + 1][*index..*index + length]);
             }
             _ => panic!("Cannot read from a non-local register"),
@@ -185,16 +185,16 @@ impl Register {
     #[inline]
     pub fn assign<T: Copy>(&self, trace_rows: &mut [Vec<T>], value: &mut [T], row_index: usize) {
         match self {
-            Register::Local(index, length) => {
+            MemorySlice::Local(index, length) => {
                 trace_rows[row_index][*index..*index + length].copy_from_slice(value);
             }
-            Register::Next(index, length) => {
+            MemorySlice::Next(index, length) => {
                 trace_rows[row_index + 1][*index..*index + length].copy_from_slice(value);
             }
-            Register::First(index, length) => {
+            MemorySlice::First(index, length) => {
                 trace_rows[0][*index..*index + length].copy_from_slice(value);
             }
-            Register::Last(index, length) => {
+            MemorySlice::Last(index, length) => {
                 trace_rows[trace_rows.len() - 1][*index..*index + length].copy_from_slice(value);
             }
         }
@@ -218,8 +218,8 @@ impl Register {
         P: PackedField<Scalar = FE>,
     {
         match self {
-            Register::Local(index, length) => &vars.local_values[*index..*index + length],
-            Register::Next(index, length) => &vars.next_values[*index..*index + length],
+            MemorySlice::Local(index, length) => &vars.local_values[*index..*index + length],
+            MemorySlice::Next(index, length) => &vars.next_values[*index..*index + length],
             _ => panic!("Cannot read from a non-local register"),
         }
     }
@@ -241,13 +241,15 @@ impl Register {
         P: PackedField<Scalar = FE>,
     {
         match self {
-            Register::Local(index, length) => vars.local_values[*index..*index + length].to_vec(),
-            Register::Next(index, length) => vars.next_values[*index..*index + length].to_vec(),
-            Register::First(index, length) => vars.public_inputs[*index..*index + length]
+            MemorySlice::Local(index, length) => {
+                vars.local_values[*index..*index + length].to_vec()
+            }
+            MemorySlice::Next(index, length) => vars.next_values[*index..*index + length].to_vec(),
+            MemorySlice::First(index, length) => vars.public_inputs[*index..*index + length]
                 .iter()
                 .map(|x| P::from(*x))
                 .collect(),
-            Register::Last(index, length) => vars.public_inputs[*index..*index + length]
+            MemorySlice::Last(index, length) => vars.public_inputs[*index..*index + length]
                 .iter()
                 .map(|x| P::from(*x))
                 .collect(),
@@ -265,22 +267,22 @@ impl Register {
         vars: &StarkEvaluationTargets<'a, D, { COLUMNS }, { PUBLIC_INPUTS }>,
     ) -> &'a [ExtensionTarget<D>] {
         match self {
-            Register::Local(index, length) => &vars.local_values[*index..*index + length],
-            Register::Next(index, length) => &vars.next_values[*index..*index + length],
-            Register::First(index, length) => &vars.public_inputs[*index..*index + length],
-            Register::Last(index, length) => &vars.public_inputs[*index..*index + length],
+            MemorySlice::Local(index, length) => &vars.local_values[*index..*index + length],
+            MemorySlice::Next(index, length) => &vars.next_values[*index..*index + length],
+            MemorySlice::First(index, length) => &vars.public_inputs[*index..*index + length],
+            MemorySlice::Last(index, length) => &vars.public_inputs[*index..*index + length],
         }
     }
 }
 
-impl DataRegister for BitRegister {
+impl Register for BitRegister {
     const CELL: Option<CellType> = Some(CellType::Bit);
 
-    fn from_raw_register(register: Register) -> Self {
+    fn from_raw_register(register: MemorySlice) -> Self {
         Self { register }
     }
 
-    fn register(&self) -> &Register {
+    fn register(&self) -> &MemorySlice {
         &self.register
     }
 
@@ -288,19 +290,19 @@ impl DataRegister for BitRegister {
         1
     }
 
-    fn into_raw_register(self) -> Register {
+    fn into_raw_register(self) -> MemorySlice {
         self.register
     }
 }
 
-impl<const N: usize> DataRegister for BitArray<N> {
+impl<const N: usize> Register for BitArray<N> {
     const CELL: Option<CellType> = Some(CellType::Bit);
 
-    fn from_raw_register(register: Register) -> Self {
+    fn from_raw_register(register: MemorySlice) -> Self {
         Self { register }
     }
 
-    fn register(&self) -> &Register {
+    fn register(&self) -> &MemorySlice {
         &self.register
     }
 
@@ -308,19 +310,19 @@ impl<const N: usize> DataRegister for BitArray<N> {
         N
     }
 
-    fn into_raw_register(self) -> Register {
+    fn into_raw_register(self) -> MemorySlice {
         self.register
     }
 }
 
-impl DataRegister for U16Array {
+impl Register for U16Array {
     const CELL: Option<CellType> = Some(CellType::U16);
 
-    fn from_raw_register(register: Register) -> Self {
+    fn from_raw_register(register: MemorySlice) -> Self {
         Self { register }
     }
 
-    fn register(&self) -> &Register {
+    fn register(&self) -> &MemorySlice {
         &self.register
     }
 
@@ -328,7 +330,7 @@ impl DataRegister for U16Array {
         panic!("Cannot get size of U16Array")
     }
 
-    fn into_raw_register(self) -> Register {
+    fn into_raw_register(self) -> MemorySlice {
         self.register
     }
 }

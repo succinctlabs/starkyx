@@ -10,7 +10,7 @@ use crate::arithmetic::builder::ChipBuilder;
 use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
-use crate::arithmetic::register::{DataRegister, Register, WitnessData};
+use crate::arithmetic::register::{MemorySlice, Register, WitnessData};
 use crate::arithmetic::trace::TraceHandle;
 use crate::arithmetic::util::{extract_witness_and_shift, split_digits, to_field_iter};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
@@ -24,9 +24,9 @@ pub struct FpQuad<P: FieldParameters> {
     c: FieldRegister<P>,
     d: FieldRegister<P>,
     result: FieldRegister<P>,
-    carry: Option<Register>,
-    witness_low: Option<Register>,
-    witness_high: Option<Register>,
+    carry: Option<MemorySlice>,
+    witness_low: Option<MemorySlice>,
+    witness_high: Option<MemorySlice>,
 }
 
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
@@ -83,7 +83,7 @@ impl<P: FieldParameters> FpQuad<P> {
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
     for FpQuad<P>
 {
-    fn memory_vec(&self) -> Vec<Register> {
+    fn memory_vec(&self) -> Vec<MemorySlice> {
         vec![
             *self.a.register(),
             *self.b.register(),
@@ -99,20 +99,20 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         ))
     }
 
-    fn set_witness(&mut self, witness: Register) -> Result<()> {
+    fn set_witness(&mut self, witness: MemorySlice) -> Result<()> {
         let (carry, witness_low, witness_high) = match witness {
-            Register::Local(index, _) => (
-                Register::Local(index, Self::NUM_CARRY_LIMBS),
-                Register::Local(index + Self::NUM_CARRY_LIMBS, Self::NUM_WITNESS_LOW_LIMBS),
-                Register::Local(
+            MemorySlice::Local(index, _) => (
+                MemorySlice::Local(index, Self::NUM_CARRY_LIMBS),
+                MemorySlice::Local(index + Self::NUM_CARRY_LIMBS, Self::NUM_WITNESS_LOW_LIMBS),
+                MemorySlice::Local(
                     index + Self::NUM_CARRY_LIMBS + Self::NUM_WITNESS_LOW_LIMBS,
                     Self::NUM_WITNESS_HIGH_LIMBS,
                 ),
             ),
-            Register::Next(index, _) => (
-                Register::Next(index, Self::NUM_CARRY_LIMBS),
-                Register::Next(index + Self::NUM_CARRY_LIMBS, Self::NUM_WITNESS_LOW_LIMBS),
-                Register::Next(
+            MemorySlice::Next(index, _) => (
+                MemorySlice::Next(index, Self::NUM_CARRY_LIMBS),
+                MemorySlice::Next(index + Self::NUM_CARRY_LIMBS, Self::NUM_WITNESS_LOW_LIMBS),
+                MemorySlice::Next(
                     index + Self::NUM_CARRY_LIMBS + Self::NUM_WITNESS_LOW_LIMBS,
                     Self::NUM_WITNESS_HIGH_LIMBS,
                 ),

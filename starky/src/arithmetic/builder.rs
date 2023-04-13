@@ -12,13 +12,13 @@ use plonky2::hash::hash_types::RichField;
 use super::bool::ConstraintBool;
 use super::chip::{Chip, ChipParameters};
 use super::instruction::{EqualityConstraint, Instruction, StandardInstruction, WriteInstruction};
-use super::register::{CellType, DataRegister, Register};
+use super::register::{CellType, MemorySlice, Register};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub enum InsID {
-    CustomInstruction(Vec<Register>),
-    StandardInstruction(Vec<Register>),
-    Write(Register),
+    CustomInstruction(Vec<MemorySlice>),
+    StandardInstruction(Vec<MemorySlice>),
+    Write(MemorySlice),
 }
 
 #[derive(Clone, Debug)]
@@ -63,8 +63,8 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         }
     }
 
-    pub fn get_local_memory(&mut self, size: usize) -> Result<Register> {
-        let register = Register::Local(self.local_index, size);
+    pub fn get_local_memory(&mut self, size: usize) -> Result<MemorySlice> {
+        let register = MemorySlice::Local(self.local_index, size);
         self.local_index += size;
         if self.local_index > L::NUM_FREE_COLUMNS {
             return Err(anyhow!("Local row memory overflow"));
@@ -72,8 +72,8 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         Ok(register)
     }
 
-    fn get_next_memory(&mut self, size: usize) -> Result<Register> {
-        let register = Register::Next(self.next_index, size);
+    fn get_next_memory(&mut self, size: usize) -> Result<MemorySlice> {
+        let register = MemorySlice::Next(self.next_index, size);
         self.next_index += size;
         if self.next_index > L::NUM_FREE_COLUMNS {
             return Err(anyhow!("Next row memory overflow"));
@@ -81,8 +81,8 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         Ok(register)
     }
 
-    fn get_local_u16_memory(&mut self, size: usize) -> Result<Register> {
-        let register = Register::Local(self.local_arithmetic_index, size);
+    fn get_local_u16_memory(&mut self, size: usize) -> Result<MemorySlice> {
+        let register = MemorySlice::Local(self.local_arithmetic_index, size);
         self.local_arithmetic_index += size;
         if self.local_arithmetic_index > L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS {
             return Err(anyhow!("Local row u16 memory overflow"));
@@ -90,8 +90,8 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         Ok(register)
     }
 
-    fn get_next_u16_memory(&mut self, size: usize) -> Result<Register> {
-        let register = Register::Next(self.next_arithmetic_index, size);
+    fn get_next_u16_memory(&mut self, size: usize) -> Result<MemorySlice> {
+        let register = MemorySlice::Next(self.next_arithmetic_index, size);
         self.local_arithmetic_index += size;
         if self.local_arithmetic_index > L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS {
             return Err(anyhow!("Next row u16 memory overflow"));
@@ -100,7 +100,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 
     /// Allocates a new local row register and returns it
-    pub fn alloc_local<T: DataRegister>(&mut self) -> Result<T> {
+    pub fn alloc_local<T: Register>(&mut self) -> Result<T> {
         let register = match T::CELL {
             Some(CellType::U16) => self.get_local_u16_memory(T::size_of())?,
             Some(CellType::Bit) => {
@@ -115,7 +115,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 
     /// Allocates a new next row register and returns it
-    pub fn alloc_next<T: DataRegister>(&mut self) -> Result<T> {
+    pub fn alloc_next<T: Register>(&mut self) -> Result<T> {
         let register = match T::CELL {
             Some(CellType::U16) => self.get_next_u16_memory(T::size_of())?,
             Some(CellType::Bit) => {
@@ -130,7 +130,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 
     /// Inserts a new instruction to the chip
-    pub fn write_data<T: DataRegister>(&mut self, data: &T) -> Result<()> {
+    pub fn write_data<T: Register>(&mut self, data: &T) -> Result<()> {
         let register = data.register();
         let label = InsID::Write(*register);
         let existing_value = self
@@ -144,7 +144,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 
     /// Inserts a new instruction to the chip
-    pub fn write_raw_register<T: DataRegister>(&mut self, data: &Register) -> Result<()> {
+    pub fn write_raw_register<T: Register>(&mut self, data: &MemorySlice) -> Result<()> {
         let register = data;
         let label = InsID::Write(*register);
         let existing_value = self
@@ -187,13 +187,13 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 
     // This function should be made private in the future
-    pub fn assert_registers_equal(&mut self, a: &Register, b: &Register) {
+    pub fn assert_registers_equal(&mut self, a: &MemorySlice, b: &MemorySlice) {
         let constraint = EqualityConstraint::Equal(*a, *b);
         self.constraints.push(constraint);
     }
 
     /// Asserts that two elements are equal
-    pub fn assert_equal<T: DataRegister>(&mut self, a: &T, b: &T) {
+    pub fn assert_equal<T: Register>(&mut self, a: &T, b: &T) {
         let a = a.register();
         let b = b.register();
         self.assert_registers_equal(a, b)
@@ -234,7 +234,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         Ok(())
     }
 
-    pub fn add<T: DataRegister>(&mut self, a: T, b: T, output: T) {
+    pub fn add<T: Register>(&mut self, a: T, b: T, output: T) {
         let a = a.register();
         let b = b.register();
         let output = output.register();
@@ -242,7 +242,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         self.insert_standard_instruction(instruction).unwrap();
     }
 
-    pub fn sub<T: DataRegister>(&mut self, a: T, b: T, output: T) {
+    pub fn sub<T: Register>(&mut self, a: T, b: T, output: T) {
         let a = a.register();
         let b = b.register();
         let output = output.register();
@@ -250,7 +250,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         self.insert_standard_instruction(instruction).unwrap();
     }
 
-    pub fn mul<T: DataRegister>(&mut self, a: T, b: T, output: T) {
+    pub fn mul<T: Register>(&mut self, a: T, b: T, output: T) {
         let a = a.register();
         let b = b.register();
         let output = output.register();
@@ -273,7 +273,7 @@ mod tests {
     use crate::arithmetic::chip::{ChipParameters, TestStark};
     use crate::arithmetic::field::mul::FpMul;
     use crate::arithmetic::field::Fp25519Param;
-    use crate::arithmetic::register::Element;
+    use crate::arithmetic::register::ElementRegister;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;
@@ -303,9 +303,9 @@ mod tests {
         // build the stark
         let mut builder = ChipBuilder::<AssertEqualTest, F, D>::new();
 
-        let a = builder.alloc_local::<Element>().unwrap();
-        let b = builder.alloc_local::<Element>().unwrap();
-        let c = builder.alloc_local::<Element>().unwrap();
+        let a = builder.alloc_local::<ElementRegister>().unwrap();
+        let b = builder.alloc_local::<ElementRegister>().unwrap();
+        let c = builder.alloc_local::<ElementRegister>().unwrap();
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
         builder.write_data(&c).unwrap();

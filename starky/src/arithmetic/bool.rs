@@ -8,23 +8,23 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use super::builder::ChipBuilder;
 use super::chip::ChipParameters;
 use super::instruction::Instruction;
-use super::register::{BitRegister, DataRegister, Register, WitnessData};
+use super::register::{BitRegister, MemorySlice, Register, WitnessData};
 use super::trace::TraceHandle;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ConstraintBool(pub Register);
+pub struct ConstraintBool(pub MemorySlice);
 
 impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for ConstraintBool {
     fn witness_data(&self) -> Option<WitnessData> {
         None
     }
 
-    fn memory_vec(&self) -> Vec<Register> {
+    fn memory_vec(&self) -> Vec<MemorySlice> {
         vec![self.0]
     }
 
-    fn set_witness(&mut self, _witness: Register) -> Result<()> {
+    fn set_witness(&mut self, _witness: MemorySlice) -> Result<()> {
         Ok(())
     }
 
@@ -108,14 +108,12 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize, T: DataRegister> Instruction<F, D>
-    for Selector<T>
-{
+impl<F: RichField + Extendable<D>, const D: usize, T: Register> Instruction<F, D> for Selector<T> {
     fn witness_data(&self) -> Option<WitnessData> {
         None
     }
 
-    fn memory_vec(&self) -> Vec<Register> {
+    fn memory_vec(&self) -> Vec<MemorySlice> {
         vec![
             *self.bit.register(),
             *self.true_value.register(),
@@ -123,7 +121,7 @@ impl<F: RichField + Extendable<D>, const D: usize, T: DataRegister> Instruction<
         ]
     }
 
-    fn set_witness(&mut self, _witness: Register) -> Result<()> {
+    fn set_witness(&mut self, _witness: MemorySlice) -> Result<()> {
         Ok(())
     }
 

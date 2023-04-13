@@ -15,7 +15,7 @@ use self::quad::FpQuad;
 use super::instruction::Instruction;
 use super::polynomial::Polynomial;
 use super::trace::TraceHandle;
-use crate::arithmetic::register::{CellType, DataRegister, Register, U16Array};
+use crate::arithmetic::register::{CellType, MemorySlice, Register, U16Array};
 
 pub const MAX_NB_LIMBS: usize = 32;
 pub const LIMB: u32 = 2u32.pow(16);
@@ -60,17 +60,17 @@ pub struct FieldRegister<P: FieldParameters> {
     _marker: core::marker::PhantomData<P>,
 }
 
-impl<P: FieldParameters> DataRegister for FieldRegister<P> {
+impl<P: FieldParameters> Register for FieldRegister<P> {
     const CELL: Option<CellType> = Some(CellType::U16);
 
-    fn from_raw_register(register: Register) -> Self {
+    fn from_raw_register(register: MemorySlice) -> Self {
         Self {
             array: U16Array::from_raw_register(register),
             _marker: core::marker::PhantomData,
         }
     }
 
-    fn register(&self) -> &Register {
+    fn register(&self) -> &MemorySlice {
         self.array.register()
     }
 
@@ -78,7 +78,7 @@ impl<P: FieldParameters> DataRegister for FieldRegister<P> {
         P::NB_LIMBS
     }
 
-    fn into_raw_register(self) -> Register {
+    fn into_raw_register(self) -> MemorySlice {
         self.array.into_raw_register()
     }
 }
@@ -132,7 +132,7 @@ impl<P: FieldParameters> From<FpQuad<P>> for FpInstruction<P> {
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
     for FpInstruction<P>
 {
-    fn memory_vec(&self) -> Vec<Register> {
+    fn memory_vec(&self) -> Vec<MemorySlice> {
         match self {
             FpInstruction::Add(add) => <FpAdd<P> as Instruction<F, D>>::memory_vec(add),
             FpInstruction::Mul(mul) => <FpMul<P> as Instruction<F, D>>::memory_vec(mul),
@@ -154,7 +154,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         }
     }
 
-    fn set_witness(&mut self, witness: Register) -> Result<()> {
+    fn set_witness(&mut self, witness: MemorySlice) -> Result<()> {
         match self {
             FpInstruction::Add(add) => <FpAdd<P> as Instruction<F, D>>::set_witness(add, witness),
             FpInstruction::Mul(mul) => <FpMul<P> as Instruction<F, D>>::set_witness(mul, witness),

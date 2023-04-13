@@ -11,7 +11,7 @@ use plonky2_maybe_rayon::*;
 use super::builder::InsID;
 use super::chip::ChipParameters;
 use super::instruction::{Instruction, StandardInstruction};
-use super::register::{DataRegister, Register};
+use super::register::{MemorySlice, Register};
 use crate::arithmetic::chip::Chip;
 use crate::lookup::permuted_cols;
 
@@ -71,12 +71,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
         Ok(())
     }
 
-    pub fn write_data<T: DataRegister>(
-        &self,
-        row_index: usize,
-        data: T,
-        row: Vec<F>,
-    ) -> Result<()> {
+    pub fn write_data<T: Register>(&self, row_index: usize, data: T, row: Vec<F>) -> Result<()> {
         let id = InsID::Write(*data.register());
         self.tx
             .send((row_index, id, row))
@@ -84,7 +79,12 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
         Ok(())
     }
 
-    pub fn write_unsafe_raw(&self, row_index: usize, data: &Register, row: Vec<F>) -> Result<()> {
+    pub fn write_unsafe_raw(
+        &self,
+        row_index: usize,
+        data: &MemorySlice,
+        row: Vec<F>,
+    ) -> Result<()> {
         let id = InsID::Write(*data);
         self.tx
             .send((row_index, id, row))
