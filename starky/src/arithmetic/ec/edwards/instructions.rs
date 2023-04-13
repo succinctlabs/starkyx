@@ -7,7 +7,7 @@ use crate::arithmetic::field::add::FpAdd;
 use crate::arithmetic::field::mul::{FpMul, FpMulConst};
 use crate::arithmetic::field::quad::FpQuad;
 use crate::arithmetic::instruction::Instruction;
-use crate::arithmetic::register::MemorySlice;
+use crate::arithmetic::register2::MemorySlice;
 
 #[derive(Debug, Clone, Copy)]
 pub enum EdWardsMicroInstruction<E: EdwardsParameters> {

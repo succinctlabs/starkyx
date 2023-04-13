@@ -4,7 +4,7 @@ use crate::arithmetic::bool::Selector;
 use crate::arithmetic::builder::ChipBuilder;
 use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::polynomial::Polynomial;
-use crate::arithmetic::register::BitRegister;
+use crate::arithmetic::register2::BitRegister;
 use crate::arithmetic::util::biguint_to_bits_le;
 
 #[derive(Clone, Copy)]
