@@ -10,7 +10,7 @@ use plonky2_maybe_rayon::*;
 
 use super::builder::InsID;
 use super::chip::ChipParameters;
-use super::instruction::{Instruction, StandardInstruction};
+use super::instruction::Instruction;
 use super::register::{MemorySlice, Register};
 use crate::arithmetic::chip::Chip;
 use crate::lookup::permuted_cols;
@@ -58,19 +58,6 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
         Ok(())
     }
 
-    pub fn write_standard(
-        &self,
-        row_index: usize,
-        instruction: StandardInstruction<F, D>,
-        row: Vec<F>,
-    ) -> Result<()> {
-        let id = InsID::StandardInstruction(instruction.memory_vec());
-        self.tx
-            .send((row_index, id, row))
-            .map_err(|_| anyhow!("Failed to send row"))?;
-        Ok(())
-    }
-
     pub fn write_data<T: Register>(&self, row_index: usize, data: T, row: Vec<F>) -> Result<()> {
         let id = InsID::Write(*data.register());
         self.tx
@@ -112,11 +99,6 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
                 InsID::CustomInstruction(_) => {
                     chip.instructions[*op_index].assign_row(&mut trace_rows, &mut row, row_index)
                 }
-                InsID::StandardInstruction(_) => chip.standard_instructions[*op_index].assign_row(
-                    &mut trace_rows,
-                    &mut row,
-                    row_index,
-                ),
                 InsID::Write(_) => chip.write_instructions[*op_index].assign_row(
                     &mut trace_rows,
                     &mut row,
