@@ -9,7 +9,7 @@ use crate::arithmetic::field::quad::FpQuad;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::register::MemorySlice;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum EdWardsMicroInstruction<E: EdwardsParameters> {
     Den(Den<E::FieldParam>),
     FpAdd(FpAdd<E::FieldParam>),

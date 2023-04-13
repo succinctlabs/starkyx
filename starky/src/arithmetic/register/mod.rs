@@ -1,3 +1,4 @@
+mod array;
 mod bit;
 mod cell;
 mod element;
@@ -7,6 +8,7 @@ mod register;
 mod u16;
 mod witness;
 
+pub use array::Array;
 pub use bit::BitRegister;
 pub use cell::CellType;
 pub use element::ElementRegister;

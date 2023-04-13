@@ -75,7 +75,7 @@ impl FieldParameters for Fp25519Param {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum FpInstruction<P: FieldParameters> {
     Add(FpAdd<P>),
     Mul(FpMul<P>),
