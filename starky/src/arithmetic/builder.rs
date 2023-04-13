@@ -191,6 +191,11 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         self.constraints.push(constraint);
     }
 
+    /// Asserts that two elements are equal
+    pub fn insert_raw_constraint(&mut self, constraint : EqualityConstraint<F, D>) {
+        self.constraints.push(constraint);
+    }
+
     /// Build the chip
     pub fn build(self) -> (Chip<L, F, D>, BTreeMap<InsID, usize>) {
         (
