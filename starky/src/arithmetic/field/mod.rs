@@ -14,9 +14,9 @@ use self::mul::{FpMul, FpMulConst};
 use self::quad::FpQuad;
 use super::instruction::Instruction;
 use super::polynomial::Polynomial;
-use super::register2::FieldRegister;
+use super::register::FieldRegister;
 use super::trace::TraceHandle;
-use crate::arithmetic::register2::{MemorySlice, Register, RegisterType};
+use crate::arithmetic::register::MemorySlice;
 
 pub const MAX_NB_LIMBS: usize = 32;
 pub const LIMB: u32 = 2u32.pow(16);

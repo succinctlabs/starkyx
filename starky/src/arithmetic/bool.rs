@@ -8,9 +8,9 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use super::builder::ChipBuilder;
 use super::chip::ChipParameters;
 use super::instruction::Instruction;
-use super::register::WitnessData;
-use super::register2::{BitRegister, MemorySlice, Register};
+use super::register::{BitRegister, MemorySlice, Register};
 use super::trace::TraceHandle;
+use crate::arithmetic::register::WitnessData;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -195,7 +195,7 @@ mod tests {
     use super::*;
     use crate::arithmetic::builder::ChipBuilder;
     use crate::arithmetic::chip::{ChipParameters, TestStark};
-    use crate::arithmetic::register2::BitRegister;
+    use crate::arithmetic::register::BitRegister;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;

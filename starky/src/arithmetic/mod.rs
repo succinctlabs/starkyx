@@ -7,6 +7,5 @@ pub mod field;
 pub mod instruction;
 pub mod polynomial;
 pub mod register;
-pub mod register2;
 pub mod trace;
 pub(crate) mod util;

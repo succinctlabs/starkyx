@@ -11,7 +11,7 @@ use plonky2_maybe_rayon::*;
 use super::builder::InsID;
 use super::chip::ChipParameters;
 use super::instruction::{Instruction, StandardInstruction};
-use super::register2::{MemorySlice, Register};
+use super::register::{MemorySlice, Register};
 use crate::arithmetic::chip::Chip;
 use crate::lookup::permuted_cols;
 

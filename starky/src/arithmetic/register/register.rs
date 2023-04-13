@@ -1,15 +1,10 @@
 use anyhow::{anyhow, Result};
 
-use crate::arithmetic::register2::memory::MemorySlice;
-
-#[derive(Debug, Clone, Copy)]
-pub enum RegisterType {
-    U16,
-    Bit,
-}
+use super::cell::CellType;
+use crate::arithmetic::register::memory::MemorySlice;
 
 pub trait Register: 'static + Sized + Clone + Send + Sync {
-    const CELL: Option<RegisterType>;
+    const CELL: Option<CellType>;
 
     /// Returns an element of the field
     ///

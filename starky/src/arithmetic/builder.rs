@@ -12,7 +12,7 @@ use plonky2::hash::hash_types::RichField;
 use super::bool::ConstraintBool;
 use super::chip::{Chip, ChipParameters};
 use super::instruction::{EqualityConstraint, Instruction, StandardInstruction, WriteInstruction};
-use super::register2::{MemorySlice, Register, RegisterType};
+use super::register::{CellType, MemorySlice, Register};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub enum InsID {
@@ -102,8 +102,8 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     /// Allocates a new local row register and returns it
     pub fn alloc_local<T: Register>(&mut self) -> Result<T> {
         let register = match T::CELL {
-            Some(RegisterType::U16) => self.get_local_u16_memory(T::size_of())?,
-            Some(RegisterType::Bit) => {
+            Some(CellType::U16) => self.get_local_u16_memory(T::size_of())?,
+            Some(CellType::Bit) => {
                 let reg = self.get_local_memory(T::size_of())?;
                 let consr = EqualityConstraint::Bool(ConstraintBool(reg));
                 self.constraints.push(consr);
@@ -117,8 +117,8 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     /// Allocates a new next row register and returns it
     pub fn alloc_next<T: Register>(&mut self) -> Result<T> {
         let register = match T::CELL {
-            Some(RegisterType::U16) => self.get_next_u16_memory(T::size_of())?,
-            Some(RegisterType::Bit) => {
+            Some(CellType::U16) => self.get_next_u16_memory(T::size_of())?,
+            Some(CellType::Bit) => {
                 let reg = self.get_next_memory(T::size_of())?;
                 let consr = EqualityConstraint::Bool(ConstraintBool(reg));
                 self.constraints.push(consr);
@@ -172,8 +172,8 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         if let Some(data) = inst.witness_data() {
             let (size, cell_type) = data.destruct();
             let register = match cell_type {
-                Some(RegisterType::U16) => self.get_local_u16_memory(size)?,
-                Some(RegisterType::Bit) => {
+                Some(CellType::U16) => self.get_local_u16_memory(size)?,
+                Some(CellType::Bit) => {
                     unimplemented!("Bit cells are not supported yet");
                     //self.get_local_memory(size)?
                 }
@@ -273,7 +273,7 @@ mod tests {
     use crate::arithmetic::chip::{ChipParameters, TestStark};
     use crate::arithmetic::field::mul::FpMul;
     use crate::arithmetic::field::Fp25519Param;
-    use crate::arithmetic::register2::ElementRegister;
+    use crate::arithmetic::register::ElementRegister;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;
