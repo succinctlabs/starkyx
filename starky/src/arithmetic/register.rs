@@ -89,6 +89,29 @@ impl WitnessData {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct Element(Register);
+
+impl DataRegister for Element {
+    const CELL: Option<CellType> = None;
+
+    fn from_raw_register(register: Register) -> Self {
+        Element(register)
+    }
+
+    fn into_raw_register(self) -> Register {
+        self.0
+    }
+
+    fn register(&self) -> &Register {
+        &self.0
+    }
+
+    fn size_of() -> usize {
+        1
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct BitArray<const N: usize> {
     register: Register,
 }

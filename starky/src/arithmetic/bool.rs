@@ -246,7 +246,7 @@ mod tests {
         }
         drop(handle);
 
-        let trace = generator.generate_trace(&chip, num_rows as usize).unwrap();
+        let trace = generator.generate_trace(&chip, num_rows).unwrap();
 
         let config = StarkConfig::standard_fast_config();
         let stark = TestStark::new(chip.clone());
@@ -312,7 +312,7 @@ mod tests {
         }
         drop(handle);
 
-        let trace = generator.generate_trace(&chip, num_rows as usize).unwrap();
+        let trace = generator.generate_trace(&chip, num_rows).unwrap();
 
         let config = StarkConfig::standard_fast_config();
         let stark = TestStark::new(chip);
@@ -327,7 +327,7 @@ mod tests {
         )
         .unwrap();
 
-        let res = verify_stark_proof(stark.clone(), proof.clone(), &config);
+        let res = verify_stark_proof(stark, proof, &config);
         assert!(res.is_err())
     }
 
@@ -356,7 +356,7 @@ mod tests {
         // Test successful proof
         // Construct the trace
         let num_rows = 2u64.pow(5) as usize;
-        let (handle, generator) = trace::<F, D>(spec.clone());
+        let (handle, generator) = trace::<F, D>(spec);
 
         for i in 0..num_rows {
             let x_i = 0u16;
@@ -376,10 +376,10 @@ mod tests {
         }
         drop(handle);
 
-        let trace = generator.generate_trace(&chip, num_rows as usize).unwrap();
+        let trace = generator.generate_trace(&chip, num_rows).unwrap();
 
         let config = StarkConfig::standard_fast_config();
-        let stark = TestStark::new(chip.clone());
+        let stark = TestStark::new(chip);
 
         // Verify proof as a stark
         let proof = prove::<F, C, S, D>(

@@ -378,7 +378,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for Standar
                     .zip(c_vals.iter())
                     .map(|((a, b), c)| {
                         let c_exp = builder.mul_extension(*a, *b);
-                        builder.sub_extension(*c, c_exp)
+                        builder.sub_extension(c_exp, *c)
                     })
                     .collect::<Vec<_>>();
 
