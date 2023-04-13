@@ -10,7 +10,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::bool::ConstraintBool;
-use super::register::{Register, WitnessData};
+use super::register::{MemorySlice, WitnessData};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
@@ -18,11 +18,11 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
 {
     //fn generate_trace_row(&self, input: Option<Self::Input>) -> (Vec<F>, Option<Self::Output>);
 
-    fn memory_vec(&self) -> Vec<Register>;
+    fn memory_vec(&self) -> Vec<MemorySlice>;
 
     fn witness_data(&self) -> Option<WitnessData>;
 
-    fn set_witness(&mut self, witness: Register) -> Result<()>;
+    fn set_witness(&mut self, witness: MemorySlice) -> Result<()>;
 
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize);
 
@@ -53,12 +53,12 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
 /// This code might change to be more generic in the future
 #[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum StandardInstruction<F, const D: usize> {
-    Add(Register, Register, Register),
-    AddConst(Register, F, Register),
-    Sub(Register, Register, Register),
-    SubConst(Register, F, Register),
-    Mul(Register, Register, Register),
-    MulConst(Register, F, Register),
+    Add(MemorySlice, MemorySlice, MemorySlice),
+    AddConst(MemorySlice, F, MemorySlice),
+    Sub(MemorySlice, MemorySlice, MemorySlice),
+    SubConst(MemorySlice, F, MemorySlice),
+    Mul(MemorySlice, MemorySlice, MemorySlice),
+    MulConst(MemorySlice, F, MemorySlice),
 }
 
 impl<F, const D: usize> StandardInstruction<F, D> {
@@ -66,28 +66,36 @@ impl<F, const D: usize> StandardInstruction<F, D> {
         matches!(
             self,
             StandardInstruction::Add(
-                Register::Local(_, _),
-                Register::Local(_, _),
-                Register::Local(_, _),
-            ) | StandardInstruction::AddConst(Register::Local(_, _), _, Register::Local(_, _))
-                | StandardInstruction::Sub(
-                    Register::Local(_, _),
-                    Register::Local(_, _),
-                    Register::Local(_, _),
-                )
-                | StandardInstruction::SubConst(Register::Local(_, _), _, Register::Local(_, _))
-                | StandardInstruction::Mul(
-                    Register::Local(_, _),
-                    Register::Local(_, _),
-                    Register::Local(_, _),
-                )
-                | StandardInstruction::MulConst(Register::Local(_, _), _, Register::Local(_, _))
+                MemorySlice::Local(_, _),
+                MemorySlice::Local(_, _),
+                MemorySlice::Local(_, _),
+            ) | StandardInstruction::AddConst(
+                MemorySlice::Local(_, _),
+                _,
+                MemorySlice::Local(_, _)
+            ) | StandardInstruction::Sub(
+                MemorySlice::Local(_, _),
+                MemorySlice::Local(_, _),
+                MemorySlice::Local(_, _),
+            ) | StandardInstruction::SubConst(
+                MemorySlice::Local(_, _),
+                _,
+                MemorySlice::Local(_, _)
+            ) | StandardInstruction::Mul(
+                MemorySlice::Local(_, _),
+                MemorySlice::Local(_, _),
+                MemorySlice::Local(_, _),
+            ) | StandardInstruction::MulConst(
+                MemorySlice::Local(_, _),
+                _,
+                MemorySlice::Local(_, _)
+            )
         )
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for StandardInstruction<F, D> {
-    fn memory_vec(&self) -> Vec<Register> {
+    fn memory_vec(&self) -> Vec<MemorySlice> {
         match self {
             StandardInstruction::Add(a, b, c) => vec![*a, *b, *c],
             StandardInstruction::AddConst(a, _, c) => vec![*a, *c],
@@ -109,7 +117,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for Standar
         }
     }
 
-    fn set_witness(&mut self, _witness: Register) -> Result<()> {
+    fn set_witness(&mut self, _witness: MemorySlice) -> Result<()> {
         Ok(())
     }
 
@@ -426,15 +434,15 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for Standar
 #[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EqualityConstraint {
     Bool(ConstraintBool),
-    Equal(Register, Register),
+    Equal(MemorySlice, MemorySlice),
 }
 
 #[derive(Clone, Debug, Copy)]
-pub struct WriteInstruction(pub Register);
+pub struct WriteInstruction(pub MemorySlice);
 
 impl WriteInstruction {
     #[inline]
-    pub fn into_register(self) -> Register {
+    pub fn into_register(self) -> MemorySlice {
         self.0
     }
 }
@@ -444,11 +452,11 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for WriteIn
         None
     }
 
-    fn memory_vec(&self) -> Vec<Register> {
+    fn memory_vec(&self) -> Vec<MemorySlice> {
         vec![self.0]
     }
 
-    fn set_witness(&mut self, _witness: Register) -> Result<()> {
+    fn set_witness(&mut self, _witness: MemorySlice) -> Result<()> {
         Ok(())
     }
 
@@ -491,7 +499,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for Equalit
         }
     }
 
-    fn memory_vec(&self) -> Vec<Register> {
+    fn memory_vec(&self) -> Vec<MemorySlice> {
         match self {
             EqualityConstraint::Bool(constraint) => {
                 <ConstraintBool as Instruction<F, D>>::memory_vec(constraint)
@@ -500,7 +508,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for Equalit
         }
     }
 
-    fn set_witness(&mut self, _witness: Register) -> Result<()> {
+    fn set_witness(&mut self, _witness: MemorySlice) -> Result<()> {
         match self {
             EqualityConstraint::Bool(constraint) => {
                 <ConstraintBool as Instruction<F, D>>::set_witness(constraint, _witness)
@@ -545,7 +553,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for Equalit
             EqualityConstraint::Equal(a, b) => {
                 let a_vals = a.packed_entries_slice(&vars);
                 let b_vals = b.packed_entries_slice(&vars);
-                if let (Register::Local(_, _), Register::Local(_, _)) = (a, b) {
+                if let (MemorySlice::Local(_, _), MemorySlice::Local(_, _)) = (a, b) {
                     for (&a, &b) in a_vals.iter().zip(b_vals.iter()) {
                         yield_constr.constraint(a - b);
                     }
@@ -576,7 +584,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for Equalit
             EqualityConstraint::Equal(a, b) => {
                 let a_vals = a.evaluation_targets(&vars);
                 let b_vals = b.evaluation_targets(&vars);
-                if let (Register::Local(_, _), Register::Local(_, _)) = (a, b) {
+                if let (MemorySlice::Local(_, _), MemorySlice::Local(_, _)) = (a, b) {
                     for (&a, &b) in a_vals.iter().zip(b_vals.iter()) {
                         let constr = builder.sub_extension(a, b);
                         yield_constr.constraint(builder, constr);
