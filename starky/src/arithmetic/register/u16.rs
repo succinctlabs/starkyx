@@ -11,19 +11,15 @@ pub struct U16Register(MemorySlice);
 impl Register for U16Register {
     const CELL: Option<CellType> = Some(CellType::U16);
 
-    fn from_raw_register(register: MemorySlice) -> Self {
-        Self(register)
-    }
-
     fn register(&self) -> &MemorySlice {
         &self.0
     }
 
     fn size_of() -> usize {
-        panic!("Cannot get size of U16Array")
+        1
     }
 
-    fn into_raw_register(self) -> MemorySlice {
-        self.0
+    fn from_raw_register(register: MemorySlice) -> Self {
+        Self(register)
     }
 }

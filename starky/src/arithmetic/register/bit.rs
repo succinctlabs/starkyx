@@ -10,10 +10,6 @@ pub struct BitRegister(MemorySlice);
 impl Register for BitRegister {
     const CELL: Option<CellType> = Some(CellType::Bit);
 
-    fn from_raw_register(register: MemorySlice) -> Self {
-        Self(register)
-    }
-
     fn register(&self) -> &MemorySlice {
         &self.0
     }
@@ -22,7 +18,7 @@ impl Register for BitRegister {
         1
     }
 
-    fn into_raw_register(self) -> MemorySlice {
-        self.0
+    fn from_raw_register(register: MemorySlice) -> Self {
+        Self(register)
     }
 }

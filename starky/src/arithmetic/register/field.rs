@@ -16,13 +16,6 @@ pub struct FieldRegister<P: FieldParameters> {
 impl<P: FieldParameters> Register for FieldRegister<P> {
     const CELL: Option<CellType> = Some(CellType::U16);
 
-    fn from_raw_register(register: MemorySlice) -> Self {
-        Self {
-            register,
-            _marker: core::marker::PhantomData,
-        }
-    }
-
     fn register(&self) -> &MemorySlice {
         &self.register
     }
@@ -31,7 +24,10 @@ impl<P: FieldParameters> Register for FieldRegister<P> {
         P::NB_LIMBS
     }
 
-    fn into_raw_register(self) -> MemorySlice {
-        self.register
+    fn from_raw_register(register: MemorySlice) -> Self {
+        Self {
+            register,
+            _marker: core::marker::PhantomData,
+        }
     }
 }
