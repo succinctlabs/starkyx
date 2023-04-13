@@ -29,7 +29,7 @@ impl<E: EdwardsParameters> EcAddData<E> {
     pub const fn num_ed_add_witness_columns() -> usize {
         2 * (FpQuad::<E::FieldParam>::num_quad_columns() - 4 * E::FieldParam::NB_LIMBS)
             + 3 * (FpMul::<E::FieldParam>::num_mul_columns() - 2 * E::FieldParam::NB_LIMBS)
-            + 2 * (FpMulConst::<E::FieldParam>::num_mul_const_columns() - E::FieldParam::NB_LIMBS)
+            + (FpMulConst::<E::FieldParam>::num_mul_const_columns() - E::FieldParam::NB_LIMBS)
             + 2 * (Den::<E::FieldParam>::num_den_columns() - 3 * E::FieldParam::NB_LIMBS)
     }
 

@@ -196,7 +196,7 @@ mod tests {
     use super::*;
     use crate::arithmetic::builder::ChipBuilder;
     use crate::arithmetic::chip::{ChipParameters, TestStark};
-    use crate::arithmetic::register::{BitRegister, U16Array};
+    use crate::arithmetic::register::BitRegister;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;

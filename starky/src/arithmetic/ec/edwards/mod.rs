@@ -6,8 +6,6 @@ pub mod den;
 pub mod instructions;
 pub mod scalar_mul;
 
-use core::char::MAX;
-
 use num::{Num, Zero};
 
 use super::*;

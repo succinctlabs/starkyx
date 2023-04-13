@@ -146,10 +146,9 @@ mod tests {
     pub struct EdScalarMulTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for EdScalarMulTest {
-        const NUM_ARITHMETIC_COLUMNS: usize = 2 * 2 * 16
-            + EdScalarMulData::<Ed25519Parameters>::num_ed_scalar_mul_columns()
-            - 1
-            - 3 * 2 * 2 * 16;
+        const NUM_ARITHMETIC_COLUMNS: usize =
+            EdScalarMulData::<Ed25519Parameters>::num_ed_scalar_mul_columns();
+
         const NUM_FREE_COLUMNS: usize = 1 + 2 * 2 * 16;
 
         type Instruction = EdWardsMicroInstruction<Ed25519Parameters>;

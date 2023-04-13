@@ -1,5 +1,3 @@
-use core::char::MAX;
-
 use anyhow::{anyhow, Result};
 use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
