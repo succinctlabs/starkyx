@@ -8,4 +8,4 @@ pub mod instruction;
 pub mod polynomial;
 pub mod register;
 pub mod trace;
-pub(crate) mod util;
+pub mod utils;

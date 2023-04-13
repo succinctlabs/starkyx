@@ -5,7 +5,7 @@ use num::BigUint;
 use super::super::AffinePoint;
 use super::EdwardsParameters;
 use crate::arithmetic::field::FieldParameters;
-use crate::arithmetic::util::biguint_to_bits_le;
+use crate::arithmetic::utils::biguint_to_bits_le;
 
 impl<E: EdwardsParameters> AffinePoint<E> {
     pub fn neutral() -> Self {
