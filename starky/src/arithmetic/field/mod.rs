@@ -14,8 +14,9 @@ use self::mul::{FpMul, FpMulConst};
 use self::quad::FpQuad;
 use super::instruction::Instruction;
 use super::polynomial::Polynomial;
+use super::register::FieldRegister;
 use super::trace::TraceHandle;
-use crate::arithmetic::register::{CellType, MemorySlice, Register, U16Array};
+use crate::arithmetic::register::MemorySlice;
 
 pub const MAX_NB_LIMBS: usize = 32;
 pub const LIMB: u32 = 2u32.pow(16);
@@ -52,35 +53,6 @@ pub fn modulus_field_iter<F: Field, P: FieldParameters>() -> impl Iterator<Item 
         .into_iter()
         .map(|x| F::from_canonical_u16(x))
         .take(P::NB_LIMBS)
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct FieldRegister<P: FieldParameters> {
-    array: U16Array,
-    _marker: core::marker::PhantomData<P>,
-}
-
-impl<P: FieldParameters> Register for FieldRegister<P> {
-    const CELL: Option<CellType> = Some(CellType::U16);
-
-    fn from_raw_register(register: MemorySlice) -> Self {
-        Self {
-            array: U16Array::from_raw_register(register),
-            _marker: core::marker::PhantomData,
-        }
-    }
-
-    fn register(&self) -> &MemorySlice {
-        self.array.register()
-    }
-
-    fn size_of() -> usize {
-        P::NB_LIMBS
-    }
-
-    fn into_raw_register(self) -> MemorySlice {
-        self.array.into_raw_register()
-    }
 }
 
 /// The parameters for the Fp25519 field of modulues 2^255-19.

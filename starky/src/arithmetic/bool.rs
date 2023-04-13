@@ -8,8 +8,9 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use super::builder::ChipBuilder;
 use super::chip::ChipParameters;
 use super::instruction::Instruction;
-use super::register::{BitRegister, MemorySlice, Register, WitnessData};
+use super::register::{BitRegister, MemorySlice, Register};
 use super::trace::TraceHandle;
+use crate::arithmetic::register::WitnessData;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]

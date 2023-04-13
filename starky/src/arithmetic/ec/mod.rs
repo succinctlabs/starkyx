@@ -5,10 +5,11 @@ use num::BigUint;
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
-use super::register::Register;
+use super::register::FieldRegister;
 use crate::arithmetic::builder::ChipBuilder;
 use crate::arithmetic::chip::ChipParameters;
-use crate::arithmetic::field::{FieldParameters, FieldRegister};
+use crate::arithmetic::field::FieldParameters;
+use crate::arithmetic::register::Register;
 use crate::arithmetic::trace::TraceHandle;
 
 pub const LIMB: u32 = 2u32.pow(16);

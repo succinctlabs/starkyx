@@ -10,7 +10,8 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::bool::ConstraintBool;
-use super::register::{MemorySlice, WitnessData};
+use super::register::MemorySlice;
+use crate::arithmetic::register::WitnessData;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:

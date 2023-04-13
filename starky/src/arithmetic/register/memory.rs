@@ -1,10 +1,11 @@
-use anyhow::{anyhow, Result};
 use plonky2::field::extension::FieldExtension;
 use plonky2::field::packed::PackedField;
 use plonky2::iop::ext_target::ExtensionTarget;
 
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
+/// A row-wise contiguous chunk of memory in the trace. Corresponds to a slice in vars.local_values
+/// or vars.next_values.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
 pub enum MemorySlice {
     Local(usize, usize),
@@ -13,112 +14,6 @@ pub enum MemorySlice {
     // Not sure if these are needed
     First(usize, usize),
     Last(usize, usize),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct U16Array {
-    register: MemorySlice,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum CellType {
-    U16,
-    Bit,
-}
-
-pub trait Register: 'static + Sized + Clone + Send + Sync {
-    const CELL: Option<CellType>;
-
-    /// Returns an element of the field
-    ///
-    /// Assumes register is of the correct size
-    fn from_raw_register(register: MemorySlice) -> Self;
-
-    fn into_raw_register(self) -> MemorySlice;
-
-    fn register(&self) -> &MemorySlice;
-
-    /// Returns an element of the field
-    ///
-    /// Checks that the register is of the correct size
-    fn from_register(register: MemorySlice) -> Result<Self> {
-        if register.len() != Self::size_of() {
-            return Err(anyhow!("Invalid register length"));
-        }
-
-        Ok(Self::from_raw_register(register))
-    }
-
-    fn next(&self) -> Self {
-        Self::from_raw_register(self.register().next())
-    }
-
-    fn size_of() -> usize;
-}
-
-pub struct WitnessData {
-    size: usize,
-    cell_type: Option<CellType>,
-}
-
-impl WitnessData {
-    pub fn u16(size: usize) -> Self {
-        WitnessData {
-            size,
-            cell_type: Some(CellType::U16),
-        }
-    }
-
-    pub fn bitarray(size: usize) -> Self {
-        WitnessData {
-            size,
-            cell_type: Some(CellType::Bit),
-        }
-    }
-
-    pub fn untyped(size: usize) -> Self {
-        WitnessData {
-            size,
-            cell_type: None,
-        }
-    }
-
-    pub fn destruct(self) -> (usize, Option<CellType>) {
-        (self.size, self.cell_type)
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct ElementRegister(MemorySlice);
-
-impl Register for ElementRegister {
-    const CELL: Option<CellType> = None;
-
-    fn from_raw_register(register: MemorySlice) -> Self {
-        ElementRegister(register)
-    }
-
-    fn into_raw_register(self) -> MemorySlice {
-        self.0
-    }
-
-    fn register(&self) -> &MemorySlice {
-        &self.0
-    }
-
-    fn size_of() -> usize {
-        1
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct BitArray<const N: usize> {
-    register: MemorySlice,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct BitRegister {
-    register: MemorySlice,
 }
 
 impl MemorySlice {
@@ -272,65 +167,5 @@ impl MemorySlice {
             MemorySlice::First(index, length) => &vars.public_inputs[*index..*index + length],
             MemorySlice::Last(index, length) => &vars.public_inputs[*index..*index + length],
         }
-    }
-}
-
-impl Register for BitRegister {
-    const CELL: Option<CellType> = Some(CellType::Bit);
-
-    fn from_raw_register(register: MemorySlice) -> Self {
-        Self { register }
-    }
-
-    fn register(&self) -> &MemorySlice {
-        &self.register
-    }
-
-    fn size_of() -> usize {
-        1
-    }
-
-    fn into_raw_register(self) -> MemorySlice {
-        self.register
-    }
-}
-
-impl<const N: usize> Register for BitArray<N> {
-    const CELL: Option<CellType> = Some(CellType::Bit);
-
-    fn from_raw_register(register: MemorySlice) -> Self {
-        Self { register }
-    }
-
-    fn register(&self) -> &MemorySlice {
-        &self.register
-    }
-
-    fn size_of() -> usize {
-        N
-    }
-
-    fn into_raw_register(self) -> MemorySlice {
-        self.register
-    }
-}
-
-impl Register for U16Array {
-    const CELL: Option<CellType> = Some(CellType::U16);
-
-    fn from_raw_register(register: MemorySlice) -> Self {
-        Self { register }
-    }
-
-    fn register(&self) -> &MemorySlice {
-        &self.register
-    }
-
-    fn size_of() -> usize {
-        panic!("Cannot get size of U16Array")
-    }
-
-    fn into_raw_register(self) -> MemorySlice {
-        self.register
     }
 }
