@@ -290,7 +290,7 @@ mod tests {
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
         const NUM_FREE_COLUMNS: usize = 3 * 16;
 
-        type Instruction = FpMul<Fp25519Param, 16>;
+        type Instruction = FpMul<Fp25519Param>;
     }
 
     #[test]

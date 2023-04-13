@@ -196,7 +196,7 @@ mod tests {
     use super::*;
     use crate::arithmetic::builder::ChipBuilder;
     use crate::arithmetic::chip::{ChipParameters, TestStark};
-    use crate::arithmetic::register::{BitRegister, U16Array};
+    use crate::arithmetic::register::BitRegister;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;
@@ -210,10 +210,10 @@ mod tests {
     pub struct BoolTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for BoolTest {
-        const NUM_ARITHMETIC_COLUMNS: usize = 3;
-        const NUM_FREE_COLUMNS: usize = 2;
+        const NUM_ARITHMETIC_COLUMNS: usize = 5;
+        const NUM_FREE_COLUMNS: usize = 5;
 
-        type Instruction = Selector<U16Array<1>>;
+        type Instruction = Selector<BitRegister>;
     }
 
     #[test]
@@ -230,7 +230,7 @@ mod tests {
         let bit_zero = builder.alloc_local::<BitRegister>().unwrap();
         builder.write_data(&bit_zero).unwrap();
 
-        let dummy = builder.alloc_local::<U16Array<1>>().unwrap();
+        let dummy = builder.alloc_local::<BitRegister>().unwrap();
         builder.write_data(&dummy).unwrap();
 
         let (chip, spec) = builder.build();
@@ -242,7 +242,7 @@ mod tests {
         for i in 0..num_rows {
             handle.write_data(i, bit_one, vec![F::ONE]).unwrap();
             handle.write_data(i, bit_zero, vec![F::ZERO]).unwrap();
-            handle.write_data(i, dummy, vec![F::ZERO; 1]).unwrap();
+            handle.write_data(i, dummy, vec![F::ZERO]).unwrap();
         }
         drop(handle);
 
@@ -343,11 +343,11 @@ mod tests {
         let bit = builder.alloc_local::<BitRegister>().unwrap();
         builder.write_data(&bit).unwrap();
 
-        let x = builder.alloc_local::<U16Array<1>>().unwrap();
+        let x = builder.alloc_local::<BitRegister>().unwrap();
         builder.write_data(&x).unwrap();
-        let y = builder.alloc_local::<U16Array<1>>().unwrap();
+        let y = builder.alloc_local::<BitRegister>().unwrap();
         builder.write_data(&y).unwrap();
-        let result = builder.alloc_local::<U16Array<1>>().unwrap();
+        let result = builder.alloc_local::<BitRegister>().unwrap();
 
         let sel = builder.selector(&bit, &x, &y, &result).unwrap();
 
@@ -359,9 +359,9 @@ mod tests {
         let (handle, generator) = trace::<F, D>(spec);
 
         for i in 0..num_rows {
-            let x_i = 4u16;
-            let y_i = 5u16;
-            let bit_i = i % 2 == 0;
+            let x_i = 0u16;
+            let y_i = 1u16;
+            let bit_i = if i % 2 == 0 { true } else { false };
             handle.write_bit(i, bit_i, &bit).unwrap();
             let res = if i % 2 == 0 { x_i } else { y_i };
             handle

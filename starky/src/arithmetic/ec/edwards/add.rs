@@ -11,62 +11,62 @@ use crate::arithmetic::trace::TraceHandle;
 #[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]
 #[allow(dead_code)]
-pub struct EcAddData<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize> {
-    P: AffinePointRegister<E, N_LIMBS>,
-    Q: AffinePointRegister<E, N_LIMBS>,
-    R: AffinePointRegister<E, N_LIMBS>,
-    XNUM: FpQuad<E::FieldParam, N_LIMBS>,
-    YNUM: FpQuad<E::FieldParam, N_LIMBS>,
-    PXPY: FpMul<E::FieldParam, N_LIMBS>,
-    QXQY: FpMul<E::FieldParam, N_LIMBS>,
-    PXPYQXQY: FpMul<E::FieldParam, N_LIMBS>,
-    DXY: FpMulConst<E::FieldParam, N_LIMBS>,
-    XDEN: Den<E::FieldParam, N_LIMBS>,
-    YDEN: Den<E::FieldParam, N_LIMBS>,
+pub struct EcAddData<E: EdwardsParameters> {
+    P: AffinePointRegister<E>,
+    Q: AffinePointRegister<E>,
+    R: AffinePointRegister<E>,
+    XNUM: FpQuad<E::FieldParam>,
+    YNUM: FpQuad<E::FieldParam>,
+    PXPY: FpMul<E::FieldParam>,
+    QXQY: FpMul<E::FieldParam>,
+    PXPYQXQY: FpMul<E::FieldParam>,
+    DXY: FpMulConst<E::FieldParam>,
+    XDEN: Den<E::FieldParam>,
+    YDEN: Den<E::FieldParam>,
 }
 
-impl<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize> EcAddData<E, N_LIMBS> {
+impl<E: EdwardsParameters> EcAddData<E> {
     pub const fn num_ed_add_witness_columns() -> usize {
-        2 * (FpQuad::<E::FieldParam, N_LIMBS>::num_quad_columns() - 4 * N_LIMBS)
-            + 3 * (FpMul::<E::FieldParam, N_LIMBS>::num_mul_columns() - 2 * N_LIMBS)
-            + 2 * (FpMulConst::<E::FieldParam, N_LIMBS>::num_mul_const_columns() - N_LIMBS)
-            + 2 * (Den::<E::FieldParam, N_LIMBS>::num_den_columns() - 3 * N_LIMBS)
+        2 * (FpQuad::<E::FieldParam>::num_quad_columns() - 4 * E::FieldParam::NB_LIMBS)
+            + 3 * (FpMul::<E::FieldParam>::num_mul_columns() - 2 * E::FieldParam::NB_LIMBS)
+            + (FpMulConst::<E::FieldParam>::num_mul_const_columns() - E::FieldParam::NB_LIMBS)
+            + 2 * (Den::<E::FieldParam>::num_den_columns() - 3 * E::FieldParam::NB_LIMBS)
     }
 
     pub const fn num_ed_add_columns() -> usize {
-        6 * N_LIMBS + Self::num_ed_add_witness_columns()
+        6 * E::FieldParam::NB_LIMBS + Self::num_ed_add_witness_columns()
     }
 
     pub const fn num_ed_double_columns() -> usize {
-        Self::num_ed_add_columns() - 3 * N_LIMBS
+        Self::num_ed_add_columns() - 3 * E::FieldParam::NB_LIMBS
     }
 }
 
-pub trait FromEdwardsAdd<E: EdwardsParameters<N>, const N: usize>:
-    From<FpMul<E::FieldParam, N>>
-    + From<FpQuad<E::FieldParam, N>>
-    + From<FpMulConst<E::FieldParam, N>>
-    + From<Den<E::FieldParam, N>>
+pub trait FromEdwardsAdd<E: EdwardsParameters>:
+    From<FpMul<E::FieldParam>>
+    + From<FpQuad<E::FieldParam>>
+    + From<FpMulConst<E::FieldParam>>
+    + From<Den<E::FieldParam>>
 {
 }
 
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
     #[allow(non_snake_case)]
-    pub fn ed_add<E: EdwardsParameters<N>, const N: usize>(
+    pub fn ed_add<E: EdwardsParameters>(
         &mut self,
-        P: &AffinePointRegister<E, N>,
-        Q: &AffinePointRegister<E, N>,
-        result: &AffinePointRegister<E, N>,
-    ) -> Result<EcAddData<E, N>>
+        P: &AffinePointRegister<E>,
+        Q: &AffinePointRegister<E>,
+        result: &AffinePointRegister<E>,
+    ) -> Result<EcAddData<E>>
     where
-        L::Instruction: FromEdwardsAdd<E, N>,
+        L::Instruction: FromEdwardsAdd<E>,
     {
-        let x_num_result = self.alloc_local::<FieldRegister<E::FieldParam, N>>()?;
-        let y_num_result = self.alloc_local::<FieldRegister<E::FieldParam, N>>()?;
-        let px_py_result = self.alloc_local::<FieldRegister<E::FieldParam, N>>()?;
-        let qx_qy_result = self.alloc_local::<FieldRegister<E::FieldParam, N>>()?;
-        let all_xy_result = self.alloc_local::<FieldRegister<E::FieldParam, N>>()?;
-        let dxy_result = self.alloc_local::<FieldRegister<E::FieldParam, N>>()?;
+        let x_num_result = self.alloc_local::<FieldRegister<E::FieldParam>>()?;
+        let y_num_result = self.alloc_local::<FieldRegister<E::FieldParam>>()?;
+        let px_py_result = self.alloc_local::<FieldRegister<E::FieldParam>>()?;
+        let qx_qy_result = self.alloc_local::<FieldRegister<E::FieldParam>>()?;
+        let all_xy_result = self.alloc_local::<FieldRegister<E::FieldParam>>()?;
+        let dxy_result = self.alloc_local::<FieldRegister<E::FieldParam>>()?;
 
         let x_num_ins = self.fpquad(&P.x, &Q.y, &Q.x, &P.y, &x_num_result)?;
         let y_num_ins = self.fpquad(&P.y, &Q.y, &P.x, &Q.x, &y_num_result)?;
@@ -96,13 +96,13 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 
     #[allow(non_snake_case)]
-    pub fn ed_double<E: EdwardsParameters<N>, const N: usize>(
+    pub fn ed_double<E: EdwardsParameters>(
         &mut self,
-        P: &AffinePointRegister<E, N>,
-        result: &AffinePointRegister<E, N>,
-    ) -> Result<EcAddData<E, N>>
+        P: &AffinePointRegister<E>,
+        result: &AffinePointRegister<E>,
+    ) -> Result<EcAddData<E>>
     where
-        L::Instruction: FromEdwardsAdd<E, N>,
+        L::Instruction: FromEdwardsAdd<E>,
     {
         self.ed_add(P, P, result)
     }
@@ -110,13 +110,13 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
     #[allow(non_snake_case)]
-    pub fn write_ed_add<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize>(
+    pub fn write_ed_add<E: EdwardsParameters>(
         &self,
         row_index: usize,
-        P: &AffinePoint<E, N_LIMBS>,
-        Q: &AffinePoint<E, N_LIMBS>,
-        chip_data: EcAddData<E, N_LIMBS>,
-    ) -> Result<AffinePoint<E, N_LIMBS>> {
+        P: &AffinePoint<E>,
+        Q: &AffinePoint<E>,
+        chip_data: EcAddData<E>,
+    ) -> Result<AffinePoint<E>> {
         let x_num = self.write_fpquad(row_index, &P.x, &Q.y, &Q.x, &P.y, chip_data.XNUM)?;
         let y_num = self.write_fpquad(row_index, &P.y, &Q.y, &P.x, &Q.x, chip_data.YNUM)?;
 
@@ -133,12 +133,12 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
     }
 
     #[allow(non_snake_case)]
-    pub fn write_ed_double<E: EdwardsParameters<N_LIMBS>, const N_LIMBS: usize>(
+    pub fn write_ed_double<E: EdwardsParameters>(
         &self,
         row_index: usize,
-        P: &AffinePoint<E, N_LIMBS>,
-        chip_data: EcAddData<E, N_LIMBS>,
-    ) -> Result<AffinePoint<E, N_LIMBS>> {
+        P: &AffinePoint<E>,
+        chip_data: EcAddData<E>,
+    ) -> Result<AffinePoint<E>> {
         self.write_ed_add(row_index, P, P, chip_data)
     }
 }
@@ -173,11 +173,10 @@ mod tests {
     pub struct EdAddTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for EdAddTest {
-        const NUM_ARITHMETIC_COLUMNS: usize =
-            EcAddData::<Ed25519Parameters, 16>::num_ed_add_columns();
+        const NUM_ARITHMETIC_COLUMNS: usize = EcAddData::<Ed25519Parameters>::num_ed_add_columns();
         const NUM_FREE_COLUMNS: usize = 0;
 
-        type Instruction = EdWardsMicroInstruction<Ed25519Parameters, 16>;
+        type Instruction = EdWardsMicroInstruction<Ed25519Parameters>;
     }
 
     #[allow(non_snake_case)]
@@ -193,11 +192,11 @@ mod tests {
         // build the stark
         let mut builder = ChipBuilder::<EdAddTest, F, D>::new();
 
-        let P = builder.alloc_local_ec_point::<E, 16>().unwrap();
-        let Q = builder.alloc_local_ec_point::<E, 16>().unwrap();
-        let R = builder.alloc_local_ec_point::<E, 16>().unwrap();
+        let P = builder.alloc_local_ec_point::<E>().unwrap();
+        let Q = builder.alloc_local_ec_point::<E>().unwrap();
+        let R = builder.alloc_local_ec_point::<E>().unwrap();
 
-        let ed_data = builder.ed_add::<E, 16>(&P, &Q, &R).unwrap();
+        let ed_data = builder.ed_add::<E>(&P, &Q, &R).unwrap();
         builder.write_ec_point(&P).unwrap();
         builder.write_ec_point(&Q).unwrap();
 
@@ -303,10 +302,10 @@ mod tests {
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for EdDoubleTest {
         const NUM_ARITHMETIC_COLUMNS: usize =
-            EcAddData::<Ed25519Parameters, 16>::num_ed_double_columns();
+            EcAddData::<Ed25519Parameters>::num_ed_double_columns();
         const NUM_FREE_COLUMNS: usize = 0;
 
-        type Instruction = EdWardsMicroInstruction<Ed25519Parameters, 16>;
+        type Instruction = EdWardsMicroInstruction<Ed25519Parameters>;
     }
 
     #[allow(non_snake_case)]
@@ -322,10 +321,10 @@ mod tests {
         // build the stark
         let mut builder = ChipBuilder::<EdAddTest, F, D>::new();
 
-        let P = builder.alloc_ec_point::<E, 16>().unwrap();
-        let R = builder.alloc_ec_point::<E, 16>().unwrap();
+        let P = builder.alloc_ec_point::<E>().unwrap();
+        let R = builder.alloc_ec_point::<E>().unwrap();
 
-        let ed_double_data = builder.ed_double::<E, 16>(&P, &R).unwrap();
+        let ed_double_data = builder.ed_double::<E>(&P, &R).unwrap();
         builder.write_ec_point(&P).unwrap();
 
         let (chip, spec) = builder.build();

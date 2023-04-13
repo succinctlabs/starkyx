@@ -16,7 +16,7 @@ pub enum Register {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct U16Array<const N: usize> {
+pub struct U16Array {
     register: Register,
 }
 
@@ -313,7 +313,7 @@ impl<const N: usize> DataRegister for BitArray<N> {
     }
 }
 
-impl<const N: usize> DataRegister for U16Array<N> {
+impl DataRegister for U16Array {
     const CELL: Option<CellType> = Some(CellType::U16);
 
     fn from_raw_register(register: Register) -> Self {
@@ -325,7 +325,7 @@ impl<const N: usize> DataRegister for U16Array<N> {
     }
 
     fn size_of() -> usize {
-        N
+        panic!("Cannot get size of U16Array")
     }
 
     fn into_raw_register(self) -> Register {

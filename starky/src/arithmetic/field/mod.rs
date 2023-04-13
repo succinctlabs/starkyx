@@ -17,10 +17,13 @@ use super::polynomial::Polynomial;
 use super::trace::TraceHandle;
 use crate::arithmetic::register::{CellType, DataRegister, Register, U16Array};
 
+pub const MAX_NB_LIMBS: usize = 32;
 pub const LIMB: u32 = 2u32.pow(16);
 
-pub trait FieldParameters<const N_LIMBS: usize>: Send + Sync + Copy + 'static {
-    const MODULUS: [u16; N_LIMBS];
+pub trait FieldParameters: Send + Sync + Copy + 'static {
+    const NB_LIMBS: usize;
+    const NB_WITNESS_LIMBS: usize;
+    const MODULUS: [u16; MAX_NB_LIMBS];
     const WITNESS_OFFSET: usize;
 
     fn modulus_biguint() -> BigUint {
@@ -33,29 +36,31 @@ pub trait FieldParameters<const N_LIMBS: usize>: Send + Sync + Copy + 'static {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
-    pub fn write_field<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize>(
+    pub fn write_field<P: FieldParameters>(
         &self,
         row_index: usize,
         a_int: &BigUint,
-        a: FieldRegister<P, N_LIMBS>,
+        a: FieldRegister<P>,
     ) -> Result<()> {
         let p_a = Polynomial::<F>::from_biguint_field(a_int, 16, 16);
         self.write_data(row_index, a, p_a.into_vec())
     }
 }
 
-pub fn modulus_field_iter<F: Field, P: FieldParameters<N_LIMBS>, const N_LIMBS: usize>(
-) -> impl Iterator<Item = F> {
-    P::MODULUS.into_iter().map(|x| F::from_canonical_u16(x))
+pub fn modulus_field_iter<F: Field, P: FieldParameters>() -> impl Iterator<Item = F> {
+    P::MODULUS
+        .into_iter()
+        .map(|x| F::from_canonical_u16(x))
+        .take(P::NB_LIMBS)
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct FieldRegister<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> {
-    array: U16Array<N_LIMBS>,
+pub struct FieldRegister<P: FieldParameters> {
+    array: U16Array,
     _marker: core::marker::PhantomData<P>,
 }
 
-impl<const N_LIMBS: usize, P: FieldParameters<N_LIMBS>> DataRegister for FieldRegister<P, N_LIMBS> {
+impl<P: FieldParameters> DataRegister for FieldRegister<P> {
     const CELL: Option<CellType> = Some(CellType::U16);
 
     fn from_raw_register(register: Register) -> Self {
@@ -70,7 +75,7 @@ impl<const N_LIMBS: usize, P: FieldParameters<N_LIMBS>> DataRegister for FieldRe
     }
 
     fn size_of() -> usize {
-        N_LIMBS
+        P::NB_LIMBS
     }
 
     fn into_raw_register(self) -> Register {
@@ -82,14 +87,15 @@ impl<const N_LIMBS: usize, P: FieldParameters<N_LIMBS>> DataRegister for FieldRe
 #[derive(Debug, Clone, Copy)]
 pub struct Fp25519Param;
 
-pub type Fp25519 = FieldRegister<Fp25519Param, 16>;
+pub type Fp25519 = FieldRegister<Fp25519Param>;
 
-impl FieldParameters<16> for Fp25519Param {
-    const MODULUS: [u16; 16] = [
+impl FieldParameters for Fp25519Param {
+    const NB_LIMBS: usize = 16;
+    const NB_WITNESS_LIMBS: usize = 2 * Self::NB_LIMBS - 2;
+    const MODULUS: [u16; MAX_NB_LIMBS] = [
         65517, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535,
-        65535, 65535, 32767,
+        65535, 65535, 32767, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     ];
-
     const WITNESS_OFFSET: usize = 1usize << 20;
 
     fn modulus_biguint() -> BigUint {
@@ -98,75 +104,65 @@ impl FieldParameters<16> for Fp25519Param {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum FpInstruction<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> {
-    Add(FpAdd<P, N_LIMBS>),
-    Mul(FpMul<P, N_LIMBS>),
-    Quad(FpQuad<P, N_LIMBS>),
-    MulConst(FpMulConst<P, N_LIMBS>),
+pub enum FpInstruction<P: FieldParameters> {
+    Add(FpAdd<P>),
+    Mul(FpMul<P>),
+    Quad(FpQuad<P>),
+    MulConst(FpMulConst<P>),
 }
 
-impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> From<FpAdd<P, N_LIMBS>>
-    for FpInstruction<P, N_LIMBS>
-{
-    fn from(add: FpAdd<P, N_LIMBS>) -> Self {
+impl<P: FieldParameters> From<FpAdd<P>> for FpInstruction<P> {
+    fn from(add: FpAdd<P>) -> Self {
         Self::Add(add)
     }
 }
 
-impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> From<FpMul<P, N_LIMBS>>
-    for FpInstruction<P, N_LIMBS>
-{
-    fn from(mul: FpMul<P, N_LIMBS>) -> Self {
+impl<P: FieldParameters> From<FpMul<P>> for FpInstruction<P> {
+    fn from(mul: FpMul<P>) -> Self {
         Self::Mul(mul)
     }
 }
 
-impl<P: FieldParameters<N_LIMBS>, const N_LIMBS: usize> From<FpQuad<P, N_LIMBS>>
-    for FpInstruction<P, N_LIMBS>
-{
-    fn from(quad: FpQuad<P, N_LIMBS>) -> Self {
+impl<P: FieldParameters> From<FpQuad<P>> for FpInstruction<P> {
+    fn from(quad: FpQuad<P>) -> Self {
         Self::Quad(quad)
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldParameters<N>>
-    Instruction<F, D> for FpInstruction<FP, N>
+impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
+    for FpInstruction<P>
 {
     fn memory_vec(&self) -> Vec<Register> {
         match self {
-            FpInstruction::Add(add) => <FpAdd<FP, N> as Instruction<F, D>>::memory_vec(add),
-            FpInstruction::Mul(mul) => <FpMul<FP, N> as Instruction<F, D>>::memory_vec(mul),
-            FpInstruction::Quad(quad) => <FpQuad<FP, N> as Instruction<F, D>>::memory_vec(quad),
+            FpInstruction::Add(add) => <FpAdd<P> as Instruction<F, D>>::memory_vec(add),
+            FpInstruction::Mul(mul) => <FpMul<P> as Instruction<F, D>>::memory_vec(mul),
+            FpInstruction::Quad(quad) => <FpQuad<P> as Instruction<F, D>>::memory_vec(quad),
             FpInstruction::MulConst(mul_const) => {
-                <FpMulConst<FP, N> as Instruction<F, D>>::memory_vec(mul_const)
+                <FpMulConst<P> as Instruction<F, D>>::memory_vec(mul_const)
             }
         }
     }
 
     fn witness_data(&self) -> Option<super::register::WitnessData> {
         match self {
-            FpInstruction::Add(add) => <FpAdd<FP, N> as Instruction<F, D>>::witness_data(add),
-            FpInstruction::Mul(mul) => <FpMul<FP, N> as Instruction<F, D>>::witness_data(mul),
-            FpInstruction::Quad(quad) => <FpQuad<FP, N> as Instruction<F, D>>::witness_data(quad),
+            FpInstruction::Add(add) => <FpAdd<P> as Instruction<F, D>>::witness_data(add),
+            FpInstruction::Mul(mul) => <FpMul<P> as Instruction<F, D>>::witness_data(mul),
+            FpInstruction::Quad(quad) => <FpQuad<P> as Instruction<F, D>>::witness_data(quad),
             FpInstruction::MulConst(mul_const) => {
-                <FpMulConst<FP, N> as Instruction<F, D>>::witness_data(mul_const)
+                <FpMulConst<P> as Instruction<F, D>>::witness_data(mul_const)
             }
         }
     }
 
     fn set_witness(&mut self, witness: Register) -> Result<()> {
         match self {
-            FpInstruction::Add(add) => {
-                <FpAdd<FP, N> as Instruction<F, D>>::set_witness(add, witness)
-            }
-            FpInstruction::Mul(mul) => {
-                <FpMul<FP, N> as Instruction<F, D>>::set_witness(mul, witness)
-            }
+            FpInstruction::Add(add) => <FpAdd<P> as Instruction<F, D>>::set_witness(add, witness),
+            FpInstruction::Mul(mul) => <FpMul<P> as Instruction<F, D>>::set_witness(mul, witness),
             FpInstruction::Quad(quad) => {
-                <FpQuad<FP, N> as Instruction<F, D>>::set_witness(quad, witness)
+                <FpQuad<P> as Instruction<F, D>>::set_witness(quad, witness)
             }
             FpInstruction::MulConst(mul_const) => {
-                <FpMulConst<FP, N> as Instruction<F, D>>::set_witness(mul_const, witness)
+                <FpMulConst<P> as Instruction<F, D>>::set_witness(mul_const, witness)
             }
         }
     }
@@ -174,60 +170,50 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
         match self {
             FpInstruction::Add(add) => {
-                <FpAdd<FP, N> as Instruction<F, D>>::assign_row(add, trace_rows, row, row_index)
+                <FpAdd<P> as Instruction<F, D>>::assign_row(add, trace_rows, row, row_index)
             }
             FpInstruction::Mul(mul) => {
-                <FpMul<FP, N> as Instruction<F, D>>::assign_row(mul, trace_rows, row, row_index)
+                <FpMul<P> as Instruction<F, D>>::assign_row(mul, trace_rows, row, row_index)
             }
             FpInstruction::Quad(quad) => {
-                <FpQuad<FP, N> as Instruction<F, D>>::assign_row(quad, trace_rows, row, row_index)
+                <FpQuad<P> as Instruction<F, D>>::assign_row(quad, trace_rows, row, row_index)
             }
-            FpInstruction::MulConst(mul_const) => {
-                <FpMulConst<FP, N> as Instruction<F, D>>::assign_row(
-                    mul_const, trace_rows, row, row_index,
-                )
-            }
+            FpInstruction::MulConst(mul_const) => <FpMulConst<P> as Instruction<F, D>>::assign_row(
+                mul_const, trace_rows, row, row_index,
+            ),
         }
     }
 
     fn packed_generic_constraints<
         FE,
-        P,
+        PF,
         const D2: usize,
         const COLUMNS: usize,
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        vars: crate::vars::StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
+        vars: crate::vars::StarkEvaluationVars<FE, PF, { COLUMNS }, { PUBLIC_INPUTS }>,
+        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<PF>,
     ) where
         FE: plonky2::field::extension::FieldExtension<D2, BaseField = F>,
-        P: plonky2::field::packed::PackedField<Scalar = FE>,
+        PF: plonky2::field::packed::PackedField<Scalar = FE>,
     {
         match self {
             FpInstruction::Add(add) => {
-                <FpAdd<FP, N> as Instruction<F, D>>::packed_generic_constraints(
-                    add,
-                    vars,
-                    yield_constr,
-                )
+                <FpAdd<P> as Instruction<F, D>>::packed_generic_constraints(add, vars, yield_constr)
             }
             FpInstruction::Mul(mul) => {
-                <FpMul<FP, N> as Instruction<F, D>>::packed_generic_constraints(
-                    mul,
-                    vars,
-                    yield_constr,
-                )
+                <FpMul<P> as Instruction<F, D>>::packed_generic_constraints(mul, vars, yield_constr)
             }
             FpInstruction::Quad(quad) => {
-                <FpQuad<FP, N> as Instruction<F, D>>::packed_generic_constraints(
+                <FpQuad<P> as Instruction<F, D>>::packed_generic_constraints(
                     quad,
                     vars,
                     yield_constr,
                 )
             }
             FpInstruction::MulConst(mul_const) => {
-                <FpMulConst<FP, N> as Instruction<F, D>>::packed_generic_constraints(
+                <FpMulConst<P> as Instruction<F, D>>::packed_generic_constraints(
                     mul_const,
                     vars,
                     yield_constr,
@@ -243,32 +229,26 @@ impl<F: RichField + Extendable<D>, const D: usize, const N: usize, FP: FieldPara
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
         match self {
-            FpInstruction::Add(add) => {
-                <FpAdd<FP, N> as Instruction<F, D>>::ext_circuit_constraints(
-                    add,
-                    builder,
-                    vars,
-                    yield_constr,
-                )
-            }
-            FpInstruction::Mul(mul) => {
-                <FpMul<FP, N> as Instruction<F, D>>::ext_circuit_constraints(
-                    mul,
-                    builder,
-                    vars,
-                    yield_constr,
-                )
-            }
-            FpInstruction::Quad(quad) => {
-                <FpQuad<FP, N> as Instruction<F, D>>::ext_circuit_constraints(
-                    quad,
-                    builder,
-                    vars,
-                    yield_constr,
-                )
-            }
+            FpInstruction::Add(add) => <FpAdd<P> as Instruction<F, D>>::ext_circuit_constraints(
+                add,
+                builder,
+                vars,
+                yield_constr,
+            ),
+            FpInstruction::Mul(mul) => <FpMul<P> as Instruction<F, D>>::ext_circuit_constraints(
+                mul,
+                builder,
+                vars,
+                yield_constr,
+            ),
+            FpInstruction::Quad(quad) => <FpQuad<P> as Instruction<F, D>>::ext_circuit_constraints(
+                quad,
+                builder,
+                vars,
+                yield_constr,
+            ),
             FpInstruction::MulConst(mul_const) => {
-                <FpMulConst<FP, N> as Instruction<F, D>>::ext_circuit_constraints(
+                <FpMulConst<P> as Instruction<F, D>>::ext_circuit_constraints(
                     mul_const,
                     builder,
                     vars,
@@ -307,10 +287,10 @@ mod tests {
     struct FpInstructionTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for FpInstructionTest {
-        const NUM_ARITHMETIC_COLUMNS: usize = FpQuad::<Fp25519Param, 16>::num_quad_columns();
+        const NUM_ARITHMETIC_COLUMNS: usize = FpQuad::<Fp25519Param>::num_quad_columns();
         const NUM_FREE_COLUMNS: usize = 0;
 
-        type Instruction = FpInstruction<Fp25519Param, 16>;
+        type Instruction = FpInstruction<Fp25519Param>;
     }
 
     #[test]
