@@ -455,9 +455,9 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         let c = self
             .c
             .into_iter()
-            .take(P::NB_LIMBS)
             .map(FE::from_canonical_u16)
             .map(PF::from)
+            .take(P::NB_LIMBS)
             .collect::<Vec<_>>();
         let result = self.result.register().packed_entries(&vars);
 
@@ -506,6 +506,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             .c
             .into_iter()
             .map(F::Extension::from_canonical_u16)
+            .take(P::NB_LIMBS)
             .collect::<Vec<_>>();
         let c = PolynomialGadget::constant_extension(builder, &c_vec);
         let result = self.result.register().evaluation_targets(&vars);

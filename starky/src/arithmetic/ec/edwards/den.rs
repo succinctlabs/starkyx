@@ -262,6 +262,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
 
         let constraint =
             PolynomialGadget::sub_extension(builder, &vanishing_poly, &witness_times_root);
+
         for constr in constraint {
             yield_constr.constraint(builder, constr);
         }
