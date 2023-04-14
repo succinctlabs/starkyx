@@ -12,7 +12,7 @@ use plonky2::hash::hash_types::RichField;
 use super::bool::ConstraintBool;
 use super::chip::{Chip, ChipParameters};
 use super::instruction::{EqualityConstraint, Instruction, StandardInstruction, WriteInstruction};
-use super::register::{CellType, MemorySlice, Register};
+use super::register::{Array, CellType, MemorySlice, Register, RegisterSerializable};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub enum InsID {
@@ -110,7 +110,22 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
             }
             None => self.get_local_memory(T::size_of())?,
         };
-        Ok(T::from_raw_register(register))
+        Ok(T::from_register(register))
+    }
+
+    pub fn alloc_local_array<T: Register>(&mut self, length: usize) -> Result<Array<T>> {
+        let size_of = T::size_of() * length;
+        let register = match T::CELL {
+            Some(CellType::U16) => self.get_local_u16_memory(size_of)?,
+            Some(CellType::Bit) => {
+                let reg = self.get_local_memory(size_of)?;
+                let consr = EqualityConstraint::Bool(ConstraintBool(reg));
+                self.constraints.push(consr);
+                reg
+            }
+            None => self.get_local_memory(size_of)?,
+        };
+        Ok(Array::<T>::from_register_unsafe(register))
     }
 
     /// Allocates a new register on the next row according to type `T` which implements the Register
@@ -126,7 +141,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
             }
             None => self.get_next_memory(T::size_of())?,
         };
-        Ok(T::from_raw_register(register))
+        Ok(T::from_register(register))
     }
 
     /// This method should be applied to any data that needs to be manually written to the trace by
@@ -152,22 +167,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         if existing_value.is_some() {
             return Err(anyhow!("Instruction label already exists"));
         }
-
-        let mut inst = instruction;
-        if let Some(data) = inst.witness_data() {
-            let (size, cell_type) = data.destruct();
-            let register = match cell_type {
-                Some(CellType::U16) => self.get_local_u16_memory(size)?,
-                Some(CellType::Bit) => {
-                    unimplemented!("Bit cells are not supported yet");
-                    //self.get_local_memory(size)?
-                }
-                None => self.get_local_memory(size)?,
-            };
-
-            inst.set_witness(register)?;
-        }
-        self.instructions.push(inst);
+        self.instructions.push(instruction);
         Ok(())
     }
 

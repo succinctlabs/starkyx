@@ -5,7 +5,7 @@ use num::BigUint;
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
-use super::register::FieldRegister;
+use super::register::{FieldRegister, RegisterSerializable};
 use crate::arithmetic::builder::ChipBuilder;
 use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::field::FieldParameters;
@@ -52,8 +52,12 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     pub fn alloc_unchecked_ec_point<E: EllipticCurveParameters>(
         &mut self,
     ) -> Result<AffinePointRegister<E>> {
-        let x = self.alloc_local::<FieldRegister<E::FieldParam>>().unwrap();
-        let y = self.alloc_local::<FieldRegister<E::FieldParam>>().unwrap();
+        let x = FieldRegister::<E::FieldParam>::from_register(
+            self.get_local_memory(E::FieldParam::NB_LIMBS).unwrap(),
+        );
+        let y = FieldRegister::<E::FieldParam>::from_register(
+            self.get_local_memory(E::FieldParam::NB_LIMBS).unwrap(),
+        );
         Ok(AffinePointRegister::<E>::from_field_registers(x, y))
     }
 
