@@ -186,7 +186,7 @@ mod tests {
     pub struct EdScalarMulTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for EdScalarMulTest {
-        const NUM_ARITHMETIC_COLUMNS: usize = 0;
+        const NUM_ARITHMETIC_COLUMNS: usize = 1504;
 
         const NUM_FREE_COLUMNS: usize = 2 + 2 * 2 * 16;
 
