@@ -23,7 +23,15 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
 
     fn memory_vec(&self) -> Vec<MemorySlice>;
 
-    fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize);
+    fn witness_vec(&self) -> Vec<MemorySlice>;
+
+    fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
+        self.witness_vec()
+            .into_iter()
+            .fold(0, |local_index, memory_slice| {
+                memory_slice.assign(trace_rows, local_index, row, row_index)
+            });
+    }
 
     fn packed_generic_constraints<
         FE,
@@ -156,6 +164,10 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for Default
     fn assign_row(&self, _trace_rows: &mut [Vec<F>], _row: &mut [F], _row_index: usize) {}
 
     fn memory_vec(&self) -> Vec<MemorySlice> {
+        Vec::new()
+    }
+
+    fn witness_vec(&self) -> Vec<MemorySlice> {
         Vec::new()
     }
 

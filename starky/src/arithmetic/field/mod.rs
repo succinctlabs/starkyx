@@ -8,6 +8,7 @@ use num::{BigUint, One, Zero};
 use plonky2::field::extension::Extendable;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
+use plonky2::iop::witness;
 
 pub use self::add::FpAdd;
 pub use self::mul::FpMul;
@@ -116,20 +117,14 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         }
     }
 
-    fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
+    fn witness_vec(&self) -> Vec<MemorySlice> {
         match self {
-            FpInstruction::Add(add) => {
-                <FpAdd<P> as Instruction<F, D>>::assign_row(add, trace_rows, row, row_index)
+            FpInstruction::Add(add) => <FpAdd<P> as Instruction<F, D>>::witness_vec(add),
+            FpInstruction::Mul(mul) => <FpMul<P> as Instruction<F, D>>::witness_vec(mul),
+            FpInstruction::Quad(quad) => <FpQuad<P> as Instruction<F, D>>::witness_vec(quad),
+            FpInstruction::MulConst(mul_const) => {
+                <FpMulConst<P> as Instruction<F, D>>::witness_vec(mul_const)
             }
-            FpInstruction::Mul(mul) => {
-                <FpMul<P> as Instruction<F, D>>::assign_row(mul, trace_rows, row, row_index)
-            }
-            FpInstruction::Quad(quad) => {
-                <FpQuad<P> as Instruction<F, D>>::assign_row(quad, trace_rows, row, row_index)
-            }
-            FpInstruction::MulConst(mul_const) => <FpMulConst<P> as Instruction<F, D>>::assign_row(
-                mul_const, trace_rows, row, row_index,
-            ),
         }
     }
 

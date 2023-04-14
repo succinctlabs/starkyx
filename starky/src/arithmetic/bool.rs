@@ -21,6 +21,10 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for Constra
         vec![self.0]
     }
 
+    fn witness_vec(&self) -> Vec<MemorySlice> {
+        Vec::new()
+    }
+
     fn assign_row(&self, _trace_rows: &mut [Vec<F>], _row: &mut [F], _row_index: usize) {}
 
     fn packed_generic_constraints<
@@ -110,8 +114,12 @@ impl<F: RichField + Extendable<D>, const D: usize, T: Register> Instruction<F, D
         ]
     }
 
+    fn witness_vec(&self) -> Vec<MemorySlice> {
+        vec![*self.result.register()]
+    }
+
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
-        self.result.register().assign(trace_rows, row, row_index);
+        self.result.register().assign(trace_rows, 0, row, row_index);
     }
 
     fn packed_generic_constraints<

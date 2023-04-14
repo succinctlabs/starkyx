@@ -78,7 +78,14 @@ impl MemorySlice {
     }
 
     #[inline]
-    pub fn assign<T: Copy>(&self, trace_rows: &mut [Vec<T>], value: &mut [T], row_index: usize) {
+    pub fn assign<T: Copy>(
+        &self,
+        trace_rows: &mut [Vec<T>],
+        local_index: usize,
+        value: &mut [T],
+        row_index: usize,
+    ) -> usize {
+        let value = &value[local_index..local_index + self.len()];
         match self {
             MemorySlice::Local(index, length) => {
                 trace_rows[row_index][*index..*index + length].copy_from_slice(value);
@@ -93,6 +100,7 @@ impl MemorySlice {
                 trace_rows[trace_rows.len() - 1][*index..*index + length].copy_from_slice(value);
             }
         }
+        return local_index + self.len();
     }
 
     #[inline]

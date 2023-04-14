@@ -43,6 +43,29 @@ impl<E: EdwardsParameters, F: RichField + Extendable<D>, const D: usize> Instruc
         }
     }
 
+    fn witness_vec(&self) -> Vec<MemorySlice> {
+        match self {
+            EdWardsMicroInstruction::Den(den) => {
+                <Den<E::FieldParam> as Instruction<F, D>>::witness_vec(den)
+            }
+            EdWardsMicroInstruction::FpAdd(fp_add) => {
+                <FpAdd<E::FieldParam> as Instruction<F, D>>::witness_vec(fp_add)
+            }
+            EdWardsMicroInstruction::FpMul(fp_mul) => {
+                <FpMul<E::FieldParam> as Instruction<F, D>>::witness_vec(fp_mul)
+            }
+            EdWardsMicroInstruction::FpQuad(fp_quad) => {
+                <FpQuad<E::FieldParam> as Instruction<F, D>>::witness_vec(fp_quad)
+            }
+            EdWardsMicroInstruction::FpMulConst(fp_mul_const) => {
+                <FpMulConst<E::FieldParam> as Instruction<F, D>>::witness_vec(fp_mul_const)
+            }
+            EdWardsMicroInstruction::Selector(selector) => {
+                <Selector<FieldRegister<E::FieldParam>> as Instruction<F, D>>::witness_vec(selector)
+            }
+        }
+    }
+
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
         match self {
             EdWardsMicroInstruction::Den(den) => {

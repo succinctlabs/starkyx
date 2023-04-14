@@ -71,27 +71,13 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         ]
     }
 
-    fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
-        let mut index = 0;
-        self.result
-            .register()
-            .assign(trace_rows, &mut row[index..P::NB_LIMBS], row_index);
-        index += P::NB_LIMBS;
-        self.carry
-            .register()
-            .assign(trace_rows, &mut row[index..index + P::NB_LIMBS], row_index);
-        index += P::NB_LIMBS;
-        self.witness_low.register().assign(
-            trace_rows,
-            &mut row[index..index + P::NB_WITNESS_LIMBS],
-            row_index,
-        );
-        index += P::NB_WITNESS_LIMBS;
-        self.witness_high.register().assign(
-            trace_rows,
-            &mut row[index..index + P::NB_WITNESS_LIMBS],
-            row_index,
-        );
+    fn witness_vec(&self) -> Vec<MemorySlice> {
+        vec![
+            *self.result.register(),
+            *self.carry.register(),
+            *self.witness_low.register(),
+            *self.witness_high.register(),
+        ]
     }
 
     fn packed_generic_constraints<
