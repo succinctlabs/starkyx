@@ -131,11 +131,7 @@ impl<F: RichField + Extendable<D>, const D: usize> EqualityConstraint<F, D> {
                 if let (MemorySlice::Local(_, _), MemorySlice::Local(_, _)) = (a, b) {
                     for (&a, &b) in a_vals.iter().zip(b_vals.iter()) {
                         let constr = builder.sub_extension(a, b);
-<<<<<<< HEAD
                         yield_constr.constraint_transition(builder, constr);
-=======
-                        yield_constr.constraint(builder, constr);
->>>>>>> main
                     }
                 } else {
                     for (&a, &b) in a_vals.iter().zip(b_vals.iter()) {
@@ -155,7 +151,6 @@ impl<F: RichField + Extendable<D>, const D: usize> EqualityConstraint<F, D> {
         }
     }
 }
-<<<<<<< HEAD
 
 /// A defult instruction set that contains no custom instructions
 #[derive(Clone, Debug)]
@@ -202,5 +197,3 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for Default
     ) {
     }
 }
-=======
->>>>>>> main

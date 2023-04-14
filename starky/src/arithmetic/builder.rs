@@ -260,38 +260,38 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use log::{info, log};
+    use plonky2::field::types::Field;
+    use plonky2::iop::witness::PartialWitness;
+    use plonky2::plonk::circuit_builder::CircuitBuilder;
+    use plonky2::plonk::circuit_data::CircuitConfig;
+    use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+    use plonky2::timed;
+    use plonky2::util::timing::TimingTree;
 
+    use super::*;
     use crate::arithmetic::chip::TestStark;
     use crate::arithmetic::instruction::DefaultInstructions;
     use crate::arithmetic::register::ElementRegister;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
-    use log::{log, info};
-    use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
-    use plonky2::timed;
-    use plonky2::util::timing::TimingTree;
-    use plonky2::iop::witness::PartialWitness;
-    use plonky2::plonk::circuit_builder::CircuitBuilder;
-    use plonky2::plonk::circuit_data::CircuitConfig;
-    use crate::verifier::verify_stark_proof;
     use crate::prover::prove;
     use crate::recursive_verifier::{
         add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
         verify_stark_proof_circuit,
     };
-    use plonky2::field::types::Field;
-
+    use crate::verifier::verify_stark_proof;
 
     #[derive(Clone, Copy, Debug)]
-    pub struct TestChipParameters<F, const D : usize> {
+    pub struct TestChipParameters<F, const D: usize> {
         _marker: core::marker::PhantomData<F>,
     }
 
-    impl<F : RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for TestChipParameters<F, D> {
+    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D>
+        for TestChipParameters<F, D>
+    {
         const NUM_FREE_COLUMNS: usize = 2;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
@@ -304,7 +304,7 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type L = TestChipParameters<F, D>;
-        type A = ArithmeticExpression::<F, D>; 
+        type A = ArithmeticExpression<F, D>;
         type S = TestStark<L, F, D>;
 
         // event logger to show messages
@@ -405,5 +405,4 @@ mod tests {
         timing.print();
         recursive_data.verify(recursive_proof).unwrap();
     }
-
 }

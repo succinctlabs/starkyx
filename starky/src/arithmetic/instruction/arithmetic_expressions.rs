@@ -186,7 +186,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Add<Vec<F>> for ArithmeticExp
     }
 }
 
-<<<<<<< HEAD
 impl<F: RichField + Extendable<D>, const D: usize> Sub<Vec<F>> for ArithmeticExpression<F, D> {
     type Output = Self;
 
@@ -195,8 +194,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Sub<Vec<F>> for ArithmeticExp
     }
 }
 
-=======
->>>>>>> main
 impl<F: RichField + Extendable<D>, const D: usize> Add<F> for ArithmeticExpression<F, D> {
     type Output = Self;
 
@@ -205,7 +202,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Add<F> for ArithmeticExpressi
     }
 }
 
-<<<<<<< HEAD
 impl<F: RichField + Extendable<D>, const D: usize> Sub<F> for ArithmeticExpression<F, D> {
     type Output = Self;
 
@@ -214,8 +210,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Sub<F> for ArithmeticExpressi
     }
 }
 
-=======
->>>>>>> main
 impl<F: RichField + Extendable<D>, const D: usize> Mul<F> for ArithmeticExpression<F, D> {
     type Output = Self;
 
