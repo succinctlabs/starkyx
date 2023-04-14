@@ -245,32 +245,30 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         a: ArithmeticExpression<F, D>,
         b: ArithmeticExpression<F, D>,
     ) {
-        let constraint = EqualityConstraint::ArithmeticConstraint(a, b);
+        assert_eq!(a.size, b.size, "Expressions must have the same size");
+        let constraint = EqualityConstraint::ArithmeticConstraint(a.expression, b.expression);
+        self.constraints.push(constraint);
+    }
+
+    pub fn assert_expression_zero(&mut self, a: ArithmeticExpression<F, D>) {
+        let zeros = ArithmeticExpression::from_constant_vec(vec![F::ZERO; a.size]);
+        let constraint = EqualityConstraint::ArithmeticConstraint(a.expression, zeros.expression);
         self.constraints.push(constraint);
     }
 
     /// Asserts that a + b = c
     pub fn add_pointwise<T: Register>(&mut self, a: &T, b: &T, c: &T) {
-        let a_exp = ArithmeticExpression::new(a);
-        let b_exp = ArithmeticExpression::new(b);
-        let c_exp = ArithmeticExpression::new(c);
-        self.assert_expressions_equal(a_exp + b_exp, c_exp);
+        self.assert_expressions_equal(a.expr() + b.expr(), c.expr());
     }
 
     /// Asserts that a - b = c
     pub fn sub_pointwise<T: Register>(&mut self, a: &T, b: &T, c: &T) {
-        let a_exp = ArithmeticExpression::new(a);
-        let b_exp = ArithmeticExpression::new(b);
-        let c_exp = ArithmeticExpression::new(c);
-        self.assert_expressions_equal(a_exp - b_exp, c_exp);
+        self.assert_expressions_equal(a.expr() - b.expr(), c.expr());
     }
 
     /// Asserts that a * b = c
     pub fn mul<T: Register>(&mut self, a: &T, b: &T, c: &T) {
-        let a_exp = ArithmeticExpression::new(a);
-        let b_exp = ArithmeticExpression::new(b);
-        let c_exp = ArithmeticExpression::new(c);
-        self.assert_expressions_equal(a_exp * b_exp, c_exp);
+        self.assert_expressions_equal(a.expr() * b.expr(), c.expr());
     }
 }
 

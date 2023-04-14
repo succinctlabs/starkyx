@@ -3,7 +3,6 @@ use super::*;
 use crate::arithmetic::bool::Selector;
 use crate::arithmetic::builder::ChipBuilder;
 use crate::arithmetic::chip::ChipParameters;
-use crate::arithmetic::instruction::arithmetic_expressions::ArithmeticExpression;
 use crate::arithmetic::polynomial::Polynomial;
 use crate::arithmetic::register::{BitRegister, ElementRegister};
 use crate::arithmetic::utils::biguint_to_bits_le;
@@ -78,8 +77,8 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         let temp_next = self.alloc_ec_point()?;
         let result_next = self.alloc_ec_point()?;
 
-        let counter = ArithmeticExpression::new(cycle_counter);
-        let counter_next = ArithmeticExpression::new(&cycle_counter.next());
+        let counter = cycle_counter.expr();
+        let counter_next = cycle_counter.next().expr();
 
         // Counter constraints
         let group = F::two_adic_subgroup(8);
@@ -96,12 +95,12 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
             (counter.clone() - generator_inv) * (temp.x.next().expr() - temp_next.x.expr());
         let temp_y_consr = (counter - generator_inv) * (temp.y.next().expr() - temp_next.y.expr());
 
-        let zero = ArithmeticExpression::from_constant(F::ZERO);
+        //let zero = ArithmeticExpression::from_constant(F::ZERO);
 
-        self.assert_expressions_equal(res_x_consr, zero.clone());
-        self.assert_expressions_equal(res_y_consr, zero.clone());
-        self.assert_expressions_equal(temp_x_consr, zero.clone());
-        self.assert_expressions_equal(temp_y_consr, zero);
+        self.assert_expression_zero(res_x_consr);
+        self.assert_expression_zero(res_y_consr);
+        self.assert_expression_zero(temp_x_consr);
+        self.assert_expression_zero(temp_y_consr);
 
         self.ed_double_and_add_step(scalar_bit, result, &result_next, temp, &temp_next)
     }

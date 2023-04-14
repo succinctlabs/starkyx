@@ -16,7 +16,7 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
 pub use self::u16::U16Register;
-use super::instruction::arithmetic_expressions::ArithmeticExpression;
+use super::instruction::arithmetic_expressions::{ArithmeticExpression, ArithmeticExpressionSlice};
 
 /// Adds serialization and deserialization to a register for converting between the canonical type
 /// and `MemorySlice`.
@@ -35,10 +35,6 @@ where
     /// Returns the register but in the next row.
     fn next(&self) -> Self {
         Self::from_register_unsafe(self.register().next())
-    }
-
-    fn expr<F: RichField + Extendable<D>, const D: usize>(&self) -> ArithmeticExpression<F, D> {
-        ArithmeticExpression::from_raw_register(*self.register())
     }
 }
 
@@ -61,5 +57,11 @@ pub trait Register:
             panic!("Invalid register length");
         }
         Self::from_register_unsafe(register)
+    }
+    fn expr<F: RichField + Extendable<D>, const D: usize>(&self) -> ArithmeticExpression<F, D> {
+        ArithmeticExpression {
+            expression: ArithmeticExpressionSlice::from_raw_register(*self.register()),
+            size: Self::size_of(),
+        }
     }
 }
