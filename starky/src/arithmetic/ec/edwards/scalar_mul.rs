@@ -103,13 +103,16 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         let counter_next = ArithmeticExpression::new(&cycle_counter.next());
 
         // Counter constraints
+        let group = F::two_adic_subgroup(8);
         let generator = F::primitive_root_of_unity(8);
+        debug_assert_eq!(generator, group[1]);
+        let generator_inv = group[group.len() - 1];
         self.assert_expressions_equal(counter_next, counter.clone() * generator);
 
-        let res_x_consr = (counter.clone() - F::ONE) * (r_x - r_n_x);
-        let res_y_consr = (counter.clone() - F::ONE) * (r_y - r_n_y);
-        let temp_x_consr = (counter.clone() - F::ONE) * (t_x - t_n_x);
-        let temp_y_consr = (counter - F::ONE) * (t_y - t_n_y);
+        let res_x_consr = (counter.clone() - generator_inv) * (r_x - r_n_x);
+        let res_y_consr = (counter.clone() - generator_inv) * (r_y - r_n_y);
+        let temp_x_consr = (counter.clone() - generator_inv) * (t_x - t_n_x);
+        let temp_y_consr = (counter - generator_inv) * (t_y - t_n_y);
 
         let zero = ArithmeticExpression::from_constant(F::ZERO);
 
@@ -133,7 +136,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
         scalar: &BigUint,
         point: &AffinePoint<E>,
         chip_data: EdScalarMulData<E>,
-    ) -> Result<(AffinePoint<E>, AffinePoint<E>)> {
+    ) -> Result<AffinePoint<E>> {
         let num_bits = E::num_scalar_bits();
         let scalar_bits = biguint_to_bits_le(scalar, num_bits);
 
@@ -161,7 +164,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
             self.write_ec_point(starting_row + i + 1, &res, &chip_data.result)?;
             self.write_ec_point(starting_row + i + 1, &temp, &chip_data.temp)?;
         }
-        Ok((res, temp))
+        Ok(res)
     }
 }
 
@@ -249,11 +252,12 @@ mod tests {
                 rayon::spawn(move || {
                     let mut rng = thread_rng();
                     let a = rng.gen_biguint(256);
-                    let point = E::neutral() * a;
+                    let point = E::generator() * a;
                     let scalar = rng.gen_biguint(256);
-                    handle
+                    let res = handle
                         .write_ed_double_and_add(256 * i, &scalar, &point, ed_data)
                         .unwrap();
+                    assert_eq!(res, point * scalar);
                 });
             }
             drop(handle);
@@ -318,5 +322,136 @@ mod tests {
         );
         timing.print();
         recursive_data.verify(recursive_proof).unwrap();
+    }
+
+    // A function for testing wrong proof that doesn't connect the two rows of the
+    // trace correctly (this checks the counter constraints)
+    #[allow(non_snake_case)]
+    pub fn write_ed_double_add_test_transition<
+        F: RichField + Extendable<D>,
+        const D: usize,
+        E: EdwardsParameters,
+    >(
+        handle: &TraceHandle<F, D>,
+        starting_row: usize,
+        scalar: &BigUint,
+        point: &AffinePoint<E>,
+        chip_data: EdScalarMulData<E>,
+    ) -> Result<AffinePoint<E>> {
+        let num_bits = E::num_scalar_bits();
+        let scalar_bits = biguint_to_bits_le(scalar, num_bits);
+
+        let mut res = E::neutral();
+        handle.write_ec_point(starting_row, &res, &chip_data.result)?;
+        let mut temp = point.clone();
+        handle.write_ec_point(starting_row, &temp, &chip_data.temp)?;
+
+        for (i, bit) in scalar_bits.iter().enumerate() {
+            handle.write_bit(starting_row + i, *bit, &chip_data.scalar_bit)?;
+            let result_plus_temp =
+                handle.write_ed_add(starting_row + i, &res, &temp, chip_data.add)?;
+            temp = handle.write_ed_double(starting_row + i, &temp, chip_data.double)?;
+            res = if *bit { result_plus_temp } else { res };
+            let res_x_field_vec =
+                Polynomial::from_biguint_field(&res.x, 16, E::FieldParam::NB_LIMBS).into_vec();
+            let res_y_field_vec =
+                Polynomial::from_biguint_field(&res.y, 16, E::FieldParam::NB_LIMBS).into_vec();
+            handle.write(starting_row + i, chip_data.selector_x, res_x_field_vec)?;
+            handle.write(starting_row + i, chip_data.selector_y, res_y_field_vec)?;
+
+            if i == num_bits - 1 {
+                break;
+            }
+            temp = &temp + &temp;
+            res = &res + &res;
+            handle.write_ec_point(starting_row + i + 1, &res, &chip_data.result)?;
+            handle.write_ec_point(starting_row + i + 1, &temp, &chip_data.temp)?;
+        }
+        Ok(res)
+    }
+
+    #[test]
+    fn test_failed_transition_scalar_mul_proof() {
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
+        type E = Ed25519Parameters;
+        type S = TestStark<EdScalarMulTest, F, D>;
+        type FieldPar = <E as EllipticCurveParameters>::FieldParam;
+
+        let _ = env_logger::builder().is_test(true).try_init();
+        // build the stark
+        let mut builder = ChipBuilder::<EdScalarMulTest, F, D>::new();
+
+        let res = builder.alloc_unchecked_ec_point::<E>().unwrap();
+        let temp = builder.alloc_unchecked_ec_point::<E>().unwrap();
+        let bit = builder.alloc_local::<BitRegister>().unwrap();
+        let counter = builder.alloc_local::<ElementRegister>().unwrap();
+
+        builder.write_data(&counter).unwrap();
+
+        let ed_data = builder
+            .ed_double_and_add(&bit, &res, &temp, &counter)
+            .unwrap();
+        builder.write_ec_point(&res).unwrap();
+        builder.write_ec_point(&temp).unwrap();
+
+        let (chip, spec) = builder.build();
+
+        // Construct the trace
+        let num_rows = 2u64.pow(16);
+        let (handle, generator) = trace::<F, D>(spec);
+
+        let mut timing = TimingTree::new("Ed_Add row", log::Level::Debug);
+
+        let trace = timed!(timing, "generate trace", {
+            let mut counter_val = F::ONE;
+            let counter_gen = F::primitive_root_of_unity(8);
+            for j in 0..(1 << 16) {
+                handle.write_data(j, counter, vec![counter_val]).unwrap();
+                counter_val *= counter_gen;
+            }
+            for i in 0..256usize {
+                let handle = handle.clone();
+                rayon::spawn(move || {
+                    let mut rng = thread_rng();
+                    let a = rng.gen_biguint(256);
+                    let point = E::generator() * a;
+                    let scalar = rng.gen_biguint(256);
+                    let res = write_ed_double_add_test_transition(
+                        &handle,
+                        256 * i,
+                        &scalar,
+                        &point,
+                        ed_data,
+                    )
+                    .unwrap();
+                    assert_ne!(res, point * scalar);
+                });
+            }
+            drop(handle);
+
+            generator.generate_trace(&chip, num_rows as usize).unwrap()
+        });
+
+        let config = StarkConfig::standard_fast_config();
+        let stark = TestStark::new(chip);
+
+        // Verify proof as a stark
+        let proof = timed!(
+            timing,
+            "generate stark proof",
+            prove::<F, C, S, D>(
+                stark.clone(),
+                &config,
+                trace,
+                [],
+                &mut TimingTree::default(),
+            )
+            .unwrap()
+        );
+
+        let res = verify_stark_proof(stark.clone(), proof, &config);
+        assert!(res.is_err());
     }
 }
