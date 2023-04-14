@@ -14,7 +14,7 @@ use crate::arithmetic::register::{
     Array, FieldRegister, MemorySlice, Register, RegisterSerializable, U16Register, WitnessData,
 };
 use crate::arithmetic::trace::TraceHandle;
-use crate::arithmetic::util::{extract_witness_and_shift, split_digits, to_field_iter};
+use crate::arithmetic::utils::{extract_witness_and_shift, split_digits, to_field_iter};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Debug, Clone, Copy)]

@@ -39,17 +39,7 @@ where
     constraints: Vec<EqualityConstraint>,
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Default
-    for ChipBuilder<L, F, D>
-{
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
-    // pub fn build(self) -> CompliedStark<L, F, D>
-
     pub fn new() -> Self {
         Self {
             local_index: 0,
@@ -64,6 +54,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         }
     }
 
+    /// Allocates `size` cells/columns worth of memory and returns it as a `MemorySlice`.
     pub fn get_local_memory(&mut self, size: usize) -> Result<MemorySlice> {
         let register = MemorySlice::Local(self.local_index, size);
         self.local_index += size;
@@ -73,6 +64,8 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         Ok(register)
     }
 
+    /// Allocates `size` cells/columns worth of memory and returns it as a `MemorySlice` on the
+    /// next row.
     fn get_next_memory(&mut self, size: usize) -> Result<MemorySlice> {
         let register = MemorySlice::Next(self.next_index, size);
         self.next_index += size;
@@ -82,6 +75,8 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         Ok(register)
     }
 
+    /// Allocates `size` cells/columns worth of memory and returns it as a `MemorySlice`. Each
+    /// cell will be range checked using the lookup table to be in the range `[0, 2^16]`.
     fn get_local_u16_memory(&mut self, size: usize) -> Result<MemorySlice> {
         let register = MemorySlice::Local(self.local_arithmetic_index, size);
         self.local_arithmetic_index += size;
@@ -91,6 +86,9 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         Ok(register)
     }
 
+    /// Allocates `size` cells/columns worth of memory and returns it as a `MemorySlice` in the
+    /// next row. Each cell will be range checked using the lookup table to be in the range
+    /// `[0, 2^16]`.
     fn get_next_u16_memory(&mut self, size: usize) -> Result<MemorySlice> {
         let register = MemorySlice::Next(self.next_arithmetic_index, size);
         self.local_arithmetic_index += size;
@@ -100,7 +98,8 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         Ok(register)
     }
 
-    /// Allocates a new local row register and returns it
+    /// Allocates a new local register according to type `T` which implements the Register trait
+    /// and returns it.
     pub fn alloc_local<T: Register>(&mut self) -> Result<T> {
         let register = match T::CELL {
             Some(CellType::U16) => self.get_local_u16_memory(T::size_of())?,
@@ -130,7 +129,8 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         Array::<T>::new(register)
     }
 
-    /// Allocates a new next row register and returns it
+    /// Allocates a new register on the next row according to type `T` which implements the Register
+    /// trait and returns it.
     pub fn alloc_next<T: Register>(&mut self) -> Result<T> {
         let register = match T::CELL {
             Some(CellType::U16) => self.get_next_u16_memory(T::size_of())?,
@@ -145,23 +145,11 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         Ok(T::from_register(register))
     }
 
-    /// Inserts a new instruction to the chip
+    /// This method should be applied to any data that needs to be manually written to the trace by
+    /// the user during trace generation. It currently does not do any actual checks, but this can
+    /// be changed later.
     pub fn write_data<T: Register>(&mut self, data: &T) -> Result<()> {
         let register = data.register();
-        let label = InsID::Write(*register);
-        let existing_value = self
-            .instruction_indices
-            .insert(label, self.write_instructions.len());
-        if existing_value.is_some() {
-            return Err(anyhow!("Instruction label already exists"));
-        }
-        self.write_instructions.push(WriteInstruction(*register));
-        Ok(())
-    }
-
-    /// Inserts a new instruction to the chip
-    pub fn write_raw_register<T: Register>(&mut self, data: &MemorySlice) -> Result<()> {
-        let register = data;
         let label = InsID::Write(*register);
         let existing_value = self
             .instruction_indices
@@ -184,17 +172,12 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         Ok(())
     }
 
-    // This function should be made private in the future
-    pub fn assert_registers_equal(&mut self, a: &MemorySlice, b: &MemorySlice) {
-        let constraint = EqualityConstraint::Equal(*a, *b);
-        self.constraints.push(constraint);
-    }
-
     /// Asserts that two elements are equal
     pub fn assert_equal<T: Register>(&mut self, a: &T, b: &T) {
         let a = a.register();
         let b = b.register();
-        self.assert_registers_equal(a, b)
+        let constraint = EqualityConstraint::Equal(*a, *b);
+        self.constraints.push(constraint);
     }
 
     /// Build the chip
