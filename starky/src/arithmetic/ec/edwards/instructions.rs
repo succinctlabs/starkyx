@@ -83,56 +83,6 @@ impl<E: EdwardsParameters, F: RichField + Extendable<D>, const D: usize> Instruc
         }
     }
 
-    fn witness_data(&self) -> Option<crate::arithmetic::register::WitnessData> {
-        match self {
-            EdWardsMicroInstruction::Den(den) => {
-                <Den<E::FieldParam> as Instruction<F, D>>::witness_data(den)
-            }
-            EdWardsMicroInstruction::FpAdd(fp_add) => {
-                <FpAdd<E::FieldParam> as Instruction<F, D>>::witness_data(fp_add)
-            }
-            EdWardsMicroInstruction::FpMul(fp_mul) => {
-                <FpMul<E::FieldParam> as Instruction<F, D>>::witness_data(fp_mul)
-            }
-            EdWardsMicroInstruction::FpQuad(fp_quad) => {
-                <FpQuad<E::FieldParam> as Instruction<F, D>>::witness_data(fp_quad)
-            }
-            EdWardsMicroInstruction::FpMulConst(fp_mul_const) => {
-                <FpMulConst<E::FieldParam> as Instruction<F, D>>::witness_data(fp_mul_const)
-            }
-            EdWardsMicroInstruction::Selector(selector) => {
-                <Selector<FieldRegister<E::FieldParam>> as Instruction<F, D>>::witness_data(
-                    selector,
-                )
-            }
-        }
-    }
-
-    fn set_witness(&mut self, witness: MemorySlice) -> Result<()> {
-        match self {
-            EdWardsMicroInstruction::Den(den) => {
-                <Den<E::FieldParam> as Instruction<F, D>>::set_witness(den, witness)
-            }
-            EdWardsMicroInstruction::FpAdd(fp_add) => {
-                <FpAdd<E::FieldParam> as Instruction<F, D>>::set_witness(fp_add, witness)
-            }
-            EdWardsMicroInstruction::FpMul(fp_mul) => {
-                <FpMul<E::FieldParam> as Instruction<F, D>>::set_witness(fp_mul, witness)
-            }
-            EdWardsMicroInstruction::FpQuad(fp_quad) => {
-                <FpQuad<E::FieldParam> as Instruction<F, D>>::set_witness(fp_quad, witness)
-            }
-            EdWardsMicroInstruction::FpMulConst(fp_mul_const) => {
-                <FpMulConst<E::FieldParam> as Instruction<F, D>>::set_witness(fp_mul_const, witness)
-            }
-            EdWardsMicroInstruction::Selector(selector) => {
-                <Selector<FieldRegister<E::FieldParam>> as Instruction<F, D>>::set_witness(
-                    selector, witness,
-                )
-            }
-        }
-    }
-
     fn packed_generic_constraints<
         FE,
         P,

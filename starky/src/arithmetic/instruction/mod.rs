@@ -6,7 +6,6 @@
 pub mod arithmetic_expressions;
 pub mod write;
 
-use anyhow::Result;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
@@ -15,7 +14,6 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use self::arithmetic_expressions::ArithmeticExpression;
 use super::bool::ConstraintBool;
 use super::register::MemorySlice;
-use crate::arithmetic::register::WitnessData;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
@@ -24,10 +22,6 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
     //fn generate_trace_row(&self, input: Option<Self::Input>) -> (Vec<F>, Option<Self::Output>);
 
     fn memory_vec(&self) -> Vec<MemorySlice>;
-
-    fn witness_data(&self) -> Option<WitnessData>;
-
-    fn set_witness(&mut self, witness: MemorySlice) -> Result<()>;
 
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize);
 
@@ -163,14 +157,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for Default
 
     fn memory_vec(&self) -> Vec<MemorySlice> {
         Vec::new()
-    }
-
-    fn witness_data(&self) -> Option<WitnessData> {
-        None
-    }
-
-    fn set_witness(&mut self, _witness: MemorySlice) -> Result<()> {
-        Ok(())
     }
 
     fn packed_generic_constraints<

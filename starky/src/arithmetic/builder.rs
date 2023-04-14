@@ -334,8 +334,8 @@ mod tests {
 
         let trace = timed!(timing, "generate trace", {
             for i in 0..num_rows {
-                handle.write_data(i, x_0, vec![x_0_val]);
-                handle.write_data(i, x_1, vec![x_1_val]);
+                handle.write_data(i, x_0, vec![x_0_val]).unwrap();
+                handle.write_data(i, x_1, vec![x_1_val]).unwrap();
                 if i == num_rows - 1 {
                     break;
                 }

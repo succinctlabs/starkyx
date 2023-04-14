@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
@@ -10,9 +10,7 @@ use crate::arithmetic::builder::ChipBuilder;
 use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
-use crate::arithmetic::register::{
-    Array, MemorySlice, Register, RegisterSerializable, U16Register, WitnessData,
-};
+use crate::arithmetic::register::{Array, MemorySlice, RegisterSerializable, U16Register};
 use crate::arithmetic::trace::TraceHandle;
 use crate::arithmetic::utils::{extract_witness_and_shift, split_digits, to_field_iter};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
@@ -119,39 +117,6 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             *self.b.register(),
             *self.result.register(),
         ]
-    }
-
-    fn witness_data(&self) -> Option<WitnessData> {
-        Some(WitnessData::u16(
-            Self::NUM_CARRY_LIMBS + Self::NUM_WITNESS_LOW_LIMBS + Self::NUM_WITNESS_HIGH_LIMBS,
-        ))
-    }
-
-    fn set_witness(&mut self, witness: MemorySlice) -> Result<()> {
-        let (carry, witness_low, witness_high) = match witness {
-            MemorySlice::Local(index, _) => (
-                MemorySlice::Local(index, Self::NUM_CARRY_LIMBS),
-                MemorySlice::Local(index + Self::NUM_CARRY_LIMBS, Self::NUM_WITNESS_LOW_LIMBS),
-                MemorySlice::Local(
-                    index + Self::NUM_CARRY_LIMBS + Self::NUM_WITNESS_LOW_LIMBS,
-                    Self::NUM_WITNESS_HIGH_LIMBS,
-                ),
-            ),
-            MemorySlice::Next(index, _) => (
-                MemorySlice::Next(index, Self::NUM_CARRY_LIMBS),
-                MemorySlice::Next(index + Self::NUM_CARRY_LIMBS, Self::NUM_WITNESS_LOW_LIMBS),
-                MemorySlice::Next(
-                    index + Self::NUM_CARRY_LIMBS + Self::NUM_WITNESS_LOW_LIMBS,
-                    Self::NUM_WITNESS_HIGH_LIMBS,
-                ),
-            ),
-            _ => return Err(anyhow!("Invalid witness register")),
-        };
-        self.carry = FieldRegister::<P>::from_register(carry);
-        self.witness_low = Array::<U16Register>::from_register_unsafe(witness_low);
-        self.witness_high = Array::<U16Register>::from_register_unsafe(witness_high);
-
-        Ok(())
     }
 
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
@@ -376,39 +341,6 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
 {
     fn memory_vec(&self) -> Vec<MemorySlice> {
         vec![*self.a.register(), *self.result.register()]
-    }
-
-    fn witness_data(&self) -> Option<WitnessData> {
-        Some(WitnessData::u16(
-            Self::NUM_CARRY_LIMBS + Self::NUM_WITNESS_LOW_LIMBS + Self::NUM_WITNESS_HIGH_LIMBS,
-        ))
-    }
-
-    fn set_witness(&mut self, witness: MemorySlice) -> Result<()> {
-        let (carry, witness_low, witness_high) = match witness {
-            MemorySlice::Local(index, _) => (
-                MemorySlice::Local(index, Self::NUM_CARRY_LIMBS),
-                MemorySlice::Local(index + Self::NUM_CARRY_LIMBS, Self::NUM_WITNESS_LOW_LIMBS),
-                MemorySlice::Local(
-                    index + Self::NUM_CARRY_LIMBS + Self::NUM_WITNESS_LOW_LIMBS,
-                    Self::NUM_WITNESS_HIGH_LIMBS,
-                ),
-            ),
-            MemorySlice::Next(index, _) => (
-                MemorySlice::Next(index, Self::NUM_CARRY_LIMBS),
-                MemorySlice::Next(index + Self::NUM_CARRY_LIMBS, Self::NUM_WITNESS_LOW_LIMBS),
-                MemorySlice::Next(
-                    index + Self::NUM_CARRY_LIMBS + Self::NUM_WITNESS_LOW_LIMBS,
-                    Self::NUM_WITNESS_HIGH_LIMBS,
-                ),
-            ),
-            _ => return Err(anyhow!("Invalid witness register")),
-        };
-        self.carry = FieldRegister::<P>::from_register(carry);
-        self.witness_low = Array::<U16Register>::from_register_unsafe(witness_low);
-        self.witness_high = Array::<U16Register>::from_register_unsafe(witness_high);
-
-        Ok(())
     }
 
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
