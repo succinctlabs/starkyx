@@ -115,30 +115,6 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         }
     }
 
-    fn witness_data(&self) -> Option<super::register::WitnessData> {
-        match self {
-            FpInstruction::Add(add) => <FpAdd<P> as Instruction<F, D>>::witness_data(add),
-            FpInstruction::Mul(mul) => <FpMul<P> as Instruction<F, D>>::witness_data(mul),
-            FpInstruction::Quad(quad) => <FpQuad<P> as Instruction<F, D>>::witness_data(quad),
-            FpInstruction::MulConst(mul_const) => {
-                <FpMulConst<P> as Instruction<F, D>>::witness_data(mul_const)
-            }
-        }
-    }
-
-    fn set_witness(&mut self, witness: MemorySlice) -> Result<()> {
-        match self {
-            FpInstruction::Add(add) => <FpAdd<P> as Instruction<F, D>>::set_witness(add, witness),
-            FpInstruction::Mul(mul) => <FpMul<P> as Instruction<F, D>>::set_witness(mul, witness),
-            FpInstruction::Quad(quad) => {
-                <FpQuad<P> as Instruction<F, D>>::set_witness(quad, witness)
-            }
-            FpInstruction::MulConst(mul_const) => {
-                <FpMulConst<P> as Instruction<F, D>>::set_witness(mul_const, witness)
-            }
-        }
-    }
-
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
         match self {
             FpInstruction::Add(add) => {

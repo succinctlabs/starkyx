@@ -10,23 +10,15 @@ use super::chip::ChipParameters;
 use super::instruction::Instruction;
 use super::register::{BitRegister, MemorySlice, Register};
 use super::trace::TraceHandle;
-use crate::arithmetic::register::{RegisterSerializable, WitnessData};
+use crate::arithmetic::register::RegisterSerializable;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ConstraintBool(pub MemorySlice);
 
 impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for ConstraintBool {
-    fn witness_data(&self) -> Option<WitnessData> {
-        None
-    }
-
     fn memory_vec(&self) -> Vec<MemorySlice> {
         vec![self.0]
-    }
-
-    fn set_witness(&mut self, _witness: MemorySlice) -> Result<()> {
-        Ok(())
     }
 
     fn assign_row(&self, _trace_rows: &mut [Vec<F>], _row: &mut [F], _row_index: usize) {}
@@ -110,20 +102,12 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize, T: Register> Instruction<F, D> for Selector<T> {
-    fn witness_data(&self) -> Option<WitnessData> {
-        None
-    }
-
     fn memory_vec(&self) -> Vec<MemorySlice> {
         vec![
             *self.bit.register(),
             *self.true_value.register(),
             *self.false_value.register(),
         ]
-    }
-
-    fn set_witness(&mut self, _witness: MemorySlice) -> Result<()> {
-        Ok(())
     }
 
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {

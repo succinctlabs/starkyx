@@ -211,7 +211,6 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type E = Ed25519Parameters;
         type S = TestStark<EdScalarMulTest, F, D>;
-        type FieldPar = <E as EllipticCurveParameters>::FieldParam;
 
         let _ = env_logger::builder().is_test(true).try_init();
         // build the stark
@@ -376,7 +375,6 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type E = Ed25519Parameters;
         type S = TestStark<EdScalarMulTest, F, D>;
-        type FieldPar = <E as EllipticCurveParameters>::FieldParam;
 
         let _ = env_logger::builder().is_test(true).try_init();
         // build the stark

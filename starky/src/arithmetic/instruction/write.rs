@@ -11,16 +11,8 @@ impl WriteInstruction {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for WriteInstruction {
-    fn witness_data(&self) -> Option<WitnessData> {
-        None
-    }
-
     fn memory_vec(&self) -> Vec<MemorySlice> {
         vec![self.0]
-    }
-
-    fn set_witness(&mut self, _witness: MemorySlice) -> Result<()> {
-        Ok(())
     }
 
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
