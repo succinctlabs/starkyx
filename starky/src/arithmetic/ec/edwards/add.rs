@@ -4,8 +4,7 @@ use super::den::Den;
 use super::*;
 use crate::arithmetic::builder::ChipBuilder;
 use crate::arithmetic::chip::ChipParameters;
-use crate::arithmetic::field::mul::{FpMul, FpMulConst};
-use crate::arithmetic::field::quad::FpQuad;
+use crate::arithmetic::field::{FpMul, FpMulConst, FpQuad};
 use crate::arithmetic::trace::TraceHandle;
 
 #[derive(Debug, Clone, Copy)]

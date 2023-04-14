@@ -3,9 +3,7 @@ use den::Den;
 use super::add::FromEdwardsAdd;
 use super::*;
 use crate::arithmetic::bool::Selector;
-use crate::arithmetic::field::add::FpAdd;
-use crate::arithmetic::field::mul::{FpMul, FpMulConst};
-use crate::arithmetic::field::quad::FpQuad;
+use crate::arithmetic::field::{FpAdd, FpMul, FpMulConst, FpQuad};
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::register::MemorySlice;
 
