@@ -112,7 +112,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
             }
             None => self.get_local_memory(T::size_of())?,
         };
-        Ok(T::from_raw_register(register))
+        Ok(T::from_register(register))
     }
 
     pub fn alloc_local_array<T: Register>(&mut self, length: usize) -> Result<Array<T>> {
@@ -142,7 +142,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
             }
             None => self.get_next_memory(T::size_of())?,
         };
-        Ok(T::from_raw_register(register))
+        Ok(T::from_register(register))
     }
 
     /// Inserts a new instruction to the chip

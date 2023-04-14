@@ -10,7 +10,7 @@ use super::chip::ChipParameters;
 use super::instruction::Instruction;
 use super::register::{BitRegister, MemorySlice, Register};
 use super::trace::TraceHandle;
-use crate::arithmetic::register::WitnessData;
+use crate::arithmetic::register::{RegisterSerializable, WitnessData};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]

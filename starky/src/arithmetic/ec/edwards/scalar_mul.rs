@@ -171,19 +171,15 @@ mod tests {
 
         //let res = builder.alloc_ec_point::<E, 16>().unwrap();
         //let temp = builder.alloc_ec_point::<E, 16>().unwrap();
-        let res_x = FieldRegister::<FieldPar>::from_raw_register(
-            builder.get_local_memory(n_limbs).unwrap(),
-        );
-        let res_y = FieldRegister::<FieldPar>::from_raw_register(
-            builder.get_local_memory(n_limbs).unwrap(),
-        );
+        let res_x =
+            FieldRegister::<FieldPar>::from_register(builder.get_local_memory(n_limbs).unwrap());
+        let res_y =
+            FieldRegister::<FieldPar>::from_register(builder.get_local_memory(n_limbs).unwrap());
         let res = AffinePointRegister::<E>::from_field_registers(res_x, res_y);
-        let temp_x = FieldRegister::<FieldPar>::from_raw_register(
-            builder.get_local_memory(n_limbs).unwrap(),
-        );
-        let temp_y = FieldRegister::<FieldPar>::from_raw_register(
-            builder.get_local_memory(n_limbs).unwrap(),
-        );
+        let temp_x =
+            FieldRegister::<FieldPar>::from_register(builder.get_local_memory(n_limbs).unwrap());
+        let temp_y =
+            FieldRegister::<FieldPar>::from_register(builder.get_local_memory(n_limbs).unwrap());
         let temp = AffinePointRegister::<E>::from_field_registers(temp_x, temp_y);
 
         let res_next = builder.alloc_ec_point::<E>().unwrap();

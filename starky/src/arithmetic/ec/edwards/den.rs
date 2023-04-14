@@ -12,7 +12,7 @@ use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::field::modulus_field_iter;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
-use crate::arithmetic::register::{MemorySlice, Register, WitnessData};
+use crate::arithmetic::register::{MemorySlice, Register, RegisterSerializable, WitnessData};
 use crate::arithmetic::trace::TraceHandle;
 use crate::arithmetic::util::{extract_witness_and_shift, split_digits, to_field_iter};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};

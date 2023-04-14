@@ -11,7 +11,7 @@ use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
 use crate::arithmetic::register::{
-    Array, FieldRegister, MemorySlice, Register, U16Register, WitnessData,
+    Array, FieldRegister, MemorySlice, Register, RegisterSerializable, U16Register, WitnessData,
 };
 use crate::arithmetic::trace::TraceHandle;
 use crate::arithmetic::util::{extract_witness_and_shift, split_digits, to_field_iter};
@@ -125,9 +125,9 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             ),
             _ => return Err(anyhow!("Invalid witness register")),
         };
-        self.carry = FieldRegister::<P>::from_register(carry).unwrap();
-        self.witness_low = Array::<U16Register>::from_register(witness_low).unwrap();
-        self.witness_high = Array::<U16Register>::from_register(witness_high).unwrap();
+        self.carry = FieldRegister::<P>::from_register(carry);
+        self.witness_low = Array::<U16Register>::from_register_unsafe(witness_low);
+        self.witness_high = Array::<U16Register>::from_register_unsafe(witness_high);
 
         Ok(())
     }

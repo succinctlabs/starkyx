@@ -14,7 +14,7 @@ pub use cell::CellType;
 pub use element::ElementRegister;
 pub use field::FieldRegister;
 pub use memory::MemorySlice;
-pub use register::Register;
+pub use register::{Register, RegisterSerializable, RegisterSized};
 pub use witness::WitnessData;
 
 pub use self::u16::U16Register;

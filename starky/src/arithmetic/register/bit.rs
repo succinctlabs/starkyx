@@ -1,3 +1,6 @@
+use anyhow::Result;
+
+use super::register::{RegisterSerializable, RegisterSized};
 use super::CellType;
 use crate::arithmetic::register::memory::MemorySlice;
 use crate::arithmetic::register::register::Register;
@@ -7,18 +10,22 @@ use crate::arithmetic::register::register::Register;
 #[derive(Debug, Clone, Copy)]
 pub struct BitRegister(MemorySlice);
 
-impl Register for BitRegister {
+impl RegisterSerializable for BitRegister {
     const CELL: Option<CellType> = Some(CellType::Bit);
 
     fn register(&self) -> &MemorySlice {
         &self.0
     }
 
+    fn from_register_unsafe(register: MemorySlice) -> Self {
+        BitRegister(register)
+    }
+}
+
+impl RegisterSized for BitRegister {
     fn size_of() -> usize {
         1
     }
-
-    fn from_raw_register(register: MemorySlice) -> Self {
-        Self(register)
-    }
 }
+
+impl Register for BitRegister {}
