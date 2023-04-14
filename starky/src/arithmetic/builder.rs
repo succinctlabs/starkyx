@@ -192,7 +192,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 
     /// Asserts that two elements are equal
-    pub fn insert_raw_constraint(&mut self, constraint : EqualityConstraint<F, D>) {
+    pub fn insert_raw_constraint(&mut self, constraint: EqualityConstraint<F, D>) {
         self.constraints.push(constraint);
     }
 

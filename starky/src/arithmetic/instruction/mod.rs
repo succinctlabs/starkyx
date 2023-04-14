@@ -12,7 +12,7 @@ use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use self::composable::AffineExpression;
+use self::composable::ArithmeticExpressionSlice;
 use super::bool::ConstraintBool;
 use super::register::MemorySlice;
 use crate::arithmetic::register::WitnessData;
@@ -53,385 +53,6 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
     );
 }
 
-// /// Standard instructions that are included in every instantiation of the builder
-// ///
-// /// This code might change to be more generic in the future
-// #[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]
-// pub enum StandardInstruction<F, const D: usize> {
-//     Add(MemorySlice, MemorySlice, MemorySlice),
-//     AddConst(MemorySlice, F, MemorySlice),
-//     Sub(MemorySlice, MemorySlice, MemorySlice),
-//     SubConst(MemorySlice, F, MemorySlice),
-//     Mul(MemorySlice, MemorySlice, MemorySlice),
-//     MulConst(MemorySlice, F, MemorySlice),
-// }
-
-// impl<F, const D: usize> StandardInstruction<F, D> {
-//     pub fn includes_next(&self) -> bool {
-//         matches!(
-//             self,
-//             StandardInstruction::Add(
-//                 MemorySlice::Local(_, _),
-//                 MemorySlice::Local(_, _),
-//                 MemorySlice::Local(_, _),
-//             ) | StandardInstruction::AddConst(
-//                 MemorySlice::Local(_, _),
-//                 _,
-//                 MemorySlice::Local(_, _)
-//             ) | StandardInstruction::Sub(
-//                 MemorySlice::Local(_, _),
-//                 MemorySlice::Local(_, _),
-//                 MemorySlice::Local(_, _),
-//             ) | StandardInstruction::SubConst(
-//                 MemorySlice::Local(_, _),
-//                 _,
-//                 MemorySlice::Local(_, _)
-//             ) | StandardInstruction::Mul(
-//                 MemorySlice::Local(_, _),
-//                 MemorySlice::Local(_, _),
-//                 MemorySlice::Local(_, _),
-//             ) | StandardInstruction::MulConst(
-//                 MemorySlice::Local(_, _),
-//                 _,
-//                 MemorySlice::Local(_, _)
-//             )
-//         )
-//     }
-// }
-
-// impl<F: RichField + Extendable<D>, const D: usize> StandardInstruction<F, D> {
-//     fn memory_vec(&self) -> Vec<MemorySlice> {
-//         match self {
-//             StandardInstruction::Add(a, b, c) => vec![*a, *b, *c],
-//             StandardInstruction::AddConst(a, _, c) => vec![*a, *c],
-//             StandardInstruction::Sub(a, b, c) => vec![*a, *b, *c],
-//             StandardInstruction::SubConst(a, _, c) => vec![*a, *c],
-//             StandardInstruction::Mul(a, b, c) => vec![*a, *b, *c],
-//             StandardInstruction::MulConst(a, _, c) => vec![*a, *c],
-//         }
-//     }
-
-//     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
-//         match self {
-//             StandardInstruction::Add(_, _, c) => c.assign(trace_rows, row, row_index),
-//             StandardInstruction::AddConst(_, _, c) => c.assign(trace_rows, row, row_index),
-//             StandardInstruction::Sub(_, _, c) => c.assign(trace_rows, row, row_index),
-//             StandardInstruction::SubConst(_, _, c) => c.assign(trace_rows, row, row_index),
-//             StandardInstruction::Mul(_, _, c) => c.assign(trace_rows, row, row_index),
-//             StandardInstruction::MulConst(_, _, c) => c.assign(trace_rows, row, row_index),
-//         }
-//     }
-
-//     pub fn set_witness(&mut self, _witness: MemorySlice) -> Result<()> {
-//         Ok(())
-//     }
-
-//     pub fn witness_data(&self) -> Option<WitnessData> {
-//         None
-//     }
-
-//     pub fn packed_generic_constraints<
-//         FE,
-//         P,
-//         const D2: usize,
-//         const COLUMNS: usize,
-//         const PUBLIC_INPUTS: usize,
-//     >(
-//         &self,
-//         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
-//         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
-//     ) where
-//         FE: FieldExtension<D2, BaseField = F>,
-//         P: PackedField<Scalar = FE>,
-//     {
-//         let includes_next = self.includes_next();
-//         match self {
-//             StandardInstruction::Add(a, b, c) => {
-//                 let a_vals = a.packed_entries_slice(&vars);
-//                 let b_vals = b.packed_entries_slice(&vars);
-//                 let c_vals = c.packed_entries_slice(&vars);
-
-//                 let constraints = a_vals
-//                     .iter()
-//                     .zip(b_vals.iter())
-//                     .zip(c_vals.iter())
-//                     .map(|((a, b), c)| *a + *b - *c);
-
-//                 if includes_next {
-//                     for consr in constraints {
-//                         yield_constr.constraint_transition(consr);
-//                     }
-//                 } else {
-//                     for consr in constraints {
-//                         yield_constr.constraint(consr);
-//                     }
-//                 }
-//             }
-
-//             StandardInstruction::AddConst(a, b, c) => {
-//                 let a_vals = a.packed_entries_slice(&vars);
-//                 let c_vals = c.packed_entries_slice(&vars);
-//                 let scalar = FE::from_basefield(*b);
-
-//                 let constraints = a_vals
-//                     .iter()
-//                     .zip(c_vals.iter())
-//                     .map(|(a, c)| *a + scalar - *c);
-
-//                 if includes_next {
-//                     for consr in constraints {
-//                         yield_constr.constraint_transition(consr);
-//                     }
-//                 } else {
-//                     for consr in constraints {
-//                         yield_constr.constraint(consr);
-//                     }
-//                 }
-//             }
-
-//             StandardInstruction::Sub(a, b, c) => {
-//                 let a_vals = a.packed_entries_slice(&vars);
-//                 let b_vals = b.packed_entries_slice(&vars);
-//                 let c_vals = c.packed_entries_slice(&vars);
-
-//                 let constraints = a_vals
-//                     .iter()
-//                     .zip(b_vals.iter())
-//                     .zip(c_vals.iter())
-//                     .map(|((a, b), c)| *a - *b - *c);
-
-//                 if includes_next {
-//                     for consr in constraints {
-//                         yield_constr.constraint_transition(consr);
-//                     }
-//                 } else {
-//                     for consr in constraints {
-//                         yield_constr.constraint(consr);
-//                     }
-//                 }
-//             }
-//             StandardInstruction::SubConst(a, b, c) => {
-//                 let a_vals = a.packed_entries_slice(&vars);
-//                 let c_vals = c.packed_entries_slice(&vars);
-//                 let scalar = FE::from_basefield(*b);
-
-//                 let constraints = a_vals
-//                     .iter()
-//                     .zip(c_vals.iter())
-//                     .map(|(a, c)| *a - scalar - *c);
-
-//                 if includes_next {
-//                     for consr in constraints {
-//                         yield_constr.constraint_transition(consr);
-//                     }
-//                 } else {
-//                     for consr in constraints {
-//                         yield_constr.constraint(consr);
-//                     }
-//                 }
-//             }
-//             StandardInstruction::Mul(a, b, c) => {
-//                 let a_vals = a.packed_entries_slice(&vars);
-//                 let b_vals = b.packed_entries_slice(&vars);
-//                 let c_vals = c.packed_entries_slice(&vars);
-
-//                 let constraints = a_vals
-//                     .iter()
-//                     .zip(b_vals.iter())
-//                     .zip(c_vals.iter())
-//                     .map(|((a, b), c)| *a * *b - *c);
-
-//                 if includes_next {
-//                     for consr in constraints {
-//                         yield_constr.constraint_transition(consr);
-//                     }
-//                 } else {
-//                     for consr in constraints {
-//                         yield_constr.constraint(consr);
-//                     }
-//                 }
-//             }
-//             StandardInstruction::MulConst(a, b, c) => {
-//                 let a_vals = a.packed_entries_slice(&vars);
-//                 let c_vals = c.packed_entries_slice(&vars);
-//                 let scalar = FE::from_basefield(*b);
-
-//                 let constraints = a_vals
-//                     .iter()
-//                     .zip(c_vals.iter())
-//                     .map(|(a, c)| *a * scalar - *c);
-
-//                 if includes_next {
-//                     for consr in constraints {
-//                         yield_constr.constraint_transition(consr);
-//                     }
-//                 } else {
-//                     for consr in constraints {
-//                         yield_constr.constraint(consr);
-//                     }
-//                 }
-//             }
-//         }
-//     }
-
-//     pub fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-//         &self,
-//         builder: &mut CircuitBuilder<F, D>,
-//         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-//         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
-//     ) {
-//         let includes_next = self.includes_next();
-//         match self {
-//             StandardInstruction::Add(a, b, c) => {
-//                 let a_vals = a.evaluation_targets(&vars);
-//                 let b_vals = b.evaluation_targets(&vars);
-//                 let c_vals = c.evaluation_targets(&vars);
-
-//                 let constraints = a_vals
-//                     .iter()
-//                     .zip(b_vals.iter())
-//                     .zip(c_vals.iter())
-//                     .map(|((a, b), c)| {
-//                         let c_exp = builder.add_extension(*a, *b);
-//                         builder.sub_extension(*c, c_exp)
-//                     })
-//                     .collect::<Vec<_>>();
-
-//                 if includes_next {
-//                     for consr in constraints {
-//                         yield_constr.constraint_transition(builder, consr);
-//                     }
-//                 } else {
-//                     for consr in constraints {
-//                         yield_constr.constraint(builder, consr);
-//                     }
-//                 }
-//             }
-//             StandardInstruction::AddConst(a, b, c) => {
-//                 let a_vals = a.evaluation_targets(&vars);
-//                 let c_vals = c.evaluation_targets(&vars);
-
-//                 let constraints = a_vals
-//                     .iter()
-//                     .zip(c_vals.iter())
-//                     .map(|(a, c)| {
-//                         let c_exp = builder.add_const_extension(*a, *b);
-//                         builder.sub_extension(*c, c_exp)
-//                     })
-//                     .collect::<Vec<_>>();
-
-//                 if includes_next {
-//                     for consr in constraints {
-//                         yield_constr.constraint_transition(builder, consr);
-//                     }
-//                 } else {
-//                     for consr in constraints {
-//                         yield_constr.constraint(builder, consr);
-//                     }
-//                 }
-//             }
-//             StandardInstruction::Sub(a, b, c) => {
-//                 let a_vals = a.evaluation_targets(&vars);
-//                 let b_vals = b.evaluation_targets(&vars);
-//                 let c_vals = c.evaluation_targets(&vars);
-
-//                 let constraints = a_vals
-//                     .iter()
-//                     .zip(b_vals.iter())
-//                     .zip(c_vals.iter())
-//                     .map(|((a, b), c)| {
-//                         let c_exp = builder.sub_extension(*a, *b);
-//                         builder.sub_extension(*c, c_exp)
-//                     })
-//                     .collect::<Vec<_>>();
-
-//                 if includes_next {
-//                     for consr in constraints {
-//                         yield_constr.constraint_transition(builder, consr);
-//                     }
-//                 } else {
-//                     for consr in constraints {
-//                         yield_constr.constraint(builder, consr);
-//                     }
-//                 }
-//             }
-//             StandardInstruction::SubConst(a, b, c) => {
-//                 let a_vals = a.evaluation_targets(&vars);
-//                 let c_vals = c.evaluation_targets(&vars);
-
-//                 let constraints = a_vals
-//                     .iter()
-//                     .zip(c_vals.iter())
-//                     .map(|(a, c)| {
-//                         let b_neg = -(*b);
-//                         let c_exp = builder.add_const_extension(*a, b_neg);
-//                         builder.sub_extension(*c, c_exp)
-//                     })
-//                     .collect::<Vec<_>>();
-
-//                 if includes_next {
-//                     for consr in constraints {
-//                         yield_constr.constraint_transition(builder, consr);
-//                     }
-//                 } else {
-//                     for consr in constraints {
-//                         yield_constr.constraint(builder, consr);
-//                     }
-//                 }
-//             }
-
-//             StandardInstruction::Mul(a, b, c) => {
-//                 let a_vals = a.evaluation_targets(&vars);
-//                 let b_vals = b.evaluation_targets(&vars);
-//                 let c_vals = c.evaluation_targets(&vars);
-
-//                 let constraints = a_vals
-//                     .iter()
-//                     .zip(b_vals.iter())
-//                     .zip(c_vals.iter())
-//                     .map(|((a, b), c)| {
-//                         let c_exp = builder.mul_extension(*a, *b);
-//                         builder.sub_extension(c_exp, *c)
-//                     })
-//                     .collect::<Vec<_>>();
-
-//                 if includes_next {
-//                     for consr in constraints {
-//                         yield_constr.constraint_transition(builder, consr);
-//                     }
-//                 } else {
-//                     for consr in constraints {
-//                         yield_constr.constraint(builder, consr);
-//                     }
-//                 }
-//             }
-//             StandardInstruction::MulConst(a, b, c) => {
-//                 let a_vals = a.evaluation_targets(&vars);
-//                 let c_vals = c.evaluation_targets(&vars);
-
-//                 let constraints = a_vals
-//                     .iter()
-//                     .zip(c_vals.iter())
-//                     .map(|(a, c)| {
-//                         let c_exp = builder.mul_const_extension(*b, *a);
-//                         builder.sub_extension(*c, c_exp)
-//                     })
-//                     .collect::<Vec<_>>();
-
-//                 if includes_next {
-//                     for consr in constraints {
-//                         yield_constr.constraint_transition(builder, consr);
-//                     }
-//                 } else {
-//                     for consr in constraints {
-//                         yield_constr.constraint(builder, consr);
-//                     }
-//                 }
-//             }
-//         }
-//     }
-// }
-
 /// Constraints don't have any writing data or witness
 ///
 /// These are only used to generate constrains and can therefore
@@ -440,7 +61,7 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
 pub enum EqualityConstraint<F, const D: usize> {
     Bool(ConstraintBool),
     Equal(MemorySlice, MemorySlice),
-    AffineConstraint(MemorySlice, AffineExpression<F, D>),
+    ArithmeticConstraint(ArithmeticExpressionSlice<F, D>, ArithmeticExpressionSlice<F, D>),
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> EqualityConstraint<F, D> {
@@ -479,10 +100,10 @@ impl<F: RichField + Extendable<D>, const D: usize> EqualityConstraint<F, D> {
                     }
                 }
             }
-            EqualityConstraint::AffineConstraint(slice, expr) => {
-                let linear_exp_vals = expr.packed_generic(&vars);
-                let slice_vals = slice.packed_entries_slice(&vars);
-                for (a, b) in linear_exp_vals.iter().zip(slice_vals.iter()) {
+            EqualityConstraint::ArithmeticConstraint(left, right) => {
+                let left_vals = left.packed_generic(&vars);
+                let right_vals = right.packed_generic(&vars);
+                for (a, b) in left_vals.iter().zip(right_vals.iter()) {
                     yield_constr.constraint_transition(*a - *b);
                 }
             }
@@ -519,7 +140,14 @@ impl<F: RichField + Extendable<D>, const D: usize> EqualityConstraint<F, D> {
                     }
                 }
             }
-            EqualityConstraint::AffineConstraint(_, constraint) => {}
+            EqualityConstraint::ArithmeticConstraint(left, right) => {
+                let left_vals = left.ext_circuit(builder, &vars);
+                let right_vals = right.ext_circuit(builder, &vars);
+                for (a, b) in left_vals.iter().zip(right_vals.iter()) {
+                    let constr = builder.sub_extension(*a, *b);
+                    yield_constr.constraint_transition(builder, constr);
+                }
+            }
         }
     }
 }
