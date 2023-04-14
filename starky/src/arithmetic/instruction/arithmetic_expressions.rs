@@ -186,11 +186,27 @@ impl<F: RichField + Extendable<D>, const D: usize> Add<Vec<F>> for ArithmeticExp
     }
 }
 
+impl<F: RichField + Extendable<D>, const D: usize> Sub<Vec<F>> for ArithmeticExpression<F, D> {
+    type Output = Self;
+
+    fn sub(self, rhs: Vec<F>) -> Self::Output {
+        ArithmeticExpression::Sub(Arc::new(self), Arc::new(ArithmeticExpression::Const(rhs)))
+    }
+}
+
 impl<F: RichField + Extendable<D>, const D: usize> Add<F> for ArithmeticExpression<F, D> {
     type Output = Self;
 
     fn add(self, rhs: F) -> Self::Output {
         self + vec![rhs]
+    }
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> Sub<F> for ArithmeticExpression<F, D> {
+    type Output = Self;
+
+    fn sub(self, rhs: F) -> Self::Output {
+        self - vec![rhs]
     }
 }
 
