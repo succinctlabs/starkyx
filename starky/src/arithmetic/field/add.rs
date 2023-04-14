@@ -57,37 +57,6 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 }
 
-impl<P: FieldParameters> FpAdd<P> {
-    const fn num_add_columns() -> usize {
-        3 * P::NB_LIMBS + P::NB_LIMBS + P::NB_WITNESS_LIMBS + P::NB_WITNESS_LIMBS
-    }
-
-    #[inline]
-    pub fn assign_row<T: Copy>(&self, trace_rows: &mut [Vec<T>], row: &mut [T], row_index: usize) {
-        let mut index = 0;
-        self.result
-            .register()
-            .assign(trace_rows, &mut row[index..P::NB_LIMBS], row_index);
-        index += P::NB_LIMBS;
-        self.carry
-            .register()
-            .assign(trace_rows, &mut row[index..index + P::NB_LIMBS], row_index);
-
-        index += P::NB_LIMBS;
-        self.witness_low.register().assign(
-            trace_rows,
-            &mut row[index..index + P::NB_WITNESS_LIMBS],
-            row_index,
-        );
-        index += P::NB_WITNESS_LIMBS;
-        self.witness_high.register().assign(
-            trace_rows,
-            &mut row[index..index + P::NB_WITNESS_LIMBS],
-            row_index,
-        );
-    }
-}
-
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
     for FpAdd<P>
 {
@@ -258,7 +227,7 @@ impl<P: FieldParameters> FpAdd<P> {
         let witness_shifted = extract_witness_and_shift(&vanishing_poly, P::WITNESS_OFFSET as u32);
         let (witness_low, witness_high) = split_digits::<F>(&witness_shifted);
 
-        let mut row = Vec::with_capacity(Self::num_add_columns());
+        let mut row = Vec::new();
 
         // output
         row.extend(to_field_iter::<F>(&p_result));
@@ -324,7 +293,7 @@ mod tests {
     struct FpAddTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for FpAddTest {
-        const NUM_ARITHMETIC_COLUMNS: usize = FpAdd::<Fp25519Param>::num_add_columns();
+        const NUM_ARITHMETIC_COLUMNS: usize = 124;
         const NUM_FREE_COLUMNS: usize = 0;
 
         type Instruction = FpAdd<Fp25519Param>;

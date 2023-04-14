@@ -63,19 +63,6 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 }
 
-impl<P: FieldParameters> FpQuad<P> {
-    const NUM_CARRY_LIMBS: usize = P::NB_LIMBS;
-    pub const NUM_WITNESS_LOW_LIMBS: usize = 2 * P::NB_LIMBS - 2;
-    pub const NUM_WITNESS_HIGH_LIMBS: usize = 2 * P::NB_LIMBS - 2;
-
-    pub const fn num_quad_columns() -> usize {
-        5 * P::NB_LIMBS
-            + Self::NUM_CARRY_LIMBS
-            + Self::NUM_WITNESS_LOW_LIMBS
-            + Self::NUM_WITNESS_HIGH_LIMBS
-    }
-}
-
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
     for FpQuad<P>
 {
@@ -95,21 +82,19 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             .register()
             .assign(trace_rows, &mut row[index..P::NB_LIMBS], row_index);
         index += P::NB_LIMBS;
-        self.carry.register().assign(
-            trace_rows,
-            &mut row[index..index + Self::NUM_CARRY_LIMBS],
-            row_index,
-        );
-        index += Self::NUM_CARRY_LIMBS;
+        self.carry
+            .register()
+            .assign(trace_rows, &mut row[index..index + P::NB_LIMBS], row_index);
+        index += P::NB_LIMBS;
         self.witness_low.register().assign(
             trace_rows,
-            &mut row[index..index + Self::NUM_WITNESS_LOW_LIMBS],
+            &mut row[index..index + P::NB_WITNESS_LIMBS],
             row_index,
         );
-        index += Self::NUM_WITNESS_LOW_LIMBS;
+        index += P::NB_WITNESS_LIMBS;
         self.witness_high.register().assign(
             trace_rows,
-            &mut row[index..index + Self::NUM_WITNESS_HIGH_LIMBS],
+            &mut row[index..index + P::NB_WITNESS_LIMBS],
             row_index,
         );
     }
@@ -249,17 +234,17 @@ impl<P: FieldParameters> FpQuad<P> {
         let p_p = Polynomial::<i64>::from_biguint_num(&p, 16, P::NB_LIMBS);
 
         let p_result = Polynomial::<i64>::from_biguint_num(&result, 16, P::NB_LIMBS);
-        let p_carry = Polynomial::<i64>::from_biguint_num(&carry, 16, Self::NUM_CARRY_LIMBS);
+        let p_carry = Polynomial::<i64>::from_biguint_num(&carry, 16, P::NB_LIMBS);
 
         // Compute the vanishing polynomial
         let vanishing_poly = &p_a * &p_b + &p_c * &p_d - &p_result - &p_carry * &p_p;
-        debug_assert_eq!(vanishing_poly.degree(), Self::NUM_WITNESS_LOW_LIMBS);
+        debug_assert_eq!(vanishing_poly.degree(), P::NB_WITNESS_LIMBS);
 
         // Compute the witness
         let witness_shifted = extract_witness_and_shift(&vanishing_poly, P::WITNESS_OFFSET as u32);
         let (witness_low, witness_high) = split_digits::<F>(&witness_shifted);
 
-        let mut row = Vec::with_capacity(Self::num_quad_columns());
+        let mut row = Vec::new();
 
         // output
         row.extend(to_field_iter::<F>(&p_result));
@@ -315,9 +300,8 @@ mod tests {
     struct FpQuadTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for FpQuadTest {
-        const NUM_ARITHMETIC_COLUMNS: usize = FpQuad::<Fp25519Param>::num_quad_columns();
+        const NUM_ARITHMETIC_COLUMNS: usize = 156;
         const NUM_FREE_COLUMNS: usize = 0;
-
         type Instruction = FpQuad<Fp25519Param>;
     }
 

@@ -1,5 +1,4 @@
 pub mod add;
-pub mod div;
 pub mod mul;
 pub mod quad;
 
@@ -235,9 +234,8 @@ mod tests {
     struct FpInstructionTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for FpInstructionTest {
-        const NUM_ARITHMETIC_COLUMNS: usize = FpQuad::<Fp25519Param>::num_quad_columns();
+        const NUM_ARITHMETIC_COLUMNS: usize = 156;
         const NUM_FREE_COLUMNS: usize = 0;
-
         type Instruction = FpInstruction<Fp25519Param>;
     }
 
