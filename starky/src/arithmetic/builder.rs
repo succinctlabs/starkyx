@@ -38,6 +38,14 @@ where
     constraints: Vec<EqualityConstraint<F, D>>,
 }
 
+impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Default
+    for ChipBuilder<L, F, D>
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
     pub fn new() -> Self {
         Self {

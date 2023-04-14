@@ -8,12 +8,8 @@ use crate::arithmetic::field::FieldParameters;
 use crate::arithmetic::utils::biguint_to_bits_le;
 
 impl<E: EdwardsParameters> AffinePoint<E> {
-    pub fn neutral() -> Self {
-        Self::new(BigUint::from(0u32), BigUint::from(1u32))
-    }
-
     fn scalar_mul(&self, scalar: &BigUint) -> Self {
-        let mut result = Self::neutral();
+        let mut result = E::neutral();
         let mut temp = self.clone();
         let bits = biguint_to_bits_le(scalar, E::num_scalar_bits());
         for bit in bits {
@@ -94,13 +90,13 @@ mod tests {
     use rand::thread_rng;
 
     use crate::arithmetic::ec::edwards::{Ed25519Parameters, EdwardsParameters};
-    use crate::arithmetic::ec::{AffinePoint, EllipticCurveParameters};
+    use crate::arithmetic::ec::EllipticCurveParameters;
     use crate::arithmetic::field::FieldParameters;
 
     #[test]
     fn test_bigint_ed_add() {
         type E = Ed25519Parameters;
-        let netural = AffinePoint::<E>::neutral();
+        let netural = E::neutral();
         let base = E::generator();
 
         assert_eq!(&base + &netural, base);
