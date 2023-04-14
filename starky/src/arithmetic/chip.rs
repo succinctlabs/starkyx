@@ -23,9 +23,16 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 pub trait ChipParameters<F: RichField + Extendable<D>, const D: usize>:
     Sized + Send + Sync
 {
+    /// The number of columns that need to be ranged-checked to range 0..num_rows
+    ///
+    /// If NUM_ARITHMETIC_COLUMNS > 0 is used for field operations with 2^16 bit limbs
+    /// the number of rows should be 2^16.
     const NUM_ARITHMETIC_COLUMNS: usize;
+
+    /// The number of columns that are not range checked.
     const NUM_FREE_COLUMNS: usize;
 
+    /// Th
     type Instruction: Instruction<F, D>;
 }
 
