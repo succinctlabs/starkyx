@@ -11,6 +11,7 @@ use plonky2::hash::hash_types::RichField;
 
 use super::bool::ConstraintBool;
 use super::chip::{Chip, ChipParameters};
+use super::instruction::arithmetic_expressions::ArithmeticExpression;
 use super::instruction::write::WriteInstruction;
 use super::instruction::{EqualityConstraint, Instruction};
 use super::register::{CellType, MemorySlice, Register};
@@ -217,152 +218,36 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
 // Implement methods for the basic operations
 
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
-    // pub fn add<T: Register>(&mut self, a: T, b: T, output: T) {
-    //     let a = a.register();
-    //     let b = b.register();
-    //     let output = output.register();
-    //     let instruction = StandardInstruction::Add(*a, *b, *output);
-    //     self.insert_standard_instruction(instruction).unwrap();
-    // }
+    pub fn assert_expressions_equal<T: Register>(
+        &mut self,
+        a: ArithmeticExpression<F, D, T>,
+        b: ArithmeticExpression<F, D, T>,
+    ) {
+        let constraint = EqualityConstraint::ArithmeticConstraint(a.expression, b.expression);
+        self.constraints.push(constraint);
+    }
 
-    // pub fn sub<T: Register>(&mut self, a: T, b: T, output: T) {
-    //     let a = a.register();
-    //     let b = b.register();
-    //     let output = output.register();
-    //     let instruction = StandardInstruction::Sub(*a, *b, *output);
-    //     self.insert_standard_instruction(instruction).unwrap();
-    // }
+    /// Asserts that a + b = c
+    pub fn add_pointwise<T: Register>(&mut self, a: &T, b: &T, c: &T) {
+        let a_exp = ArithmeticExpression::new(a);
+        let b_exp = ArithmeticExpression::new(b);
+        let c_exp = ArithmeticExpression::new(c);
+        self.assert_expressions_equal(a_exp + b_exp, c_exp);
+    }
 
-    // pub fn mul<T: Register>(&mut self, a: T, b: T, output: T) {
-    //     let a = a.register();
-    //     let b = b.register();
-    //     let output = output.register();
-    //     let instruction = StandardInstruction::Mul(*a, *b, *output);
-    //     self.insert_standard_instruction(instruction).unwrap();
-    // }
+    /// Asserts that a - b = c
+    pub fn sub_pointwise<T: Register>(&mut self, a: &T, b: &T, c: &T) {
+        let a_exp = ArithmeticExpression::new(a);
+        let b_exp = ArithmeticExpression::new(b);
+        let c_exp = ArithmeticExpression::new(c);
+        self.assert_expressions_equal(a_exp - b_exp, c_exp);
+    }
+
+    /// Asserts that a * b = c
+    pub fn mul<T: Register>(&mut self, a: &T, b: &T, c: &T) {
+        let a_exp = ArithmeticExpression::new(a);
+        let b_exp = ArithmeticExpression::new(b);
+        let c_exp = ArithmeticExpression::new(c);
+        self.assert_expressions_equal(a_exp * b_exp, c_exp);
+    }
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use plonky2::field::types::Sample;
-//     use plonky2::iop::witness::PartialWitness;
-//     use plonky2::plonk::circuit_builder::CircuitBuilder;
-//     use plonky2::plonk::circuit_data::CircuitConfig;
-//     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
-//     use plonky2::util::timing::TimingTree;
-
-//     use super::*;
-//     use crate::arithmetic::builder::ChipBuilder;
-//     use crate::arithmetic::chip::{ChipParameters, TestStark};
-//     use crate::arithmetic::field::mul::FpMul;
-//     use crate::arithmetic::field::Fp25519Param;
-//     use crate::arithmetic::register::ElementRegister;
-//     use crate::arithmetic::trace::trace;
-//     use crate::config::StarkConfig;
-//     use crate::prover::prove;
-//     use crate::recursive_verifier::{
-//         add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
-//         verify_stark_proof_circuit,
-//     };
-//     use crate::verifier::verify_stark_proof;
-
-//     #[derive(Clone, Debug, Copy)]
-//     struct AssertEqualTest;
-
-//     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for AssertEqualTest {
-//         const NUM_ARITHMETIC_COLUMNS: usize = 0;
-//         const NUM_FREE_COLUMNS: usize = 3 * 16;
-
-//         type Instruction = FpMul<Fp25519Param>;
-//     }
-
-//     #[test]
-//     fn test_builder_basic() {
-//         const D: usize = 2;
-//         type C = PoseidonGoldilocksConfig;
-//         type F = <C as GenericConfig<D>>::F;
-//         type S = TestStark<AssertEqualTest, F, D>;
-
-//         // build the stark
-//         let mut builder = ChipBuilder::<AssertEqualTest, F, D>::new();
-
-//         let a = builder.alloc_local::<ElementRegister>().unwrap();
-//         let b = builder.alloc_local::<ElementRegister>().unwrap();
-//         let c = builder.alloc_local::<ElementRegister>().unwrap();
-//         builder.write_data(&a).unwrap();
-//         builder.write_data(&b).unwrap();
-//         builder.write_data(&c).unwrap();
-
-//         builder.mul(a, b, c);
-
-//         let (chip, spec) = builder.build();
-
-//         // Construct the trace
-//         let num_rows = 2u64.pow(16) as usize;
-//         let (handle, generator) = trace::<F, D>(spec);
-
-//         for i in 0..num_rows {
-//             let a_val = F::rand();
-//             let b_val = F::rand();
-//             let c_val = a_val * b_val;
-//             handle.write_data(i, a, vec![a_val]).unwrap();
-//             handle.write_data(i, b, vec![b_val]).unwrap();
-//             handle.write_data(i, c, vec![c_val]).unwrap();
-//         }
-//         drop(handle);
-
-//         let trace = generator.generate_trace(&chip, num_rows).unwrap();
-
-//         let config = StarkConfig::standard_fast_config();
-//         let stark = TestStark::new(chip);
-
-//         // Verify proof as a stark
-//         let proof = prove::<F, C, S, D>(
-//             stark.clone(),
-//             &config,
-//             trace,
-//             [],
-//             &mut TimingTree::default(),
-//         )
-//         .unwrap();
-//         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
-
-//         // Verify recursive proof in a circuit
-//         let config_rec = CircuitConfig::standard_recursion_config();
-//         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
-
-//         let degree_bits = proof.proof.recover_degree_bits(&config);
-//         let virtual_proof = add_virtual_stark_proof_with_pis(
-//             &mut recursive_builder,
-//             stark.clone(),
-//             &config,
-//             degree_bits,
-//         );
-
-//         recursive_builder.print_gate_counts(0);
-
-//         let mut rec_pw = PartialWitness::new();
-//         set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-
-//         verify_stark_proof_circuit::<F, C, S, D>(
-//             &mut recursive_builder,
-//             stark,
-//             virtual_proof,
-//             &config,
-//         );
-
-//         let recursive_data = recursive_builder.build::<C>();
-
-//         let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
-//         let recursive_proof = plonky2::plonk::prover::prove(
-//             &recursive_data.prover_only,
-//             &recursive_data.common,
-//             rec_pw,
-//             &mut timing,
-//         )
-//         .unwrap();
-
-//         timing.print();
-//         recursive_data.verify(recursive_proof).unwrap();
-//     }
-// }

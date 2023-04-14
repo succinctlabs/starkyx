@@ -3,7 +3,7 @@
 //! The instruction trait represents the interface of a microcomand in a chip. It is the
 //! lowest level of abstraction in the arithmetic module.
 
-pub mod composable;
+pub mod arithmetic_expressions;
 pub mod write;
 
 use anyhow::Result;
@@ -12,7 +12,7 @@ use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use self::composable::ArithmeticExpressionSlice;
+use self::arithmetic_expressions::ArithmeticExpressionSlice;
 use super::bool::ConstraintBool;
 use super::register::MemorySlice;
 use crate::arithmetic::register::WitnessData;
@@ -61,7 +61,10 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
 pub enum EqualityConstraint<F, const D: usize> {
     Bool(ConstraintBool),
     Equal(MemorySlice, MemorySlice),
-    ArithmeticConstraint(ArithmeticExpressionSlice<F, D>, ArithmeticExpressionSlice<F, D>),
+    ArithmeticConstraint(
+        ArithmeticExpressionSlice<F, D>,
+        ArithmeticExpressionSlice<F, D>,
+    ),
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> EqualityConstraint<F, D> {

@@ -13,7 +13,7 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Clone, Debug)]
 pub struct ArithmeticExpression<F, const D: usize, T: Register> {
-    expression: ArithmeticExpressionSlice<F, D>,
+    pub(crate) expression: ArithmeticExpressionSlice<F, D>,
     _target: core::marker::PhantomData<T>,
 }
 
@@ -36,8 +36,8 @@ pub enum ArithmeticExpressionSlice<F, const D: usize> {
     ),
 }
 
-impl<F: RichField + Extendable<D>, const D: usize, T : Register> ArithmeticExpression<F, D, T> {
-    pub fn new(register : T) -> Self {
+impl<F: RichField + Extendable<D>, const D: usize, T: Register> ArithmeticExpression<F, D, T> {
+    pub fn new(register: &T) -> Self {
         ArithmeticExpression {
             expression: ArithmeticExpressionSlice::Input(*register.register()),
             _target: PhantomData,
@@ -423,7 +423,6 @@ mod tests {
         type Instruction = WriteInstruction;
     }
 
-
     #[test]
     fn test_register_arithmetic_expression() {
         const D: usize = 2;
@@ -441,16 +440,7 @@ mod tests {
         builder.write_data(&input_2).unwrap();
         builder.write_data(&output).unwrap();
 
-        let in_1 = ArithmeticExpression::new(input_1);
-        let in_2 = ArithmeticExpression::new(input_2);
-        let two = F::ONE + F::ONE;
-        let expr = in_1.clone() * in_2 + in_1 * two;
-
-        let out_expr = ArithmeticExpression::new(output);
-
-        let equal_consr = EqualityConstraint::ArithmeticConstraint(out_expr.expression, expr.expression);
-
-        builder.insert_raw_constraint(equal_consr);
+        builder.mul(&input_1, &input_2, &output);
 
         let (chip, spec) = builder.build();
 
@@ -460,7 +450,7 @@ mod tests {
         for i in 0..num_rows {
             let a_val = F::ONE;
             let b_val = F::ONE + F::ONE + F::ONE;
-            let c_val = a_val * b_val + a_val * two;
+            let c_val = a_val * b_val;
             handle.write_data(i, input_1, vec![a_val]).unwrap();
             handle.write_data(i, input_2, vec![b_val]).unwrap();
             handle.write_data(i, output, vec![c_val]).unwrap();
