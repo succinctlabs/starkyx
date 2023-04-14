@@ -262,7 +262,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
 
 #[cfg(test)]
 mod tests {
-    use log::{info, log};
+    use log::info;
     use plonky2::field::types::Field;
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_builder::CircuitBuilder;
