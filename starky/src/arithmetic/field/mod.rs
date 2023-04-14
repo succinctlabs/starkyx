@@ -1,6 +1,7 @@
-pub mod add;
-pub mod mul;
-pub mod quad;
+mod add;
+mod mul;
+mod mul_const;
+mod quad;
 
 use anyhow::Result;
 use num::{BigUint, One, Zero};
@@ -8,9 +9,10 @@ use plonky2::field::extension::Extendable;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 
-use self::add::FpAdd;
-use self::mul::{FpMul, FpMulConst};
-use self::quad::FpQuad;
+pub use self::add::FpAdd;
+pub use self::mul::FpMul;
+pub use self::mul_const::FpMulConst;
+pub use self::quad::FpQuad;
 use super::instruction::Instruction;
 use super::polynomial::Polynomial;
 use super::register::FieldRegister;
