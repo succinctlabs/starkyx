@@ -203,7 +203,7 @@ mod tests {
     }
 
     #[test]
-    fn test_ed_double_and_add() {
+    fn test_scalar_mul() {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
