@@ -38,7 +38,7 @@ where
     }
 
     fn expr<F: RichField + Extendable<D>, const D: usize>(&self) -> ArithmeticExpression<F, D> {
-        ArithmeticExpression::from_raw_register(self.register().clone())
+        ArithmeticExpression::from_raw_register(*self.register())
     }
 }
 
