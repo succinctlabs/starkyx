@@ -193,9 +193,8 @@ mod tests {
     pub struct BoolTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for BoolTest {
-        const NUM_ARITHMETIC_COLUMNS: usize = 5;
-        const NUM_FREE_COLUMNS: usize = 5;
-
+        const NUM_ARITHMETIC_COLUMNS: usize = 10;
+        const NUM_FREE_COLUMNS: usize = 10;
         type Instruction = Selector<BitRegister>;
     }
 

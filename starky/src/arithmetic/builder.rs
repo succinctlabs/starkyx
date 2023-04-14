@@ -64,9 +64,6 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     pub fn get_local_memory(&mut self, size: usize) -> Result<MemorySlice> {
         let register = MemorySlice::Local(self.local_index, size);
         self.local_index += size;
-        if self.local_index > L::NUM_FREE_COLUMNS {
-            return Err(anyhow!("Local row memory overflow"));
-        }
         Ok(register)
     }
 
@@ -75,9 +72,6 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     fn get_next_memory(&mut self, size: usize) -> Result<MemorySlice> {
         let register = MemorySlice::Next(self.next_index, size);
         self.next_index += size;
-        if self.next_index > L::NUM_FREE_COLUMNS {
-            return Err(anyhow!("Next row memory overflow"));
-        }
         Ok(register)
     }
 
@@ -86,9 +80,6 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     fn get_local_u16_memory(&mut self, size: usize) -> Result<MemorySlice> {
         let register = MemorySlice::Local(self.local_arithmetic_index, size);
         self.local_arithmetic_index += size;
-        if self.local_arithmetic_index > L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS {
-            return Err(anyhow!("Local row u16 memory overflow"));
-        }
         Ok(register)
     }
 
@@ -98,9 +89,6 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     fn get_next_u16_memory(&mut self, size: usize) -> Result<MemorySlice> {
         let register = MemorySlice::Next(self.next_arithmetic_index, size);
         self.local_arithmetic_index += size;
-        if self.local_arithmetic_index > L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS {
-            return Err(anyhow!("Next row u16 memory overflow"));
-        }
         Ok(register)
     }
 
@@ -207,6 +195,32 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
 
     /// Build the chip
     pub fn build(self) -> (Chip<L, F, D>, BTreeMap<InsID, usize>) {
+        let num_free_columns = self.local_index;
+        if num_free_columns > L::NUM_FREE_COLUMNS {
+            panic!(
+                "Not enough free columns. Expected {} free columns, got {}.",
+                num_free_columns,
+                L::NUM_FREE_COLUMNS
+            );
+        } else if num_free_columns < L::NUM_FREE_COLUMNS {
+            println!(
+                "Warning: {} free columns unused",
+                L::NUM_FREE_COLUMNS - num_free_columns
+            );
+        }
+        let num_arithmetic_columns = self.local_arithmetic_index - self.local_index;
+        if num_arithmetic_columns > L::NUM_ARITHMETIC_COLUMNS {
+            panic!(
+                "Not enough arithmetic columns. Expected {} arithmetic columns, got {}.",
+                num_arithmetic_columns,
+                L::NUM_ARITHMETIC_COLUMNS
+            );
+        } else if num_arithmetic_columns < L::NUM_ARITHMETIC_COLUMNS {
+            println!(
+                "Warning: {} arithmetic columns unused",
+                L::NUM_ARITHMETIC_COLUMNS - num_arithmetic_columns
+            );
+        }
         (
             Chip {
                 instructions: self.instructions,
