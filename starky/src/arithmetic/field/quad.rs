@@ -10,7 +10,9 @@ use crate::arithmetic::builder::ChipBuilder;
 use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
-use crate::arithmetic::register::{MemorySlice, Register, RegisterSerializable, WitnessData};
+use crate::arithmetic::register::{
+    Array, MemorySlice, Register, RegisterSerializable, U16Register, WitnessData,
+};
 use crate::arithmetic::trace::TraceHandle;
 use crate::arithmetic::utils::{extract_witness_and_shift, split_digits, to_field_iter};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
@@ -24,9 +26,9 @@ pub struct FpQuad<P: FieldParameters> {
     c: FieldRegister<P>,
     d: FieldRegister<P>,
     result: FieldRegister<P>,
-    carry: Option<MemorySlice>,
-    witness_low: Option<MemorySlice>,
-    witness_high: Option<MemorySlice>,
+    carry: FieldRegister<P>,
+    witness_low: Array<U16Register>,
+    witness_high: Array<U16Register>,
 }
 
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
@@ -41,7 +43,23 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     where
         L::Instruction: From<FpQuad<P>>,
     {
-        let instr = FpQuad::new(*a, *b, *c, *d, *result);
+        let carry = self.alloc_local::<FieldRegister<P>>().unwrap();
+        let witness_low = self
+            .alloc_local_array::<U16Register>(P::NB_WITNESS_LIMBS)
+            .unwrap();
+        let witness_high = self
+            .alloc_local_array::<U16Register>(P::NB_WITNESS_LIMBS)
+            .unwrap();
+        let instr = FpQuad {
+            a: *a,
+            b: *b,
+            c: *c,
+            d: *d,
+            result: *result,
+            carry,
+            witness_low,
+            witness_high,
+        };
         self.insert_instruction(instr.into())?;
         Ok(instr)
     }
@@ -51,26 +69,6 @@ impl<P: FieldParameters> FpQuad<P> {
     const NUM_CARRY_LIMBS: usize = P::NB_LIMBS;
     pub const NUM_WITNESS_LOW_LIMBS: usize = 2 * P::NB_LIMBS - 2;
     pub const NUM_WITNESS_HIGH_LIMBS: usize = 2 * P::NB_LIMBS - 2;
-
-    #[inline]
-    pub const fn new(
-        a: FieldRegister<P>,
-        b: FieldRegister<P>,
-        c: FieldRegister<P>,
-        d: FieldRegister<P>,
-        result: FieldRegister<P>,
-    ) -> Self {
-        Self {
-            a,
-            b,
-            c,
-            d,
-            result,
-            carry: None,
-            witness_low: None,
-            witness_high: None,
-        }
-    }
 
     pub const fn num_quad_columns() -> usize {
         5 * P::NB_LIMBS
@@ -119,9 +117,9 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             ),
             _ => return Err(anyhow!("Invalid witness register")),
         };
-        self.carry = Some(carry);
-        self.witness_low = Some(witness_low);
-        self.witness_high = Some(witness_high);
+        self.carry = FieldRegister::<P>::from_register(carry);
+        self.witness_low = Array::<U16Register>::from_register_unsafe(witness_low);
+        self.witness_high = Array::<U16Register>::from_register_unsafe(witness_high);
 
         Ok(())
     }
@@ -132,19 +130,19 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             .register()
             .assign(trace_rows, &mut row[index..P::NB_LIMBS], row_index);
         index += P::NB_LIMBS;
-        self.carry.unwrap().assign(
+        self.carry.register().assign(
             trace_rows,
             &mut row[index..index + Self::NUM_CARRY_LIMBS],
             row_index,
         );
         index += Self::NUM_CARRY_LIMBS;
-        self.witness_low.unwrap().assign(
+        self.witness_low.register().assign(
             trace_rows,
             &mut row[index..index + Self::NUM_WITNESS_LOW_LIMBS],
             row_index,
         );
         index += Self::NUM_WITNESS_LOW_LIMBS;
-        self.witness_high.unwrap().assign(
+        self.witness_high.register().assign(
             trace_rows,
             &mut row[index..index + Self::NUM_WITNESS_HIGH_LIMBS],
             row_index,
@@ -172,9 +170,9 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         let d = self.d.register().packed_entries_slice(&vars);
         let result = self.result.register().packed_entries_slice(&vars);
 
-        let carry = self.carry.unwrap().packed_entries_slice(&vars);
-        let witness_low = self.witness_low.unwrap().packed_entries_slice(&vars);
-        let witness_high = self.witness_high.unwrap().packed_entries_slice(&vars);
+        let carry = self.carry.register().packed_entries_slice(&vars);
+        let witness_low = self.witness_low.register().packed_entries_slice(&vars);
+        let witness_high = self.witness_high.register().packed_entries_slice(&vars);
 
         // Construct the expected vanishing polynmial
         let ab = PolynomialOps::mul(a, b);
@@ -221,9 +219,9 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         let d = self.d.register().evaluation_targets(&vars);
         let result = self.result.register().evaluation_targets(&vars);
 
-        let carry = self.carry.unwrap().evaluation_targets(&vars);
-        let witness_low = self.witness_low.unwrap().evaluation_targets(&vars);
-        let witness_high = self.witness_high.unwrap().evaluation_targets(&vars);
+        let carry = self.carry.register().evaluation_targets(&vars);
+        let witness_low = self.witness_low.register().evaluation_targets(&vars);
+        let witness_high = self.witness_high.register().evaluation_targets(&vars);
 
         // Construct the expected vanishing polynmial
         let ab = PolynomialGadget::mul_extension(builder, a, b);

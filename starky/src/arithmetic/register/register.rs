@@ -1,5 +1,3 @@
-use anyhow::{anyhow, Result};
-
 use super::{CellType, MemorySlice};
 
 /// Adds serialization and deserialization to a register for converting between the canonical type

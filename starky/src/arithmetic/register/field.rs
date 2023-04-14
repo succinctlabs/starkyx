@@ -1,8 +1,5 @@
 use std::marker::PhantomData;
 
-use anyhow::Result;
-use plonky2::field::types::Field;
-
 use super::cell::CellType;
 use super::register::{Register, RegisterSerializable, RegisterSized};
 use crate::arithmetic::field::FieldParameters;

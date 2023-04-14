@@ -4,7 +4,6 @@
 //!
 
 use alloc::collections::BTreeMap;
-use core::marker::PhantomData;
 
 use anyhow::{anyhow, Result};
 use plonky2::field::extension::Extendable;

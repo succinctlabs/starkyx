@@ -58,8 +58,6 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         let y = FieldRegister::<E::FieldParam>::from_register(
             self.get_local_memory(E::FieldParam::NB_LIMBS).unwrap(),
         );
-        let x = self.alloc_local::<FieldRegister<E::FieldParam>>().unwrap();
-        let y = self.alloc_local::<FieldRegister<E::FieldParam>>().unwrap();
         Ok(AffinePointRegister::<E>::from_field_registers(x, y))
     }
 

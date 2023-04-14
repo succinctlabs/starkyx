@@ -1,5 +1,3 @@
-use anyhow::Result;
-
 use super::cell::CellType;
 use super::register::{RegisterSerializable, RegisterSized};
 use crate::arithmetic::register::memory::MemorySlice;
