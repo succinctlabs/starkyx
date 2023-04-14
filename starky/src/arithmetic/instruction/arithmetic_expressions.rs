@@ -1,4 +1,10 @@
-use core::marker::PhantomData;
+//! Arithmetic expressions
+//!
+//! This module defines arithmetic expressions that can be used to define constraint
+//! equations in column entries. The arithmetic expressions are defined in terms of the
+//! `ArithmeticExpression` type.
+//!
+
 use core::ops::{Add, Mul, Sub};
 use std::sync::Arc;
 
@@ -11,43 +17,52 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use crate::arithmetic::register::{MemorySlice, Register};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
+/// An arithmetic expression of trace column entries.
+/// 
+/// Arithmetic expressions represent a composition of additions, multiplications, subtractions,
+/// and scalar multiplications of trace column entries. These expression can be used in
+/// an EqualityConstraint to define a constraint equation.
 #[derive(Clone, Debug)]
-pub struct ArithmeticExpression<F, const D: usize, T: Register> {
-    pub(crate) expression: ArithmeticExpressionSlice<F, D>,
-    _target: core::marker::PhantomData<T>,
-}
+pub enum ArithmeticExpression<F, const D: usize> {
 
-#[derive(Clone, Debug)]
-pub enum ArithmeticExpressionSlice<F, const D: usize> {
+    /// A contiguous chunk of elemnt of a trace column.
     Input(MemorySlice),
+    /// A constant vector of field values.
     Const(Vec<F>),
+    /// The addition of two arithmetic expressions.
     Add(
-        Arc<ArithmeticExpressionSlice<F, D>>,
-        Arc<ArithmeticExpressionSlice<F, D>>,
+        Arc<ArithmeticExpression<F, D>>,
+        Arc<ArithmeticExpression<F, D>>,
     ),
+    /// The subtraction of two arithmetic expressions.
     Sub(
-        Arc<ArithmeticExpressionSlice<F, D>>,
-        Arc<ArithmeticExpressionSlice<F, D>>,
+        Arc<ArithmeticExpression<F, D>>,
+        Arc<ArithmeticExpression<F, D>>,
     ),
-    ScalarMul(F, Arc<ArithmeticExpressionSlice<F, D>>),
+    /// The scalar multiplication of an arithmetic expression by a field element.
+    ScalarMul(F, Arc<ArithmeticExpression<F, D>>),
+    /// The multiplication of two arithmetic expressions.
     Mul(
-        Arc<ArithmeticExpressionSlice<F, D>>,
-        Arc<ArithmeticExpressionSlice<F, D>>,
+        Arc<ArithmeticExpression<F, D>>,
+        Arc<ArithmeticExpression<F, D>>,
     ),
 }
 
-impl<F: RichField + Extendable<D>, const D: usize, T: Register> ArithmeticExpression<F, D, T> {
-    pub fn new(register: &T) -> Self {
-        ArithmeticExpression {
-            expression: ArithmeticExpressionSlice::Input(*register.register()),
-            _target: PhantomData,
-        }
+impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpression<F, D> {
+    pub fn new<T: Register>(input: &T) -> Self {
+        ArithmeticExpression::Input(*input.register())
     }
-}
 
-impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, D> {
-    pub fn input(input: MemorySlice) -> Self {
-        ArithmeticExpressionSlice::Input(input)
+    pub fn from_raw_register(input: MemorySlice) -> Self {
+        ArithmeticExpression::Input(input)
+    }
+
+    pub fn from_constant(constant: F) -> Self {
+        ArithmeticExpression::Const(vec![constant])
+    }
+
+    pub fn from_constant_vec(constants: Vec<F>) -> Self {
+        ArithmeticExpression::Const(constants)
     }
 
     pub fn packed_generic<
@@ -65,12 +80,12 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
         P: PackedField<Scalar = FE>,
     {
         match self {
-            ArithmeticExpressionSlice::Input(input) => input.packed_entries_slice(vars).to_vec(),
-            ArithmeticExpressionSlice::Const(constants) => {
+            ArithmeticExpression::Input(input) => input.packed_entries_slice(vars).to_vec(),
+            ArithmeticExpression::Const(constants) => {
                 let s = |x: &F| P::from(FE::from_basefield(*x));
                 constants.iter().map(s).collect()
             }
-            ArithmeticExpressionSlice::Add(left, right) => {
+            ArithmeticExpression::Add(left, right) => {
                 let left = left.packed_generic(vars);
                 let right = right.packed_generic(vars);
                 left.iter()
@@ -78,7 +93,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
                     .map(|(l, r)| *r + *l)
                     .collect()
             }
-            ArithmeticExpressionSlice::Sub(left, right) => {
+            ArithmeticExpression::Sub(left, right) => {
                 let left = left.packed_generic(vars);
                 let right = right.packed_generic(vars);
                 left.iter()
@@ -86,12 +101,12 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
                     .map(|(l, r)| *r - *l)
                     .collect()
             }
-            ArithmeticExpressionSlice::ScalarMul(scalar, expr) => {
+            ArithmeticExpression::ScalarMul(scalar, expr) => {
                 let expr = expr.packed_generic(vars);
                 let s = FE::from_basefield(*scalar);
                 expr.iter().map(|e| *e * s).collect()
             }
-            ArithmeticExpressionSlice::Mul(left, right) => {
+            ArithmeticExpression::Mul(left, right) => {
                 let left = left.packed_generic(vars);
                 let right = right.packed_generic(vars);
                 left.iter()
@@ -108,12 +123,12 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
         vars: &StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
     ) -> Vec<ExtensionTarget<D>> {
         match self {
-            ArithmeticExpressionSlice::Input(input) => input.evaluation_targets(vars).to_vec(),
-            ArithmeticExpressionSlice::Const(constants) => constants
+            ArithmeticExpression::Input(input) => input.evaluation_targets(vars).to_vec(),
+            ArithmeticExpression::Const(constants) => constants
                 .iter()
                 .map(|x| builder.constant_extension(F::Extension::from_basefield(*x)))
                 .collect(),
-            ArithmeticExpressionSlice::Add(left, right) => {
+            ArithmeticExpression::Add(left, right) => {
                 let left = left.ext_circuit(builder, vars);
                 let right = right.ext_circuit(builder, vars);
                 left.iter()
@@ -121,7 +136,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
                     .map(|(l, r)| builder.add_extension(*l, *r))
                     .collect()
             }
-            ArithmeticExpressionSlice::Sub(left, right) => {
+            ArithmeticExpression::Sub(left, right) => {
                 let left = left.ext_circuit(builder, vars);
                 let right = right.ext_circuit(builder, vars);
                 left.iter()
@@ -129,13 +144,13 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
                     .map(|(l, r)| builder.sub_extension(*l, *r))
                     .collect()
             }
-            ArithmeticExpressionSlice::ScalarMul(scalar, expr) => {
+            ArithmeticExpression::ScalarMul(scalar, expr) => {
                 let expr = expr.ext_circuit(builder, vars);
                 expr.iter()
                     .map(|x| builder.mul_const_extension(*scalar, *x))
                     .collect()
             }
-            ArithmeticExpressionSlice::Mul(left, right) => {
+            ArithmeticExpression::Mul(left, right) => {
                 let left_vals = left.ext_circuit(builder, vars);
                 let right_vals = right.ext_circuit(builder, vars);
                 left_vals
@@ -148,34 +163,31 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> Add for ArithmeticExpressionSlice<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> Add for ArithmeticExpression<F, D> {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        ArithmeticExpressionSlice::Add(Arc::new(self), Arc::new(rhs))
+        ArithmeticExpression::Add(Arc::new(self), Arc::new(rhs))
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> Sub for ArithmeticExpressionSlice<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> Sub for ArithmeticExpression<F, D> {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        ArithmeticExpressionSlice::Sub(Arc::new(self), Arc::new(rhs))
+        ArithmeticExpression::Sub(Arc::new(self), Arc::new(rhs))
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> Add<Vec<F>> for ArithmeticExpressionSlice<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> Add<Vec<F>> for ArithmeticExpression<F, D> {
     type Output = Self;
 
     fn add(self, rhs: Vec<F>) -> Self::Output {
-        ArithmeticExpressionSlice::Add(
-            Arc::new(self),
-            Arc::new(ArithmeticExpressionSlice::Const(rhs)),
-        )
+        ArithmeticExpression::Add(Arc::new(self), Arc::new(ArithmeticExpression::Const(rhs)))
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> Add<F> for ArithmeticExpressionSlice<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> Add<F> for ArithmeticExpression<F, D> {
     type Output = Self;
 
     fn add(self, rhs: F) -> Self::Output {
@@ -183,94 +195,19 @@ impl<F: RichField + Extendable<D>, const D: usize> Add<F> for ArithmeticExpressi
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> Mul<F> for ArithmeticExpressionSlice<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> Mul<F> for ArithmeticExpression<F, D> {
     type Output = Self;
 
     fn mul(self, rhs: F) -> Self::Output {
-        ArithmeticExpressionSlice::ScalarMul(rhs, Arc::new(self))
+        ArithmeticExpression::ScalarMul(rhs, Arc::new(self))
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> Mul for ArithmeticExpressionSlice<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> Mul for ArithmeticExpression<F, D> {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        ArithmeticExpressionSlice::Mul(Arc::new(self), Arc::new(rhs))
-    }
-}
-
-impl<F: RichField + Extendable<D>, const D: usize, T: Register> Add
-    for ArithmeticExpression<F, D, T>
-{
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Self {
-            expression: self.expression + rhs.expression,
-            _target: PhantomData,
-        }
-    }
-}
-
-impl<F: RichField + Extendable<D>, const D: usize, T: Register> Sub
-    for ArithmeticExpression<F, D, T>
-{
-    type Output = Self;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        Self {
-            expression: self.expression - rhs.expression,
-            _target: PhantomData,
-        }
-    }
-}
-
-impl<F: RichField + Extendable<D>, const D: usize, T: Register> Add<Vec<F>>
-    for ArithmeticExpression<F, D, T>
-{
-    type Output = Self;
-
-    fn add(self, rhs: Vec<F>) -> Self::Output {
-        Self {
-            expression: self.expression + rhs,
-            _target: PhantomData,
-        }
-    }
-}
-
-impl<F: RichField + Extendable<D>, const D: usize, T: Register> Add<F>
-    for ArithmeticExpression<F, D, T>
-{
-    type Output = Self;
-
-    fn add(self, rhs: F) -> Self::Output {
-        self + vec![rhs]
-    }
-}
-
-impl<F: RichField + Extendable<D>, const D: usize, T: Register> Mul<F>
-    for ArithmeticExpression<F, D, T>
-{
-    type Output = Self;
-
-    fn mul(self, rhs: F) -> Self::Output {
-        Self {
-            expression: self.expression * rhs,
-            _target: PhantomData,
-        }
-    }
-}
-
-impl<F: RichField + Extendable<D>, const D: usize, T: Register> Mul
-    for ArithmeticExpression<F, D, T>
-{
-    type Output = Self;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        Self {
-            expression: self.expression * rhs.expression,
-            _target: PhantomData,
-        }
+        ArithmeticExpression::Mul(Arc::new(self), Arc::new(rhs))
     }
 }
 
@@ -298,12 +235,12 @@ mod tests {
     use crate::verifier::verify_stark_proof;
 
     #[derive(Clone, Debug)]
-    pub struct TestArithmeticExpressionSlice<F, const D: usize> {
+    pub struct TestArithmeticExpression<F, const D: usize> {
         _marker: core::marker::PhantomData<F>,
     }
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D>
-        for TestArithmeticExpressionSlice<F, D>
+        for TestArithmeticExpression<F, D>
     {
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
         const NUM_FREE_COLUMNS: usize = 3;
@@ -316,9 +253,9 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type S = TestStark<TestArithmeticExpressionSlice<F, D>, F, D>;
+        type S = TestStark<TestArithmeticExpression<F, D>, F, D>;
 
-        let mut builder = ChipBuilder::<TestArithmeticExpressionSlice<F, D>, F, D>::new();
+        let mut builder = ChipBuilder::<TestArithmeticExpression<F, D>, F, D>::new();
 
         let input_1 = builder.get_local_memory(1).unwrap();
         let input_2 = builder.get_local_memory(1).unwrap();
@@ -328,12 +265,12 @@ mod tests {
         builder.write_raw_register(&input_2).unwrap();
         builder.write_raw_register(&output).unwrap();
 
-        let in_1 = ArithmeticExpressionSlice::<F, D>::Input(input_1);
-        let in_2 = ArithmeticExpressionSlice::<F, D>::Input(input_2);
+        let in_1 = ArithmeticExpression::<F, D>::Input(input_1);
+        let in_2 = ArithmeticExpression::<F, D>::Input(input_2);
         let two = F::ONE + F::ONE;
         let expr = in_1.clone() * in_2 + in_1 * two;
 
-        let out_expr = ArithmeticExpressionSlice::<F, D>::Input(output);
+        let out_expr = ArithmeticExpression::<F, D>::Input(output);
 
         let equal_consr = EqualityConstraint::ArithmeticConstraint(out_expr, expr);
 
@@ -410,12 +347,12 @@ mod tests {
     }
 
     #[derive(Clone, Debug)]
-    pub struct TestArithmeticExpression<F, const D: usize> {
+    pub struct Test2ArithmeticExpression<F, const D: usize> {
         _marker: core::marker::PhantomData<F>,
     }
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D>
-        for TestArithmeticExpression<F, D>
+        for Test2ArithmeticExpression<F, D>
     {
         const NUM_ARITHMETIC_COLUMNS: usize = 3;
         const NUM_FREE_COLUMNS: usize = 0;
@@ -428,9 +365,9 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type S = TestStark<TestArithmeticExpression<F, D>, F, D>;
+        type S = TestStark<Test2ArithmeticExpression<F, D>, F, D>;
 
-        let mut builder = ChipBuilder::<TestArithmeticExpression<F, D>, F, D>::new();
+        let mut builder = ChipBuilder::<Test2ArithmeticExpression<F, D>, F, D>::new();
 
         let input_1 = builder.alloc_local::<U16Register>().unwrap();
         let input_2 = builder.alloc_local::<U16Register>().unwrap();

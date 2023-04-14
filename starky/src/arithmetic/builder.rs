@@ -218,12 +218,12 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
 // Implement methods for the basic operations
 
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
-    pub fn assert_expressions_equal<T: Register>(
+    pub fn assert_expressions_equal(
         &mut self,
-        a: ArithmeticExpression<F, D, T>,
-        b: ArithmeticExpression<F, D, T>,
+        a: ArithmeticExpression<F, D>,
+        b: ArithmeticExpression<F, D>,
     ) {
-        let constraint = EqualityConstraint::ArithmeticConstraint(a.expression, b.expression);
+        let constraint = EqualityConstraint::ArithmeticConstraint(a, b);
         self.constraints.push(constraint);
     }
 

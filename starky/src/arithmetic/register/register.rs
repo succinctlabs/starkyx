@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 
 use super::cell::CellType;
-use crate::arithmetic::register::memory::MemorySlice;
+use crate::arithmetic::{register::memory::MemorySlice, instruction::arithmetic_expressions::ArithmeticExpression};
 
 /// A register is a slice of memory in the trace that is supposed to represent a specific type of
 /// data. A register can be thought as a compiler provided type--it should not be necessary to
@@ -33,5 +33,11 @@ pub trait Register: 'static + Sized + Clone + Send + Sync {
             return Err(anyhow!("Invalid register length"));
         }
         Ok(Self::from_raw_register(register))
+    }
+
+    /// Initializes an arithmetic expression corresponding to the content of
+    /// the memoery slice of the register
+    fn expression<F, const D: usize>(&self) -> ArithmeticExpression<F, D> {
+        ArithmeticExpression::new(&self)
     }
 }
