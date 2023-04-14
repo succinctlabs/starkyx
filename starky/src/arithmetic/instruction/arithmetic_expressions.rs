@@ -18,13 +18,12 @@ use crate::arithmetic::register::{MemorySlice, Register};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 /// An arithmetic expression of trace column entries.
-/// 
+///
 /// Arithmetic expressions represent a composition of additions, multiplications, subtractions,
 /// and scalar multiplications of trace column entries. These expression can be used in
 /// an EqualityConstraint to define a constraint equation.
 #[derive(Clone, Debug)]
 pub enum ArithmeticExpression<F, const D: usize> {
-
     /// A contiguous chunk of elemnt of a trace column.
     Input(MemorySlice),
     /// A constant vector of field values.
