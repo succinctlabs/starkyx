@@ -22,16 +22,6 @@ pub struct EdScalarMulData<E: EdwardsParameters> {
     selector_y: Selector<FieldRegister<E::FieldParam>>,
 }
 
-impl<E: EdwardsParameters> EdScalarMulData<E> {
-    pub const fn num_ed_scalar_mul_witness_columns() -> usize {
-        2 * E::FieldParam::NB_LIMBS + 2 * EcAddData::<E>::num_ed_add_witness_columns()
-    }
-
-    pub const fn num_ed_scalar_mul_columns() -> usize {
-        1 + 2 * 2 * E::FieldParam::NB_LIMBS + Self::num_ed_scalar_mul_witness_columns()
-    }
-}
-
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
     /// This constraints of one step of the double-and-add algorithm for scalar multiplication.
     ///
@@ -196,8 +186,7 @@ mod tests {
     pub struct EdScalarMulTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for EdScalarMulTest {
-        const NUM_ARITHMETIC_COLUMNS: usize =
-            EdScalarMulData::<Ed25519Parameters>::num_ed_scalar_mul_columns();
+        const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
         const NUM_FREE_COLUMNS: usize = 2 + 2 * 2 * 16;
 

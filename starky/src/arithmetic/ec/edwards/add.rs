@@ -25,23 +25,6 @@ pub struct EcAddData<E: EdwardsParameters> {
     YDEN: Den<E::FieldParam>,
 }
 
-impl<E: EdwardsParameters> EcAddData<E> {
-    pub const fn num_ed_add_witness_columns() -> usize {
-        2 * (FpQuad::<E::FieldParam>::num_quad_columns() - 4 * E::FieldParam::NB_LIMBS)
-            + 3 * (FpMul::<E::FieldParam>::num_mul_columns() - 2 * E::FieldParam::NB_LIMBS)
-            + (FpMulConst::<E::FieldParam>::num_mul_const_columns() - E::FieldParam::NB_LIMBS)
-            + 2 * (Den::<E::FieldParam>::num_den_columns() - 3 * E::FieldParam::NB_LIMBS)
-    }
-
-    pub const fn num_ed_add_columns() -> usize {
-        6 * E::FieldParam::NB_LIMBS + Self::num_ed_add_witness_columns()
-    }
-
-    pub const fn num_ed_double_columns() -> usize {
-        Self::num_ed_add_columns() - 3 * E::FieldParam::NB_LIMBS
-    }
-}
-
 pub trait FromEdwardsAdd<E: EdwardsParameters>:
     From<FpMul<E::FieldParam>>
     + From<FpQuad<E::FieldParam>>
@@ -173,9 +156,8 @@ mod tests {
     pub struct EdAddTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for EdAddTest {
-        const NUM_ARITHMETIC_COLUMNS: usize = EcAddData::<Ed25519Parameters>::num_ed_add_columns();
+        const NUM_ARITHMETIC_COLUMNS: usize = 800;
         const NUM_FREE_COLUMNS: usize = 0;
-
         type Instruction = EdWardsMicroInstruction<Ed25519Parameters>;
     }
 
@@ -301,10 +283,8 @@ mod tests {
     pub struct EdDoubleTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for EdDoubleTest {
-        const NUM_ARITHMETIC_COLUMNS: usize =
-            EcAddData::<Ed25519Parameters>::num_ed_double_columns();
+        const NUM_ARITHMETIC_COLUMNS: usize = 768;
         const NUM_FREE_COLUMNS: usize = 0;
-
         type Instruction = EdWardsMicroInstruction<Ed25519Parameters>;
     }
 
@@ -315,11 +295,11 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type E = Ed25519Parameters;
-        type S = TestStark<EdAddTest, F, D>;
+        type S = TestStark<EdDoubleTest, F, D>;
 
         let _ = env_logger::builder().is_test(true).try_init();
         // build the stark
-        let mut builder = ChipBuilder::<EdAddTest, F, D>::new();
+        let mut builder = ChipBuilder::<EdDoubleTest, F, D>::new();
 
         let P = builder.alloc_ec_point::<E>().unwrap();
         let R = builder.alloc_ec_point::<E>().unwrap();
