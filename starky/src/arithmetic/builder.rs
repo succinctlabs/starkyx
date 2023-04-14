@@ -304,7 +304,6 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type L = TestChipParameters<F, D>;
-        type A = ArithmeticExpression<F, D>;
         type S = TestStark<L, F, D>;
 
         // event logger to show messages
@@ -320,7 +319,7 @@ mod tests {
         // Asserts that x_0_next = x_1
         builder.assert_equal(&x_0.next(), &x_1);
         // Asserts that x_1_next = x_0 + x_1
-        builder.assert_expressions_equal(A::new(&x_0) + A::new(&x_1), A::new(&x_1.next()));
+        builder.assert_expressions_equal(x_0.expr() + x_1.expr(), x_1.next().expr());
 
         let (chip, spec) = builder.build();
 
