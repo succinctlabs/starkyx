@@ -1,5 +1,3 @@
-use plonky2::field::types::Field;
-
 use super::add::{EcAddData, FromEdwardsAdd};
 use super::*;
 use crate::arithmetic::bool::Selector;
@@ -171,6 +169,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
+    use plonky2::field::types::Field;
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;

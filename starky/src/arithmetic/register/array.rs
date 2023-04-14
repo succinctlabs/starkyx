@@ -34,6 +34,10 @@ impl<T: Register> Array<T> {
         self.length
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn get(&self, idx: usize) -> T {
         if idx >= self.len() {
             panic!("Index out of bounds");
