@@ -137,7 +137,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
         let num_bits = E::num_scalar_bits();
         let scalar_bits = biguint_to_bits_le(scalar, num_bits);
 
-        let mut res = AffinePoint::neutral();
+        let mut res = E::neutral();
         self.write_ec_point(starting_row, &res, &chip_data.result)?;
         let mut temp = point.clone();
         self.write_ec_point(starting_row, &temp, &chip_data.temp)?;
@@ -249,7 +249,7 @@ mod tests {
                 rayon::spawn(move || {
                     let mut rng = thread_rng();
                     let a = rng.gen_biguint(256);
-                    let point = AffinePoint::neutral() * a;
+                    let point = E::neutral() * a;
                     let scalar = rng.gen_biguint(256);
                     handle
                         .write_ed_double_and_add(256 * i, &scalar, &point, ed_data)

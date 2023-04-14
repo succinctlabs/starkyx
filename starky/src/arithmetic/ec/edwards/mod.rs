@@ -30,6 +30,10 @@ pub trait EdwardsParameters: EllipticCurveParameters {
     fn num_scalar_bits() -> usize {
         Self::FieldParam::NB_LIMBS * 16
     }
+
+    fn neutral() -> AffinePoint<Self> {
+        AffinePoint::new(BigUint::from(0u32), BigUint::from(1u32))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
