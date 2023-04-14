@@ -12,7 +12,7 @@ use plonky2::hash::hash_types::RichField;
 use super::bool::ConstraintBool;
 use super::chip::{Chip, ChipParameters};
 use super::instruction::{EqualityConstraint, Instruction, StandardInstruction, WriteInstruction};
-use super::register::{Array, CellType, MemorySlice, Register};
+use super::register::{Array, CellType, MemorySlice, Register, RegisterSerializable};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub enum InsID {
@@ -125,7 +125,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
             }
             None => self.get_local_memory(size_of)?,
         };
-        Array::<T>::new(register)
+        Ok(Array::<T>::from_register_unsafe(register))
     }
 
     /// Allocates a new register on the next row according to type `T` which implements the Register

@@ -1,7 +1,7 @@
 use super::cell::CellType;
-use super::register::{RegisterSerializable, RegisterSized};
+use super::{RegisterSerializable, RegisterSized};
 use crate::arithmetic::register::memory::MemorySlice;
-use crate::arithmetic::register::register::Register;
+use crate::arithmetic::register::Register;
 
 /// A register for a single element/column in the trace that is supposed to represent a u16. The
 /// value is automatically range checked via the lookup table if the register is allocated through

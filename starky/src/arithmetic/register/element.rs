@@ -1,5 +1,4 @@
-use super::register::{Register, RegisterSerializable, RegisterSized};
-use super::CellType;
+use super::{CellType, Register, RegisterSerializable, RegisterSized};
 use crate::arithmetic::register::memory::MemorySlice;
 
 /// A register for a single element/column in the trace. The value is not constrainted.

@@ -1,7 +1,6 @@
-use super::register::{RegisterSerializable, RegisterSized};
-use super::CellType;
+use super::{CellType, RegisterSerializable, RegisterSized};
 use crate::arithmetic::register::memory::MemorySlice;
-use crate::arithmetic::register::register::Register;
+use crate::arithmetic::register::Register;
 
 /// A register for a single element/column in the trace that is supposed to represent a bit. The
 /// value is automatically constrained to be 0 or 1 via the quadratic constraint x * (x - 1) == 0.

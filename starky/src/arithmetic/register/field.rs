@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use super::cell::CellType;
-use super::register::{Register, RegisterSerializable, RegisterSized};
+use super::{Register, RegisterSerializable, RegisterSized};
 use crate::arithmetic::field::FieldParameters;
 use crate::arithmetic::register::memory::MemorySlice;
 
