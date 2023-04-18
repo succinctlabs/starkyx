@@ -51,7 +51,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
         instruction: T,
         row: Vec<F>,
     ) -> Result<()> {
-        let id = InsID::CustomInstruction(instruction.witness_vec());
+        let id = InsID::CustomInstruction(instruction.layout());
         self.tx
             .send((row_index, id, row))
             .map_err(|_| anyhow!("Failed to send row"))?;

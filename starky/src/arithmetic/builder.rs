@@ -171,7 +171,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
 
     /// Registers a new instruction to the chip.
     pub fn insert_instruction(&mut self, instruction: L::Instruction) -> Result<()> {
-        let id = InsID::CustomInstruction(instruction.witness_vec());
+        let id = InsID::CustomInstruction(instruction.layout());
         let existing_value = self.instruction_indices.insert(id, self.instructions.len());
         if existing_value.is_some() {
             return Err(anyhow!("Instruction label already exists"));

@@ -17,7 +17,7 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 pub struct ConstraintBool(pub MemorySlice);
 
 impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for ConstraintBool {
-    fn witness_vec(&self) -> Vec<MemorySlice> {
+    fn layout(&self) -> Vec<MemorySlice> {
         Vec::new()
     }
 
@@ -102,7 +102,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize, T: Register> Instruction<F, D> for Selector<T> {
-    fn witness_vec(&self) -> Vec<MemorySlice> {
+    fn layout(&self) -> Vec<MemorySlice> {
         vec![*self.result.register()]
     }
 

@@ -106,13 +106,13 @@ impl<P: FieldParameters> From<FpQuad<P>> for FpInstruction<P> {
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
     for FpInstruction<P>
 {
-    fn witness_vec(&self) -> Vec<MemorySlice> {
+    fn layout(&self) -> Vec<MemorySlice> {
         match self {
-            FpInstruction::Add(add) => <FpAdd<P> as Instruction<F, D>>::witness_vec(add),
-            FpInstruction::Mul(mul) => <FpMul<P> as Instruction<F, D>>::witness_vec(mul),
-            FpInstruction::Quad(quad) => <FpQuad<P> as Instruction<F, D>>::witness_vec(quad),
+            FpInstruction::Add(add) => <FpAdd<P> as Instruction<F, D>>::layout(add),
+            FpInstruction::Mul(mul) => <FpMul<P> as Instruction<F, D>>::layout(mul),
+            FpInstruction::Quad(quad) => <FpQuad<P> as Instruction<F, D>>::layout(quad),
             FpInstruction::MulConst(mul_const) => {
-                <FpMulConst<P> as Instruction<F, D>>::witness_vec(mul_const)
+                <FpMulConst<P> as Instruction<F, D>>::layout(mul_const)
             }
         }
     }
