@@ -19,10 +19,6 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
     'static + Send + Sync + Clone
 {
-    //fn generate_trace_row(&self, input: Option<Self::Input>) -> (Vec<F>, Option<Self::Output>);
-
-    fn memory_vec(&self) -> Vec<MemorySlice>;
-
     fn witness_vec(&self) -> Vec<MemorySlice>;
 
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
@@ -162,10 +158,6 @@ pub struct DefaultInstructions<F, const D: usize> {
 
 impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for DefaultInstructions<F, D> {
     fn assign_row(&self, _trace_rows: &mut [Vec<F>], _row: &mut [F], _row_index: usize) {}
-
-    fn memory_vec(&self) -> Vec<MemorySlice> {
-        Vec::new()
-    }
 
     fn witness_vec(&self) -> Vec<MemorySlice> {
         Vec::new()

@@ -37,12 +37,12 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     where
         L::Instruction: From<FpAdd<P>>,
     {
-        let carry = self.alloc_local::<FieldRegister<P>>().unwrap();
+        let carry = self.alloc::<FieldRegister<P>>().unwrap();
         let witness_low = self
-            .alloc_local_array::<U16Register>(P::NB_WITNESS_LIMBS)
+            .alloc_array::<U16Register>(P::NB_WITNESS_LIMBS)
             .unwrap();
         let witness_high = self
-            .alloc_local_array::<U16Register>(P::NB_WITNESS_LIMBS)
+            .alloc_array::<U16Register>(P::NB_WITNESS_LIMBS)
             .unwrap();
         let instr = FpAdd {
             a: *a,
@@ -60,14 +60,6 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
     for FpAdd<P>
 {
-    fn memory_vec(&self) -> Vec<MemorySlice> {
-        vec![
-            *self.a.register(),
-            *self.b.register(),
-            *self.result.register(),
-        ]
-    }
-
     fn witness_vec(&self) -> Vec<MemorySlice> {
         vec![
             *self.result.register(),
@@ -297,9 +289,9 @@ mod tests {
         // build the stark
         let mut builder = ChipBuilder::<FpAddTest, F, D>::new();
 
-        let a = builder.alloc_local::<Fp>().unwrap();
-        let b = builder.alloc_local::<Fp>().unwrap();
-        let result = builder.alloc_local::<Fp>().unwrap();
+        let a = builder.alloc::<Fp>().unwrap();
+        let b = builder.alloc::<Fp>().unwrap();
+        let result = builder.alloc::<Fp>().unwrap();
 
         //let ab = FMul::new(a, b, result);
         //builder.insert_instruction(ab).unwrap();

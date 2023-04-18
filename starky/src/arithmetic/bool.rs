@@ -17,10 +17,6 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 pub struct ConstraintBool(pub MemorySlice);
 
 impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for ConstraintBool {
-    fn memory_vec(&self) -> Vec<MemorySlice> {
-        vec![self.0]
-    }
-
     fn witness_vec(&self) -> Vec<MemorySlice> {
         Vec::new()
     }
@@ -106,14 +102,6 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize, T: Register> Instruction<F, D> for Selector<T> {
-    fn memory_vec(&self) -> Vec<MemorySlice> {
-        vec![
-            *self.bit.register(),
-            *self.true_value.register(),
-            *self.false_value.register(),
-        ]
-    }
-
     fn witness_vec(&self) -> Vec<MemorySlice> {
         vec![*self.result.register()]
     }
@@ -215,12 +203,12 @@ mod tests {
 
         let mut builder = ChipBuilder::<BoolTest, F, D>::new();
 
-        let bit_one = builder.alloc_local::<BitRegister>().unwrap();
+        let bit_one = builder.alloc::<BitRegister>().unwrap();
         builder.write_data(&bit_one).unwrap();
-        let bit_zero = builder.alloc_local::<BitRegister>().unwrap();
+        let bit_zero = builder.alloc::<BitRegister>().unwrap();
         builder.write_data(&bit_zero).unwrap();
 
-        let dummy = builder.alloc_local::<BitRegister>().unwrap();
+        let dummy = builder.alloc::<BitRegister>().unwrap();
         builder.write_data(&dummy).unwrap();
 
         let (chip, spec) = builder.build();
@@ -330,14 +318,14 @@ mod tests {
 
         let mut builder = ChipBuilder::<BoolTest, F, D>::new();
 
-        let bit = builder.alloc_local::<BitRegister>().unwrap();
+        let bit = builder.alloc::<BitRegister>().unwrap();
         builder.write_data(&bit).unwrap();
 
-        let x = builder.alloc_local::<BitRegister>().unwrap();
+        let x = builder.alloc::<BitRegister>().unwrap();
         builder.write_data(&x).unwrap();
-        let y = builder.alloc_local::<BitRegister>().unwrap();
+        let y = builder.alloc::<BitRegister>().unwrap();
         builder.write_data(&y).unwrap();
-        let result = builder.alloc_local::<BitRegister>().unwrap();
+        let result = builder.alloc::<BitRegister>().unwrap();
 
         let sel = builder.selector(&bit, &x, &y, &result).unwrap();
 

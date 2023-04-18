@@ -20,29 +20,6 @@ pub enum EdWardsMicroInstruction<E: EdwardsParameters> {
 impl<E: EdwardsParameters, F: RichField + Extendable<D>, const D: usize> Instruction<F, D>
     for EdWardsMicroInstruction<E>
 {
-    fn memory_vec(&self) -> Vec<MemorySlice> {
-        match self {
-            EdWardsMicroInstruction::Den(den) => {
-                <Den<E::FieldParam> as Instruction<F, D>>::memory_vec(den)
-            }
-            EdWardsMicroInstruction::FpAdd(fp_add) => {
-                <FpAdd<E::FieldParam> as Instruction<F, D>>::memory_vec(fp_add)
-            }
-            EdWardsMicroInstruction::FpMul(fp_mul) => {
-                <FpMul<E::FieldParam> as Instruction<F, D>>::memory_vec(fp_mul)
-            }
-            EdWardsMicroInstruction::FpQuad(fp_quad) => {
-                <FpQuad<E::FieldParam> as Instruction<F, D>>::memory_vec(fp_quad)
-            }
-            EdWardsMicroInstruction::FpMulConst(fp_mul_const) => {
-                <FpMulConst<E::FieldParam> as Instruction<F, D>>::memory_vec(fp_mul_const)
-            }
-            EdWardsMicroInstruction::Selector(selector) => {
-                <Selector<FieldRegister<E::FieldParam>> as Instruction<F, D>>::memory_vec(selector)
-            }
-        }
-    }
-
     fn witness_vec(&self) -> Vec<MemorySlice> {
         match self {
             EdWardsMicroInstruction::Den(den) => {

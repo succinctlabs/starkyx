@@ -43,12 +43,12 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     where
         L::Instruction: FromEdwardsAdd<E>,
     {
-        let x_num_result = self.alloc_local::<FieldRegister<E::FieldParam>>()?;
-        let y_num_result = self.alloc_local::<FieldRegister<E::FieldParam>>()?;
-        let px_py_result = self.alloc_local::<FieldRegister<E::FieldParam>>()?;
-        let qx_qy_result = self.alloc_local::<FieldRegister<E::FieldParam>>()?;
-        let all_xy_result = self.alloc_local::<FieldRegister<E::FieldParam>>()?;
-        let dxy_result = self.alloc_local::<FieldRegister<E::FieldParam>>()?;
+        let x_num_result = self.alloc::<FieldRegister<E::FieldParam>>()?;
+        let y_num_result = self.alloc::<FieldRegister<E::FieldParam>>()?;
+        let px_py_result = self.alloc::<FieldRegister<E::FieldParam>>()?;
+        let qx_qy_result = self.alloc::<FieldRegister<E::FieldParam>>()?;
+        let all_xy_result = self.alloc::<FieldRegister<E::FieldParam>>()?;
+        let dxy_result = self.alloc::<FieldRegister<E::FieldParam>>()?;
 
         let x_num_ins = self.fpquad(&P.x, &Q.y, &Q.x, &P.y, &x_num_result)?;
         let y_num_ins = self.fpquad(&P.y, &Q.y, &P.x, &Q.x, &y_num_result)?;

@@ -384,9 +384,9 @@ mod tests {
 
         let mut builder = ChipBuilder::<Test2ArithmeticExpression<F, D>, F, D>::new();
 
-        let input_1 = builder.alloc_local::<U16Register>().unwrap();
-        let input_2 = builder.alloc_local::<U16Register>().unwrap();
-        let output = builder.alloc_local::<U16Register>().unwrap();
+        let input_1 = builder.alloc::<U16Register>().unwrap();
+        let input_2 = builder.alloc::<U16Register>().unwrap();
+        let output = builder.alloc::<U16Register>().unwrap();
 
         builder.write_data(&input_1).unwrap();
         builder.write_data(&input_2).unwrap();

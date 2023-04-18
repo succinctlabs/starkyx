@@ -94,7 +94,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
 
     /// Allocates a new local register according to type `T` which implements the Register trait
     /// and returns it.
-    pub fn alloc_local<T: Register>(&mut self) -> Result<T> {
+    pub fn alloc<T: Register>(&mut self) -> Result<T> {
         let register = match T::CELL {
             Some(CellType::U16) => self.get_local_u16_memory(T::size_of())?,
             Some(CellType::Bit) => {
@@ -108,7 +108,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         Ok(T::from_register(register))
     }
 
-    pub fn alloc_local_array<T: Register>(&mut self, length: usize) -> Result<Array<T>> {
+    pub fn alloc_array<T: Register>(&mut self, length: usize) -> Result<Array<T>> {
         let size_of = T::size_of() * length;
         let register = match T::CELL {
             Some(CellType::U16) => self.get_local_u16_memory(size_of)?,
@@ -171,7 +171,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
 
     /// Registers a new instruction to the chip.
     pub fn insert_instruction(&mut self, instruction: L::Instruction) -> Result<()> {
-        let id = InsID::CustomInstruction(instruction.memory_vec());
+        let id = InsID::CustomInstruction(instruction.witness_vec());
         let existing_value = self.instruction_indices.insert(id, self.instructions.len());
         if existing_value.is_some() {
             return Err(anyhow!("Instruction label already exists"));
@@ -326,8 +326,8 @@ mod tests {
 
         let mut builder = ChipBuilder::<L, F, D>::new();
 
-        let x_0 = builder.alloc_local::<ElementRegister>().unwrap();
-        let x_1 = builder.alloc_local::<ElementRegister>().unwrap();
+        let x_0 = builder.alloc::<ElementRegister>().unwrap();
+        let x_1 = builder.alloc::<ElementRegister>().unwrap();
         builder.write_data(&x_0).unwrap();
         builder.write_data(&x_1).unwrap();
 

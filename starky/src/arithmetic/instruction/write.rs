@@ -11,10 +11,6 @@ impl WriteInstruction {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for WriteInstruction {
-    fn memory_vec(&self) -> Vec<MemorySlice> {
-        vec![self.0]
-    }
-
     fn witness_vec(&self) -> Vec<MemorySlice> {
         vec![self.0]
     }

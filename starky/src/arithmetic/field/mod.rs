@@ -106,17 +106,6 @@ impl<P: FieldParameters> From<FpQuad<P>> for FpInstruction<P> {
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
     for FpInstruction<P>
 {
-    fn memory_vec(&self) -> Vec<MemorySlice> {
-        match self {
-            FpInstruction::Add(add) => <FpAdd<P> as Instruction<F, D>>::memory_vec(add),
-            FpInstruction::Mul(mul) => <FpMul<P> as Instruction<F, D>>::memory_vec(mul),
-            FpInstruction::Quad(quad) => <FpQuad<P> as Instruction<F, D>>::memory_vec(quad),
-            FpInstruction::MulConst(mul_const) => {
-                <FpMulConst<P> as Instruction<F, D>>::memory_vec(mul_const)
-            }
-        }
-    }
-
     fn witness_vec(&self) -> Vec<MemorySlice> {
         match self {
             FpInstruction::Add(add) => <FpAdd<P> as Instruction<F, D>>::witness_vec(add),
@@ -247,11 +236,11 @@ mod tests {
         // build the stark
         let mut builder = ChipBuilder::<FpInstructionTest, F, D>::new();
 
-        let a = builder.alloc_local::<Fp>().unwrap();
-        let b = builder.alloc_local::<Fp>().unwrap();
-        let c = builder.alloc_local::<Fp>().unwrap();
-        let d = builder.alloc_local::<Fp>().unwrap();
-        let result = builder.alloc_local::<Fp>().unwrap();
+        let a = builder.alloc::<Fp>().unwrap();
+        let b = builder.alloc::<Fp>().unwrap();
+        let c = builder.alloc::<Fp>().unwrap();
+        let d = builder.alloc::<Fp>().unwrap();
+        let result = builder.alloc::<Fp>().unwrap();
 
         let quad = builder.fpquad(&a, &b, &c, &d, &result).unwrap();
         builder.write_data(&a).unwrap();
