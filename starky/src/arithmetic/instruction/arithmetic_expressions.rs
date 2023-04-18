@@ -272,9 +272,9 @@ mod tests {
 
         let mut builder = ChipBuilder::<TestArithmeticExpression<F, D>, F, D>::new();
 
-        let input_1 = builder.get_local_memory(1).unwrap();
-        let input_2 = builder.get_local_memory(1).unwrap();
-        let output = builder.get_local_memory(1).unwrap();
+        let input_1 = builder.get_local_memory(1);
+        let input_2 = builder.get_local_memory(1);
+        let output = builder.get_local_memory(1);
 
         builder.write_raw_register(&input_1).unwrap();
         builder.write_raw_register(&input_2).unwrap();
@@ -384,9 +384,9 @@ mod tests {
 
         let mut builder = ChipBuilder::<Test2ArithmeticExpression<F, D>, F, D>::new();
 
-        let input_1 = builder.alloc::<U16Register>().unwrap();
-        let input_2 = builder.alloc::<U16Register>().unwrap();
-        let output = builder.alloc::<U16Register>().unwrap();
+        let input_1 = builder.alloc::<U16Register>();
+        let input_2 = builder.alloc::<U16Register>();
+        let output = builder.alloc::<U16Register>();
 
         builder.write_data(&input_1).unwrap();
         builder.write_data(&input_2).unwrap();

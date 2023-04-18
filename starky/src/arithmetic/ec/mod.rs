@@ -53,10 +53,10 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         &mut self,
     ) -> Result<AffinePointRegister<E>> {
         let x = FieldRegister::<E::FieldParam>::from_register(
-            self.get_local_memory(E::FieldParam::NB_LIMBS).unwrap(),
+            self.get_local_memory(E::FieldParam::NB_LIMBS),
         );
         let y = FieldRegister::<E::FieldParam>::from_register(
-            self.get_local_memory(E::FieldParam::NB_LIMBS).unwrap(),
+            self.get_local_memory(E::FieldParam::NB_LIMBS),
         );
         Ok(AffinePointRegister::<E>::from_field_registers(x, y))
     }
@@ -68,8 +68,8 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     pub fn alloc_local_ec_point<E: EllipticCurveParameters>(
         &mut self,
     ) -> Result<AffinePointRegister<E>> {
-        let x = self.alloc::<FieldRegister<E::FieldParam>>()?;
-        let y = self.alloc::<FieldRegister<E::FieldParam>>()?;
+        let x = self.alloc::<FieldRegister<E::FieldParam>>();
+        let y = self.alloc::<FieldRegister<E::FieldParam>>();
         Ok(AffinePointRegister { x, y })
     }
 

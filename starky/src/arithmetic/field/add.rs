@@ -11,7 +11,7 @@ use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
 use crate::arithmetic::register::{
-    Array, FieldRegister, MemorySlice, RegisterSerializable, U16Register,
+    FieldRegister, MemorySlice, RegisterArray, RegisterSerializable, U16Register,
 };
 use crate::arithmetic::trace::TraceHandle;
 use crate::arithmetic::utils::{extract_witness_and_shift, split_digits, to_field_iter};
@@ -23,8 +23,8 @@ pub struct FpAdd<P: FieldParameters> {
     b: FieldRegister<P>,
     result: FieldRegister<P>,
     carry: FieldRegister<P>,
-    witness_low: Array<U16Register>,
-    witness_high: Array<U16Register>,
+    witness_low: RegisterArray<U16Register>,
+    witness_high: RegisterArray<U16Register>,
 }
 
 impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
@@ -37,13 +37,9 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     where
         L::Instruction: From<FpAdd<P>>,
     {
-        let carry = self.alloc::<FieldRegister<P>>().unwrap();
-        let witness_low = self
-            .alloc_array::<U16Register>(P::NB_WITNESS_LIMBS)
-            .unwrap();
-        let witness_high = self
-            .alloc_array::<U16Register>(P::NB_WITNESS_LIMBS)
-            .unwrap();
+        let carry = self.alloc::<FieldRegister<P>>();
+        let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
         let instr = FpAdd {
             a: *a,
             b: *b,
@@ -289,9 +285,9 @@ mod tests {
         // build the stark
         let mut builder = ChipBuilder::<FpAddTest, F, D>::new();
 
-        let a = builder.alloc::<Fp>().unwrap();
-        let b = builder.alloc::<Fp>().unwrap();
-        let result = builder.alloc::<Fp>().unwrap();
+        let a = builder.alloc::<Fp>();
+        let b = builder.alloc::<Fp>();
+        let result = builder.alloc::<Fp>();
 
         //let ab = FMul::new(a, b, result);
         //builder.insert_instruction(ab).unwrap();

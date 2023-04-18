@@ -14,7 +14,7 @@ use super::chip::{Chip, ChipParameters};
 use super::instruction::arithmetic_expressions::ArithmeticExpression;
 use super::instruction::write::WriteInstruction;
 use super::instruction::{EqualityConstraint, Instruction};
-use super::register::{Array, CellType, MemorySlice, Register, RegisterSerializable};
+use super::register::{CellType, MemorySlice, Register, RegisterArray, RegisterSerializable};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub enum InsID {
@@ -61,80 +61,80 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 
     /// Allocates `size` cells/columns worth of memory and returns it as a `MemorySlice`.
-    pub fn get_local_memory(&mut self, size: usize) -> Result<MemorySlice> {
+    pub fn get_local_memory(&mut self, size: usize) -> MemorySlice {
         let register = MemorySlice::Local(self.local_index, size);
         self.local_index += size;
-        Ok(register)
+        register
     }
 
     /// Allocates `size` cells/columns worth of memory and returns it as a `MemorySlice` on the
     /// next row.
-    fn get_next_memory(&mut self, size: usize) -> Result<MemorySlice> {
+    fn get_next_memory(&mut self, size: usize) -> MemorySlice {
         let register = MemorySlice::Next(self.next_index, size);
         self.next_index += size;
-        Ok(register)
+        register
     }
 
     /// Allocates `size` cells/columns worth of memory and returns it as a `MemorySlice`. Each
     /// cell will be range checked using the lookup table to be in the range `[0, 2^16]`.
-    fn get_local_u16_memory(&mut self, size: usize) -> Result<MemorySlice> {
+    fn get_local_u16_memory(&mut self, size: usize) -> MemorySlice {
         let register = MemorySlice::Local(self.local_arithmetic_index, size);
         self.local_arithmetic_index += size;
-        Ok(register)
+        register
     }
 
     /// Allocates `size` cells/columns worth of memory and returns it as a `MemorySlice` in the
     /// next row. Each cell will be range checked using the lookup table to be in the range
     /// `[0, 2^16]`.
-    fn get_next_u16_memory(&mut self, size: usize) -> Result<MemorySlice> {
+    fn get_next_u16_memory(&mut self, size: usize) -> MemorySlice {
         let register = MemorySlice::Next(self.next_arithmetic_index, size);
         self.local_arithmetic_index += size;
-        Ok(register)
+        register
     }
 
     /// Allocates a new local register according to type `T` which implements the Register trait
     /// and returns it.
-    pub fn alloc<T: Register>(&mut self) -> Result<T> {
+    pub fn alloc<T: Register>(&mut self) -> T {
         let register = match T::CELL {
-            Some(CellType::U16) => self.get_local_u16_memory(T::size_of())?,
+            Some(CellType::U16) => self.get_local_u16_memory(T::size_of()),
             Some(CellType::Bit) => {
-                let reg = self.get_local_memory(T::size_of())?;
+                let reg = self.get_local_memory(T::size_of());
                 let consr = EqualityConstraint::<F, D>::Bool(ConstraintBool(reg));
                 self.constraints.push(consr);
                 reg
             }
-            None => self.get_local_memory(T::size_of())?,
+            None => self.get_local_memory(T::size_of()),
         };
-        Ok(T::from_register(register))
+        T::from_register(register)
     }
 
-    pub fn alloc_array<T: Register>(&mut self, length: usize) -> Result<Array<T>> {
+    pub fn alloc_array<T: Register>(&mut self, length: usize) -> RegisterArray<T> {
         let size_of = T::size_of() * length;
         let register = match T::CELL {
-            Some(CellType::U16) => self.get_local_u16_memory(size_of)?,
+            Some(CellType::U16) => self.get_local_u16_memory(size_of),
             Some(CellType::Bit) => {
-                let reg = self.get_local_memory(size_of)?;
+                let reg = self.get_local_memory(size_of);
                 let consr = EqualityConstraint::Bool(ConstraintBool(reg));
                 self.constraints.push(consr);
                 reg
             }
-            None => self.get_local_memory(size_of)?,
+            None => self.get_local_memory(size_of),
         };
-        Ok(Array::<T>::from_register_unsafe(register))
+        RegisterArray::<T>::from_register_unsafe(register)
     }
 
     /// Allocates a new register on the next row according to type `T` which implements the Register
     /// trait and returns it.
     pub fn alloc_next<T: Register>(&mut self) -> Result<T> {
         let register = match T::CELL {
-            Some(CellType::U16) => self.get_next_u16_memory(T::size_of())?,
+            Some(CellType::U16) => self.get_next_u16_memory(T::size_of()),
             Some(CellType::Bit) => {
-                let reg = self.get_next_memory(T::size_of())?;
+                let reg = self.get_next_memory(T::size_of());
                 let consr = EqualityConstraint::<F, D>::Bool(ConstraintBool(reg));
                 self.constraints.push(consr);
                 reg
             }
-            None => self.get_next_memory(T::size_of())?,
+            None => self.get_next_memory(T::size_of()),
         };
         Ok(T::from_register(register))
     }
@@ -326,8 +326,8 @@ mod tests {
 
         let mut builder = ChipBuilder::<L, F, D>::new();
 
-        let x_0 = builder.alloc::<ElementRegister>().unwrap();
-        let x_1 = builder.alloc::<ElementRegister>().unwrap();
+        let x_0 = builder.alloc::<ElementRegister>();
+        let x_1 = builder.alloc::<ElementRegister>();
         builder.write_data(&x_0).unwrap();
         builder.write_data(&x_1).unwrap();
 

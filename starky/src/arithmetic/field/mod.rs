@@ -236,11 +236,11 @@ mod tests {
         // build the stark
         let mut builder = ChipBuilder::<FpInstructionTest, F, D>::new();
 
-        let a = builder.alloc::<Fp>().unwrap();
-        let b = builder.alloc::<Fp>().unwrap();
-        let c = builder.alloc::<Fp>().unwrap();
-        let d = builder.alloc::<Fp>().unwrap();
-        let result = builder.alloc::<Fp>().unwrap();
+        let a = builder.alloc::<Fp>();
+        let b = builder.alloc::<Fp>();
+        let c = builder.alloc::<Fp>();
+        let d = builder.alloc::<Fp>();
+        let result = builder.alloc::<Fp>();
 
         let quad = builder.fpquad(&a, &b, &c, &d, &result).unwrap();
         builder.write_data(&a).unwrap();

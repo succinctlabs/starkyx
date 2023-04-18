@@ -6,13 +6,13 @@ use crate::arithmetic::register::memory::MemorySlice;
 /// A helper struct for representing an array of registers. In particular, it makes it easier
 /// to access the memory slice as well as converting from a memory slice to the struct.
 #[derive(Debug, Clone, Copy)]
-pub struct Array<T: Register> {
+pub struct RegisterArray<T: Register> {
     register: MemorySlice,
     length: usize,
     _marker: PhantomData<T>,
 }
 
-impl<T: Register> RegisterSerializable for Array<T> {
+impl<T: Register> RegisterSerializable for RegisterArray<T> {
     const CELL: Option<CellType> = T::CELL;
 
     fn register(&self) -> &MemorySlice {
@@ -29,7 +29,7 @@ impl<T: Register> RegisterSerializable for Array<T> {
     }
 }
 
-impl<T: Register> Array<T> {
+impl<T: Register> RegisterArray<T> {
     pub fn len(&self) -> usize {
         self.length
     }

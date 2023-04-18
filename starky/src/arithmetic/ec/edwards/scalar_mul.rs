@@ -207,8 +207,8 @@ mod tests {
 
         let res = builder.alloc_unchecked_ec_point::<E>().unwrap();
         let temp = builder.alloc_unchecked_ec_point::<E>().unwrap();
-        let bit = builder.alloc::<BitRegister>().unwrap();
-        let counter = builder.alloc::<ElementRegister>().unwrap();
+        let bit = builder.alloc::<BitRegister>();
+        let counter = builder.alloc::<ElementRegister>();
 
         builder.write_data(&counter).unwrap();
 
@@ -371,8 +371,8 @@ mod tests {
 
         let res = builder.alloc_unchecked_ec_point::<E>().unwrap();
         let temp = builder.alloc_unchecked_ec_point::<E>().unwrap();
-        let bit = builder.alloc::<BitRegister>().unwrap();
-        let counter = builder.alloc::<ElementRegister>().unwrap();
+        let bit = builder.alloc::<BitRegister>();
+        let counter = builder.alloc::<ElementRegister>();
 
         builder.write_data(&counter).unwrap();
 

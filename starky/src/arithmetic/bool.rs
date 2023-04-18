@@ -203,12 +203,12 @@ mod tests {
 
         let mut builder = ChipBuilder::<BoolTest, F, D>::new();
 
-        let bit_one = builder.alloc::<BitRegister>().unwrap();
+        let bit_one = builder.alloc::<BitRegister>();
         builder.write_data(&bit_one).unwrap();
-        let bit_zero = builder.alloc::<BitRegister>().unwrap();
+        let bit_zero = builder.alloc::<BitRegister>();
         builder.write_data(&bit_zero).unwrap();
 
-        let dummy = builder.alloc::<BitRegister>().unwrap();
+        let dummy = builder.alloc::<BitRegister>();
         builder.write_data(&dummy).unwrap();
 
         let (chip, spec) = builder.build();
@@ -318,14 +318,14 @@ mod tests {
 
         let mut builder = ChipBuilder::<BoolTest, F, D>::new();
 
-        let bit = builder.alloc::<BitRegister>().unwrap();
+        let bit = builder.alloc::<BitRegister>();
         builder.write_data(&bit).unwrap();
 
-        let x = builder.alloc::<BitRegister>().unwrap();
+        let x = builder.alloc::<BitRegister>();
         builder.write_data(&x).unwrap();
-        let y = builder.alloc::<BitRegister>().unwrap();
+        let y = builder.alloc::<BitRegister>();
         builder.write_data(&y).unwrap();
-        let result = builder.alloc::<BitRegister>().unwrap();
+        let result = builder.alloc::<BitRegister>();
 
         let sel = builder.selector(&bit, &x, &y, &result).unwrap();
 
