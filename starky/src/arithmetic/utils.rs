@@ -45,54 +45,59 @@ pub fn field_limbs_to_biguint<F: RichField>(limbs: &[F]) -> BigUint {
 }
 
 #[inline]
-pub fn split_digits<F: Field>(
-    slice: &[u32],
-) -> (impl Iterator<Item = F> + '_, impl Iterator<Item = F> + '_) {
+pub fn split_u32_limbs_to_u16_limbs<F: RichField>(slice: &[F]) -> (Vec<F>, Vec<F>) {
     (
         slice
             .iter()
-            .map(|x| *x as u16)
-            .map(|x| F::from_canonical_u16(x)),
+            .map(|x| x.to_canonical_u64() as u16)
+            .map(|x| F::from_canonical_u16(x))
+            .collect(),
         slice
             .iter()
-            .map(|x| (*x >> 16) as u16)
-            .map(|x| F::from_canonical_u16(x)),
+            .map(|x| (x.to_canonical_u64() >> 16) as u16)
+            .map(|x| F::from_canonical_u16(x))
+            .collect(),
     )
 }
 
 #[inline]
-pub fn extract_witness_and_shift(vanishing_poly: &Polynomial<i64>, offset: u32) -> Vec<u32> {
-    //sanity check
-    let eval_vanishing = vanishing_poly
+pub fn compute_root_quotient_and_shift<F: RichField>(
+    p_vanishing: &Polynomial<F>,
+    offset: usize,
+) -> Vec<F> {
+    // Evaluate the vanishing polynomial at x = 2^16.
+    let p_vanishing_eval = p_vanishing
         .as_slice()
         .iter()
         .enumerate()
-        .map(|(i, x)| BigInt::from(2u32).pow(16 * i as u32) * x)
-        .sum::<BigInt>();
-    debug_assert_eq!(eval_vanishing, BigInt::from(0));
+        .map(|(i, x)| F::from_noncanonical_biguint(BigUint::from(2u32).pow(16 * i as u32)) * *x)
+        .sum::<F>();
+    debug_assert_eq!(p_vanishing_eval, F::ZERO);
 
-    // extract witness from vanishing polynomial
-    let limb = 2u32.pow(16) as i64;
-    let witness_poly = vanishing_poly.root_quotient(limb);
-    assert_eq!(witness_poly.degree(), vanishing_poly.degree() - 1);
+    // Compute the witness polynomial by witness(x) = vanishing(x) / (x - 2^16).
+    let root = F::from_canonical_u32(2u32.pow(16));
+    let p_quotient = p_vanishing.root_quotient(root);
+    debug_assert_eq!(p_quotient.degree(), p_vanishing.degree() - 1);
 
-    for c in witness_poly.as_slice().iter() {
-        debug_assert!(c.abs() < offset as i64);
+    // Sanity Check #1: For all i, |w_i| < 2^20 to prevent overflows.
+    let offset_u64 = offset as u64;
+    for c in p_quotient.as_slice().iter() {
+        debug_assert!(c.neg().to_canonical_u64() < offset_u64 || c.to_canonical_u64() < offset_u64);
     }
 
-    // Sanity check
+    // Sanity Check #2: w(x) * (x - 2^16) = vanishing(x).
+    let x_minus_root = Polynomial::<F>::new_from_slice(&[-root, F::ONE]);
     debug_assert_eq!(
-        (&witness_poly * &(Polynomial::<i64>::new_from_slice(&[-limb, 1]))).as_slice(),
-        vanishing_poly.as_slice()
+        (&p_quotient * &x_minus_root).as_slice(),
+        p_vanishing.as_slice()
     );
 
     // Shifting the witness polynomial to make it positive
-    witness_poly
+    p_quotient
         .coefficients()
         .iter()
-        .map(|x| x + offset as i64)
-        .map(|x| u32::try_from(x).unwrap())
-        .collect()
+        .map(|x| *x + F::from_canonical_u64(offset_u64))
+        .collect::<Vec<F>>()
 }
 
 #[inline]

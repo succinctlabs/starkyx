@@ -11,10 +11,14 @@ use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::field::modulus_field_iter;
 use crate::arithmetic::instruction::Instruction;
-use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
+use crate::arithmetic::polynomial::{
+    to_u16_le_limbs_polynomial, Polynomial, PolynomialGadget, PolynomialOps,
+};
 use crate::arithmetic::register::{ArrayRegister, MemorySlice, RegisterSerializable, U16Register};
 use crate::arithmetic::trace::TraceWriter;
-use crate::arithmetic::utils::{extract_witness_and_shift, split_digits, to_field_iter};
+use crate::arithmetic::utils::{
+    compute_root_quotient_and_shift, split_u32_limbs_to_u16_limbs, to_field_iter,
+};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Debug, Clone, Copy)]
@@ -192,16 +196,15 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
     }
 }
 
-impl<P: FieldParameters> Den<P> {
-    /// Trace row for fp_mul operation
-    ///
-    /// Returns a vector
-    /// [Input[2 * N_LIMBS], output[N_LIMBS], carry[NUM_CARRY_LIMBS], Witness_low[NUM_WITNESS_LIMBS], Witness_high[NUM_WITNESS_LIMBS]]
-    pub fn trace_row<F: RichField + Extendable<D>, const D: usize>(
+impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
+    pub fn write_ed_den<P: FieldParameters>(
+        &self,
+        row_index: usize,
         a: &BigUint,
         b: &BigUint,
         sign: bool,
-    ) -> (Vec<F>, BigUint) {
+        instruction: Den<P>,
+    ) -> Result<BigUint> {
         let p = P::modulus();
 
         let minus_b_int = &p - b;
@@ -226,12 +229,11 @@ impl<P: FieldParameters> Den<P> {
         debug_assert_eq!(&carry * &p, &equation_lhs - &equation_rhs);
 
         // make polynomial limbs
-        let p_a = Polynomial::<i64>::from_biguint_num(a, 16, P::NB_LIMBS);
-        let p_b = Polynomial::<i64>::from_biguint_num(b, 16, P::NB_LIMBS);
-        let p_p = Polynomial::<i64>::from_biguint_num(&p, 16, P::NB_LIMBS);
-
-        let p_result = Polynomial::<i64>::from_biguint_num(&result, 16, P::NB_LIMBS);
-        let p_carry = Polynomial::<i64>::from_biguint_num(&carry, 16, P::NB_LIMBS);
+        let p_a = to_u16_le_limbs_polynomial::<F, P>(a);
+        let p_b = to_u16_le_limbs_polynomial::<F, P>(b);
+        let p_p = to_u16_le_limbs_polynomial::<F, P>(&p);
+        let p_result = to_u16_le_limbs_polynomial::<F, P>(&result);
+        let p_carry = to_u16_le_limbs_polynomial::<F, P>(&carry);
 
         // Compute the vanishing polynomial
         let vanishing_poly = if sign {
@@ -242,32 +244,20 @@ impl<P: FieldParameters> Den<P> {
         debug_assert_eq!(vanishing_poly.degree(), P::NB_WITNESS_LIMBS);
 
         // Compute the witness
-        let witness_shifted = extract_witness_and_shift(&vanishing_poly, P::WITNESS_OFFSET as u32);
-        let (witness_low, witness_high) = split_digits::<F>(&witness_shifted);
+        let p_witness_shifted = compute_root_quotient_and_shift(&vanishing_poly, P::WITNESS_OFFSET);
+        let (p_witness_low, p_witness_high) = split_u32_limbs_to_u16_limbs::<F>(&p_witness_shifted);
 
-        let mut row = Vec::new();
-        // output
-        row.extend(to_field_iter::<F>(&p_result));
-        // carry and witness
-        row.extend(to_field_iter::<F>(&p_carry));
-        row.extend(witness_low);
-        row.extend(witness_high);
-
-        (row, result)
-    }
-}
-
-impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
-    pub fn write_ed_den<P: FieldParameters>(
-        &self,
-        row_index: usize,
-        a_int: &BigUint,
-        b_int: &BigUint,
-        sign: bool,
-        instruction: Den<P>,
-    ) -> Result<BigUint> {
-        let (row, result) = Den::<P>::trace_row::<F, D>(a_int, b_int, sign);
-        self.write(row_index, instruction, row)?;
+        // Row must match layout of instruction.
+        self.write_to_layout(
+            row_index,
+            instruction,
+            vec![
+                p_result.coefficients,
+                p_carry.coefficients,
+                p_witness_low,
+                p_witness_high,
+            ],
+        )?;
         Ok(result)
     }
 }

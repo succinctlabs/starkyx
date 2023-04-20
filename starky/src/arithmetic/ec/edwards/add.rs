@@ -4,7 +4,7 @@ use super::den::Den;
 use super::*;
 use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::ChipParameters;
-use crate::arithmetic::field::{FpMul, FpMulConst, FpQuad};
+use crate::arithmetic::field::{FpMulConstInstruction, FpMulInstruction, FpQuadInstruction};
 use crate::arithmetic::trace::TraceWriter;
 
 #[derive(Debug, Clone, Copy)]
@@ -14,20 +14,20 @@ pub struct EcAddData<E: EdwardsParameters> {
     P: AffinePointRegister<E>,
     Q: AffinePointRegister<E>,
     R: AffinePointRegister<E>,
-    XNUM: FpQuad<E::FieldParam>,
-    YNUM: FpQuad<E::FieldParam>,
-    PXPY: FpMul<E::FieldParam>,
-    QXQY: FpMul<E::FieldParam>,
-    PXPYQXQY: FpMul<E::FieldParam>,
-    DXY: FpMulConst<E::FieldParam>,
+    XNUM: FpQuadInstruction<E::FieldParam>,
+    YNUM: FpQuadInstruction<E::FieldParam>,
+    PXPY: FpMulInstruction<E::FieldParam>,
+    QXQY: FpMulInstruction<E::FieldParam>,
+    PXPYQXQY: FpMulInstruction<E::FieldParam>,
+    DXY: FpMulConstInstruction<E::FieldParam>,
     XDEN: Den<E::FieldParam>,
     YDEN: Den<E::FieldParam>,
 }
 
 pub trait FromEdwardsAdd<E: EdwardsParameters>:
-    From<FpMul<E::FieldParam>>
-    + From<FpQuad<E::FieldParam>>
-    + From<FpMulConst<E::FieldParam>>
+    From<FpMulInstruction<E::FieldParam>>
+    + From<FpQuadInstruction<E::FieldParam>>
+    + From<FpMulConstInstruction<E::FieldParam>>
     + From<Den<E::FieldParam>>
 {
 }

@@ -9,14 +9,16 @@ use super::*;
 use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::instruction::Instruction;
-use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
+use crate::arithmetic::polynomial::{
+    to_u16_le_limbs_polynomial, Polynomial, PolynomialGadget, PolynomialOps,
+};
 use crate::arithmetic::register::{ArrayRegister, MemorySlice, RegisterSerializable, U16Register};
 use crate::arithmetic::trace::TraceWriter;
-use crate::arithmetic::utils::{extract_witness_and_shift, split_digits, to_field_iter};
+use crate::arithmetic::utils::{compute_root_quotient_and_shift, split_u32_limbs_to_u16_limbs};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Debug, Clone, Copy)]
-pub struct FpMulConst<P: FieldParameters> {
+pub struct FpMulConstInstruction<P: FieldParameters> {
     a: FieldRegister<P>,
     c: [u16; MAX_NB_LIMBS],
     result: FieldRegister<P>,
@@ -30,15 +32,15 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Star
         &mut self,
         a: &FieldRegister<P>,
         c: [u16; MAX_NB_LIMBS],
-    ) -> Result<(FieldRegister<P>, FpMulConst<P>)>
+    ) -> Result<(FieldRegister<P>, FpMulConstInstruction<P>)>
     where
-        L::Instruction: From<FpMulConst<P>>,
+        L::Instruction: From<FpMulConstInstruction<P>>,
     {
         let result = self.alloc::<FieldRegister<P>>();
         let carry = self.alloc::<FieldRegister<P>>();
         let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
         let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
-        let instr = FpMulConst {
+        let instr = FpMulConstInstruction {
             a: *a,
             c,
             result,
@@ -51,8 +53,56 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Star
     }
 }
 
+impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
+    pub fn write_fpmul_const<P: FieldParameters>(
+        &self,
+        row_index: usize,
+        a: &BigUint,
+        instruction: FpMulConstInstruction<P>,
+    ) -> Result<BigUint> {
+        let modulus = P::modulus();
+        let mut c = BigUint::zero();
+        for (i, limb) in instruction.c.iter().enumerate() {
+            c += BigUint::from(*limb) << (16 * i);
+        }
+        let result = (a * &c) % &modulus;
+        let carry = (a * &c - &result) / &modulus;
+        debug_assert!(result < modulus);
+        debug_assert!(carry < modulus);
+        debug_assert_eq!(&carry * &modulus, a * &c - &result);
+
+        // Make little endian polynomial limbs.
+        let p_a = to_u16_le_limbs_polynomial::<F, P>(a);
+        let p_c = to_u16_le_limbs_polynomial::<F, P>(&c);
+        let p_modulus = to_u16_le_limbs_polynomial::<F, P>(&modulus);
+        let p_result = to_u16_le_limbs_polynomial::<F, P>(&result);
+        let p_carry = to_u16_le_limbs_polynomial::<F, P>(&carry);
+
+        // Compute the vanishing polynomial
+        let vanishing_poly = &p_a * &p_c - &p_result - &p_carry * &p_modulus;
+        debug_assert_eq!(vanishing_poly.degree(), P::NB_WITNESS_LIMBS);
+
+        // Compute the witness
+        let p_witness_shifted = compute_root_quotient_and_shift(&vanishing_poly, P::WITNESS_OFFSET);
+        let (p_witness_low, p_witness_high) = split_u32_limbs_to_u16_limbs::<F>(&p_witness_shifted);
+
+        // Row must match layout of instruction.
+        self.write_to_layout(
+            row_index,
+            instruction,
+            vec![
+                p_result.coefficients,
+                p_carry.coefficients,
+                p_witness_low,
+                p_witness_high,
+            ],
+        )?;
+        Ok(result)
+    }
+}
+
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
-    for FpMulConst<P>
+    for FpMulConstInstruction<P>
 {
     fn witness_layout(&self) -> Vec<MemorySlice> {
         vec![
@@ -179,68 +229,6 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
     }
 }
 
-impl<P: FieldParameters> FpMulConst<P> {
-    /// Trace row for fp_mul operation
-    ///
-    /// Returns a vector
-    /// [Input[2 * N_LIMBS], output[N_LIMBS], carry[NUM_CARRY_LIMBS], Witness_low[NUM_WITNESS_LIMBS], Witness_high[NUM_WITNESS_LIMBS]]
-    pub fn trace_row<F: RichField + Extendable<D>, const D: usize>(
-        &self,
-        a: &BigUint,
-    ) -> (Vec<F>, BigUint) {
-        let p = P::modulus();
-        let mut c = BigUint::zero();
-        for (i, limb) in self.c.iter().enumerate() {
-            c += BigUint::from(*limb) << (16 * i);
-        }
-        let result = (a * &c) % &p;
-        debug_assert!(result < p);
-        let carry = (a * &c - &result) / &p;
-        debug_assert!(carry < p);
-        debug_assert_eq!(&carry * &p, a * &c - &result);
-
-        // make polynomial limbs
-        let p_a = Polynomial::<i64>::from_biguint_num(a, 16, P::NB_LIMBS);
-        let p_c = Polynomial::<i64>::from_biguint_num(&c, 16, P::NB_LIMBS);
-        let p_p = Polynomial::<i64>::from_biguint_num(&p, 16, P::NB_LIMBS);
-
-        let p_result = Polynomial::<i64>::from_biguint_num(&result, 16, P::NB_LIMBS);
-        let p_carry = Polynomial::<i64>::from_biguint_num(&carry, 16, P::NB_LIMBS);
-
-        // Compute the vanishing polynomial
-        let vanishing_poly = &p_a * &p_c - &p_result - &p_carry * &p_p;
-        debug_assert_eq!(vanishing_poly.degree(), Self::NUM_WITNESS_LOW_LIMBS);
-
-        // Compute the witness
-        let witness_shifted = extract_witness_and_shift(&vanishing_poly, P::WITNESS_OFFSET as u32);
-        let (witness_low, witness_high) = split_digits::<F>(&witness_shifted);
-
-        let mut row = Vec::with_capacity(Self::num_mul_const_columns());
-
-        // output
-        row.extend(to_field_iter::<F>(&p_result));
-        // carry and witness
-        row.extend(to_field_iter::<F>(&p_carry));
-        row.extend(witness_low);
-        row.extend(witness_high);
-
-        (row, result)
-    }
-}
-
-impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
-    pub fn write_fpmul_const<P: FieldParameters>(
-        &self,
-        row_index: usize,
-        a_int: &BigUint,
-        instruction: FpMulConst<P>,
-    ) -> Result<BigUint> {
-        let (row, result) = instruction.trace_row::<F, D>(a_int);
-        self.write(row_index, instruction, row)?;
-        Ok(result)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
@@ -271,17 +259,17 @@ mod tests {
         const NUM_ARITHMETIC_COLUMNS: usize = 124;
         const NUM_FREE_COLUMNS: usize = 0;
 
-        type Instruction = FpMul<Fp25519Param>;
+        type Instruction = FpMulInstruction<Fp25519Param>;
     }
 
     #[derive(Clone, Debug, Copy)]
     struct FpMulConstTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for FpMulConstTest {
-        const NUM_ARITHMETIC_COLUMNS: usize = FpMulConst::<Fp25519Param>::num_mul_const_columns();
+        const NUM_ARITHMETIC_COLUMNS: usize = 108;
         const NUM_FREE_COLUMNS: usize = 0;
 
-        type Instruction = FpMulConst<Fp25519Param>;
+        type Instruction = FpMulConstInstruction<Fp25519Param>;
     }
 
     #[test]

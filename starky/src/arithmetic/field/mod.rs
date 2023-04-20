@@ -11,9 +11,9 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::witness;
 
 pub use self::add::FpAddInstruction;
-pub use self::mul::FpMul;
-pub use self::mul_const::FpMulConst;
-pub use self::quad::FpQuad;
+pub use self::mul::FpMulInstruction;
+pub use self::mul_const::FpMulConstInstruction;
+pub use self::quad::FpQuadInstruction;
 use super::instruction::Instruction;
 use super::polynomial::Polynomial;
 use super::register::FieldRegister;
@@ -24,6 +24,7 @@ pub const MAX_NB_LIMBS: usize = 32;
 pub const LIMB: u32 = 2u32.pow(16);
 
 pub trait FieldParameters: Send + Sync + Copy + 'static {
+    const NB_BITS_PER_LIMB: usize;
     const NB_LIMBS: usize;
     const NB_WITNESS_LIMBS: usize;
     const MODULUS: [u16; MAX_NB_LIMBS];
@@ -64,6 +65,7 @@ pub struct Fp25519Param;
 pub type Fp25519 = FieldRegister<Fp25519Param>;
 
 impl FieldParameters for Fp25519Param {
+    const NB_BITS_PER_LIMB: usize = 16;
     const NB_LIMBS: usize = 16;
     const NB_WITNESS_LIMBS: usize = 2 * Self::NB_LIMBS - 2;
     const MODULUS: [u16; MAX_NB_LIMBS] = [
@@ -80,9 +82,9 @@ impl FieldParameters for Fp25519Param {
 #[derive(Debug, Clone)]
 pub enum FpInstruction<P: FieldParameters> {
     Add(FpAddInstruction<P>),
-    Mul(FpMul<P>),
-    Quad(FpQuad<P>),
-    MulConst(FpMulConst<P>),
+    Mul(FpMulInstruction<P>),
+    Quad(FpQuadInstruction<P>),
+    MulConst(FpMulConstInstruction<P>),
 }
 
 impl<P: FieldParameters> From<FpAddInstruction<P>> for FpInstruction<P> {
@@ -91,14 +93,14 @@ impl<P: FieldParameters> From<FpAddInstruction<P>> for FpInstruction<P> {
     }
 }
 
-impl<P: FieldParameters> From<FpMul<P>> for FpInstruction<P> {
-    fn from(mul: FpMul<P>) -> Self {
+impl<P: FieldParameters> From<FpMulInstruction<P>> for FpInstruction<P> {
+    fn from(mul: FpMulInstruction<P>) -> Self {
         Self::Mul(mul)
     }
 }
 
-impl<P: FieldParameters> From<FpQuad<P>> for FpInstruction<P> {
-    fn from(quad: FpQuad<P>) -> Self {
+impl<P: FieldParameters> From<FpQuadInstruction<P>> for FpInstruction<P> {
+    fn from(quad: FpQuadInstruction<P>) -> Self {
         Self::Quad(quad)
     }
 }
@@ -111,10 +113,14 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             FpInstruction::Add(add) => {
                 <FpAddInstruction<P> as Instruction<F, D>>::witness_layout(add)
             }
-            FpInstruction::Mul(mul) => <FpMul<P> as Instruction<F, D>>::witness_layout(mul),
-            FpInstruction::Quad(quad) => <FpQuad<P> as Instruction<F, D>>::witness_layout(quad),
+            FpInstruction::Mul(mul) => {
+                <FpMulInstruction<P> as Instruction<F, D>>::witness_layout(mul)
+            }
+            FpInstruction::Quad(quad) => {
+                <FpQuadInstruction<P> as Instruction<F, D>>::witness_layout(quad)
+            }
             FpInstruction::MulConst(mul_const) => {
-                <FpMulConst<P> as Instruction<F, D>>::witness_layout(mul_const)
+                <FpMulConstInstruction<P> as Instruction<F, D>>::witness_layout(mul_const)
             }
         }
     }
@@ -142,17 +148,21 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
                 )
             }
             FpInstruction::Mul(mul) => {
-                <FpMul<P> as Instruction<F, D>>::packed_generic_constraints(mul, vars, yield_constr)
+                <FpMulInstruction<P> as Instruction<F, D>>::packed_generic_constraints(
+                    mul,
+                    vars,
+                    yield_constr,
+                )
             }
             FpInstruction::Quad(quad) => {
-                <FpQuad<P> as Instruction<F, D>>::packed_generic_constraints(
+                <FpQuadInstruction<P> as Instruction<F, D>>::packed_generic_constraints(
                     quad,
                     vars,
                     yield_constr,
                 )
             }
             FpInstruction::MulConst(mul_const) => {
-                <FpMulConst<P> as Instruction<F, D>>::packed_generic_constraints(
+                <FpMulConstInstruction<P> as Instruction<F, D>>::packed_generic_constraints(
                     mul_const,
                     vars,
                     yield_constr,
@@ -176,20 +186,24 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
                     yield_constr,
                 )
             }
-            FpInstruction::Mul(mul) => <FpMul<P> as Instruction<F, D>>::ext_circuit_constraints(
-                mul,
-                builder,
-                vars,
-                yield_constr,
-            ),
-            FpInstruction::Quad(quad) => <FpQuad<P> as Instruction<F, D>>::ext_circuit_constraints(
-                quad,
-                builder,
-                vars,
-                yield_constr,
-            ),
+            FpInstruction::Mul(mul) => {
+                <FpMulInstruction<P> as Instruction<F, D>>::ext_circuit_constraints(
+                    mul,
+                    builder,
+                    vars,
+                    yield_constr,
+                )
+            }
+            FpInstruction::Quad(quad) => {
+                <FpQuadInstruction<P> as Instruction<F, D>>::ext_circuit_constraints(
+                    quad,
+                    builder,
+                    vars,
+                    yield_constr,
+                )
+            }
             FpInstruction::MulConst(mul_const) => {
-                <FpMulConst<P> as Instruction<F, D>>::ext_circuit_constraints(
+                <FpMulConstInstruction<P> as Instruction<F, D>>::ext_circuit_constraints(
                     mul_const,
                     builder,
                     vars,
