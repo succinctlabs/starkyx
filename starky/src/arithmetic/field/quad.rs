@@ -6,12 +6,12 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::*;
-use crate::arithmetic::builder::ChipBuilder;
+use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
-use crate::arithmetic::register::{MemorySlice, RegisterArray, RegisterSerializable, U16Register};
-use crate::arithmetic::trace::TraceHandle;
+use crate::arithmetic::register::{ArrayRegister, MemorySlice, RegisterSerializable, U16Register};
+use crate::arithmetic::trace::TraceWriter;
 use crate::arithmetic::utils::{extract_witness_and_shift, split_digits, to_field_iter};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -25,22 +25,22 @@ pub struct FpQuad<P: FieldParameters> {
     d: FieldRegister<P>,
     result: FieldRegister<P>,
     carry: FieldRegister<P>,
-    witness_low: RegisterArray<U16Register>,
-    witness_high: RegisterArray<U16Register>,
+    witness_low: ArrayRegister<U16Register>,
+    witness_high: ArrayRegister<U16Register>,
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
+impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     pub fn fpquad<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,
         b: &FieldRegister<P>,
         c: &FieldRegister<P>,
         d: &FieldRegister<P>,
-        result: &FieldRegister<P>,
-    ) -> Result<FpQuad<P>>
+    ) -> Result<(FieldRegister<P>, FpQuad<P>)>
     where
         L::Instruction: From<FpQuad<P>>,
     {
+        let result = self.alloc::<FieldRegister<P>>();
         let carry = self.alloc::<FieldRegister<P>>();
         let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
         let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
@@ -49,20 +49,20 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
             b: *b,
             c: *c,
             d: *d,
-            result: *result,
+            result,
             carry,
             witness_low,
             witness_high,
         };
         self.insert_instruction(instr.into())?;
-        Ok(instr)
+        Ok((result, instr))
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
     for FpQuad<P>
 {
-    fn layout(&self) -> Vec<MemorySlice> {
+    fn witness_layout(&self) -> Vec<MemorySlice> {
         vec![
             *self.result.register(),
             *self.carry.register(),
@@ -191,7 +191,7 @@ impl<P: FieldParameters> FpQuad<P> {
         c: &BigUint,
         d: &BigUint,
     ) -> (Vec<F>, BigUint) {
-        let p = P::modulus_biguint();
+        let p = P::modulus();
         let result = (a * b + c * d) % &p;
         debug_assert!(result < p);
         let carry = (a * b + c * d - &result) / &p;
@@ -229,7 +229,7 @@ impl<P: FieldParameters> FpQuad<P> {
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
     pub fn write_fpquad<P: FieldParameters>(
         &self,
         row_index: usize,
@@ -256,7 +256,7 @@ mod tests {
     use rand::thread_rng;
 
     use super::*;
-    use crate::arithmetic::builder::ChipBuilder;
+    use crate::arithmetic::builder::StarkBuilder;
     use crate::arithmetic::chip::{ChipParameters, TestStark};
     use crate::arithmetic::field::Fp25519Param;
     use crate::arithmetic::trace::trace;
@@ -286,15 +286,14 @@ mod tests {
         type S = TestStark<FpQuadTest, F, D>;
 
         // build the stark
-        let mut builder = ChipBuilder::<FpQuadTest, F, D>::new();
+        let mut builder = StarkBuilder::<FpQuadTest, F, D>::new();
 
         let a = builder.alloc::<Fp>();
         let b = builder.alloc::<Fp>();
         let c = builder.alloc::<Fp>();
         let d = builder.alloc::<Fp>();
-        let result = builder.alloc::<Fp>();
 
-        let quad = builder.fpquad(&a, &b, &c, &d, &result).unwrap();
+        let (result, quad) = builder.fpquad(&a, &b, &c, &d).unwrap();
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
         builder.write_data(&c).unwrap();
@@ -306,7 +305,7 @@ mod tests {
         let num_rows = 2u64.pow(16);
         let (handle, generator) = trace::<F, D>(spec);
 
-        let p = Fp25519Param::modulus_biguint();
+        let p = Fp25519Param::modulus();
 
         let mut rng = thread_rng();
         for i in 0..num_rows {

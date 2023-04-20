@@ -6,7 +6,7 @@ mod field;
 mod memory;
 mod u16;
 
-pub use array::RegisterArray;
+pub use array::ArrayRegister;
 pub use bit::BitRegister;
 pub use cell::CellType;
 pub use element::ElementRegister;

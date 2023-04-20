@@ -3,14 +3,14 @@ use den::Den;
 use super::add::FromEdwardsAdd;
 use super::*;
 use crate::arithmetic::bool::Selector;
-use crate::arithmetic::field::{FpAdd, FpMul, FpMulConst, FpQuad};
+use crate::arithmetic::field::{FpAddInstruction, FpMul, FpMulConst, FpQuad};
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::register::MemorySlice;
 
 #[derive(Debug, Clone)]
 pub enum EdWardsMicroInstruction<E: EdwardsParameters> {
     Den(Den<E::FieldParam>),
-    FpAdd(FpAdd<E::FieldParam>),
+    FpAdd(FpAddInstruction<E::FieldParam>),
     FpMul(FpMul<E::FieldParam>),
     FpQuad(FpQuad<E::FieldParam>),
     FpMulConst(FpMulConst<E::FieldParam>),
@@ -20,25 +20,27 @@ pub enum EdWardsMicroInstruction<E: EdwardsParameters> {
 impl<E: EdwardsParameters, F: RichField + Extendable<D>, const D: usize> Instruction<F, D>
     for EdWardsMicroInstruction<E>
 {
-    fn layout(&self) -> Vec<MemorySlice> {
+    fn witness_layout(&self) -> Vec<MemorySlice> {
         match self {
             EdWardsMicroInstruction::Den(den) => {
-                <Den<E::FieldParam> as Instruction<F, D>>::layout(den)
+                <Den<E::FieldParam> as Instruction<F, D>>::witness_layout(den)
             }
             EdWardsMicroInstruction::FpAdd(fp_add) => {
-                <FpAdd<E::FieldParam> as Instruction<F, D>>::layout(fp_add)
+                <FpAddInstruction<E::FieldParam> as Instruction<F, D>>::witness_layout(fp_add)
             }
             EdWardsMicroInstruction::FpMul(fp_mul) => {
-                <FpMul<E::FieldParam> as Instruction<F, D>>::layout(fp_mul)
+                <FpMul<E::FieldParam> as Instruction<F, D>>::witness_layout(fp_mul)
             }
             EdWardsMicroInstruction::FpQuad(fp_quad) => {
-                <FpQuad<E::FieldParam> as Instruction<F, D>>::layout(fp_quad)
+                <FpQuad<E::FieldParam> as Instruction<F, D>>::witness_layout(fp_quad)
             }
             EdWardsMicroInstruction::FpMulConst(fp_mul_const) => {
-                <FpMulConst<E::FieldParam> as Instruction<F, D>>::layout(fp_mul_const)
+                <FpMulConst<E::FieldParam> as Instruction<F, D>>::witness_layout(fp_mul_const)
             }
             EdWardsMicroInstruction::Selector(selector) => {
-                <Selector<FieldRegister<E::FieldParam>> as Instruction<F, D>>::layout(selector)
+                <Selector<FieldRegister<E::FieldParam>> as Instruction<F, D>>::witness_layout(
+                    selector,
+                )
             }
         }
     }
@@ -51,7 +53,7 @@ impl<E: EdwardsParameters, F: RichField + Extendable<D>, const D: usize> Instruc
                 )
             }
             EdWardsMicroInstruction::FpAdd(fp_add) => {
-                <FpAdd<E::FieldParam> as Instruction<F, D>>::assign_row(
+                <FpAddInstruction<E::FieldParam> as Instruction<F, D>>::assign_row(
                     fp_add, trace_rows, row, row_index,
                 )
             }
@@ -103,7 +105,7 @@ impl<E: EdwardsParameters, F: RichField + Extendable<D>, const D: usize> Instruc
                     yield_constr,
                 )
             }
-            EdWardsMicroInstruction::FpAdd(fp_add) => <FpAdd<E::FieldParam> as Instruction<
+            EdWardsMicroInstruction::FpAdd(fp_add) => <FpAddInstruction<E::FieldParam> as Instruction<
                 F,
                 D,
             >>::packed_generic_constraints(
@@ -151,7 +153,7 @@ impl<E: EdwardsParameters, F: RichField + Extendable<D>, const D: usize> Instruc
                     yield_constr,
                 )
             }
-            EdWardsMicroInstruction::FpAdd(fp_add) => <FpAdd<E::FieldParam> as Instruction<
+            EdWardsMicroInstruction::FpAdd(fp_add) => <FpAddInstruction<E::FieldParam> as Instruction<
                 F,
                 D,
             >>::ext_circuit_constraints(
@@ -192,8 +194,8 @@ impl<E: EdwardsParameters> From<FpMul<E::FieldParam>> for EdWardsMicroInstructio
     }
 }
 
-impl<E: EdwardsParameters> From<FpAdd<E::FieldParam>> for EdWardsMicroInstruction<E> {
-    fn from(fp_add: FpAdd<E::FieldParam>) -> Self {
+impl<E: EdwardsParameters> From<FpAddInstruction<E::FieldParam>> for EdWardsMicroInstruction<E> {
+    fn from(fp_add: FpAddInstruction<E::FieldParam>) -> Self {
         EdWardsMicroInstruction::FpAdd(fp_add)
     }
 }

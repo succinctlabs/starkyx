@@ -7,13 +7,13 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::*;
-use crate::arithmetic::builder::ChipBuilder;
+use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::field::modulus_field_iter;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
-use crate::arithmetic::register::{MemorySlice, RegisterArray, RegisterSerializable, U16Register};
-use crate::arithmetic::trace::TraceHandle;
+use crate::arithmetic::register::{ArrayRegister, MemorySlice, RegisterSerializable, U16Register};
+use crate::arithmetic::trace::TraceWriter;
 use crate::arithmetic::utils::{extract_witness_and_shift, split_digits, to_field_iter};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -24,11 +24,11 @@ pub struct Den<P: FieldParameters> {
     sign: bool,
     result: FieldRegister<P>,
     carry: FieldRegister<P>,
-    witness_low: RegisterArray<U16Register>,
-    witness_high: RegisterArray<U16Register>,
+    witness_low: ArrayRegister<U16Register>,
+    witness_high: ArrayRegister<U16Register>,
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
+impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     pub fn ed_den<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,
@@ -59,7 +59,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
     for Den<P>
 {
-    fn layout(&self) -> Vec<MemorySlice> {
+    fn witness_layout(&self) -> Vec<MemorySlice> {
         vec![
             *self.result.register(),
             *self.carry.register(),
@@ -202,7 +202,7 @@ impl<P: FieldParameters> Den<P> {
         b: &BigUint,
         sign: bool,
     ) -> (Vec<F>, BigUint) {
-        let p = P::modulus_biguint();
+        let p = P::modulus();
 
         let minus_b_int = &p - b;
         let b_signed = if sign { b } else { &minus_b_int };
@@ -257,7 +257,7 @@ impl<P: FieldParameters> Den<P> {
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
     pub fn write_ed_den<P: FieldParameters>(
         &self,
         row_index: usize,
@@ -283,7 +283,7 @@ mod tests {
     use rand::thread_rng;
 
     use super::*;
-    use crate::arithmetic::builder::ChipBuilder;
+    use crate::arithmetic::builder::StarkBuilder;
     use crate::arithmetic::chip::{ChipParameters, TestStark};
     use crate::arithmetic::field::{Fp25519, Fp25519Param};
     use crate::arithmetic::trace::trace;
@@ -314,7 +314,7 @@ mod tests {
         type S = TestStark<DenTest, F, D>;
 
         // build the stark
-        let mut builder = ChipBuilder::<DenTest, F, D>::new();
+        let mut builder = StarkBuilder::<DenTest, F, D>::new();
 
         let a = builder.alloc::<Fp>();
         let b = builder.alloc::<Fp>();
@@ -331,7 +331,7 @@ mod tests {
         let num_rows = 2u64.pow(16);
         let (handle, generator) = trace::<F, D>(spec);
 
-        let p = Fp25519Param::modulus_biguint();
+        let p = Fp25519Param::modulus();
 
         let mut rng = thread_rng();
         for i in 0..num_rows {

@@ -2,10 +2,10 @@ use anyhow::Result;
 
 use super::den::Den;
 use super::*;
-use crate::arithmetic::builder::ChipBuilder;
+use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::field::{FpMul, FpMulConst, FpQuad};
-use crate::arithmetic::trace::TraceHandle;
+use crate::arithmetic::trace::TraceWriter;
 
 #[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]
@@ -32,7 +32,7 @@ pub trait FromEdwardsAdd<E: EdwardsParameters>:
 {
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
+impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     #[allow(non_snake_case)]
     pub fn ed_add<E: EdwardsParameters>(
         &mut self,
@@ -43,21 +43,14 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     where
         L::Instruction: FromEdwardsAdd<E>,
     {
-        let x_num_result = self.alloc::<FieldRegister<E::FieldParam>>();
-        let y_num_result = self.alloc::<FieldRegister<E::FieldParam>>();
-        let px_py_result = self.alloc::<FieldRegister<E::FieldParam>>();
-        let qx_qy_result = self.alloc::<FieldRegister<E::FieldParam>>();
-        let all_xy_result = self.alloc::<FieldRegister<E::FieldParam>>();
-        let dxy_result = self.alloc::<FieldRegister<E::FieldParam>>();
+        let (x_num_result, x_num_ins) = self.fpquad(&P.x, &Q.y, &Q.x, &P.y)?;
+        let (y_num_result, y_num_ins) = self.fpquad(&P.y, &Q.y, &P.x, &Q.x)?;
 
-        let x_num_ins = self.fpquad(&P.x, &Q.y, &Q.x, &P.y, &x_num_result)?;
-        let y_num_ins = self.fpquad(&P.y, &Q.y, &P.x, &Q.x, &y_num_result)?;
+        let (px_py_result, px_py_ins) = self.fpmul(&P.x, &P.y)?;
+        let (qx_qy_result, qx_qy_ins) = self.fpmul(&Q.x, &Q.y)?;
 
-        let px_py_ins = self.fpmul(&P.x, &P.y, &px_py_result)?;
-        let qx_qy_ins = self.fpmul(&Q.x, &Q.y, &qx_qy_result)?;
-
-        let all_xy_ins = self.fpmul(&px_py_result, &qx_qy_result, &all_xy_result)?;
-        let dxy_ins = self.fpmul_const(&all_xy_result, E::D, &dxy_result)?;
+        let (all_xy_result, all_xy_ins) = self.fpmul(&px_py_result, &qx_qy_result)?;
+        let (dxy_result, dxy_ins) = self.fpmul_const(&all_xy_result, E::D)?;
 
         let r_x_ins = self.ed_den(&x_num_result, &dxy_result, true, &result.x)?;
         let r_y_ins = self.ed_den(&y_num_result, &dxy_result, false, &result.y)?;
@@ -90,7 +83,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
     #[allow(non_snake_case)]
     pub fn write_ed_add<E: EdwardsParameters>(
         &self,
@@ -139,7 +132,7 @@ mod tests {
     use rand::thread_rng;
 
     use super::*;
-    use crate::arithmetic::builder::ChipBuilder;
+    use crate::arithmetic::builder::StarkBuilder;
     use crate::arithmetic::chip::{ChipParameters, TestStark};
     use crate::arithmetic::ec::edwards::instructions::EdWardsMicroInstruction;
     use crate::arithmetic::trace::trace;
@@ -171,7 +164,7 @@ mod tests {
 
         let _ = env_logger::builder().is_test(true).try_init();
         // build the stark
-        let mut builder = ChipBuilder::<EdAddTest, F, D>::new();
+        let mut builder = StarkBuilder::<EdAddTest, F, D>::new();
 
         let P = builder.alloc_local_ec_point::<E>().unwrap();
         let Q = builder.alloc_local_ec_point::<E>().unwrap();
@@ -298,7 +291,7 @@ mod tests {
 
         let _ = env_logger::builder().is_test(true).try_init();
         // build the stark
-        let mut builder = ChipBuilder::<EdDoubleTest, F, D>::new();
+        let mut builder = StarkBuilder::<EdDoubleTest, F, D>::new();
 
         let P = builder.alloc_ec_point::<E>().unwrap();
         let R = builder.alloc_ec_point::<E>().unwrap();

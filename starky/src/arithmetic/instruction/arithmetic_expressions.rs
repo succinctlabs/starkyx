@@ -235,7 +235,7 @@ mod tests {
     use plonky2::util::timing::TimingTree;
 
     use super::*;
-    use crate::arithmetic::builder::ChipBuilder;
+    use crate::arithmetic::builder::StarkBuilder;
     use crate::arithmetic::chip::{ChipParameters, TestStark};
     use crate::arithmetic::instruction::write::WriteInstruction;
     use crate::arithmetic::instruction::EqualityConstraint;
@@ -270,7 +270,7 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type S = TestStark<TestArithmeticExpression<F, D>, F, D>;
 
-        let mut builder = ChipBuilder::<TestArithmeticExpression<F, D>, F, D>::new();
+        let mut builder = StarkBuilder::<TestArithmeticExpression<F, D>, F, D>::new();
 
         let input_1 = builder.get_local_memory(1);
         let input_2 = builder.get_local_memory(1);
@@ -382,7 +382,7 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type S = TestStark<Test2ArithmeticExpression<F, D>, F, D>;
 
-        let mut builder = ChipBuilder::<Test2ArithmeticExpression<F, D>, F, D>::new();
+        let mut builder = StarkBuilder::<Test2ArithmeticExpression<F, D>, F, D>::new();
 
         let input_1 = builder.alloc::<U16Register>();
         let input_2 = builder.alloc::<U16Register>();

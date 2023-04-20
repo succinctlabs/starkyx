@@ -26,7 +26,7 @@ impl<E: EdwardsParameters> Add<&AffinePoint<E>> for &AffinePoint<E> {
     type Output = AffinePoint<E>;
 
     fn add(self, other: &AffinePoint<E>) -> AffinePoint<E> {
-        let p = E::FieldParam::modulus_biguint();
+        let p = E::FieldParam::modulus();
         let x_3n = (&self.x * &other.y + &self.y * &other.x) % &p;
         let y_3n = (&self.y * &other.y + &self.x * &other.x) % &p;
 
@@ -110,7 +110,7 @@ mod tests {
         let base = E::generator();
 
         let d = E::d_biguint();
-        let p = <E as EllipticCurveParameters>::FieldParam::modulus_biguint();
+        let p = <E as EllipticCurveParameters>::FieldParam::modulus();
         assert_eq!((d * 121666u32) % &p, (&p - 121665u32) % &p);
 
         let mut rng = thread_rng();

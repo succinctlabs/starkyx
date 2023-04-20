@@ -1,3 +1,30 @@
+//! Implements field addition for any field, using a trick from Polygon Zero.
+//! Reference: https://github.com/mir-protocol/plonky2/blob/main/evm/src/arithmetic/addcy.rs
+//!
+//! We want to compute a + b = result mod p. In the integers, this is equivalent to witnessing some
+//! carry such that:
+//!
+//!     a + b - result - carry * p = 0.
+//!
+//! Let us encode the integers as polynomials in the Goldilocks field, where each coefficient is
+//! at most 16 bits. In other words, the integers are encoded as an array of little-endian base 16
+//! limbs. We can then write the above equation as:
+//!
+//!    a(x) + b(x) - result(x) - carry(x) * p(x)
+//!
+//! where the polynomial should evaluate to 0 if x = 2^16. To prove that the polynomial has a root
+//! at 2^16, we can have the prover witness a polynomial `w(x)` such that the above polynomial
+//! is divisble by (x - 2^16):
+//!
+//!
+//!    a(x) + b(x) - result(x) - carry(x) * p(x) - (x - 2^16) * w(x) = 0
+//!
+//! Thus, if we can prove that above polynomial is 0, we can conclude that the addition has been
+//! computed correctly. Note that this relies on the fact that any quadratic sum of a sufficiently
+//! small number of terms (i.e., less than 2^32 terms) will not overflow in the Goldilocks field.
+//! Furthermore, one must be careful to ensure that all polynomials except w(x) are range checked
+//! in [0, 2^16).
+
 use anyhow::Result;
 use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
@@ -6,57 +33,102 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::*;
-use crate::arithmetic::builder::ChipBuilder;
+use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
 use crate::arithmetic::register::{
-    FieldRegister, MemorySlice, RegisterArray, RegisterSerializable, U16Register,
+    ArrayRegister, FieldRegister, MemorySlice, RegisterSerializable, U16Register,
 };
-use crate::arithmetic::trace::TraceHandle;
+use crate::arithmetic::trace::TraceWriter;
 use crate::arithmetic::utils::{extract_witness_and_shift, split_digits, to_field_iter};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Debug, Clone, Copy)]
-pub struct FpAdd<P: FieldParameters> {
+pub struct FpAddInstruction<P: FieldParameters> {
     a: FieldRegister<P>,
     b: FieldRegister<P>,
     result: FieldRegister<P>,
     carry: FieldRegister<P>,
-    witness_low: RegisterArray<U16Register>,
-    witness_high: RegisterArray<U16Register>,
+    witness_low: ArrayRegister<U16Register>,
+    witness_high: ArrayRegister<U16Register>,
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
+impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     pub fn fpadd<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,
         b: &FieldRegister<P>,
-        result: &FieldRegister<P>,
-    ) -> Result<FpAdd<P>>
+    ) -> Result<(FieldRegister<P>, FpAddInstruction<P>)>
     where
-        L::Instruction: From<FpAdd<P>>,
+        L::Instruction: From<FpAddInstruction<P>>,
     {
+        let result = self.alloc::<FieldRegister<P>>();
         let carry = self.alloc::<FieldRegister<P>>();
         let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
         let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
-        let instr = FpAdd {
+        let instr = FpAddInstruction {
             a: *a,
             b: *b,
-            result: *result,
+            result,
             carry,
             witness_low,
             witness_high,
         };
         self.insert_instruction(instr.into())?;
-        Ok(instr)
+        Ok((result, instr))
+    }
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
+    pub fn write_fpadd<P: FieldParameters>(
+        &self,
+        row_index: usize,
+        a: &BigUint,
+        b: &BigUint,
+        instruction: FpAddInstruction<P>,
+    ) -> Result<BigUint> {
+        let p = P::modulus();
+        let result = (a + b) % &p;
+        let carry = (a + b - &result) / &p;
+        debug_assert!(result < p);
+        debug_assert!(carry < p);
+        debug_assert_eq!(&carry * &p, a + b - &result);
+
+        // Make polynomial limbs.
+        let p_a = Polynomial::<i64>::from_biguint_num(a, 16, P::NB_LIMBS);
+        let p_b = Polynomial::<i64>::from_biguint_num(b, 16, P::NB_LIMBS);
+        let p_p = Polynomial::<i64>::from_biguint_num(&p, 16, P::NB_LIMBS);
+        let p_result = Polynomial::<i64>::from_biguint_num(&result, 16, P::NB_LIMBS);
+        let p_carry = Polynomial::<i64>::from_biguint_num(&carry, 16, P::NB_LIMBS);
+
+        // Compute the vanishing polynomial.
+        let vanishing_poly = &p_a + &p_b - &p_result - &p_carry * &p_p;
+        debug_assert_eq!(vanishing_poly.degree(), P::NB_WITNESS_LIMBS);
+
+        // Compute the witness.
+        let witness_shifted = extract_witness_and_shift(&vanishing_poly, P::WITNESS_OFFSET as u32);
+        let (witness_low, witness_high) = split_digits::<F>(&witness_shifted);
+
+        // Row must match layout of instruction.
+        self.write_to_layout(
+            row_index,
+            instruction,
+            vec![
+                to_field_iter::<F>(&p_result).collect(),
+                to_field_iter::<F>(&p_carry).collect(),
+                witness_low.collect(),
+                witness_high.collect(),
+            ],
+        )?;
+        Ok(result)
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
-    for FpAdd<P>
+    for FpAddInstruction<P>
 {
-    fn layout(&self) -> Vec<MemorySlice> {
+    fn witness_layout(&self) -> Vec<MemorySlice> {
         vec![
             *self.result.register(),
             *self.carry.register(),
@@ -169,76 +241,6 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
     }
 }
 
-impl<P: FieldParameters> FpAdd<P> {
-    /// Trace row for fp_mul operation
-    ///
-    /// Returns a vector
-    /// [Input[2 * N_LIMBS], output[N_LIMBS], carry[NUM_CARRY_LIMBS], Witness_low[NUM_WITNESS_LIMBS], Witness_high[NUM_WITNESS_LIMBS]]
-    pub fn trace_row<F: RichField + Extendable<D>, const D: usize>(
-        a: &BigUint,
-        b: &BigUint,
-    ) -> (Vec<F>, BigUint) {
-        let p = P::modulus_biguint();
-        let result = (a + b) % &p;
-        debug_assert!(result < p);
-        let carry = (a + b - &result) / &p;
-        debug_assert!(carry < p);
-        debug_assert_eq!(&carry * &p, a + b - &result);
-
-        // make polynomial limbs
-        let p_a = Polynomial::<i64>::from_biguint_num(a, 16, P::NB_LIMBS);
-        let p_b = Polynomial::<i64>::from_biguint_num(b, 16, P::NB_LIMBS);
-        let p_p = Polynomial::<i64>::from_biguint_num(&p, 16, P::NB_LIMBS);
-
-        let p_result = Polynomial::<i64>::from_biguint_num(&result, 16, P::NB_LIMBS);
-        let p_carry = Polynomial::<i64>::from_biguint_num(&carry, 16, P::NB_LIMBS);
-
-        // Compute the vanishing polynomial
-        let vanishing_poly = &p_a + &p_b - &p_result - &p_carry * &p_p;
-        debug_assert_eq!(vanishing_poly.degree(), P::NB_WITNESS_LIMBS);
-
-        // Compute the witness
-        let witness_shifted = extract_witness_and_shift(&vanishing_poly, P::WITNESS_OFFSET as u32);
-        let (witness_low, witness_high) = split_digits::<F>(&witness_shifted);
-
-        let mut row = Vec::new();
-
-        // output
-        row.extend(to_field_iter::<F>(&p_result));
-        // carry and witness
-        row.extend(to_field_iter::<F>(&p_carry));
-        row.extend(witness_low);
-        row.extend(witness_high);
-
-        (row, result)
-    }
-
-    pub fn write<F: RichField + Extendable<D>, const D: usize>(
-        &self,
-        a: BigUint,
-        b: BigUint,
-        handle: TraceHandle<F, D>,
-        row_index: usize,
-    ) -> Result<()> {
-        let (row, _) = Self::trace_row::<F, D>(&a, &b);
-        handle.write(row_index, *self, row)
-    }
-}
-
-impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
-    pub fn write_fpadd<P: FieldParameters>(
-        &self,
-        row_index: usize,
-        a_int: &BigUint,
-        b_int: &BigUint,
-        instruction: FpAdd<P>,
-    ) -> Result<BigUint> {
-        let (row, result) = FpAdd::<P>::trace_row::<F, D>(a_int, b_int);
-        self.write(row_index, instruction, row)?;
-        Ok(result)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
@@ -247,11 +249,10 @@ mod tests {
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::timed;
     use plonky2::util::timing::TimingTree;
-    //use plonky2_maybe_rayon::*;
     use rand::thread_rng;
 
     use super::*;
-    use crate::arithmetic::builder::ChipBuilder;
+    use crate::arithmetic::builder::StarkBuilder;
     use crate::arithmetic::chip::{ChipParameters, TestStark};
     use crate::arithmetic::field::Fp25519Param;
     use crate::arithmetic::trace::trace;
@@ -270,7 +271,7 @@ mod tests {
         const NUM_ARITHMETIC_COLUMNS: usize = 124;
         const NUM_FREE_COLUMNS: usize = 0;
 
-        type Instruction = FpAdd<Fp25519Param>;
+        type Instruction = FpAddInstruction<Fp25519Param>;
     }
 
     #[test]
@@ -282,16 +283,12 @@ mod tests {
         type S = TestStark<FpAddTest, F, D>;
 
         let _ = env_logger::builder().is_test(true).try_init();
-        // build the stark
-        let mut builder = ChipBuilder::<FpAddTest, F, D>::new();
+        let mut builder = StarkBuilder::<FpAddTest, F, D>::new();
 
         let a = builder.alloc::<Fp>();
         let b = builder.alloc::<Fp>();
-        let result = builder.alloc::<Fp>();
 
-        //let ab = FMul::new(a, b, result);
-        //builder.insert_instruction(ab).unwrap();
-        let a_add_b_ins = builder.fpadd(&a, &b, &result).unwrap();
+        let (_, a_add_b_ins) = builder.fpadd(&a, &b).unwrap();
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
 
@@ -301,7 +298,7 @@ mod tests {
         let num_rows = 2u64.pow(16);
         let (handle, generator) = trace::<F, D>(spec);
 
-        let p = Fp25519Param::modulus_biguint();
+        let p = Fp25519Param::modulus();
 
         let mut timing = TimingTree::new("stark_proof", log::Level::Debug);
 

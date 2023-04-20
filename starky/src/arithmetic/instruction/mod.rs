@@ -19,10 +19,10 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
     'static + Send + Sync + Clone
 {
-    fn layout(&self) -> Vec<MemorySlice>;
+    fn witness_layout(&self) -> Vec<MemorySlice>;
 
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
-        self.layout()
+        self.witness_layout()
             .into_iter()
             .fold(0, |local_index, memory_slice| {
                 memory_slice.assign(trace_rows, local_index, row, row_index)
@@ -159,7 +159,7 @@ pub struct DefaultInstructions<F, const D: usize> {
 impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for DefaultInstructions<F, D> {
     fn assign_row(&self, _trace_rows: &mut [Vec<F>], _row: &mut [F], _row_index: usize) {}
 
-    fn layout(&self) -> Vec<MemorySlice> {
+    fn witness_layout(&self) -> Vec<MemorySlice> {
         Vec::new()
     }
 

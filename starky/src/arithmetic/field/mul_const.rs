@@ -6,12 +6,12 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::*;
-use crate::arithmetic::builder::ChipBuilder;
+use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::ChipParameters;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
-use crate::arithmetic::register::{MemorySlice, RegisterArray, RegisterSerializable, U16Register};
-use crate::arithmetic::trace::TraceHandle;
+use crate::arithmetic::register::{ArrayRegister, MemorySlice, RegisterSerializable, U16Register};
+use crate::arithmetic::trace::TraceWriter;
 use crate::arithmetic::utils::{extract_witness_and_shift, split_digits, to_field_iter};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -21,40 +21,40 @@ pub struct FpMulConst<P: FieldParameters> {
     c: [u16; MAX_NB_LIMBS],
     result: FieldRegister<P>,
     carry: FieldRegister<P>,
-    witness_low: RegisterArray<U16Register>,
-    witness_high: RegisterArray<U16Register>,
+    witness_low: ArrayRegister<U16Register>,
+    witness_high: ArrayRegister<U16Register>,
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
+impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     pub fn fpmul_const<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,
         c: [u16; MAX_NB_LIMBS],
-        result: &FieldRegister<P>,
-    ) -> Result<FpMulConst<P>>
+    ) -> Result<(FieldRegister<P>, FpMulConst<P>)>
     where
         L::Instruction: From<FpMulConst<P>>,
     {
+        let result = self.alloc::<FieldRegister<P>>();
         let carry = self.alloc::<FieldRegister<P>>();
         let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
         let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
         let instr = FpMulConst {
             a: *a,
             c,
-            result: *result,
+            result,
             carry,
             witness_low,
             witness_high,
         };
         self.insert_instruction(instr.into())?;
-        Ok(instr)
+        Ok((result, instr))
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
     for FpMulConst<P>
 {
-    fn layout(&self) -> Vec<MemorySlice> {
+    fn witness_layout(&self) -> Vec<MemorySlice> {
         vec![
             *self.result.register(),
             *self.carry.register(),
@@ -188,7 +188,7 @@ impl<P: FieldParameters> FpMulConst<P> {
         &self,
         a: &BigUint,
     ) -> (Vec<F>, BigUint) {
-        let p = P::modulus_biguint();
+        let p = P::modulus();
         let mut c = BigUint::zero();
         for (i, limb) in self.c.iter().enumerate() {
             c += BigUint::from(*limb) << (16 * i);
@@ -228,7 +228,7 @@ impl<P: FieldParameters> FpMulConst<P> {
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
     pub fn write_fpmul_const<P: FieldParameters>(
         &self,
         row_index: usize,
@@ -252,7 +252,7 @@ mod tests {
     use rand::thread_rng;
 
     use super::*;
-    use crate::arithmetic::builder::ChipBuilder;
+    use crate::arithmetic::builder::StarkBuilder;
     use crate::arithmetic::chip::{ChipParameters, TestStark};
     use crate::arithmetic::field::Fp25519Param;
     use crate::arithmetic::trace::trace;
@@ -303,14 +303,13 @@ mod tests {
         }
 
         // build the stark
-        let mut builder = ChipBuilder::<FpMulConstTest, F, D>::new();
+        let mut builder = StarkBuilder::<FpMulConstTest, F, D>::new();
 
         let a = builder.alloc::<Fp>();
-        let result = builder.alloc::<Fp>();
 
         //let ab = FMul::new(a, b, result);
         //builder.insert_instruction(ab).unwrap();
-        let ac_ins = builder.fpmul_const(&a, c, &result).unwrap();
+        let (result, ac_ins) = builder.fpmul_const(&a, c).unwrap();
         builder.write_data(&a).unwrap();
 
         let (chip, spec) = builder.build();
@@ -319,7 +318,7 @@ mod tests {
         let num_rows = 2u64.pow(16) as usize;
         let (handle, generator) = trace::<F, D>(spec);
 
-        let p = Fp25519Param::modulus_biguint();
+        let p = Fp25519Param::modulus();
 
         let mut rng = thread_rng();
         for i in 0..num_rows {
