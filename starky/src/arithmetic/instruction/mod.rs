@@ -95,8 +95,8 @@ impl<F: RichField + Extendable<D>, const D: usize> EqualityConstraint<F, D> {
                 )
             }
             EqualityConstraint::Equal(a, b) => {
-                let a_vals = a.packed_entries_slice(&vars);
-                let b_vals = b.packed_entries_slice(&vars);
+                let a_vals = a.packed_generic_vars(&vars);
+                let b_vals = b.packed_generic_vars(&vars);
                 if let (MemorySlice::Local(_, _), MemorySlice::Local(_, _)) = (a, b) {
                     for (&a, &b) in a_vals.iter().zip(b_vals.iter()) {
                         yield_constr.constraint(a - b);
@@ -133,8 +133,8 @@ impl<F: RichField + Extendable<D>, const D: usize> EqualityConstraint<F, D> {
                 )
             }
             EqualityConstraint::Equal(a, b) => {
-                let a_vals = a.evaluation_targets(&vars);
-                let b_vals = b.evaluation_targets(&vars);
+                let a_vals = a.ext_circuit_vars(&vars);
+                let b_vals = b.ext_circuit_vars(&vars);
                 if let (MemorySlice::Local(_, _), MemorySlice::Local(_, _)) = (a, b) {
                     for (&a, &b) in a_vals.iter().zip(b_vals.iter()) {
                         let constr = builder.sub_extension(a, b);

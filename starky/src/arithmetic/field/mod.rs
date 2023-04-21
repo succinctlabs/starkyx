@@ -30,9 +30,9 @@
 
 mod add;
 mod constrain;
+mod inner_product;
 mod mul;
 mod mul_const;
-mod quad;
 
 use anyhow::Result;
 use num::{BigUint, One, Zero};
@@ -44,9 +44,9 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 pub use self::add::FpAddInstruction;
+pub use self::inner_product::FpInnerProductInstruction;
 pub use self::mul::FpMulInstruction;
 pub use self::mul_const::FpMulConstInstruction;
-pub use self::quad::FpQuadInstruction;
 use super::instruction::Instruction;
 use super::polynomial::{Polynomial, PolynomialOps};
 use super::register::FieldRegister;
@@ -117,7 +117,7 @@ impl FieldParameters for Fp25519Param {
 pub enum FpInstruction<P: FieldParameters> {
     Add(FpAddInstruction<P>),
     Mul(FpMulInstruction<P>),
-    Quad(FpQuadInstruction<P>),
+    Quad(FpInnerProductInstruction<P>),
     MulConst(FpMulConstInstruction<P>),
 }
 
@@ -133,8 +133,8 @@ impl<P: FieldParameters> From<FpMulInstruction<P>> for FpInstruction<P> {
     }
 }
 
-impl<P: FieldParameters> From<FpQuadInstruction<P>> for FpInstruction<P> {
-    fn from(quad: FpQuadInstruction<P>) -> Self {
+impl<P: FieldParameters> From<FpInnerProductInstruction<P>> for FpInstruction<P> {
+    fn from(quad: FpInnerProductInstruction<P>) -> Self {
         Self::Quad(quad)
     }
 }
@@ -151,7 +151,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
                 <FpMulInstruction<P> as Instruction<F, D>>::witness_layout(mul)
             }
             FpInstruction::Quad(quad) => {
-                <FpQuadInstruction<P> as Instruction<F, D>>::witness_layout(quad)
+                <FpInnerProductInstruction<P> as Instruction<F, D>>::witness_layout(quad)
             }
             FpInstruction::MulConst(mul_const) => {
                 <FpMulConstInstruction<P> as Instruction<F, D>>::witness_layout(mul_const)
@@ -189,7 +189,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
                 )
             }
             FpInstruction::Quad(quad) => {
-                <FpQuadInstruction<P> as Instruction<F, D>>::packed_generic_constraints(
+                <FpInnerProductInstruction<P> as Instruction<F, D>>::packed_generic_constraints(
                     quad,
                     vars,
                     yield_constr,
@@ -229,7 +229,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
                 )
             }
             FpInstruction::Quad(quad) => {
-                <FpQuadInstruction<P> as Instruction<F, D>>::ext_circuit_constraints(
+                <FpInnerProductInstruction<P> as Instruction<F, D>>::ext_circuit_constraints(
                     quad,
                     builder,
                     vars,
@@ -289,53 +289,48 @@ mod tests {
         type Fp = Fp25519;
         type S = TestStark<FpInstructionTest, F, D>;
 
-        // build the stark
+        // Build the STARK.
         let mut builder = StarkBuilder::<FpInstructionTest, F, D>::new();
-
         let a = builder.alloc::<Fp>();
         let b = builder.alloc::<Fp>();
         let c = builder.alloc::<Fp>();
         let d = builder.alloc::<Fp>();
-
-        let (result, quad) = builder.fpquad(&a, &b, &c, &d).unwrap();
+        let (result, quad) = builder.fp_inner_product(&vec![a, b], &vec![c, d]);
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
         builder.write_data(&c).unwrap();
         builder.write_data(&d).unwrap();
-
         let (chip, spec) = builder.build();
 
-        // Construct the trace
+        // Construct the trace.
         let num_rows = 2u64.pow(16);
         let (handle, generator) = trace::<F, D>(spec);
-
         let p = Fp25519Param::modulus();
-
         let mut rng = thread_rng();
         for i in 0..num_rows {
             let a_int: BigUint = rng.gen_biguint(256) % &p;
             let b_int = rng.gen_biguint(256) % &p;
             let c_int = rng.gen_biguint(256) % &p;
             let d_int = rng.gen_biguint(256) % &p;
-            //let handle = handle.clone();
-            //rayon::spawn(move || {
             handle.write_field(i as usize, &a_int, a).unwrap();
             handle.write_field(i as usize, &b_int, b).unwrap();
             handle.write_field(i as usize, &c_int, c).unwrap();
             handle.write_field(i as usize, &d_int, d).unwrap();
             handle
-                .write_fpquad(i as usize, &a_int, &b_int, &c_int, &d_int, quad)
+                .write_fp_inner_product(
+                    i as usize,
+                    vec![&a_int, &b_int],
+                    vec![&c_int, &d_int],
+                    quad.clone(),
+                )
                 .unwrap();
-            //});
         }
         drop(handle);
-
         let trace = generator.generate_trace(&chip, num_rows as usize).unwrap();
 
+        // Verify proof as a stark.
         let config = StarkConfig::standard_fast_config();
         let stark = TestStark::new(chip);
-
-        // Verify proof as a stark
         let proof = prove::<F, C, S, D>(
             stark.clone(),
             &config,
@@ -349,7 +344,6 @@ mod tests {
         // Verify recursive proof in a circuit
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
-
         let degree_bits = proof.proof.recover_degree_bits(&config);
         let virtual_proof = add_virtual_stark_proof_with_pis(
             &mut recursive_builder,
@@ -357,21 +351,16 @@ mod tests {
             &config,
             degree_bits,
         );
-
         recursive_builder.print_gate_counts(0);
-
         let mut rec_pw = PartialWitness::new();
         set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-
         verify_stark_proof_circuit::<F, C, S, D>(
             &mut recursive_builder,
             stark,
             virtual_proof,
             &config,
         );
-
         let recursive_data = recursive_builder.build::<C>();
-
         let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
         let recursive_proof = plonky2::plonk::prover::prove(
             &recursive_data.prover_only,
@@ -380,7 +369,6 @@ mod tests {
             &mut timing,
         )
         .unwrap();
-
         timing.print();
         recursive_data.verify(recursive_proof).unwrap();
     }

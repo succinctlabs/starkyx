@@ -4,7 +4,7 @@ use super::add::FromEdwardsAdd;
 use super::*;
 use crate::arithmetic::bool::Selector;
 use crate::arithmetic::field::{
-    FpAddInstruction, FpMulConstInstruction, FpMulInstruction, FpQuadInstruction,
+    FpAddInstruction, FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction,
 };
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::register::MemorySlice;
@@ -14,7 +14,7 @@ pub enum EdWardsMicroInstruction<E: EdwardsParameters> {
     Den(Den<E::FieldParam>),
     FpAdd(FpAddInstruction<E::FieldParam>),
     FpMul(FpMulInstruction<E::FieldParam>),
-    FpQuad(FpQuadInstruction<E::FieldParam>),
+    FpInnerProduct(FpInnerProductInstruction<E::FieldParam>),
     FpMulConst(FpMulConstInstruction<E::FieldParam>),
     Selector(Selector<FieldRegister<E::FieldParam>>),
 }
@@ -33,8 +33,10 @@ impl<E: EdwardsParameters, F: RichField + Extendable<D>, const D: usize> Instruc
             EdWardsMicroInstruction::FpMul(fp_mul) => {
                 <FpMulInstruction<E::FieldParam> as Instruction<F, D>>::witness_layout(fp_mul)
             }
-            EdWardsMicroInstruction::FpQuad(fp_quad) => {
-                <FpQuadInstruction<E::FieldParam> as Instruction<F, D>>::witness_layout(fp_quad)
+            EdWardsMicroInstruction::FpInnerProduct(fp_quad) => {
+                <FpInnerProductInstruction<E::FieldParam> as Instruction<F, D>>::witness_layout(
+                    fp_quad,
+                )
             }
             EdWardsMicroInstruction::FpMulConst(fp_mul_const) => {
                 <FpMulConstInstruction<E::FieldParam> as Instruction<F, D>>::witness_layout(
@@ -66,8 +68,8 @@ impl<E: EdwardsParameters, F: RichField + Extendable<D>, const D: usize> Instruc
                     fp_mul, trace_rows, row, row_index,
                 )
             }
-            EdWardsMicroInstruction::FpQuad(fp_quad) => {
-                <FpQuadInstruction<E::FieldParam> as Instruction<F, D>>::assign_row(
+            EdWardsMicroInstruction::FpInnerProduct(fp_quad) => {
+                <FpInnerProductInstruction<E::FieldParam> as Instruction<F, D>>::assign_row(
                     fp_quad, trace_rows, row, row_index,
                 )
             }
@@ -121,7 +123,7 @@ impl<E: EdwardsParameters, F: RichField + Extendable<D>, const D: usize> Instruc
             >>::packed_generic_constraints(
                 fp_mul, vars, yield_constr
             ),
-            EdWardsMicroInstruction::FpQuad(fp_quad) => <FpQuadInstruction<E::FieldParam> as Instruction<
+            EdWardsMicroInstruction::FpInnerProduct(fp_quad) => <FpInnerProductInstruction<E::FieldParam> as Instruction<
                 F,
                 D,
             >>::packed_generic_constraints(
@@ -169,7 +171,7 @@ impl<E: EdwardsParameters, F: RichField + Extendable<D>, const D: usize> Instruc
             >>::ext_circuit_constraints(
                 fp_mul, builder, vars, yield_constr
             ),
-            EdWardsMicroInstruction::FpQuad(fp_quad) => <FpQuadInstruction<E::FieldParam> as Instruction<
+            EdWardsMicroInstruction::FpInnerProduct(fp_quad) => <FpInnerProductInstruction<E::FieldParam> as Instruction<
                 F,
                 D,
             >>::ext_circuit_constraints(
@@ -204,9 +206,11 @@ impl<E: EdwardsParameters> From<FpAddInstruction<E::FieldParam>> for EdWardsMicr
     }
 }
 
-impl<E: EdwardsParameters> From<FpQuadInstruction<E::FieldParam>> for EdWardsMicroInstruction<E> {
-    fn from(fp_quad: FpQuadInstruction<E::FieldParam>) -> Self {
-        EdWardsMicroInstruction::FpQuad(fp_quad)
+impl<E: EdwardsParameters> From<FpInnerProductInstruction<E::FieldParam>>
+    for EdWardsMicroInstruction<E>
+{
+    fn from(fp_quad: FpInnerProductInstruction<E::FieldParam>) -> Self {
+        EdWardsMicroInstruction::FpInnerProduct(fp_quad)
     }
 }
 

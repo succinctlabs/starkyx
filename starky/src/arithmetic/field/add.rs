@@ -136,12 +136,12 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         PF: PackedField<Scalar = FE>,
     {
         // Get the packed entries.
-        let p_a = self.a.register().packed_entries_slice(&vars);
-        let p_b = self.b.register().packed_entries_slice(&vars);
-        let p_result = self.result.register().packed_entries_slice(&vars);
-        let p_carry = self.carry.register().packed_entries_slice(&vars);
-        let p_witness_low = self.witness_low.register().packed_entries_slice(&vars);
-        let p_witness_high = self.witness_high.register().packed_entries_slice(&vars);
+        let p_a = self.a.register().packed_generic_vars(&vars);
+        let p_b = self.b.register().packed_generic_vars(&vars);
+        let p_result = self.result.register().packed_generic_vars(&vars);
+        let p_carry = self.carry.register().packed_generic_vars(&vars);
+        let p_witness_low = self.witness_low.register().packed_generic_vars(&vars);
+        let p_witness_high = self.witness_high.register().packed_generic_vars(&vars);
 
         // Compute the vanishing polynomial a(x) + b(x) - result(x) - carry(x) * p(x).
         let p_a_plus_b = PolynomialOps::add(p_a, p_b);
@@ -168,12 +168,12 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         type PG = PolynomialGadget;
 
         // Get the packed entries.
-        let p_a = self.a.register().evaluation_targets(&vars);
-        let p_b = self.b.register().evaluation_targets(&vars);
-        let p_result = self.result.register().evaluation_targets(&vars);
-        let p_carry = self.carry.register().evaluation_targets(&vars);
-        let p_witness_low = self.witness_low.register().evaluation_targets(&vars);
-        let p_witness_high = self.witness_high.register().evaluation_targets(&vars);
+        let p_a = self.a.register().ext_circuit_vars(&vars);
+        let p_b = self.b.register().ext_circuit_vars(&vars);
+        let p_result = self.result.register().ext_circuit_vars(&vars);
+        let p_carry = self.carry.register().ext_circuit_vars(&vars);
+        let p_witness_low = self.witness_low.register().ext_circuit_vars(&vars);
+        let p_witness_high = self.witness_high.register().ext_circuit_vars(&vars);
 
         // Compute the vanishing polynomial a(x) + b(x) - result(x) - carry(x) * p(x).
         let p_a_plus_b = PG::add_extension(builder, p_a, p_b);
@@ -224,7 +224,6 @@ mod tests {
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpAddTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 124;
         const NUM_FREE_COLUMNS: usize = 0;
-
         type Instruction = FpAddInstruction<Fp25519Param>;
     }
 
@@ -235,50 +234,38 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type Fp = Fp25519;
         type S = TestStark<FpAddTest, F, D>;
-
         let _ = env_logger::builder().is_test(true).try_init();
-        let mut builder = StarkBuilder::<FpAddTest, F, D>::new();
 
+        // Build the circuit.
+        let mut builder = StarkBuilder::<FpAddTest, F, D>::new();
         let a = builder.alloc::<Fp>();
         let b = builder.alloc::<Fp>();
-
         let (_, a_add_b_ins) = builder.fpadd(&a, &b).unwrap();
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
-
         let (chip, spec) = builder.build();
 
-        // Construct the trace
-        let num_rows = 2u64.pow(16);
+        // Generate the trace.
+        let num_rows = 2u64.pow(16) as usize;
         let (handle, generator) = trace::<F, D>(spec);
-
-        let p = Fp25519Param::modulus();
-
         let mut timing = TimingTree::new("stark_proof", log::Level::Debug);
-
         let trace = timed!(timing, "generate trace", {
+            let p = Fp25519Param::modulus();
             let mut rng = thread_rng();
             for i in 0..num_rows {
                 let a_int: BigUint = rng.gen_biguint(256) % &p;
                 let b_int = rng.gen_biguint(256) % &p;
-                //let handle = handle.clone();
-                //rayon::spawn(move || {
-                handle.write_field(i as usize, &a_int, a).unwrap();
-                handle.write_field(i as usize, &b_int, b).unwrap();
-                handle
-                    .write_fpadd(i as usize, &a_int, &b_int, a_add_b_ins)
-                    .unwrap();
-                //});
+                handle.write_field(i, &a_int, a).unwrap();
+                handle.write_field(i, &b_int, b).unwrap();
+                handle.write_fpadd(i, &a_int, &b_int, a_add_b_ins).unwrap();
             }
             drop(handle);
-
             generator.generate_trace(&chip, num_rows as usize).unwrap()
         });
 
+        // Generate the proof.
         let config = StarkConfig::standard_fast_config();
         let stark = TestStark::new(chip);
-
-        // Verify proof as a stark
         let proof = timed!(
             timing,
             "generate proof",
@@ -291,13 +278,11 @@ mod tests {
             )
             .unwrap()
         );
-
         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
 
-        // Verify recursive proof in a circuit
+        // Generate the recursive proof.
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
-
         let degree_bits = proof.proof.recover_degree_bits(&config);
         let virtual_proof = add_virtual_stark_proof_with_pis(
             &mut recursive_builder,
@@ -305,21 +290,16 @@ mod tests {
             &config,
             degree_bits,
         );
-
         recursive_builder.print_gate_counts(0);
-
         let mut rec_pw = PartialWitness::new();
         set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-
         verify_stark_proof_circuit::<F, C, S, D>(
             &mut recursive_builder,
             stark,
             virtual_proof,
             &config,
         );
-
         let recursive_data = recursive_builder.build::<C>();
-
         let recursive_proof = timed!(
             timing,
             "generate recursive proof",
@@ -331,7 +311,6 @@ mod tests {
             )
             .unwrap()
         );
-
         timed!(
             timing,
             "verify recursive proof",

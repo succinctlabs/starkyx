@@ -104,7 +104,7 @@ impl MemorySlice {
     }
 
     #[inline]
-    pub fn packed_entries_slice<
+    pub fn packed_generic_vars<
         'a,
         F,
         FE,
@@ -160,7 +160,7 @@ impl MemorySlice {
     }
 
     #[inline]
-    pub fn evaluation_targets<
+    pub fn ext_circuit_vars<
         'a,
         const COLUMNS: usize,
         const PUBLIC_INPUTS: usize,
