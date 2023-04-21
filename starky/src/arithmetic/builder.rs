@@ -10,7 +10,7 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
 use super::bool::ConstraintBool;
-use super::chip::{Chip, ChipParameters};
+use super::chip::{Chip, StarkParameters};
 use super::instruction::arithmetic_expressions::ArithmeticExpression;
 use super::instruction::write::WriteInstruction;
 use super::instruction::{EqualityConstraint, Instruction};
@@ -25,7 +25,7 @@ pub enum InsID {
 #[derive(Clone, Debug)]
 pub struct StarkBuilder<L, F, const D: usize>
 where
-    L: ChipParameters<F, D>,
+    L: StarkParameters<F, D>,
     F: RichField + Extendable<D>,
 {
     local_index: usize,
@@ -38,7 +38,7 @@ where
     constraints: Vec<EqualityConstraint<F, D>>,
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Default
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Default
     for StarkBuilder<L, F, D>
 {
     fn default() -> Self {
@@ -46,7 +46,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Defa
     }
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     pub fn new() -> Self {
         Self {
             local_index: 0,
@@ -239,7 +239,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Star
 
 // Implement methods for the basic operations
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     pub fn assert_expressions_equal(
         &mut self,
         a: ArithmeticExpression<F, D>,
@@ -303,7 +303,7 @@ mod tests {
         _marker: core::marker::PhantomData<F>,
     }
 
-    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D>
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D>
         for TestChipParameters<F, D>
     {
         const NUM_FREE_COLUMNS: usize = 2;

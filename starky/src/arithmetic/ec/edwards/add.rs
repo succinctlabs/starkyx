@@ -3,7 +3,7 @@ use anyhow::Result;
 use super::den::Den;
 use super::*;
 use crate::arithmetic::builder::StarkBuilder;
-use crate::arithmetic::chip::ChipParameters;
+use crate::arithmetic::chip::StarkParameters;
 use crate::arithmetic::field::{FpMulConstInstruction, FpMulInstruction, FpQuadInstruction};
 use crate::arithmetic::trace::TraceWriter;
 
@@ -32,7 +32,7 @@ pub trait FromEdwardsAdd<E: EdwardsParameters>:
 {
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     #[allow(non_snake_case)]
     pub fn ed_add<E: EdwardsParameters>(
         &mut self,
@@ -133,7 +133,7 @@ mod tests {
 
     use super::*;
     use crate::arithmetic::builder::StarkBuilder;
-    use crate::arithmetic::chip::{ChipParameters, TestStark};
+    use crate::arithmetic::chip::{StarkParameters, TestStark};
     use crate::arithmetic::ec::edwards::instructions::EdWardsMicroInstruction;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
@@ -147,7 +147,7 @@ mod tests {
     #[derive(Clone, Debug, Copy)]
     pub struct EdAddTest;
 
-    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for EdAddTest {
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for EdAddTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 800;
         const NUM_FREE_COLUMNS: usize = 0;
         type Instruction = EdWardsMicroInstruction<Ed25519Parameters>;
@@ -274,7 +274,7 @@ mod tests {
     #[derive(Clone, Debug, Copy)]
     pub struct EdDoubleTest;
 
-    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for EdDoubleTest {
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for EdDoubleTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 768;
         const NUM_FREE_COLUMNS: usize = 0;
         type Instruction = EdWardsMicroInstruction<Ed25519Parameters>;

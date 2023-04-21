@@ -75,8 +75,8 @@ pub fn compute_root_quotient_and_shift<F: RichField>(
     debug_assert_eq!(p_vanishing_eval, F::ZERO);
 
     // Compute the witness polynomial by witness(x) = vanishing(x) / (x - 2^16).
-    let root = F::from_canonical_u32(2u32.pow(16));
-    let p_quotient = p_vanishing.root_quotient(root);
+    let root_monomial = F::from_canonical_u32(2u32.pow(16));
+    let p_quotient = p_vanishing.root_quotient(root_monomial);
     debug_assert_eq!(p_quotient.degree(), p_vanishing.degree() - 1);
 
     // Sanity Check #1: For all i, |w_i| < 2^20 to prevent overflows.
@@ -86,7 +86,7 @@ pub fn compute_root_quotient_and_shift<F: RichField>(
     }
 
     // Sanity Check #2: w(x) * (x - 2^16) = vanishing(x).
-    let x_minus_root = Polynomial::<F>::new_from_slice(&[-root, F::ONE]);
+    let x_minus_root = Polynomial::<F>::new_from_slice(&[-root_monomial, F::ONE]);
     debug_assert_eq!(
         (&p_quotient * &x_minus_root).as_slice(),
         p_vanishing.as_slice()

@@ -236,7 +236,7 @@ mod tests {
 
     use super::*;
     use crate::arithmetic::builder::StarkBuilder;
-    use crate::arithmetic::chip::{ChipParameters, TestStark};
+    use crate::arithmetic::chip::{StarkParameters, TestStark};
     use crate::arithmetic::instruction::write::WriteInstruction;
     use crate::arithmetic::instruction::EqualityConstraint;
     use crate::arithmetic::register::U16Register;
@@ -254,7 +254,7 @@ mod tests {
         _marker: core::marker::PhantomData<F>,
     }
 
-    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D>
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D>
         for TestArithmeticExpression<F, D>
     {
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
@@ -366,7 +366,7 @@ mod tests {
         _marker: core::marker::PhantomData<F>,
     }
 
-    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D>
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D>
         for Test2ArithmeticExpression<F, D>
     {
         const NUM_ARITHMETIC_COLUMNS: usize = 3;

@@ -7,7 +7,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::*;
 use crate::arithmetic::builder::StarkBuilder;
-use crate::arithmetic::chip::ChipParameters;
+use crate::arithmetic::chip::StarkParameters;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{
     to_u16_le_limbs_polynomial, Polynomial, PolynomialGadget, PolynomialOps,
@@ -29,7 +29,7 @@ pub struct FpQuadInstruction<P: FieldParameters> {
     witness_high: ArrayRegister<U16Register>,
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     pub fn fpquad<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,
@@ -245,7 +245,7 @@ mod tests {
 
     use super::*;
     use crate::arithmetic::builder::StarkBuilder;
-    use crate::arithmetic::chip::{ChipParameters, TestStark};
+    use crate::arithmetic::chip::{StarkParameters, TestStark};
     use crate::arithmetic::field::Fp25519Param;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
@@ -259,7 +259,7 @@ mod tests {
     #[derive(Clone, Debug, Copy)]
     struct FpQuadTest;
 
-    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for FpQuadTest {
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpQuadTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 156;
         const NUM_FREE_COLUMNS: usize = 0;
         type Instruction = FpQuadInstruction<Fp25519Param>;

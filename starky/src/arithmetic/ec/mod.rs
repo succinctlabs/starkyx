@@ -7,7 +7,7 @@ use plonky2::hash::hash_types::RichField;
 
 use super::register::{FieldRegister, RegisterSerializable};
 use crate::arithmetic::builder::StarkBuilder;
-use crate::arithmetic::chip::ChipParameters;
+use crate::arithmetic::chip::StarkParameters;
 use crate::arithmetic::field::FieldParameters;
 use crate::arithmetic::register::Register;
 use crate::arithmetic::trace::TraceWriter;
@@ -43,7 +43,7 @@ pub struct AffinePointRegister<E: EllipticCurveParameters> {
     y: FieldRegister<E::FieldParam>,
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     /// Allocates registers for an affine elliptic curve point.
     ///
     /// The entries are range-checked to be less than 2^16.

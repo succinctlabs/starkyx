@@ -9,7 +9,7 @@ use plonky2::util::transpose;
 use plonky2_maybe_rayon::*;
 
 use super::builder::InsID;
-use super::chip::ChipParameters;
+use super::chip::StarkParameters;
 use super::instruction::Instruction;
 use super::register::{MemorySlice, Register};
 use crate::arithmetic::chip::Chip;
@@ -103,7 +103,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
-    pub fn generate_trace<L: ChipParameters<F, D>>(
+    pub fn generate_trace<L: StarkParameters<F, D>>(
         &self,
         chip: &Chip<L, F, D>,
         row_capacity: usize,

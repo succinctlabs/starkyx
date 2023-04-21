@@ -2,7 +2,7 @@ use super::add::{EcAddData, FromEdwardsAdd};
 use super::*;
 use crate::arithmetic::bool::Selector;
 use crate::arithmetic::builder::StarkBuilder;
-use crate::arithmetic::chip::ChipParameters;
+use crate::arithmetic::chip::StarkParameters;
 use crate::arithmetic::instruction::arithmetic_expressions::ArithmeticExpression;
 use crate::arithmetic::polynomial::Polynomial;
 use crate::arithmetic::register::{BitRegister, ElementRegister};
@@ -22,7 +22,7 @@ pub struct EdScalarMulData<E: EdwardsParameters> {
     selector_y: Selector<FieldRegister<E::FieldParam>>,
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     /// This constraints of one step of the double-and-add algorithm for scalar multiplication.
     ///
     /// The function performs the following operation:
@@ -171,7 +171,7 @@ mod tests {
 
     use super::*;
     use crate::arithmetic::builder::StarkBuilder;
-    use crate::arithmetic::chip::{ChipParameters, TestStark};
+    use crate::arithmetic::chip::{StarkParameters, TestStark};
     use crate::arithmetic::ec::edwards::instructions::EdWardsMicroInstruction;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
@@ -185,7 +185,7 @@ mod tests {
     #[derive(Clone, Debug, Copy)]
     pub struct EdScalarMulTest;
 
-    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for EdScalarMulTest {
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for EdScalarMulTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 1504;
 
         const NUM_FREE_COLUMNS: usize = 2 + 2 * 2 * 16;

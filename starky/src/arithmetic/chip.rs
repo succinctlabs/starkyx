@@ -20,7 +20,7 @@ use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 /// A layout for a circuit that emulates field operations
-pub trait ChipParameters<F: RichField + Extendable<D>, const D: usize>:
+pub trait StarkParameters<F: RichField + Extendable<D>, const D: usize>:
     Sized + Send + Sync
 {
     /// The number of columns that need to be ranged-checked to range 0..num_rows
@@ -39,7 +39,7 @@ pub trait ChipParameters<F: RichField + Extendable<D>, const D: usize>:
 #[derive(Debug, Clone)]
 pub struct Chip<L, F, const D: usize>
 where
-    L: ChipParameters<F, D>,
+    L: StarkParameters<F, D>,
     F: RichField + Extendable<D>,
 {
     pub(crate) instructions: Vec<L::Instruction>,
@@ -51,7 +51,7 @@ where
 
 impl<L, F, const D: usize> Chip<L, F, D>
 where
-    L: ChipParameters<F, D>,
+    L: StarkParameters<F, D>,
     F: RichField + Extendable<D>,
 {
     #[inline]
@@ -193,7 +193,7 @@ where
 #[derive(Clone)]
 pub struct TestStark<L, F, const D: usize>
 where
-    L: ChipParameters<F, D>,
+    L: StarkParameters<F, D>,
     F: RichField + Extendable<D>,
 {
     pub(crate) chip: Chip<L, F, D>,
@@ -201,7 +201,7 @@ where
 
 impl<L, F, const D: usize> TestStark<L, F, D>
 where
-    L: ChipParameters<F, D>,
+    L: StarkParameters<F, D>,
     F: RichField + Extendable<D>,
 {
     pub fn new(chip: Chip<L, F, D>) -> Self {
@@ -209,7 +209,7 @@ where
     }
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Stark<F, D>
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Stark<F, D>
     for TestStark<L, F, D>
 {
     const COLUMNS: usize = Chip::<L, F, D>::num_columns();

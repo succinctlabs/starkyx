@@ -6,7 +6,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::builder::StarkBuilder;
-use super::chip::ChipParameters;
+use super::chip::StarkParameters;
 use super::instruction::Instruction;
 use super::register::{BitRegister, MemorySlice, Register};
 use super::trace::TraceWriter;
@@ -66,7 +66,7 @@ pub struct Selector<T> {
     result: T,
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     pub fn selector<T: Copy>(
         &mut self,
         bit: &BitRegister,
@@ -174,7 +174,7 @@ mod tests {
 
     use super::*;
     use crate::arithmetic::builder::StarkBuilder;
-    use crate::arithmetic::chip::{ChipParameters, TestStark};
+    use crate::arithmetic::chip::{StarkParameters, TestStark};
     use crate::arithmetic::register::BitRegister;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
@@ -188,7 +188,7 @@ mod tests {
     #[derive(Debug, Clone, Copy)]
     pub struct BoolTest;
 
-    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for BoolTest {
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for BoolTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 10;
         const NUM_FREE_COLUMNS: usize = 10;
         type Instruction = Selector<BitRegister>;

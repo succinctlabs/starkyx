@@ -1,29 +1,6 @@
-//! Implements field addition for any field, using a trick from Polygon Zero.
-//! Reference: https://github.com/mir-protocol/plonky2/blob/main/evm/src/arithmetic/addcy.rs
+//! Implements non-native field addition as an "instruction".
 //!
-//! We want to compute a + b = result mod p. In the integers, this is equivalent to witnessing some
-//! carry such that:
-//!
-//!     a + b - result - carry * p = 0.
-//!
-//! Let us encode the integers as polynomials in the Goldilocks field, where each coefficient is
-//! at most 16 bits. In other words, the integers are encoded as an array of little-endian base 16
-//! limbs. We can then write the above equation as:
-//!
-//!    a(x) + b(x) - result(x) - carry(x) * p(x)
-//!
-//! where the polynomial should evaluate to 0 if x = 2^16. To prove that the polynomial has a root
-//! at 2^16, we can have the prover witness a polynomial `w(x)` such that the above polynomial
-//! is divisble by (x - 2^16):
-//!
-//!
-//!    a(x) + b(x) - result(x) - carry(x) * p(x) - (x - 2^16) * w(x) = 0
-//!
-//! Thus, if we can prove that above polynomial is 0, we can conclude that the addition has been
-//! computed correctly. Note that this relies on the fact that any quadratic sum of a sufficiently
-//! small number of terms (i.e., less than 2^32 terms) will not overflow in the Goldilocks field.
-//! Furthermore, one must be careful to ensure that all polynomials except w(x) are range checked
-//! in [0, 2^16).
+//! To understand the implementation, it may be useful to refer to `mod.rs`.
 
 use anyhow::Result;
 use num::BigUint;
@@ -32,9 +9,11 @@ use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
+use super::constrain::packed_generic_constrain_field_operation;
 use super::*;
 use crate::arithmetic::builder::StarkBuilder;
-use crate::arithmetic::chip::ChipParameters;
+use crate::arithmetic::chip::StarkParameters;
+use crate::arithmetic::field::constrain::ext_circuit_constrain_field_operation;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{
     to_u16_le_limbs_polynomial, Polynomial, PolynomialGadget, PolynomialOps,
@@ -56,7 +35,8 @@ pub struct FpAddInstruction<P: FieldParameters> {
     witness_high: ArrayRegister<U16Register>,
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
+    /// Given two field elements `a` and `b`, computes the sum `a + b = c`.
     pub fn fpadd<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,
@@ -83,6 +63,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Star
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
+    /// Writes a `FpAddInstruction` to the trace and returns the result.
     pub fn write_fpadd<P: FieldParameters>(
         &self,
         row_index: usize,
@@ -154,42 +135,28 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         FE: FieldExtension<D2, BaseField = F>,
         PF: PackedField<Scalar = FE>,
     {
-        // get all the data
-        let a = self.a.register().packed_entries_slice(&vars);
-        let b = self.b.register().packed_entries_slice(&vars);
-        let result = self.result.register().packed_entries_slice(&vars);
+        // Get the packed entries.
+        let p_a = self.a.register().packed_entries_slice(&vars);
+        let p_b = self.b.register().packed_entries_slice(&vars);
+        let p_result = self.result.register().packed_entries_slice(&vars);
+        let p_carry = self.carry.register().packed_entries_slice(&vars);
+        let p_witness_low = self.witness_low.register().packed_entries_slice(&vars);
+        let p_witness_high = self.witness_high.register().packed_entries_slice(&vars);
 
-        let carry = self.carry.register().packed_entries_slice(&vars);
-        let witness_low = self.witness_low.register().packed_entries_slice(&vars);
-        let witness_high = self.witness_high.register().packed_entries_slice(&vars);
+        // Compute the vanishing polynomial a(x) + b(x) - result(x) - carry(x) * p(x).
+        let p_a_plus_b = PolynomialOps::add(p_a, p_b);
+        let p_a_plus_b_minus_result = PolynomialOps::sub(&p_a_plus_b, p_result);
+        let p_modulus = Polynomial::<FE>::from_iter(modulus_field_iter::<FE, P>());
+        let p_carry_mul_modulus = PolynomialOps::scalar_poly_mul(p_carry, p_modulus.as_slice());
+        let p_vanishing = PolynomialOps::sub(&p_a_plus_b_minus_result, &p_carry_mul_modulus);
 
-        // Construct the expected vanishing polynmial
-        let a_plus_b = PolynomialOps::add(a, b);
-        let a_plus_b_minus_result = PolynomialOps::sub(&a_plus_b, result);
-        let p_limbs = Polynomial::<FE>::from_iter(modulus_field_iter::<FE, P>());
-        let mul_times_carry = PolynomialOps::scalar_poly_mul(carry, p_limbs.as_slice());
-        let vanishing_poly = PolynomialOps::sub(&a_plus_b_minus_result, &mul_times_carry);
-
-        // reconstruct witness
-
-        let limb = FE::from_canonical_u32(LIMB);
-
-        // Reconstruct and shift back the witness polynomial
-        let w_shifted = witness_low
-            .iter()
-            .zip(witness_high.iter())
-            .map(|(x, y)| *x + (*y * limb));
-
-        let offset = FE::from_canonical_u32(P::WITNESS_OFFSET as u32);
-        let w = w_shifted.map(|x| x - offset).collect::<Vec<PF>>();
-
-        // Multiply by (x-2^16) and make the constraint
-        let root_monomial: &[PF] = &[PF::from(-limb), PF::from(PF::Scalar::ONE)];
-        let witness_times_root = PolynomialOps::mul(&w, root_monomial);
-
-        for i in 0..vanishing_poly.len() {
-            yield_constr.constraint(vanishing_poly[i] - witness_times_root[i]);
-        }
+        // Check [a(x) + b(x) - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
+        packed_generic_constrain_field_operation::<F, D, FE, PF, D2, P>(
+            yield_constr,
+            p_vanishing,
+            p_witness_low,
+            p_witness_high,
+        );
     }
 
     fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
@@ -198,49 +165,33 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        // get all the data
-        let a = self.a.register().evaluation_targets(&vars);
-        let b = self.b.register().evaluation_targets(&vars);
-        let result = self.result.register().evaluation_targets(&vars);
+        type PG = PolynomialGadget;
 
-        let carry = self.carry.register().evaluation_targets(&vars);
-        let witness_low = self.witness_low.register().evaluation_targets(&vars);
-        let witness_high = self.witness_high.register().evaluation_targets(&vars);
+        // Get the packed entries.
+        let p_a = self.a.register().evaluation_targets(&vars);
+        let p_b = self.b.register().evaluation_targets(&vars);
+        let p_result = self.result.register().evaluation_targets(&vars);
+        let p_carry = self.carry.register().evaluation_targets(&vars);
+        let p_witness_low = self.witness_low.register().evaluation_targets(&vars);
+        let p_witness_high = self.witness_high.register().evaluation_targets(&vars);
 
-        // Construct the expected vanishing polynmial
-        let a_plus_b = PolynomialGadget::add_extension(builder, a, b);
-        let a_plus_b_minus_result = PolynomialGadget::sub_extension(builder, &a_plus_b, result);
-        let p_limbs = PolynomialGadget::constant_extension(
+        // Compute the vanishing polynomial a(x) + b(x) - result(x) - carry(x) * p(x).
+        let p_a_plus_b = PG::add_extension(builder, p_a, p_b);
+        let p_a_plus_b_minus_result = PG::sub_extension(builder, &p_a_plus_b, p_result);
+        let p_limbs = PG::constant_extension(
             builder,
             &modulus_field_iter::<F::Extension, P>().collect::<Vec<_>>()[..],
         );
-        let mul_times_carry = PolynomialGadget::mul_extension(builder, carry, &p_limbs[..]);
-        let vanishing_poly =
-            PolynomialGadget::sub_extension(builder, &a_plus_b_minus_result, &mul_times_carry);
+        let p_mul_times_carry = PG::mul_extension(builder, p_carry, &p_limbs[..]);
+        let p_vanishing = PG::sub_extension(builder, &p_a_plus_b_minus_result, &p_mul_times_carry);
 
-        // reconstruct witness
-
-        // Reconstruct and shift back the witness polynomial
-        let limb_const = F::Extension::from_canonical_u32(2u32.pow(16));
-        let limb = builder.constant_extension(limb_const);
-        let w_high_times_limb =
-            PolynomialGadget::ext_scalar_mul_extension(builder, witness_high, &limb);
-        let w_shifted = PolynomialGadget::add_extension(builder, witness_low, &w_high_times_limb);
-        let offset =
-            builder.constant_extension(F::Extension::from_canonical_u32(P::WITNESS_OFFSET as u32));
-        let w = PolynomialGadget::sub_constant_extension(builder, &w_shifted, &offset);
-
-        // Multiply by (x-2^16) and make the constraint
-        let neg_limb = builder.constant_extension(-limb_const);
-        let root_monomial = &[neg_limb, builder.constant_extension(F::Extension::ONE)];
-        let witness_times_root =
-            PolynomialGadget::mul_extension(builder, w.as_slice(), root_monomial);
-
-        let constraint =
-            PolynomialGadget::sub_extension(builder, &vanishing_poly, &witness_times_root);
-        for constr in constraint {
-            yield_constr.constraint(builder, constr);
-        }
+        ext_circuit_constrain_field_operation::<F, D, P>(
+            builder,
+            yield_constr,
+            p_vanishing,
+            p_witness_low,
+            p_witness_high,
+        );
     }
 }
 
@@ -256,7 +207,7 @@ mod tests {
 
     use super::*;
     use crate::arithmetic::builder::StarkBuilder;
-    use crate::arithmetic::chip::{ChipParameters, TestStark};
+    use crate::arithmetic::chip::{StarkParameters, TestStark};
     use crate::arithmetic::field::Fp25519Param;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
@@ -270,7 +221,7 @@ mod tests {
     #[derive(Clone, Debug, Copy)]
     struct FpAddTest;
 
-    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for FpAddTest {
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpAddTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 124;
         const NUM_FREE_COLUMNS: usize = 0;
 
