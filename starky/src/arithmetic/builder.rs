@@ -10,11 +10,11 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
 use super::bool::ConstraintBool;
-use super::chip::{Chip, ChipParameters};
+use super::chip::{Chip, StarkParameters};
 use super::instruction::arithmetic_expressions::ArithmeticExpression;
 use super::instruction::write::WriteInstruction;
 use super::instruction::{EqualityConstraint, Instruction};
-use super::register::{Array, CellType, MemorySlice, Register, RegisterSerializable};
+use super::register::{ArrayRegister, CellType, MemorySlice, Register, RegisterSerializable};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub enum InsID {
@@ -23,9 +23,9 @@ pub enum InsID {
 }
 
 #[derive(Clone, Debug)]
-pub struct ChipBuilder<L, F, const D: usize>
+pub struct StarkBuilder<L, F, const D: usize>
 where
-    L: ChipParameters<F, D>,
+    L: StarkParameters<F, D>,
     F: RichField + Extendable<D>,
 {
     local_index: usize,
@@ -38,15 +38,15 @@ where
     constraints: Vec<EqualityConstraint<F, D>>,
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Default
-    for ChipBuilder<L, F, D>
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Default
+    for StarkBuilder<L, F, D>
 {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     pub fn new() -> Self {
         Self {
             local_index: 0,
@@ -61,80 +61,80 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 
     /// Allocates `size` cells/columns worth of memory and returns it as a `MemorySlice`.
-    pub fn get_local_memory(&mut self, size: usize) -> Result<MemorySlice> {
+    pub fn get_local_memory(&mut self, size: usize) -> MemorySlice {
         let register = MemorySlice::Local(self.local_index, size);
         self.local_index += size;
-        Ok(register)
+        register
     }
 
     /// Allocates `size` cells/columns worth of memory and returns it as a `MemorySlice` on the
     /// next row.
-    fn get_next_memory(&mut self, size: usize) -> Result<MemorySlice> {
+    fn get_next_memory(&mut self, size: usize) -> MemorySlice {
         let register = MemorySlice::Next(self.next_index, size);
         self.next_index += size;
-        Ok(register)
+        register
     }
 
     /// Allocates `size` cells/columns worth of memory and returns it as a `MemorySlice`. Each
     /// cell will be range checked using the lookup table to be in the range `[0, 2^16]`.
-    fn get_local_u16_memory(&mut self, size: usize) -> Result<MemorySlice> {
+    fn get_local_u16_memory(&mut self, size: usize) -> MemorySlice {
         let register = MemorySlice::Local(self.local_arithmetic_index, size);
         self.local_arithmetic_index += size;
-        Ok(register)
+        register
     }
 
     /// Allocates `size` cells/columns worth of memory and returns it as a `MemorySlice` in the
     /// next row. Each cell will be range checked using the lookup table to be in the range
     /// `[0, 2^16]`.
-    fn get_next_u16_memory(&mut self, size: usize) -> Result<MemorySlice> {
+    fn get_next_u16_memory(&mut self, size: usize) -> MemorySlice {
         let register = MemorySlice::Next(self.next_arithmetic_index, size);
         self.local_arithmetic_index += size;
-        Ok(register)
+        register
     }
 
     /// Allocates a new local register according to type `T` which implements the Register trait
     /// and returns it.
-    pub fn alloc_local<T: Register>(&mut self) -> Result<T> {
+    pub fn alloc<T: Register>(&mut self) -> T {
         let register = match T::CELL {
-            Some(CellType::U16) => self.get_local_u16_memory(T::size_of())?,
+            Some(CellType::U16) => self.get_local_u16_memory(T::size_of()),
             Some(CellType::Bit) => {
-                let reg = self.get_local_memory(T::size_of())?;
+                let reg = self.get_local_memory(T::size_of());
                 let consr = EqualityConstraint::<F, D>::Bool(ConstraintBool(reg));
                 self.constraints.push(consr);
                 reg
             }
-            None => self.get_local_memory(T::size_of())?,
+            None => self.get_local_memory(T::size_of()),
         };
-        Ok(T::from_register(register))
+        T::from_register(register)
     }
 
-    pub fn alloc_local_array<T: Register>(&mut self, length: usize) -> Result<Array<T>> {
+    pub fn alloc_array<T: Register>(&mut self, length: usize) -> ArrayRegister<T> {
         let size_of = T::size_of() * length;
         let register = match T::CELL {
-            Some(CellType::U16) => self.get_local_u16_memory(size_of)?,
+            Some(CellType::U16) => self.get_local_u16_memory(size_of),
             Some(CellType::Bit) => {
-                let reg = self.get_local_memory(size_of)?;
+                let reg = self.get_local_memory(size_of);
                 let consr = EqualityConstraint::Bool(ConstraintBool(reg));
                 self.constraints.push(consr);
                 reg
             }
-            None => self.get_local_memory(size_of)?,
+            None => self.get_local_memory(size_of),
         };
-        Ok(Array::<T>::from_register_unsafe(register))
+        ArrayRegister::<T>::from_register_unsafe(register)
     }
 
     /// Allocates a new register on the next row according to type `T` which implements the Register
     /// trait and returns it.
     pub fn alloc_next<T: Register>(&mut self) -> Result<T> {
         let register = match T::CELL {
-            Some(CellType::U16) => self.get_next_u16_memory(T::size_of())?,
+            Some(CellType::U16) => self.get_next_u16_memory(T::size_of()),
             Some(CellType::Bit) => {
-                let reg = self.get_next_memory(T::size_of())?;
+                let reg = self.get_next_memory(T::size_of());
                 let consr = EqualityConstraint::<F, D>::Bool(ConstraintBool(reg));
                 self.constraints.push(consr);
                 reg
             }
-            None => self.get_next_memory(T::size_of())?,
+            None => self.get_next_memory(T::size_of()),
         };
         Ok(T::from_register(register))
     }
@@ -171,7 +171,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
 
     /// Registers a new instruction to the chip.
     pub fn insert_instruction(&mut self, instruction: L::Instruction) -> Result<()> {
-        let id = InsID::CustomInstruction(instruction.memory_vec());
+        let id = InsID::CustomInstruction(instruction.witness_layout());
         let existing_value = self.instruction_indices.insert(id, self.instructions.len());
         if existing_value.is_some() {
             return Err(anyhow!("Instruction label already exists"));
@@ -239,7 +239,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
 
 // Implement methods for the basic operations
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     pub fn assert_expressions_equal(
         &mut self,
         a: ArithmeticExpression<F, D>,
@@ -301,7 +301,7 @@ mod tests {
         _marker: core::marker::PhantomData<F>,
     }
 
-    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D>
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D>
         for TestChipParameters<F, D>
     {
         const NUM_FREE_COLUMNS: usize = 2;
@@ -321,10 +321,10 @@ mod tests {
         // event logger to show messages
         let _ = env_logger::builder().is_test(true).try_init();
 
-        let mut builder = ChipBuilder::<L, F, D>::new();
+        let mut builder = StarkBuilder::<L, F, D>::new();
 
-        let x_0 = builder.alloc_local::<ElementRegister>().unwrap();
-        let x_1 = builder.alloc_local::<ElementRegister>().unwrap();
+        let x_0 = builder.alloc::<ElementRegister>();
+        let x_1 = builder.alloc::<ElementRegister>();
         builder.write_data(&x_0).unwrap();
         builder.write_data(&x_1).unwrap();
 

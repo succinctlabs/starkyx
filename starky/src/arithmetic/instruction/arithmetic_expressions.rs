@@ -327,10 +327,10 @@ mod tests {
     use plonky2::util::timing::TimingTree;
 
     use super::*;
-    use crate::arithmetic::builder::ChipBuilder;
-    use crate::arithmetic::chip::{ChipParameters, TestStark};
+    use crate::arithmetic::builder::StarkBuilder;
+    use crate::arithmetic::chip::{StarkParameters, TestStark};
     use crate::arithmetic::instruction::write::WriteInstruction;
-    use crate::arithmetic::register::ElementRegister;
+    use crate::arithmetic::register::{ElementRegister, U16Register};
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;
@@ -345,11 +345,25 @@ mod tests {
         _marker: core::marker::PhantomData<F>,
     }
 
-    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D>
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D>
         for TestArithmeticExpression<F, D>
     {
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
         const NUM_FREE_COLUMNS: usize = 3;
+
+        type Instruction = WriteInstruction;
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct Test2ArithmeticExpression<F, const D: usize> {
+        _marker: core::marker::PhantomData<F>,
+    }
+
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D>
+        for Test2ArithmeticExpression<F, D>
+    {
+        const NUM_ARITHMETIC_COLUMNS: usize = 3;
+        const NUM_FREE_COLUMNS: usize = 0;
 
         type Instruction = WriteInstruction;
     }
@@ -359,13 +373,13 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type S = TestStark<TestArithmeticExpression<F, D>, F, D>;
+        type S = TestStark<Test2ArithmeticExpression<F, D>, F, D>;
 
-        let mut builder = ChipBuilder::<TestArithmeticExpression<F, D>, F, D>::new();
+        let mut builder = StarkBuilder::<Test2ArithmeticExpression<F, D>, F, D>::new();
 
-        let input_1 = builder.alloc_local::<ElementRegister>().unwrap();
-        let input_2 = builder.alloc_local::<ElementRegister>().unwrap();
-        let output = builder.alloc_local::<ElementRegister>().unwrap();
+        let input_1 = builder.alloc::<U16Register>();
+        let input_2 = builder.alloc::<U16Register>();
+        let output = builder.alloc::<U16Register>();
 
         builder.write_data(&input_1).unwrap();
         builder.write_data(&input_2).unwrap();

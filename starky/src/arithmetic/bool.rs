@@ -5,11 +5,11 @@ use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::builder::ChipBuilder;
-use super::chip::ChipParameters;
+use super::builder::StarkBuilder;
+use super::chip::StarkParameters;
 use super::instruction::Instruction;
 use super::register::{BitRegister, MemorySlice, Register};
-use super::trace::TraceHandle;
+use super::trace::TraceWriter;
 use crate::arithmetic::register::RegisterSerializable;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -17,8 +17,8 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 pub struct ConstraintBool(pub MemorySlice);
 
 impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for ConstraintBool {
-    fn memory_vec(&self) -> Vec<MemorySlice> {
-        vec![self.0]
+    fn witness_layout(&self) -> Vec<MemorySlice> {
+        Vec::new()
     }
 
     fn assign_row(&self, _trace_rows: &mut [Vec<F>], _row: &mut [F], _row_index: usize) {}
@@ -66,7 +66,7 @@ pub struct Selector<T> {
     result: T,
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     pub fn selector<T: Copy>(
         &mut self,
         bit: &BitRegister,
@@ -94,7 +94,7 @@ impl<T> Selector<T> {
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
     #[allow(dead_code)]
     pub fn write_bit(&self, row_index: usize, bit: bool, data: &BitRegister) -> Result<()> {
         self.write_data(row_index, *data, vec![F::from_canonical_u16(bit as u16)])
@@ -102,16 +102,12 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize, T: Register> Instruction<F, D> for Selector<T> {
-    fn memory_vec(&self) -> Vec<MemorySlice> {
-        vec![
-            *self.bit.register(),
-            *self.true_value.register(),
-            *self.false_value.register(),
-        ]
+    fn witness_layout(&self) -> Vec<MemorySlice> {
+        vec![*self.result.register()]
     }
 
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
-        self.result.register().assign(trace_rows, row, row_index);
+        self.result.register().assign(trace_rows, 0, row, row_index);
     }
 
     fn packed_generic_constraints<
@@ -177,8 +173,8 @@ mod tests {
     use plonky2::util::timing::TimingTree;
 
     use super::*;
-    use crate::arithmetic::builder::ChipBuilder;
-    use crate::arithmetic::chip::{ChipParameters, TestStark};
+    use crate::arithmetic::builder::StarkBuilder;
+    use crate::arithmetic::chip::{StarkParameters, TestStark};
     use crate::arithmetic::register::BitRegister;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
@@ -192,7 +188,7 @@ mod tests {
     #[derive(Debug, Clone, Copy)]
     pub struct BoolTest;
 
-    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for BoolTest {
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for BoolTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 10;
         const NUM_FREE_COLUMNS: usize = 10;
         type Instruction = Selector<BitRegister>;
@@ -205,14 +201,14 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type S = TestStark<BoolTest, F, D>;
 
-        let mut builder = ChipBuilder::<BoolTest, F, D>::new();
+        let mut builder = StarkBuilder::<BoolTest, F, D>::new();
 
-        let bit_one = builder.alloc_local::<BitRegister>().unwrap();
+        let bit_one = builder.alloc::<BitRegister>();
         builder.write_data(&bit_one).unwrap();
-        let bit_zero = builder.alloc_local::<BitRegister>().unwrap();
+        let bit_zero = builder.alloc::<BitRegister>();
         builder.write_data(&bit_zero).unwrap();
 
-        let dummy = builder.alloc_local::<BitRegister>().unwrap();
+        let dummy = builder.alloc::<BitRegister>();
         builder.write_data(&dummy).unwrap();
 
         let (chip, spec) = builder.build();
@@ -320,16 +316,16 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type S = TestStark<BoolTest, F, D>;
 
-        let mut builder = ChipBuilder::<BoolTest, F, D>::new();
+        let mut builder = StarkBuilder::<BoolTest, F, D>::new();
 
-        let bit = builder.alloc_local::<BitRegister>().unwrap();
+        let bit = builder.alloc::<BitRegister>();
         builder.write_data(&bit).unwrap();
 
-        let x = builder.alloc_local::<BitRegister>().unwrap();
+        let x = builder.alloc::<BitRegister>();
         builder.write_data(&x).unwrap();
-        let y = builder.alloc_local::<BitRegister>().unwrap();
+        let y = builder.alloc::<BitRegister>();
         builder.write_data(&y).unwrap();
-        let result = builder.alloc_local::<BitRegister>().unwrap();
+        let result = builder.alloc::<BitRegister>();
 
         let sel = builder.selector(&bit, &x, &y, &result).unwrap();
 

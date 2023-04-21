@@ -19,12 +19,21 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
     'static + Send + Sync + Clone
 {
-    //fn generate_trace_row(&self, input: Option<Self::Input>) -> (Vec<F>, Option<Self::Output>);
+    /// Returns a vector of memory slices or contiguous memory regions of the row in the trace that
+    /// instruction relies on. These registers must be filled in by the `TraceWriter`.
+    fn witness_layout(&self) -> Vec<MemorySlice>;
 
-    fn memory_vec(&self) -> Vec<MemorySlice>;
+    /// Assigns the row in the trace according to the `witness_layout`. Usually called by the
+    /// `TraceWriter`.
+    fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
+        self.witness_layout()
+            .into_iter()
+            .fold(0, |local_index, memory_slice| {
+                memory_slice.assign(trace_rows, local_index, row, row_index)
+            });
+    }
 
-    fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize);
-
+    /// Constrains the instruction properly within the STARK by using the `ConstraintConsumer`.
     fn packed_generic_constraints<
         FE,
         P,
@@ -39,6 +48,7 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>;
 
+    /// Constrains the instruction properly within Plonky2 by using the `RecursiveConstraintConsumer`.
     fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
         builder: &mut CircuitBuilder<F, D>,
@@ -158,7 +168,7 @@ pub struct DefaultInstructions<F, const D: usize> {
 impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for DefaultInstructions<F, D> {
     fn assign_row(&self, _trace_rows: &mut [Vec<F>], _row: &mut [F], _row_index: usize) {}
 
-    fn memory_vec(&self) -> Vec<MemorySlice> {
+    fn witness_layout(&self) -> Vec<MemorySlice> {
         Vec::new()
     }
 

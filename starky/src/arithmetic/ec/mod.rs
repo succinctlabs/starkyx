@@ -6,11 +6,11 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
 use super::register::{FieldRegister, RegisterSerializable};
-use crate::arithmetic::builder::ChipBuilder;
-use crate::arithmetic::chip::ChipParameters;
+use crate::arithmetic::builder::StarkBuilder;
+use crate::arithmetic::chip::StarkParameters;
 use crate::arithmetic::field::FieldParameters;
 use crate::arithmetic::register::Register;
-use crate::arithmetic::trace::TraceHandle;
+use crate::arithmetic::trace::TraceWriter;
 
 pub const LIMB: u32 = 2u32.pow(16);
 
@@ -43,7 +43,7 @@ pub struct AffinePointRegister<E: EllipticCurveParameters> {
     y: FieldRegister<E::FieldParam>,
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     /// Allocates registers for an affine elliptic curve point.
     ///
     /// The entries are range-checked to be less than 2^16.
@@ -53,10 +53,10 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
         &mut self,
     ) -> Result<AffinePointRegister<E>> {
         let x = FieldRegister::<E::FieldParam>::from_register(
-            self.get_local_memory(E::FieldParam::NB_LIMBS).unwrap(),
+            self.get_local_memory(E::FieldParam::NB_LIMBS),
         );
         let y = FieldRegister::<E::FieldParam>::from_register(
-            self.get_local_memory(E::FieldParam::NB_LIMBS).unwrap(),
+            self.get_local_memory(E::FieldParam::NB_LIMBS),
         );
         Ok(AffinePointRegister::<E>::from_field_registers(x, y))
     }
@@ -68,8 +68,8 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     pub fn alloc_local_ec_point<E: EllipticCurveParameters>(
         &mut self,
     ) -> Result<AffinePointRegister<E>> {
-        let x = self.alloc_local::<FieldRegister<E::FieldParam>>()?;
-        let y = self.alloc_local::<FieldRegister<E::FieldParam>>()?;
+        let x = self.alloc::<FieldRegister<E::FieldParam>>();
+        let y = self.alloc::<FieldRegister<E::FieldParam>>();
         Ok(AffinePointRegister { x, y })
     }
 
@@ -91,7 +91,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
     #[allow(dead_code)]
     fn write_ec_point<E: EllipticCurveParameters>(
         &self,

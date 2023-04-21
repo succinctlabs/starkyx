@@ -1,34 +1,70 @@
+//! Implements field arithmetic for any field, using a trick from Polygon Zero.
+//! Reference: https://github.com/mir-protocol/plonky2/blob/main/evm/src/arithmetic/addcy.rs
+//!
+//! We want to compute a + b = result mod p. In the integers, this is equivalent to witnessing some
+//! carry such that:
+//!
+//!     a + b - result - carry * p = 0.
+//!
+//! Let us encode the integers as polynomials in the Goldilocks field, where each coefficient is
+//! at most 16 bits. In other words, the integers are encoded as an array of little-endian base 16
+//! limbs. We can then write the above equation as:
+//!
+//!    a(x) + b(x) - result(x) - carry(x) * p(x)
+//!
+//! where the polynomial should evaluate to 0 if x = 2^16. To prove that the polynomial has a root
+//! at 2^16, we can have the prover witness a polynomial `w(x)` such that the above polynomial
+//! is divisble by (x - 2^16):
+//!
+//!
+//!    a(x) + b(x) - result(x) - carry(x) * p(x) - (x - 2^16) * w(x) = 0
+//!
+//! Thus, if we can prove that above polynomial is 0, we can conclude that the addition has been
+//! computed correctly. Note that this relies on the fact that any quadratic sum of a sufficiently
+//! small number of terms (i.e., less than 2^32 terms) will not overflow in the Goldilocks field.
+//! Furthermore, one must be careful to ensure that all polynomials except w(x) are range checked
+//! in [0, 2^16).
+//!
+//! This technique generalizes for any quadratic sum with a "small" number of terms to avoid
+//! overflow.
+
 mod add;
+mod constrain;
 mod mul;
 mod mul_const;
 mod quad;
 
 use anyhow::Result;
 use num::{BigUint, One, Zero};
-use plonky2::field::extension::Extendable;
+use plonky2::field::extension::{Extendable, FieldExtension};
+use plonky2::field::packed::PackedField;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
+use plonky2::iop::ext_target::ExtensionTarget;
+use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-pub use self::add::FpAdd;
-pub use self::mul::FpMul;
-pub use self::mul_const::FpMulConst;
-pub use self::quad::FpQuad;
+pub use self::add::FpAddInstruction;
+pub use self::mul::FpMulInstruction;
+pub use self::mul_const::FpMulConstInstruction;
+pub use self::quad::FpQuadInstruction;
 use super::instruction::Instruction;
-use super::polynomial::Polynomial;
+use super::polynomial::{Polynomial, PolynomialOps};
 use super::register::FieldRegister;
-use super::trace::TraceHandle;
+use super::trace::TraceWriter;
+use crate::arithmetic::polynomial::PolynomialGadget;
 use crate::arithmetic::register::MemorySlice;
 
 pub const MAX_NB_LIMBS: usize = 32;
 pub const LIMB: u32 = 2u32.pow(16);
 
 pub trait FieldParameters: Send + Sync + Copy + 'static {
+    const NB_BITS_PER_LIMB: usize;
     const NB_LIMBS: usize;
     const NB_WITNESS_LIMBS: usize;
     const MODULUS: [u16; MAX_NB_LIMBS];
     const WITNESS_OFFSET: usize;
 
-    fn modulus_biguint() -> BigUint {
+    fn modulus() -> BigUint {
         let mut modulus = BigUint::zero();
         for (i, limb) in Self::MODULUS.iter().enumerate() {
             modulus += BigUint::from(*limb) << (16 * i);
@@ -37,7 +73,7 @@ pub trait FieldParameters: Send + Sync + Copy + 'static {
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
     pub fn write_field<P: FieldParameters>(
         &self,
         row_index: usize,
@@ -63,6 +99,7 @@ pub struct Fp25519Param;
 pub type Fp25519 = FieldRegister<Fp25519Param>;
 
 impl FieldParameters for Fp25519Param {
+    const NB_BITS_PER_LIMB: usize = 16;
     const NB_LIMBS: usize = 16;
     const NB_WITNESS_LIMBS: usize = 2 * Self::NB_LIMBS - 2;
     const MODULUS: [u16; MAX_NB_LIMBS] = [
@@ -71,33 +108,33 @@ impl FieldParameters for Fp25519Param {
     ];
     const WITNESS_OFFSET: usize = 1usize << 20;
 
-    fn modulus_biguint() -> BigUint {
+    fn modulus() -> BigUint {
         (BigUint::one() << 255) - BigUint::from(19u32)
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum FpInstruction<P: FieldParameters> {
-    Add(FpAdd<P>),
-    Mul(FpMul<P>),
-    Quad(FpQuad<P>),
-    MulConst(FpMulConst<P>),
+    Add(FpAddInstruction<P>),
+    Mul(FpMulInstruction<P>),
+    Quad(FpQuadInstruction<P>),
+    MulConst(FpMulConstInstruction<P>),
 }
 
-impl<P: FieldParameters> From<FpAdd<P>> for FpInstruction<P> {
-    fn from(add: FpAdd<P>) -> Self {
+impl<P: FieldParameters> From<FpAddInstruction<P>> for FpInstruction<P> {
+    fn from(add: FpAddInstruction<P>) -> Self {
         Self::Add(add)
     }
 }
 
-impl<P: FieldParameters> From<FpMul<P>> for FpInstruction<P> {
-    fn from(mul: FpMul<P>) -> Self {
+impl<P: FieldParameters> From<FpMulInstruction<P>> for FpInstruction<P> {
+    fn from(mul: FpMulInstruction<P>) -> Self {
         Self::Mul(mul)
     }
 }
 
-impl<P: FieldParameters> From<FpQuad<P>> for FpInstruction<P> {
-    fn from(quad: FpQuad<P>) -> Self {
+impl<P: FieldParameters> From<FpQuadInstruction<P>> for FpInstruction<P> {
+    fn from(quad: FpQuadInstruction<P>) -> Self {
         Self::Quad(quad)
     }
 }
@@ -105,31 +142,20 @@ impl<P: FieldParameters> From<FpQuad<P>> for FpInstruction<P> {
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
     for FpInstruction<P>
 {
-    fn memory_vec(&self) -> Vec<MemorySlice> {
-        match self {
-            FpInstruction::Add(add) => <FpAdd<P> as Instruction<F, D>>::memory_vec(add),
-            FpInstruction::Mul(mul) => <FpMul<P> as Instruction<F, D>>::memory_vec(mul),
-            FpInstruction::Quad(quad) => <FpQuad<P> as Instruction<F, D>>::memory_vec(quad),
-            FpInstruction::MulConst(mul_const) => {
-                <FpMulConst<P> as Instruction<F, D>>::memory_vec(mul_const)
-            }
-        }
-    }
-
-    fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
+    fn witness_layout(&self) -> Vec<MemorySlice> {
         match self {
             FpInstruction::Add(add) => {
-                <FpAdd<P> as Instruction<F, D>>::assign_row(add, trace_rows, row, row_index)
+                <FpAddInstruction<P> as Instruction<F, D>>::witness_layout(add)
             }
             FpInstruction::Mul(mul) => {
-                <FpMul<P> as Instruction<F, D>>::assign_row(mul, trace_rows, row, row_index)
+                <FpMulInstruction<P> as Instruction<F, D>>::witness_layout(mul)
             }
             FpInstruction::Quad(quad) => {
-                <FpQuad<P> as Instruction<F, D>>::assign_row(quad, trace_rows, row, row_index)
+                <FpQuadInstruction<P> as Instruction<F, D>>::witness_layout(quad)
             }
-            FpInstruction::MulConst(mul_const) => <FpMulConst<P> as Instruction<F, D>>::assign_row(
-                mul_const, trace_rows, row, row_index,
-            ),
+            FpInstruction::MulConst(mul_const) => {
+                <FpMulConstInstruction<P> as Instruction<F, D>>::witness_layout(mul_const)
+            }
         }
     }
 
@@ -149,20 +175,28 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
     {
         match self {
             FpInstruction::Add(add) => {
-                <FpAdd<P> as Instruction<F, D>>::packed_generic_constraints(add, vars, yield_constr)
+                <FpAddInstruction<P> as Instruction<F, D>>::packed_generic_constraints(
+                    add,
+                    vars,
+                    yield_constr,
+                )
             }
             FpInstruction::Mul(mul) => {
-                <FpMul<P> as Instruction<F, D>>::packed_generic_constraints(mul, vars, yield_constr)
+                <FpMulInstruction<P> as Instruction<F, D>>::packed_generic_constraints(
+                    mul,
+                    vars,
+                    yield_constr,
+                )
             }
             FpInstruction::Quad(quad) => {
-                <FpQuad<P> as Instruction<F, D>>::packed_generic_constraints(
+                <FpQuadInstruction<P> as Instruction<F, D>>::packed_generic_constraints(
                     quad,
                     vars,
                     yield_constr,
                 )
             }
             FpInstruction::MulConst(mul_const) => {
-                <FpMulConst<P> as Instruction<F, D>>::packed_generic_constraints(
+                <FpMulConstInstruction<P> as Instruction<F, D>>::packed_generic_constraints(
                     mul_const,
                     vars,
                     yield_constr,
@@ -178,26 +212,32 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
         match self {
-            FpInstruction::Add(add) => <FpAdd<P> as Instruction<F, D>>::ext_circuit_constraints(
-                add,
-                builder,
-                vars,
-                yield_constr,
-            ),
-            FpInstruction::Mul(mul) => <FpMul<P> as Instruction<F, D>>::ext_circuit_constraints(
-                mul,
-                builder,
-                vars,
-                yield_constr,
-            ),
-            FpInstruction::Quad(quad) => <FpQuad<P> as Instruction<F, D>>::ext_circuit_constraints(
-                quad,
-                builder,
-                vars,
-                yield_constr,
-            ),
+            FpInstruction::Add(add) => {
+                <FpAddInstruction<P> as Instruction<F, D>>::ext_circuit_constraints(
+                    add,
+                    builder,
+                    vars,
+                    yield_constr,
+                )
+            }
+            FpInstruction::Mul(mul) => {
+                <FpMulInstruction<P> as Instruction<F, D>>::ext_circuit_constraints(
+                    mul,
+                    builder,
+                    vars,
+                    yield_constr,
+                )
+            }
+            FpInstruction::Quad(quad) => {
+                <FpQuadInstruction<P> as Instruction<F, D>>::ext_circuit_constraints(
+                    quad,
+                    builder,
+                    vars,
+                    yield_constr,
+                )
+            }
             FpInstruction::MulConst(mul_const) => {
-                <FpMulConst<P> as Instruction<F, D>>::ext_circuit_constraints(
+                <FpMulConstInstruction<P> as Instruction<F, D>>::ext_circuit_constraints(
                     mul_const,
                     builder,
                     vars,
@@ -220,8 +260,8 @@ mod tests {
     use rand::thread_rng;
 
     use super::*;
-    use crate::arithmetic::builder::ChipBuilder;
-    use crate::arithmetic::chip::{ChipParameters, TestStark};
+    use crate::arithmetic::builder::StarkBuilder;
+    use crate::arithmetic::chip::{StarkParameters, TestStark};
     use crate::arithmetic::field::Fp25519Param;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
@@ -235,7 +275,7 @@ mod tests {
     #[derive(Clone, Debug, Copy)]
     struct FpInstructionTest;
 
-    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for FpInstructionTest {
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpInstructionTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 156;
         const NUM_FREE_COLUMNS: usize = 0;
         type Instruction = FpInstruction<Fp25519Param>;
@@ -250,15 +290,14 @@ mod tests {
         type S = TestStark<FpInstructionTest, F, D>;
 
         // build the stark
-        let mut builder = ChipBuilder::<FpInstructionTest, F, D>::new();
+        let mut builder = StarkBuilder::<FpInstructionTest, F, D>::new();
 
-        let a = builder.alloc_local::<Fp>().unwrap();
-        let b = builder.alloc_local::<Fp>().unwrap();
-        let c = builder.alloc_local::<Fp>().unwrap();
-        let d = builder.alloc_local::<Fp>().unwrap();
-        let result = builder.alloc_local::<Fp>().unwrap();
+        let a = builder.alloc::<Fp>();
+        let b = builder.alloc::<Fp>();
+        let c = builder.alloc::<Fp>();
+        let d = builder.alloc::<Fp>();
 
-        let quad = builder.fpquad(&a, &b, &c, &d, &result).unwrap();
+        let (result, quad) = builder.fpquad(&a, &b, &c, &d).unwrap();
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
         builder.write_data(&c).unwrap();
@@ -270,7 +309,7 @@ mod tests {
         let num_rows = 2u64.pow(16);
         let (handle, generator) = trace::<F, D>(spec);
 
-        let p = Fp25519Param::modulus_biguint();
+        let p = Fp25519Param::modulus();
 
         let mut rng = thread_rng();
         for i in 0..num_rows {

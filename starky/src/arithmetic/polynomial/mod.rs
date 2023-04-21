@@ -6,10 +6,14 @@ use core::iter;
 use core::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub};
 
 pub use gadget::PolynomialGadget;
+use itertools::Itertools;
 use num::BigUint;
 pub use ops::PolynomialOps;
+use plonky2::field::extension::Extendable;
 use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
 
+use super::field::FieldParameters;
 use crate::arithmetic::utils::{bigint_into_u16_digits, biguint_to_16_digits_field};
 
 /// A wrapper around a vector of field elements that implements polynomial operations. Often used
@@ -32,12 +36,12 @@ impl<T: Clone> Polynomial<T> {
         Self::new_from_vec(biguint_to_16_digits_field(num, num_limbs))
     }
 
-    pub fn from_biguint_num(num: &BigUint, num_bits: usize, num_limbs: usize) -> Self
+    pub fn from_biguint<P: FieldParameters>(num: &BigUint) -> Self
     where
         T: From<u16>,
     {
-        assert_eq!(num_bits, 16, "Only 16 bit numbers supported");
-        let num_limbs = bigint_into_u16_digits(num, num_limbs)
+        assert_eq!(P::NB_BITS_PER_LIMB, 16, "Only 16 bit numbers supported");
+        let num_limbs = bigint_into_u16_digits(num, P::NB_LIMBS)
             .iter()
             .map(|x| (*x).into())
             .collect();
@@ -329,4 +333,12 @@ pub fn get_powers<T>(x: T, one: T) -> PowersIter<T> {
         base: x,
         current: one,
     }
+}
+
+pub fn to_u16_le_limbs_polynomial<F: RichField, P: FieldParameters>(x: &BigUint) -> Polynomial<F> {
+    let num_limbs = bigint_into_u16_digits(x, P::NB_LIMBS)
+        .iter()
+        .map(|x| F::from_canonical_u16(*x))
+        .collect();
+    Polynomial::new_from_vec(num_limbs)
 }

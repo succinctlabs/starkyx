@@ -1,3 +1,7 @@
+//! Implements non-native field addition as an "instruction".
+//!
+//! To understand the implementation, it may be useful to refer to `mod.rs`.
+
 use anyhow::Result;
 use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
@@ -5,90 +9,116 @@ use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
+use super::constrain::packed_generic_constrain_field_operation;
 use super::*;
-use crate::arithmetic::builder::ChipBuilder;
-use crate::arithmetic::chip::ChipParameters;
+use crate::arithmetic::builder::StarkBuilder;
+use crate::arithmetic::chip::StarkParameters;
+use crate::arithmetic::field::constrain::ext_circuit_constrain_field_operation;
 use crate::arithmetic::instruction::Instruction;
-use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
-use crate::arithmetic::register::{
-    Array, FieldRegister, MemorySlice, RegisterSerializable, U16Register,
+use crate::arithmetic::polynomial::{
+    to_u16_le_limbs_polynomial, Polynomial, PolynomialGadget, PolynomialOps,
 };
-use crate::arithmetic::trace::TraceHandle;
-use crate::arithmetic::utils::{extract_witness_and_shift, split_digits, to_field_iter};
+use crate::arithmetic::register::{
+    ArrayRegister, FieldRegister, MemorySlice, RegisterSerializable, U16Register,
+};
+use crate::arithmetic::trace::TraceWriter;
+use crate::arithmetic::utils::{compute_root_quotient_and_shift, split_u32_limbs_to_u16_limbs};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Debug, Clone, Copy)]
-pub struct FpAdd<P: FieldParameters> {
+pub struct FpAddInstruction<P: FieldParameters> {
     a: FieldRegister<P>,
     b: FieldRegister<P>,
     result: FieldRegister<P>,
     carry: FieldRegister<P>,
-    witness_low: Array<U16Register>,
-    witness_high: Array<U16Register>,
+    witness_low: ArrayRegister<U16Register>,
+    witness_high: ArrayRegister<U16Register>,
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
+    /// Given two field elements `a` and `b`, computes the sum `a + b = c`.
     pub fn fpadd<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,
         b: &FieldRegister<P>,
-        result: &FieldRegister<P>,
-    ) -> Result<FpAdd<P>>
+    ) -> Result<(FieldRegister<P>, FpAddInstruction<P>)>
     where
-        L::Instruction: From<FpAdd<P>>,
+        L::Instruction: From<FpAddInstruction<P>>,
     {
-        let carry = self.alloc_local::<FieldRegister<P>>().unwrap();
-        let witness_low = self
-            .alloc_local_array::<U16Register>(P::NB_WITNESS_LIMBS)
-            .unwrap();
-        let witness_high = self
-            .alloc_local_array::<U16Register>(P::NB_WITNESS_LIMBS)
-            .unwrap();
-        let instr = FpAdd {
+        let result = self.alloc::<FieldRegister<P>>();
+        let carry = self.alloc::<FieldRegister<P>>();
+        let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        let instr = FpAddInstruction {
             a: *a,
             b: *b,
-            result: *result,
+            result,
             carry,
             witness_low,
             witness_high,
         };
         self.insert_instruction(instr.into())?;
-        Ok(instr)
+        Ok((result, instr))
+    }
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
+    /// Writes a `FpAddInstruction` to the trace and returns the result.
+    pub fn write_fpadd<P: FieldParameters>(
+        &self,
+        row_index: usize,
+        a: &BigUint,
+        b: &BigUint,
+        instruction: FpAddInstruction<P>,
+    ) -> Result<BigUint> {
+        // Compute field addition in the integers.
+        let modulus = P::modulus();
+        let result = (a + b) % &modulus;
+        let carry = (a + b - &result) / &modulus;
+        debug_assert!(result < modulus);
+        debug_assert!(carry < modulus);
+        debug_assert_eq!(&carry * &modulus, a + b - &result);
+
+        // Make little endian polynomial limbs.
+        let p_a = to_u16_le_limbs_polynomial::<F, P>(a);
+        let p_b = to_u16_le_limbs_polynomial::<F, P>(b);
+        let p_modulus = to_u16_le_limbs_polynomial::<F, P>(&modulus);
+        let p_result = to_u16_le_limbs_polynomial::<F, P>(&result);
+        let p_carry = to_u16_le_limbs_polynomial::<F, P>(&carry);
+
+        // Compute the vanishing polynomial.
+        let p_vanishing = &p_a + &p_b - &p_result - &p_carry * &p_modulus;
+        debug_assert_eq!(p_vanishing.degree(), P::NB_WITNESS_LIMBS);
+
+        // Compute the witness.
+        let p_witness = compute_root_quotient_and_shift(&p_vanishing, P::WITNESS_OFFSET);
+        let (p_witness_low, p_witness_high) = split_u32_limbs_to_u16_limbs(&p_witness);
+
+        // Row must match layout of instruction.
+        self.write_to_layout(
+            row_index,
+            instruction,
+            vec![
+                p_result.coefficients,
+                p_carry.coefficients,
+                p_witness_low,
+                p_witness_high,
+            ],
+        )?;
+        Ok(result)
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
-    for FpAdd<P>
+    for FpAddInstruction<P>
 {
-    fn memory_vec(&self) -> Vec<MemorySlice> {
+    fn witness_layout(&self) -> Vec<MemorySlice> {
         vec![
-            *self.a.register(),
-            *self.b.register(),
             *self.result.register(),
+            *self.carry.register(),
+            *self.witness_low.register(),
+            *self.witness_high.register(),
         ]
-    }
-
-    fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
-        let mut index = 0;
-        self.result
-            .register()
-            .assign(trace_rows, &mut row[index..P::NB_LIMBS], row_index);
-        index += P::NB_LIMBS;
-        self.carry
-            .register()
-            .assign(trace_rows, &mut row[index..index + P::NB_LIMBS], row_index);
-        index += P::NB_LIMBS;
-        self.witness_low.register().assign(
-            trace_rows,
-            &mut row[index..index + P::NB_WITNESS_LIMBS],
-            row_index,
-        );
-        index += P::NB_WITNESS_LIMBS;
-        self.witness_high.register().assign(
-            trace_rows,
-            &mut row[index..index + P::NB_WITNESS_LIMBS],
-            row_index,
-        );
     }
 
     fn packed_generic_constraints<
@@ -105,42 +135,28 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         FE: FieldExtension<D2, BaseField = F>,
         PF: PackedField<Scalar = FE>,
     {
-        // get all the data
-        let a = self.a.register().packed_entries_slice(&vars);
-        let b = self.b.register().packed_entries_slice(&vars);
-        let result = self.result.register().packed_entries_slice(&vars);
+        // Get the packed entries.
+        let p_a = self.a.register().packed_entries_slice(&vars);
+        let p_b = self.b.register().packed_entries_slice(&vars);
+        let p_result = self.result.register().packed_entries_slice(&vars);
+        let p_carry = self.carry.register().packed_entries_slice(&vars);
+        let p_witness_low = self.witness_low.register().packed_entries_slice(&vars);
+        let p_witness_high = self.witness_high.register().packed_entries_slice(&vars);
 
-        let carry = self.carry.register().packed_entries_slice(&vars);
-        let witness_low = self.witness_low.register().packed_entries_slice(&vars);
-        let witness_high = self.witness_high.register().packed_entries_slice(&vars);
+        // Compute the vanishing polynomial a(x) + b(x) - result(x) - carry(x) * p(x).
+        let p_a_plus_b = PolynomialOps::add(p_a, p_b);
+        let p_a_plus_b_minus_result = PolynomialOps::sub(&p_a_plus_b, p_result);
+        let p_modulus = Polynomial::<FE>::from_iter(modulus_field_iter::<FE, P>());
+        let p_carry_mul_modulus = PolynomialOps::scalar_poly_mul(p_carry, p_modulus.as_slice());
+        let p_vanishing = PolynomialOps::sub(&p_a_plus_b_minus_result, &p_carry_mul_modulus);
 
-        // Construct the expected vanishing polynmial
-        let a_plus_b = PolynomialOps::add(a, b);
-        let a_plus_b_minus_result = PolynomialOps::sub(&a_plus_b, result);
-        let p_limbs = Polynomial::<FE>::from_iter(modulus_field_iter::<FE, P>());
-        let mul_times_carry = PolynomialOps::scalar_poly_mul(carry, p_limbs.as_slice());
-        let vanishing_poly = PolynomialOps::sub(&a_plus_b_minus_result, &mul_times_carry);
-
-        // reconstruct witness
-
-        let limb = FE::from_canonical_u32(LIMB);
-
-        // Reconstruct and shift back the witness polynomial
-        let w_shifted = witness_low
-            .iter()
-            .zip(witness_high.iter())
-            .map(|(x, y)| *x + (*y * limb));
-
-        let offset = FE::from_canonical_u32(P::WITNESS_OFFSET as u32);
-        let w = w_shifted.map(|x| x - offset).collect::<Vec<PF>>();
-
-        // Multiply by (x-2^16) and make the constraint
-        let root_monomial: &[PF] = &[PF::from(-limb), PF::from(PF::Scalar::ONE)];
-        let witness_times_root = PolynomialOps::mul(&w, root_monomial);
-
-        for i in 0..vanishing_poly.len() {
-            yield_constr.constraint(vanishing_poly[i] - witness_times_root[i]);
-        }
+        // Check [a(x) + b(x) - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
+        packed_generic_constrain_field_operation::<F, D, FE, PF, D2, P>(
+            yield_constr,
+            p_vanishing,
+            p_witness_low,
+            p_witness_high,
+        );
     }
 
     fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
@@ -149,119 +165,33 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        // get all the data
-        let a = self.a.register().evaluation_targets(&vars);
-        let b = self.b.register().evaluation_targets(&vars);
-        let result = self.result.register().evaluation_targets(&vars);
+        type PG = PolynomialGadget;
 
-        let carry = self.carry.register().evaluation_targets(&vars);
-        let witness_low = self.witness_low.register().evaluation_targets(&vars);
-        let witness_high = self.witness_high.register().evaluation_targets(&vars);
+        // Get the packed entries.
+        let p_a = self.a.register().evaluation_targets(&vars);
+        let p_b = self.b.register().evaluation_targets(&vars);
+        let p_result = self.result.register().evaluation_targets(&vars);
+        let p_carry = self.carry.register().evaluation_targets(&vars);
+        let p_witness_low = self.witness_low.register().evaluation_targets(&vars);
+        let p_witness_high = self.witness_high.register().evaluation_targets(&vars);
 
-        // Construct the expected vanishing polynmial
-        let a_plus_b = PolynomialGadget::add_extension(builder, a, b);
-        let a_plus_b_minus_result = PolynomialGadget::sub_extension(builder, &a_plus_b, result);
-        let p_limbs = PolynomialGadget::constant_extension(
+        // Compute the vanishing polynomial a(x) + b(x) - result(x) - carry(x) * p(x).
+        let p_a_plus_b = PG::add_extension(builder, p_a, p_b);
+        let p_a_plus_b_minus_result = PG::sub_extension(builder, &p_a_plus_b, p_result);
+        let p_limbs = PG::constant_extension(
             builder,
             &modulus_field_iter::<F::Extension, P>().collect::<Vec<_>>()[..],
         );
-        let mul_times_carry = PolynomialGadget::mul_extension(builder, carry, &p_limbs[..]);
-        let vanishing_poly =
-            PolynomialGadget::sub_extension(builder, &a_plus_b_minus_result, &mul_times_carry);
+        let p_mul_times_carry = PG::mul_extension(builder, p_carry, &p_limbs[..]);
+        let p_vanishing = PG::sub_extension(builder, &p_a_plus_b_minus_result, &p_mul_times_carry);
 
-        // reconstruct witness
-
-        // Reconstruct and shift back the witness polynomial
-        let limb_const = F::Extension::from_canonical_u32(2u32.pow(16));
-        let limb = builder.constant_extension(limb_const);
-        let w_high_times_limb =
-            PolynomialGadget::ext_scalar_mul_extension(builder, witness_high, &limb);
-        let w_shifted = PolynomialGadget::add_extension(builder, witness_low, &w_high_times_limb);
-        let offset =
-            builder.constant_extension(F::Extension::from_canonical_u32(P::WITNESS_OFFSET as u32));
-        let w = PolynomialGadget::sub_constant_extension(builder, &w_shifted, &offset);
-
-        // Multiply by (x-2^16) and make the constraint
-        let neg_limb = builder.constant_extension(-limb_const);
-        let root_monomial = &[neg_limb, builder.constant_extension(F::Extension::ONE)];
-        let witness_times_root =
-            PolynomialGadget::mul_extension(builder, w.as_slice(), root_monomial);
-
-        let constraint =
-            PolynomialGadget::sub_extension(builder, &vanishing_poly, &witness_times_root);
-        for constr in constraint {
-            yield_constr.constraint(builder, constr);
-        }
-    }
-}
-
-impl<P: FieldParameters> FpAdd<P> {
-    /// Trace row for fp_mul operation
-    ///
-    /// Returns a vector
-    /// [Input[2 * N_LIMBS], output[N_LIMBS], carry[NUM_CARRY_LIMBS], Witness_low[NUM_WITNESS_LIMBS], Witness_high[NUM_WITNESS_LIMBS]]
-    pub fn trace_row<F: RichField + Extendable<D>, const D: usize>(
-        a: &BigUint,
-        b: &BigUint,
-    ) -> (Vec<F>, BigUint) {
-        let p = P::modulus_biguint();
-        let result = (a + b) % &p;
-        debug_assert!(result < p);
-        let carry = (a + b - &result) / &p;
-        debug_assert!(carry < p);
-        debug_assert_eq!(&carry * &p, a + b - &result);
-
-        // make polynomial limbs
-        let p_a = Polynomial::<i64>::from_biguint_num(a, 16, P::NB_LIMBS);
-        let p_b = Polynomial::<i64>::from_biguint_num(b, 16, P::NB_LIMBS);
-        let p_p = Polynomial::<i64>::from_biguint_num(&p, 16, P::NB_LIMBS);
-
-        let p_result = Polynomial::<i64>::from_biguint_num(&result, 16, P::NB_LIMBS);
-        let p_carry = Polynomial::<i64>::from_biguint_num(&carry, 16, P::NB_LIMBS);
-
-        // Compute the vanishing polynomial
-        let vanishing_poly = &p_a + &p_b - &p_result - &p_carry * &p_p;
-        debug_assert_eq!(vanishing_poly.degree(), P::NB_WITNESS_LIMBS);
-
-        // Compute the witness
-        let witness_shifted = extract_witness_and_shift(&vanishing_poly, P::WITNESS_OFFSET as u32);
-        let (witness_low, witness_high) = split_digits::<F>(&witness_shifted);
-
-        let mut row = Vec::new();
-
-        // output
-        row.extend(to_field_iter::<F>(&p_result));
-        // carry and witness
-        row.extend(to_field_iter::<F>(&p_carry));
-        row.extend(witness_low);
-        row.extend(witness_high);
-
-        (row, result)
-    }
-
-    pub fn write<F: RichField + Extendable<D>, const D: usize>(
-        &self,
-        a: BigUint,
-        b: BigUint,
-        handle: TraceHandle<F, D>,
-        row_index: usize,
-    ) -> Result<()> {
-        let (row, _) = Self::trace_row::<F, D>(&a, &b);
-        handle.write(row_index, *self, row)
-    }
-}
-
-impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
-    pub fn write_fpadd<P: FieldParameters>(
-        &self,
-        row_index: usize,
-        a_int: &BigUint,
-        b_int: &BigUint,
-        instruction: FpAdd<P>,
-    ) -> Result<BigUint> {
-        let (row, result) = FpAdd::<P>::trace_row::<F, D>(a_int, b_int);
-        self.write(row_index, instruction, row)?;
-        Ok(result)
+        ext_circuit_constrain_field_operation::<F, D, P>(
+            builder,
+            yield_constr,
+            p_vanishing,
+            p_witness_low,
+            p_witness_high,
+        );
     }
 }
 
@@ -273,12 +203,11 @@ mod tests {
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::timed;
     use plonky2::util::timing::TimingTree;
-    //use plonky2_maybe_rayon::*;
     use rand::thread_rng;
 
     use super::*;
-    use crate::arithmetic::builder::ChipBuilder;
-    use crate::arithmetic::chip::{ChipParameters, TestStark};
+    use crate::arithmetic::builder::StarkBuilder;
+    use crate::arithmetic::chip::{StarkParameters, TestStark};
     use crate::arithmetic::field::Fp25519Param;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
@@ -292,11 +221,11 @@ mod tests {
     #[derive(Clone, Debug, Copy)]
     struct FpAddTest;
 
-    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for FpAddTest {
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpAddTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 124;
         const NUM_FREE_COLUMNS: usize = 0;
 
-        type Instruction = FpAdd<Fp25519Param>;
+        type Instruction = FpAddInstruction<Fp25519Param>;
     }
 
     #[test]
@@ -308,16 +237,12 @@ mod tests {
         type S = TestStark<FpAddTest, F, D>;
 
         let _ = env_logger::builder().is_test(true).try_init();
-        // build the stark
-        let mut builder = ChipBuilder::<FpAddTest, F, D>::new();
+        let mut builder = StarkBuilder::<FpAddTest, F, D>::new();
 
-        let a = builder.alloc_local::<Fp>().unwrap();
-        let b = builder.alloc_local::<Fp>().unwrap();
-        let result = builder.alloc_local::<Fp>().unwrap();
+        let a = builder.alloc::<Fp>();
+        let b = builder.alloc::<Fp>();
 
-        //let ab = FMul::new(a, b, result);
-        //builder.insert_instruction(ab).unwrap();
-        let a_add_b_ins = builder.fpadd(&a, &b, &result).unwrap();
+        let (_, a_add_b_ins) = builder.fpadd(&a, &b).unwrap();
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
 
@@ -327,7 +252,7 @@ mod tests {
         let num_rows = 2u64.pow(16);
         let (handle, generator) = trace::<F, D>(spec);
 
-        let p = Fp25519Param::modulus_biguint();
+        let p = Fp25519Param::modulus();
 
         let mut timing = TimingTree::new("stark_proof", log::Level::Debug);
 

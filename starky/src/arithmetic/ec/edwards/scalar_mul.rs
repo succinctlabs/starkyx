@@ -1,8 +1,8 @@
 use super::add::{EcAddData, FromEdwardsAdd};
 use super::*;
 use crate::arithmetic::bool::Selector;
-use crate::arithmetic::builder::ChipBuilder;
-use crate::arithmetic::chip::ChipParameters;
+use crate::arithmetic::builder::StarkBuilder;
+use crate::arithmetic::chip::StarkParameters;
 use crate::arithmetic::polynomial::Polynomial;
 use crate::arithmetic::register::{BitRegister, ElementRegister};
 use crate::arithmetic::utils::biguint_to_bits_le;
@@ -21,7 +21,7 @@ pub struct EdScalarMulData<E: EdwardsParameters> {
     selector_y: Selector<FieldRegister<E::FieldParam>>,
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     /// This constraints of one step of the double-and-add algorithm for scalar multiplication.
     ///
     /// The function performs the following operation:
@@ -106,7 +106,7 @@ impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Chip
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
     /// Writes the double-and-add algorithm for scalar multiplication to the trace.
     ///
     /// Assumes the scalar is already reduced modulo the order of the curve group
@@ -163,8 +163,8 @@ mod tests {
     use rand::thread_rng;
 
     use super::*;
-    use crate::arithmetic::builder::ChipBuilder;
-    use crate::arithmetic::chip::{ChipParameters, TestStark};
+    use crate::arithmetic::builder::StarkBuilder;
+    use crate::arithmetic::chip::{StarkParameters, TestStark};
     use crate::arithmetic::ec::edwards::instructions::EdWardsMicroInstruction;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
@@ -178,7 +178,7 @@ mod tests {
     #[derive(Clone, Debug, Copy)]
     pub struct EdScalarMulTest;
 
-    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for EdScalarMulTest {
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for EdScalarMulTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 1504;
 
         const NUM_FREE_COLUMNS: usize = 2 + 2 * 2 * 16;
@@ -196,12 +196,12 @@ mod tests {
 
         let _ = env_logger::builder().is_test(true).try_init();
         // build the stark
-        let mut builder = ChipBuilder::<EdScalarMulTest, F, D>::new();
+        let mut builder = StarkBuilder::<EdScalarMulTest, F, D>::new();
 
         let res = builder.alloc_unchecked_ec_point::<E>().unwrap();
         let temp = builder.alloc_unchecked_ec_point::<E>().unwrap();
-        let bit = builder.alloc_local::<BitRegister>().unwrap();
-        let counter = builder.alloc_local::<ElementRegister>().unwrap();
+        let bit = builder.alloc::<BitRegister>();
+        let counter = builder.alloc::<ElementRegister>();
 
         builder.write_data(&counter).unwrap();
 
@@ -312,7 +312,7 @@ mod tests {
         const D: usize,
         E: EdwardsParameters,
     >(
-        handle: &TraceHandle<F, D>,
+        handle: &TraceWriter<F, D>,
         starting_row: usize,
         scalar: &BigUint,
         point: &AffinePoint<E>,
@@ -360,12 +360,12 @@ mod tests {
 
         let _ = env_logger::builder().is_test(true).try_init();
         // build the stark
-        let mut builder = ChipBuilder::<EdScalarMulTest, F, D>::new();
+        let mut builder = StarkBuilder::<EdScalarMulTest, F, D>::new();
 
         let res = builder.alloc_unchecked_ec_point::<E>().unwrap();
         let temp = builder.alloc_unchecked_ec_point::<E>().unwrap();
-        let bit = builder.alloc_local::<BitRegister>().unwrap();
-        let counter = builder.alloc_local::<ElementRegister>().unwrap();
+        let bit = builder.alloc::<BitRegister>();
+        let counter = builder.alloc::<ElementRegister>();
 
         builder.write_data(&counter).unwrap();
 

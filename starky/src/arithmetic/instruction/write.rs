@@ -11,12 +11,12 @@ impl WriteInstruction {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for WriteInstruction {
-    fn memory_vec(&self) -> Vec<MemorySlice> {
+    fn witness_layout(&self) -> Vec<MemorySlice> {
         vec![self.0]
     }
 
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
-        self.0.assign(trace_rows, row, row_index);
+        self.0.assign(trace_rows, 0, row, row_index);
     }
 
     fn packed_generic_constraints<

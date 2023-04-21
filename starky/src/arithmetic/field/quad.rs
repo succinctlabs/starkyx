@@ -6,97 +6,118 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::*;
-use crate::arithmetic::builder::ChipBuilder;
-use crate::arithmetic::chip::ChipParameters;
+use crate::arithmetic::builder::StarkBuilder;
+use crate::arithmetic::chip::StarkParameters;
 use crate::arithmetic::instruction::Instruction;
-use crate::arithmetic::polynomial::{Polynomial, PolynomialGadget, PolynomialOps};
-use crate::arithmetic::register::{Array, MemorySlice, RegisterSerializable, U16Register};
-use crate::arithmetic::trace::TraceHandle;
-use crate::arithmetic::utils::{extract_witness_and_shift, split_digits, to_field_iter};
+use crate::arithmetic::polynomial::{
+    to_u16_le_limbs_polynomial, Polynomial, PolynomialGadget, PolynomialOps,
+};
+use crate::arithmetic::register::{ArrayRegister, MemorySlice, RegisterSerializable, U16Register};
+use crate::arithmetic::trace::TraceWriter;
+use crate::arithmetic::utils::{compute_root_quotient_and_shift, split_u32_limbs_to_u16_limbs};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-/// An instruction to compute
-/// QUAD(x, y, z, w) = (a * b + c * d) mod p
 #[derive(Debug, Clone, Copy)]
-pub struct FpQuad<P: FieldParameters> {
+pub struct FpQuadInstruction<P: FieldParameters> {
     a: FieldRegister<P>,
     b: FieldRegister<P>,
     c: FieldRegister<P>,
     d: FieldRegister<P>,
     result: FieldRegister<P>,
     carry: FieldRegister<P>,
-    witness_low: Array<U16Register>,
-    witness_high: Array<U16Register>,
+    witness_low: ArrayRegister<U16Register>,
+    witness_high: ArrayRegister<U16Register>,
 }
 
-impl<L: ChipParameters<F, D>, F: RichField + Extendable<D>, const D: usize> ChipBuilder<L, F, D> {
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     pub fn fpquad<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,
         b: &FieldRegister<P>,
         c: &FieldRegister<P>,
         d: &FieldRegister<P>,
-        result: &FieldRegister<P>,
-    ) -> Result<FpQuad<P>>
+    ) -> Result<(FieldRegister<P>, FpQuadInstruction<P>)>
     where
-        L::Instruction: From<FpQuad<P>>,
+        L::Instruction: From<FpQuadInstruction<P>>,
     {
-        let carry = self.alloc_local::<FieldRegister<P>>().unwrap();
-        let witness_low = self
-            .alloc_local_array::<U16Register>(P::NB_WITNESS_LIMBS)
-            .unwrap();
-        let witness_high = self
-            .alloc_local_array::<U16Register>(P::NB_WITNESS_LIMBS)
-            .unwrap();
-        let instr = FpQuad {
+        let result = self.alloc::<FieldRegister<P>>();
+        let carry = self.alloc::<FieldRegister<P>>();
+        let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        let instr = FpQuadInstruction {
             a: *a,
             b: *b,
             c: *c,
             d: *d,
-            result: *result,
+            result,
             carry,
             witness_low,
             witness_high,
         };
         self.insert_instruction(instr.into())?;
-        Ok(instr)
+        Ok((result, instr))
+    }
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
+    pub fn write_fpquad<P: FieldParameters>(
+        &self,
+        row_index: usize,
+        a: &BigUint,
+        b: &BigUint,
+        c: &BigUint,
+        d: &BigUint,
+        instruction: FpQuadInstruction<P>,
+    ) -> Result<BigUint> {
+        let modulus = P::modulus();
+        let result = (a * b + c * d) % &modulus;
+        let carry = (a * b + c * d - &result) / &modulus;
+        debug_assert!(result < modulus);
+        debug_assert!(carry < 2u32 * &modulus);
+        debug_assert_eq!(&carry * &modulus, a * b + c * d - &result);
+
+        // Make little endian polynomial limbs.
+        let p_a = to_u16_le_limbs_polynomial::<F, P>(a);
+        let p_b = to_u16_le_limbs_polynomial::<F, P>(b);
+        let p_c = to_u16_le_limbs_polynomial::<F, P>(c);
+        let p_d = to_u16_le_limbs_polynomial::<F, P>(d);
+        let p_modulus = to_u16_le_limbs_polynomial::<F, P>(&modulus);
+        let p_result = to_u16_le_limbs_polynomial::<F, P>(&result);
+        let p_carry = to_u16_le_limbs_polynomial::<F, P>(&carry);
+
+        // Compute the vanishing polynomial
+        let p_vanishing = &p_a * &p_b + &p_c * &p_d - &p_result - &p_carry * &p_modulus;
+        debug_assert_eq!(p_vanishing.degree(), P::NB_WITNESS_LIMBS);
+
+        // Compute the witness
+        let p_witness_shifted = compute_root_quotient_and_shift(&p_vanishing, P::WITNESS_OFFSET);
+        let (p_witness_low, p_witness_high) = split_u32_limbs_to_u16_limbs::<F>(&p_witness_shifted);
+
+        // Row must match layout of instruction.
+        self.write_to_layout(
+            row_index,
+            instruction,
+            vec![
+                p_result.coefficients,
+                p_carry.coefficients,
+                p_witness_low,
+                p_witness_high,
+            ],
+        )?;
+        Ok(result)
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
-    for FpQuad<P>
+    for FpQuadInstruction<P>
 {
-    fn memory_vec(&self) -> Vec<MemorySlice> {
+    fn witness_layout(&self) -> Vec<MemorySlice> {
         vec![
-            *self.a.register(),
-            *self.b.register(),
-            *self.c.register(),
-            *self.d.register(),
             *self.result.register(),
+            *self.carry.register(),
+            *self.witness_low.register(),
+            *self.witness_high.register(),
         ]
-    }
-
-    fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
-        let mut index = 0;
-        self.result
-            .register()
-            .assign(trace_rows, &mut row[index..P::NB_LIMBS], row_index);
-        index += P::NB_LIMBS;
-        self.carry
-            .register()
-            .assign(trace_rows, &mut row[index..index + P::NB_LIMBS], row_index);
-        index += P::NB_LIMBS;
-        self.witness_low.register().assign(
-            trace_rows,
-            &mut row[index..index + P::NB_WITNESS_LIMBS],
-            row_index,
-        );
-        index += P::NB_WITNESS_LIMBS;
-        self.witness_high.register().assign(
-            trace_rows,
-            &mut row[index..index + P::NB_WITNESS_LIMBS],
-            row_index,
-        );
     }
 
     fn packed_generic_constraints<
@@ -212,67 +233,6 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
     }
 }
 
-impl<P: FieldParameters> FpQuad<P> {
-    pub fn trace_row<F: RichField + Extendable<D>, const D: usize>(
-        a: &BigUint,
-        b: &BigUint,
-        c: &BigUint,
-        d: &BigUint,
-    ) -> (Vec<F>, BigUint) {
-        let p = P::modulus_biguint();
-        let result = (a * b + c * d) % &p;
-        debug_assert!(result < p);
-        let carry = (a * b + c * d - &result) / &p;
-        debug_assert!(carry < 2u32 * &p);
-        debug_assert_eq!(&carry * &p, a * b + c * d - &result);
-
-        // make polynomial limbs
-        let p_a = Polynomial::<i64>::from_biguint_num(a, 16, P::NB_LIMBS);
-        let p_b = Polynomial::<i64>::from_biguint_num(b, 16, P::NB_LIMBS);
-        let p_c = Polynomial::<i64>::from_biguint_num(c, 16, P::NB_LIMBS);
-        let p_d = Polynomial::<i64>::from_biguint_num(d, 16, P::NB_LIMBS);
-        let p_p = Polynomial::<i64>::from_biguint_num(&p, 16, P::NB_LIMBS);
-
-        let p_result = Polynomial::<i64>::from_biguint_num(&result, 16, P::NB_LIMBS);
-        let p_carry = Polynomial::<i64>::from_biguint_num(&carry, 16, P::NB_LIMBS);
-
-        // Compute the vanishing polynomial
-        let vanishing_poly = &p_a * &p_b + &p_c * &p_d - &p_result - &p_carry * &p_p;
-        debug_assert_eq!(vanishing_poly.degree(), P::NB_WITNESS_LIMBS);
-
-        // Compute the witness
-        let witness_shifted = extract_witness_and_shift(&vanishing_poly, P::WITNESS_OFFSET as u32);
-        let (witness_low, witness_high) = split_digits::<F>(&witness_shifted);
-
-        let mut row = Vec::new();
-
-        // output
-        row.extend(to_field_iter::<F>(&p_result));
-        // carry and witness
-        row.extend(to_field_iter::<F>(&p_carry));
-        row.extend(witness_low);
-        row.extend(witness_high);
-
-        (row, result)
-    }
-}
-
-impl<F: RichField + Extendable<D>, const D: usize> TraceHandle<F, D> {
-    pub fn write_fpquad<P: FieldParameters>(
-        &self,
-        row_index: usize,
-        a_int: &BigUint,
-        b_int: &BigUint,
-        c_int: &BigUint,
-        d_int: &BigUint,
-        instruction: FpQuad<P>,
-    ) -> Result<BigUint> {
-        let (row, result) = FpQuad::<P>::trace_row::<F, D>(a_int, b_int, c_int, d_int);
-        self.write(row_index, instruction, row)?;
-        Ok(result)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
@@ -284,8 +244,8 @@ mod tests {
     use rand::thread_rng;
 
     use super::*;
-    use crate::arithmetic::builder::ChipBuilder;
-    use crate::arithmetic::chip::{ChipParameters, TestStark};
+    use crate::arithmetic::builder::StarkBuilder;
+    use crate::arithmetic::chip::{StarkParameters, TestStark};
     use crate::arithmetic::field::Fp25519Param;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
@@ -299,10 +259,10 @@ mod tests {
     #[derive(Clone, Debug, Copy)]
     struct FpQuadTest;
 
-    impl<F: RichField + Extendable<D>, const D: usize> ChipParameters<F, D> for FpQuadTest {
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpQuadTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 156;
         const NUM_FREE_COLUMNS: usize = 0;
-        type Instruction = FpQuad<Fp25519Param>;
+        type Instruction = FpQuadInstruction<Fp25519Param>;
     }
 
     #[test]
@@ -314,15 +274,14 @@ mod tests {
         type S = TestStark<FpQuadTest, F, D>;
 
         // build the stark
-        let mut builder = ChipBuilder::<FpQuadTest, F, D>::new();
+        let mut builder = StarkBuilder::<FpQuadTest, F, D>::new();
 
-        let a = builder.alloc_local::<Fp>().unwrap();
-        let b = builder.alloc_local::<Fp>().unwrap();
-        let c = builder.alloc_local::<Fp>().unwrap();
-        let d = builder.alloc_local::<Fp>().unwrap();
-        let result = builder.alloc_local::<Fp>().unwrap();
+        let a = builder.alloc::<Fp>();
+        let b = builder.alloc::<Fp>();
+        let c = builder.alloc::<Fp>();
+        let d = builder.alloc::<Fp>();
 
-        let quad = builder.fpquad(&a, &b, &c, &d, &result).unwrap();
+        let (result, quad) = builder.fpquad(&a, &b, &c, &d).unwrap();
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
         builder.write_data(&c).unwrap();
@@ -334,7 +293,7 @@ mod tests {
         let num_rows = 2u64.pow(16);
         let (handle, generator) = trace::<F, D>(spec);
 
-        let p = Fp25519Param::modulus_biguint();
+        let p = Fp25519Param::modulus();
 
         let mut rng = thread_rng();
         for i in 0..num_rows {
