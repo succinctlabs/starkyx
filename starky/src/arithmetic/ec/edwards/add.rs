@@ -4,18 +4,20 @@ use super::den::Den;
 use super::*;
 use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::StarkParameters;
-use crate::arithmetic::field::{FpMulConstInstruction, FpMulInstruction, FpQuadInstruction};
+use crate::arithmetic::field::{
+    FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction,
+};
 use crate::arithmetic::trace::TraceWriter;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 #[allow(non_snake_case)]
 #[allow(dead_code)]
 pub struct EcAddData<E: EdwardsParameters> {
     P: AffinePointRegister<E>,
     Q: AffinePointRegister<E>,
     R: AffinePointRegister<E>,
-    XNUM: FpQuadInstruction<E::FieldParam>,
-    YNUM: FpQuadInstruction<E::FieldParam>,
+    XNUM: FpInnerProductInstruction<E::FieldParam>,
+    YNUM: FpInnerProductInstruction<E::FieldParam>,
     PXPY: FpMulInstruction<E::FieldParam>,
     QXQY: FpMulInstruction<E::FieldParam>,
     PXPYQXQY: FpMulInstruction<E::FieldParam>,
@@ -26,7 +28,7 @@ pub struct EcAddData<E: EdwardsParameters> {
 
 pub trait FromEdwardsAdd<E: EdwardsParameters>:
     From<FpMulInstruction<E::FieldParam>>
-    + From<FpQuadInstruction<E::FieldParam>>
+    + From<FpInnerProductInstruction<E::FieldParam>>
     + From<FpMulConstInstruction<E::FieldParam>>
     + From<Den<E::FieldParam>>
 {
@@ -43,8 +45,8 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     where
         L::Instruction: FromEdwardsAdd<E>,
     {
-        let (x_num_result, x_num_ins) = self.fpquad(&P.x, &Q.y, &Q.x, &P.y)?;
-        let (y_num_result, y_num_ins) = self.fpquad(&P.y, &Q.y, &P.x, &Q.x)?;
+        let (x_num_result, x_num_ins) = self.fp_inner_product(&vec![P.x, Q.x], &vec![Q.y, P.y]);
+        let (y_num_result, y_num_ins) = self.fp_inner_product(&vec![P.y, P.x], &vec![Q.y, Q.x]);
 
         let (px_py_result, px_py_ins) = self.fpmul(&P.x, &P.y)?;
         let (qx_qy_result, qx_qy_ins) = self.fpmul(&Q.x, &Q.y)?;
@@ -92,8 +94,18 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
         Q: &AffinePoint<E>,
         chip_data: EcAddData<E>,
     ) -> Result<AffinePoint<E>> {
-        let x_num = self.write_fpquad(row_index, &P.x, &Q.y, &Q.x, &P.y, chip_data.XNUM)?;
-        let y_num = self.write_fpquad(row_index, &P.y, &Q.y, &P.x, &Q.x, chip_data.YNUM)?;
+        let x_num = self.write_fp_inner_product(
+            row_index,
+            vec![&P.x, &Q.x],
+            vec![&Q.y, &P.y],
+            chip_data.XNUM,
+        )?;
+        let y_num = self.write_fp_inner_product(
+            row_index,
+            vec![&P.y, &P.x],
+            vec![&Q.y, &Q.x],
+            chip_data.YNUM,
+        )?;
 
         let px_py = self.write_fpmul(row_index, &P.x, &P.y, chip_data.PXPY)?;
         let qx_qy = self.write_fpmul(row_index, &Q.x, &Q.y, chip_data.QXQY)?;
@@ -188,23 +200,22 @@ mod tests {
             for i in 0..256usize {
                 let handle = handle.clone();
                 let base = base.clone();
-                rayon::spawn(move || {
-                    let mut rng = thread_rng();
-                    let a = rng.gen_biguint(256);
-                    let b = rng.gen_biguint(256);
-                    let P_int = &base * &a;
-                    let Q_int = &base * &b;
-                    let R_exp = &P_int + &Q_int;
+                let ed_data_copy = ed_data.clone();
+                let mut rng = thread_rng();
+                let a = rng.gen_biguint(256);
+                let b = rng.gen_biguint(256);
+                let P_int = &base * &a;
+                let Q_int = &base * &b;
+                let R_exp = &P_int + &Q_int;
 
-                    for j in 0..256usize {
-                        handle.write_ec_point(256 * i + j, &P_int, &P).unwrap();
-                        handle.write_ec_point(256 * i + j, &Q_int, &Q).unwrap();
-                        let R = handle
-                            .write_ed_add(256 * i + j, &P_int, &Q_int, ed_data)
-                            .unwrap();
-                        assert_eq!(R, R_exp);
-                    }
-                });
+                for j in 0..256usize {
+                    handle.write_ec_point(256 * i + j, &P_int, &P).unwrap();
+                    handle.write_ec_point(256 * i + j, &Q_int, &Q).unwrap();
+                    let R = handle
+                        .write_ed_add(256 * i + j, &P_int, &Q_int, ed_data_copy.clone())
+                        .unwrap();
+                    assert_eq!(R, R_exp);
+                }
             }
             drop(handle);
 
@@ -313,6 +324,7 @@ mod tests {
             for i in 0..256usize {
                 let handle = handle.clone();
                 let base = base.clone();
+                let ed_double_data_copy = ed_double_data.clone();
                 rayon::spawn(move || {
                     let mut rng = thread_rng();
                     let a = rng.gen_biguint(256);
@@ -322,7 +334,7 @@ mod tests {
                     for j in 0..256usize {
                         handle.write_ec_point(256 * i + j, &P_int, &P).unwrap();
                         let R = handle
-                            .write_ed_double(256 * i + j, &P_int, ed_double_data)
+                            .write_ed_double(256 * i + j, &P_int, ed_double_data_copy.clone())
                             .unwrap();
                         assert_eq!(R, R_exp);
                     }

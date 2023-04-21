@@ -7,7 +7,7 @@ use crate::arithmetic::polynomial::Polynomial;
 use crate::arithmetic::register::{BitRegister, ElementRegister};
 use crate::arithmetic::utils::biguint_to_bits_le;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 #[allow(dead_code)]
 pub struct EdScalarMulData<E: EdwardsParameters> {
     result: AffinePointRegister<E>,
@@ -129,8 +129,8 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
         for (i, bit) in scalar_bits.iter().enumerate() {
             self.write_bit(starting_row + i, *bit, &chip_data.scalar_bit)?;
             let result_plus_temp =
-                self.write_ed_add(starting_row + i, &res, &temp, chip_data.add)?;
-            temp = self.write_ed_double(starting_row + i, &temp, chip_data.double)?;
+                self.write_ed_add(starting_row + i, &res, &temp, chip_data.add.clone())?;
+            temp = self.write_ed_double(starting_row + i, &temp, chip_data.double.clone())?;
             res = if *bit { result_plus_temp } else { res };
             let res_x_field_vec =
                 Polynomial::from_biguint_field(&res.x, 16, E::FieldParam::NB_LIMBS).into_vec();
@@ -229,13 +229,14 @@ mod tests {
             }
             for i in 0..256usize {
                 let handle = handle.clone();
+                let ed_data_copy = ed_data.clone();
                 rayon::spawn(move || {
                     let mut rng = thread_rng();
                     let a = rng.gen_biguint(256);
                     let point = E::generator() * a;
                     let scalar = rng.gen_biguint(256);
                     let res = handle
-                        .write_ed_double_and_add(256 * i, &scalar, &point, ed_data)
+                        .write_ed_double_and_add(256 * i, &scalar, &point, ed_data_copy.clone())
                         .unwrap();
                     assert_eq!(res, point * scalar);
                 });
@@ -329,8 +330,8 @@ mod tests {
         for (i, bit) in scalar_bits.iter().enumerate() {
             handle.write_bit(starting_row + i, *bit, &chip_data.scalar_bit)?;
             let result_plus_temp =
-                handle.write_ed_add(starting_row + i, &res, &temp, chip_data.add)?;
-            temp = handle.write_ed_double(starting_row + i, &temp, chip_data.double)?;
+                handle.write_ed_add(starting_row + i, &res, &temp, chip_data.add.clone())?;
+            temp = handle.write_ed_double(starting_row + i, &temp, chip_data.double.clone())?;
             res = if *bit { result_plus_temp } else { res };
             let res_x_field_vec =
                 Polynomial::from_biguint_field(&res.x, 16, E::FieldParam::NB_LIMBS).into_vec();
@@ -392,6 +393,7 @@ mod tests {
             }
             for i in 0..256usize {
                 let handle = handle.clone();
+                let ed_data_copy = ed_data.clone();
                 rayon::spawn(move || {
                     let mut rng = thread_rng();
                     let a = rng.gen_biguint(256);
@@ -402,7 +404,7 @@ mod tests {
                         256 * i,
                         &scalar,
                         &point,
-                        ed_data,
+                        ed_data_copy.clone(),
                     )
                     .unwrap();
                     assert_ne!(res, point * scalar);

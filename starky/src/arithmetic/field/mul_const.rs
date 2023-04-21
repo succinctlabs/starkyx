@@ -87,11 +87,11 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
         let p_result = to_u16_le_limbs_polynomial::<F, P>(&result);
         let p_carry = to_u16_le_limbs_polynomial::<F, P>(&carry);
 
-        // Compute the vanishing polynomial
+        // Compute the vanishing polynomial.
         let vanishing_poly = &p_a * &p_c - &p_result - &p_carry * &p_modulus;
         debug_assert_eq!(vanishing_poly.degree(), P::NB_WITNESS_LIMBS);
 
-        // Compute the witness
+        // Compute the witness.
         let p_witness_shifted = compute_root_quotient_and_shift(&vanishing_poly, P::WITNESS_OFFSET);
         let (p_witness_low, p_witness_high) = split_u32_limbs_to_u16_limbs::<F>(&p_witness_shifted);
 
