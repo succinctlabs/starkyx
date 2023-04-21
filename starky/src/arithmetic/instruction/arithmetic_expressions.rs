@@ -99,7 +99,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
         P: PackedField<Scalar = FE>,
     {
         match self {
-            ArithmeticExpressionSlice::Input(input) => input.packed_entries_slice(vars).to_vec(),
+            ArithmeticExpressionSlice::Input(input) => input.packed_generic_vars(vars).to_vec(),
             ArithmeticExpressionSlice::Const(constants) => {
                 let s = |x: &F| P::from(FE::from_basefield(*x));
                 constants.iter().map(s).collect()
@@ -142,7 +142,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
         vars: &StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
     ) -> Vec<ExtensionTarget<D>> {
         match self {
-            ArithmeticExpressionSlice::Input(input) => input.evaluation_targets(vars).to_vec(),
+            ArithmeticExpressionSlice::Input(input) => input.ext_circuit_vars(vars).to_vec(),
             ArithmeticExpressionSlice::Const(constants) => constants
                 .iter()
                 .map(|x| builder.constant_extension(F::Extension::from_basefield(*x)))

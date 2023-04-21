@@ -138,9 +138,9 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             .collect::<Vec<_>>();
         let result = self.result.register().packed_entries(&vars);
 
-        let carry = self.carry.register().packed_entries_slice(&vars);
-        let witness_low = self.witness_low.register().packed_entries_slice(&vars);
-        let witness_high = self.witness_high.register().packed_entries_slice(&vars);
+        let carry = self.carry.register().packed_generic_vars(&vars);
+        let witness_low = self.witness_low.register().packed_generic_vars(&vars);
+        let witness_high = self.witness_high.register().packed_generic_vars(&vars);
 
         // Construct the expected vanishing polynmial
         let ac = PolynomialOps::mul(&a, &c);
@@ -178,7 +178,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
         // get all the data
-        let a = self.a.register().evaluation_targets(&vars);
+        let a = self.a.register().ext_circuit_vars(&vars);
         let c_vec = self
             .c
             .into_iter()
@@ -186,11 +186,11 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             .take(P::NB_LIMBS)
             .collect::<Vec<_>>();
         let c = PolynomialGadget::constant_extension(builder, &c_vec);
-        let result = self.result.register().evaluation_targets(&vars);
+        let result = self.result.register().ext_circuit_vars(&vars);
 
-        let carry = self.carry.register().evaluation_targets(&vars);
-        let witness_low = self.witness_low.register().evaluation_targets(&vars);
-        let witness_high = self.witness_high.register().evaluation_targets(&vars);
+        let carry = self.carry.register().ext_circuit_vars(&vars);
+        let witness_low = self.witness_low.register().ext_circuit_vars(&vars);
+        let witness_high = self.witness_high.register().ext_circuit_vars(&vars);
 
         // Construct the expected vanishing polynmial
         let ac = PolynomialGadget::mul_extension(builder, a, &c);

@@ -37,7 +37,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for Constra
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
-        let values = self.0.packed_entries_slice(&vars);
+        let values = self.0.packed_generic_vars(&vars);
         for value in values.iter() {
             yield_constr.constraint(value.square() - *value);
         }
@@ -49,7 +49,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for Constra
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        let values = self.0.evaluation_targets(&vars);
+        let values = self.0.ext_circuit_vars(&vars);
         for value in values.iter() {
             let square = builder.square_extension(*value);
             let constraint = builder.sub_extension(square, *value);
@@ -124,10 +124,10 @@ impl<F: RichField + Extendable<D>, const D: usize, T: Register> Instruction<F, D
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
-        let bit_slice = self.bit.register().packed_entries_slice(&vars);
-        let true_value = self.true_value.register().packed_entries_slice(&vars);
-        let false_value = self.false_value.register().packed_entries_slice(&vars);
-        let result = self.result.register().packed_entries_slice(&vars);
+        let bit_slice = self.bit.register().packed_generic_vars(&vars);
+        let true_value = self.true_value.register().packed_generic_vars(&vars);
+        let false_value = self.false_value.register().packed_generic_vars(&vars);
+        let result = self.result.register().packed_generic_vars(&vars);
 
         debug_assert!(bit_slice.len() == 1);
         let bit = bit_slice[0];
@@ -142,10 +142,10 @@ impl<F: RichField + Extendable<D>, const D: usize, T: Register> Instruction<F, D
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        let bit_slice = self.bit.register().evaluation_targets(&vars);
-        let true_value = self.true_value.register().evaluation_targets(&vars);
-        let false_value = self.false_value.register().evaluation_targets(&vars);
-        let result = self.result.register().evaluation_targets(&vars);
+        let bit_slice = self.bit.register().ext_circuit_vars(&vars);
+        let true_value = self.true_value.register().ext_circuit_vars(&vars);
+        let false_value = self.false_value.register().ext_circuit_vars(&vars);
+        let result = self.result.register().ext_circuit_vars(&vars);
 
         debug_assert!(bit_slice.len() == 1);
         let bit = bit_slice[0];

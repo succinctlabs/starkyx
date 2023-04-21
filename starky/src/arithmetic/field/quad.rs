@@ -135,15 +135,15 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         PF: PackedField<Scalar = FE>,
     {
         // get all the data
-        let a = self.a.register().packed_entries_slice(&vars);
-        let b = self.b.register().packed_entries_slice(&vars);
-        let c = self.c.register().packed_entries_slice(&vars);
-        let d = self.d.register().packed_entries_slice(&vars);
-        let result = self.result.register().packed_entries_slice(&vars);
+        let a = self.a.register().packed_generic_vars(&vars);
+        let b = self.b.register().packed_generic_vars(&vars);
+        let c = self.c.register().packed_generic_vars(&vars);
+        let d = self.d.register().packed_generic_vars(&vars);
+        let result = self.result.register().packed_generic_vars(&vars);
 
-        let carry = self.carry.register().packed_entries_slice(&vars);
-        let witness_low = self.witness_low.register().packed_entries_slice(&vars);
-        let witness_high = self.witness_high.register().packed_entries_slice(&vars);
+        let carry = self.carry.register().packed_generic_vars(&vars);
+        let witness_low = self.witness_low.register().packed_generic_vars(&vars);
+        let witness_high = self.witness_high.register().packed_generic_vars(&vars);
 
         // Construct the expected vanishing polynmial
         let ab = PolynomialOps::mul(a, b);
@@ -184,15 +184,15 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
         // get all the data
-        let a = self.a.register().evaluation_targets(&vars);
-        let b = self.b.register().evaluation_targets(&vars);
-        let c = self.c.register().evaluation_targets(&vars);
-        let d = self.d.register().evaluation_targets(&vars);
-        let result = self.result.register().evaluation_targets(&vars);
+        let a = self.a.register().ext_circuit_vars(&vars);
+        let b = self.b.register().ext_circuit_vars(&vars);
+        let c = self.c.register().ext_circuit_vars(&vars);
+        let d = self.d.register().ext_circuit_vars(&vars);
+        let result = self.result.register().ext_circuit_vars(&vars);
 
-        let carry = self.carry.register().evaluation_targets(&vars);
-        let witness_low = self.witness_low.register().evaluation_targets(&vars);
-        let witness_high = self.witness_high.register().evaluation_targets(&vars);
+        let carry = self.carry.register().ext_circuit_vars(&vars);
+        let witness_low = self.witness_low.register().ext_circuit_vars(&vars);
+        let witness_high = self.witness_high.register().ext_circuit_vars(&vars);
 
         // Construct the expected vanishing polynmial
         let ab = PolynomialGadget::mul_extension(builder, a, b);
