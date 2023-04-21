@@ -220,7 +220,6 @@ mod tests {
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpMulTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 124;
         const NUM_FREE_COLUMNS: usize = 0;
-
         type Instruction = FpMulInstruction<Fp25519Param>;
     }
 
@@ -232,46 +231,34 @@ mod tests {
         type Fp = Fp25519;
         type S = TestStark<FpMulTest, F, D>;
 
-        // build the stark
+        // Build the circuit.
         let mut builder = StarkBuilder::<FpMulTest, F, D>::new();
-
         let a = builder.alloc::<Fp>();
         let b = builder.alloc::<Fp>();
-
-        //let ab = FMul::new(a, b, result);
-        //builder.insert_instruction(ab).unwrap();
         let (_, ab_ins) = builder.fpmul(&a, &b).unwrap();
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
-
         let (chip, spec) = builder.build();
 
-        // Construct the trace
+        // Generate the trace.
         let num_rows = 2u64.pow(16) as usize;
         let (handle, generator) = trace::<F, D>(spec);
-
         let p = Fp25519Param::modulus();
-
         let mut rng = thread_rng();
         for i in 0..num_rows {
             let a_int: BigUint = rng.gen_biguint(256) % &p;
             let b_int = rng.gen_biguint(256) % &p;
-            //let handle = handle.clone();
-            //rayon::spawn(move || {
             handle.write_field(i, &a_int, a).unwrap();
             handle.write_field(i, &b_int, b).unwrap();
             let res = handle.write_fpmul(i, &a_int, &b_int, ab_ins).unwrap();
             assert_eq!(res, (a_int * b_int) % &p);
-            //});
         }
         drop(handle);
-
         let trace = generator.generate_trace(&chip, num_rows).unwrap();
 
+        // Generate the proof.
         let config = StarkConfig::standard_fast_config();
         let stark = TestStark::new(chip);
-
-        // Verify proof as a stark
         let proof = prove::<F, C, S, D>(
             stark.clone(),
             &config,
@@ -282,10 +269,9 @@ mod tests {
         .unwrap();
         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
 
-        // Verify recursive proof in a circuit
+        // Generate the recursive proof.
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
-
         let degree_bits = proof.proof.recover_degree_bits(&config);
         let virtual_proof = add_virtual_stark_proof_with_pis(
             &mut recursive_builder,
@@ -293,21 +279,16 @@ mod tests {
             &config,
             degree_bits,
         );
-
         recursive_builder.print_gate_counts(0);
-
         let mut rec_pw = PartialWitness::new();
         set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-
         verify_stark_proof_circuit::<F, C, S, D>(
             &mut recursive_builder,
             stark,
             virtual_proof,
             &config,
         );
-
         let recursive_data = recursive_builder.build::<C>();
-
         let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
         let recursive_proof = plonky2::plonk::prover::prove(
             &recursive_data.prover_only,
@@ -316,7 +297,6 @@ mod tests {
             &mut timing,
         )
         .unwrap();
-
         timing.print();
         recursive_data.verify(recursive_proof).unwrap();
     }
