@@ -36,22 +36,18 @@ mod mul_const;
 
 use anyhow::Result;
 use num::{BigUint, One, Zero};
-use plonky2::field::extension::{Extendable, FieldExtension};
-use plonky2::field::packed::PackedField;
+use plonky2::field::extension::Extendable;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
-use plonky2::iop::ext_target::ExtensionTarget;
-use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 pub use self::add::FpAddInstruction;
 pub use self::inner_product::FpInnerProductInstruction;
 pub use self::mul::FpMulInstruction;
 pub use self::mul_const::FpMulConstInstruction;
-use super::instruction::Instruction;
-use super::polynomial::{Polynomial, PolynomialOps};
+use super::instruction::{Instruction, InstructionTrace};
+use super::polynomial::Polynomial;
 use super::register::FieldRegister;
 use super::trace::TraceWriter;
-use crate::arithmetic::polynomial::PolynomialGadget;
 use crate::arithmetic::register::MemorySlice;
 
 pub const MAX_NB_LIMBS: usize = 32;
@@ -139,26 +135,26 @@ impl<P: FieldParameters> From<FpInnerProductInstruction<P>> for FpInstruction<P>
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
+impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> InstructionTrace<F, D>
     for FpInstruction<P>
 {
-    fn witness_layout(&self) -> Vec<MemorySlice> {
+    fn layout(&self) -> Vec<MemorySlice> {
         match self {
-            FpInstruction::Add(add) => {
-                <FpAddInstruction<P> as Instruction<F, D>>::witness_layout(add)
-            }
-            FpInstruction::Mul(mul) => {
-                <FpMulInstruction<P> as Instruction<F, D>>::witness_layout(mul)
-            }
+            FpInstruction::Add(add) => <FpAddInstruction<P> as InstructionTrace<F, D>>::layout(add),
+            FpInstruction::Mul(mul) => <FpMulInstruction<P> as InstructionTrace<F, D>>::layout(mul),
             FpInstruction::Quad(quad) => {
-                <FpInnerProductInstruction<P> as Instruction<F, D>>::witness_layout(quad)
+                <FpInnerProductInstruction<P> as InstructionTrace<F, D>>::layout(quad)
             }
             FpInstruction::MulConst(mul_const) => {
-                <FpMulConstInstruction<P> as Instruction<F, D>>::witness_layout(mul_const)
+                <FpMulConstInstruction<P> as InstructionTrace<F, D>>::layout(mul_const)
             }
         }
     }
+}
 
+impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
+    for FpInstruction<P>
+{
     fn packed_generic_constraints<
         FE,
         PF,

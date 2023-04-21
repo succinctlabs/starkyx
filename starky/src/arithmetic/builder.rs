@@ -13,7 +13,7 @@ use super::bool::ConstraintBool;
 use super::chip::{Chip, StarkParameters};
 use super::instruction::arithmetic_expressions::ArithmeticExpression;
 use super::instruction::write::WriteInstruction;
-use super::instruction::{EqualityConstraint, Instruction};
+use super::instruction::{EqualityConstraint, Instruction, InstructionTrace};
 use super::register::{ArrayRegister, CellType, MemorySlice, Register, RegisterSerializable};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
@@ -22,7 +22,6 @@ pub enum InsID {
     Write(MemorySlice),
 }
 
-#[derive(Clone, Debug)]
 pub struct StarkBuilder<L, F, const D: usize>
 where
     L: StarkParameters<F, D>,
@@ -33,6 +32,7 @@ where
     next_arithmetic_index: usize,
     next_index: usize,
     instruction_indices: BTreeMap<InsID, usize>,
+    instructions_v2: Vec<Box<dyn InstructionTrace<F, D>>>,
     instructions: Vec<L::Instruction>,
     write_instructions: Vec<WriteInstruction>,
     constraints: Vec<EqualityConstraint<F, D>>,
@@ -54,6 +54,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             local_arithmetic_index: L::NUM_FREE_COLUMNS,
             next_arithmetic_index: L::NUM_FREE_COLUMNS,
             instruction_indices: BTreeMap::new(),
+            instructions_v2: Vec::new(),
             instructions: Vec::new(),
             write_instructions: Vec::new(),
             constraints: Vec::new(),
@@ -171,7 +172,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
 
     /// Registers a new instruction to the chip.
     pub fn insert_instruction(&mut self, instruction: L::Instruction) -> Result<()> {
-        let id = InsID::CustomInstruction(instruction.witness_layout());
+        let id = InsID::CustomInstruction(instruction.layout());
         let existing_value = self.instruction_indices.insert(id, self.instructions.len());
         if existing_value.is_some() {
             return Err(anyhow!("Instruction label already exists"));
@@ -285,7 +286,6 @@ mod tests {
 
     use super::*;
     use crate::arithmetic::chip::TestStark;
-    use crate::arithmetic::instruction::DefaultInstructions;
     use crate::arithmetic::register::ElementRegister;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;

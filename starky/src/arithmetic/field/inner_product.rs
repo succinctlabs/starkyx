@@ -1,4 +1,4 @@
-//! Implements non-native field multiplication as an "instruction".
+//! Implements non-native inner product as an "instruction".
 //!
 //! To understand the implementation, it may be useful to refer to `mod.rs`.
 
@@ -15,7 +15,7 @@ use super::constrain::{
 use super::*;
 use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::StarkParameters;
-use crate::arithmetic::instruction::{Instruction, InstructionTrace};
+use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::polynomial::{
     to_u16_le_limbs_polynomial, Polynomial, PolynomialGadget, PolynomialOps,
 };
@@ -24,10 +24,10 @@ use crate::arithmetic::trace::TraceWriter;
 use crate::arithmetic::utils::{compute_root_quotient_and_shift, split_u32_limbs_to_u16_limbs};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-#[derive(Debug, Clone, Copy)]
-pub struct FpMulInstruction<P: FieldParameters> {
-    a: FieldRegister<P>,
-    b: FieldRegister<P>,
+#[derive(Debug, Clone)]
+pub struct FpInnerProductInstruction<P: FieldParameters> {
+    a: Vec<FieldRegister<P>>,
+    b: Vec<FieldRegister<P>>,
     result: FieldRegister<P>,
     carry: FieldRegister<P>,
     witness_low: ArrayRegister<U16Register>,
@@ -35,58 +35,72 @@ pub struct FpMulInstruction<P: FieldParameters> {
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
-    /// Given two field elements `a` and `b`, computes the product `a * b = c`.
-    pub fn fpmul<P: FieldParameters>(
+    pub fn fp_inner_product<P: FieldParameters>(
         &mut self,
-        a: &FieldRegister<P>,
-        b: &FieldRegister<P>,
-    ) -> Result<(FieldRegister<P>, FpMulInstruction<P>)>
+        a: &Vec<FieldRegister<P>>,
+        b: &Vec<FieldRegister<P>>,
+    ) -> (FieldRegister<P>, FpInnerProductInstruction<P>)
     where
-        L::Instruction: From<FpMulInstruction<P>>,
+        L::Instruction: From<FpInnerProductInstruction<P>>,
     {
+        debug_assert!(a.len() == b.len());
         let result = self.alloc::<FieldRegister<P>>();
         let carry = self.alloc::<FieldRegister<P>>();
         let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
         let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
-        let instr = FpMulInstruction {
-            a: *a,
-            b: *b,
+
+        let instr = FpInnerProductInstruction {
+            a: a.clone(),
+            b: b.clone(),
             result,
             carry,
             witness_low,
             witness_high,
         };
-        self.insert_instruction(instr.into())?;
-        Ok((result, instr))
+        (result, instr)
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
-    /// Writes a `FpMulInstruction` to the trace and returns the result.
-    pub fn write_fpmul<P: FieldParameters>(
+    pub fn write_fp_inner_product<P: FieldParameters>(
         &self,
         row_index: usize,
-        a: &BigUint,
-        b: &BigUint,
-        instruction: FpMulInstruction<P>,
+        a: Vec<&BigUint>,
+        b: Vec<&BigUint>,
+        instruction: FpInnerProductInstruction<P>,
     ) -> Result<BigUint> {
-        let modulus = P::modulus();
-        let result = (a * b) % &modulus;
-        let carry = (a * b - &result) / &modulus;
-        debug_assert!(result < modulus);
-        debug_assert!(carry < modulus);
-        debug_assert_eq!(&carry * &modulus, a * b - &result);
+        let modulus = &P::modulus();
+        let inner_product = &a
+            .clone()
+            .into_iter()
+            .zip(b.clone())
+            .fold(BigUint::zero(), |acc, (c, d)| acc + c * d);
+        let result = &(inner_product % modulus);
+        let carry = &((inner_product - result) / modulus);
+        assert!(result < modulus);
+        assert!(carry < &(2u32 * modulus));
+        assert_eq!(carry * modulus, inner_product - result);
 
         // Make little endian polynomial limbs.
-        let p_a = to_u16_le_limbs_polynomial::<F, P>(a);
-        let p_b = to_u16_le_limbs_polynomial::<F, P>(b);
+        let p_a_vec = a
+            .into_iter()
+            .map(|a| to_u16_le_limbs_polynomial::<F, P>(&a))
+            .collect::<Vec<Polynomial<F>>>();
+        let p_b_vec = b
+            .into_iter()
+            .map(|b| to_u16_le_limbs_polynomial::<F, P>(&b))
+            .collect::<Vec<Polynomial<F>>>();
         let p_modulus = to_u16_le_limbs_polynomial::<F, P>(&modulus);
         let p_result = to_u16_le_limbs_polynomial::<F, P>(&result);
         let p_carry = to_u16_le_limbs_polynomial::<F, P>(&carry);
 
         // Compute the vanishing polynomial.
-        let p_vanishing = &p_a * &p_b - &p_result - &p_carry * &p_modulus;
-        debug_assert_eq!(p_vanishing.degree(), P::NB_WITNESS_LIMBS);
+        let p_inner_product = p_a_vec.into_iter().zip(p_b_vec.into_iter()).fold(
+            Polynomial::<F>::new_from_vec(vec![F::ZERO]),
+            |acc, (c, d)| acc + &c * &d,
+        );
+        let p_vanishing = p_inner_product - &p_result - &p_carry * &p_modulus;
+        assert_eq!(p_vanishing.degree(), P::NB_WITNESS_LIMBS);
 
         // Compute the witness
         let p_witness_shifted = compute_root_quotient_and_shift(&p_vanishing, P::WITNESS_OFFSET);
@@ -103,12 +117,12 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
                 p_witness_high,
             ],
         )?;
-        Ok(result)
+        Ok(result.clone())
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> InstructionTrace<F, D>
-    for FpMulInstruction<P>
+    for FpInnerProductInstruction<P>
 {
     fn layout(&self) -> Vec<MemorySlice> {
         vec![
@@ -121,7 +135,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
 }
 
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
-    for FpMulInstruction<P>
+    for FpInnerProductInstruction<P>
 {
     fn packed_generic_constraints<
         FE,
@@ -137,22 +151,37 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         FE: FieldExtension<D2, BaseField = F>,
         PF: PackedField<Scalar = FE>,
     {
-        // Get the packed entries.
-        let p_a = self.a.register().packed_entries(&vars);
-        let p_b = self.b.register().packed_entries(&vars);
-        let p_result = self.result.register().packed_entries(&vars);
+        // Get packed entries.
+        let p_a_vec = self
+            .a
+            .clone()
+            .into_iter()
+            .map(|x| x.register().packed_generic_vars(&vars))
+            .collect::<Vec<_>>();
+        let p_b_vec = self
+            .b
+            .clone()
+            .into_iter()
+            .map(|x| x.register().packed_generic_vars(&vars))
+            .collect::<Vec<_>>();
+        let p_result = self.result.register().packed_generic_vars(&vars);
         let p_carry = self.carry.register().packed_generic_vars(&vars);
         let p_witness_low = self.witness_low.register().packed_generic_vars(&vars);
         let p_witness_high = self.witness_high.register().packed_generic_vars(&vars);
 
-        // Compute the vanishing polynomial a(x) * b(x) - result(x) - carry(x) * p(x).
-        let p_a_mul_b = PolynomialOps::mul(&p_a, &p_b);
-        let p_a_mul_b_minus_result = PolynomialOps::sub(&p_a_mul_b, &p_result);
+        // Construct the expected vanishing polynmial.
+        let p_zero = vec![PF::ZEROS];
+        let p_inner_product = p_a_vec
+            .into_iter()
+            .zip(p_b_vec)
+            .map(|(a, b)| PolynomialOps::mul(a, b))
+            .fold(p_zero, |acc, x| PolynomialOps::add(&acc, &x[..]));
+        let p_inner_product_minus_result = PolynomialOps::sub(&p_inner_product, p_result);
         let p_limbs = Polynomial::<FE>::from_iter(modulus_field_iter::<FE, P>());
-        let p_carry_mul_modulus = PolynomialOps::scalar_poly_mul(p_carry, p_limbs.as_slice());
-        let p_vanishing = PolynomialOps::sub(&p_a_mul_b_minus_result, &p_carry_mul_modulus);
+        let mul_times_carry = PolynomialOps::scalar_poly_mul(p_carry, p_limbs.as_slice());
+        let p_vanishing = PolynomialOps::sub(&p_inner_product_minus_result, &mul_times_carry);
 
-        // Check [a(x) * b(x) - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
+        // Check [(\sum_i a_i(x) + b_i(x)) - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
         packed_generic_constrain_field_operation::<F, D, FE, PF, D2, P>(
             yield_constr,
             p_vanishing,
@@ -168,24 +197,48 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
         // Get the packed entries.
-        let p_a = self.a.register().ext_circuit_vars(&vars);
-        let p_b = self.b.register().ext_circuit_vars(&vars);
+        let p_a_vec = self
+            .a
+            .clone()
+            .into_iter()
+            .map(|x| x.register().ext_circuit_vars(&vars))
+            .collect::<Vec<_>>();
+        let p_b_vec = self
+            .b
+            .clone()
+            .into_iter()
+            .map(|x| x.register().ext_circuit_vars(&vars))
+            .collect::<Vec<_>>();
         let p_result = self.result.register().ext_circuit_vars(&vars);
         let p_carry = self.carry.register().ext_circuit_vars(&vars);
         let p_witness_low = self.witness_low.register().ext_circuit_vars(&vars);
         let p_witness_high = self.witness_high.register().ext_circuit_vars(&vars);
 
-        // Compute the vanishing polynomial a(x) * b(x) - result(x) - carry(x) * p(x).
-        let p_a_mul_b = PolynomialGadget::mul_extension(builder, p_a, p_b);
-        let p_a_mul_b_minus_result = PolynomialGadget::sub_extension(builder, &p_a_mul_b, p_result);
-        let p_limbs = PolynomialGadget::constant_extension(
+        // Construct the expected vanishing polynmial
+        let p_zero = vec![builder.zero_extension()];
+        let p_inner_product = p_a_vec
+            .into_iter()
+            .zip(p_b_vec)
+            .map(|(a, b)| PolynomialGadget::mul_extension(builder, a, b))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .fold(p_zero, |acc, x| {
+                PolynomialGadget::add_extension(builder, &acc, &x[..])
+            });
+        let p_inner_product_minus_result =
+            PolynomialGadget::sub_extension(builder, &p_inner_product, p_result);
+        let p_modulus = PolynomialGadget::constant_extension(
             builder,
             &modulus_field_iter::<F::Extension, P>().collect::<Vec<_>>(),
         );
-        let p_mul_times_carry = PolynomialGadget::mul_extension(builder, p_carry, &p_limbs[..]);
-        let p_vanishing =
-            PolynomialGadget::sub_extension(builder, &p_a_mul_b_minus_result, &p_mul_times_carry);
+        let p_carry_mul_modulus = PolynomialGadget::mul_extension(builder, p_carry, &p_modulus[..]);
+        let p_vanishing = PolynomialGadget::sub_extension(
+            builder,
+            &p_inner_product_minus_result,
+            &p_carry_mul_modulus,
+        );
 
+        // Check [(\sum_i a_i(x) + b_i(x)) - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
         ext_circuit_constrain_field_operation::<F, D, P>(
             builder,
             yield_constr,
@@ -220,48 +273,64 @@ mod tests {
     use crate::verifier::verify_stark_proof;
 
     #[derive(Clone, Debug, Copy)]
-    struct FpMulTest;
+    struct FpInnerProductTest;
 
-    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpMulTest {
-        const NUM_ARITHMETIC_COLUMNS: usize = 124;
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpInnerProductTest {
+        const NUM_ARITHMETIC_COLUMNS: usize = 156;
         const NUM_FREE_COLUMNS: usize = 0;
-        type Instruction = FpMulInstruction<Fp25519Param>;
+        type Instruction = FpInnerProductInstruction<Fp25519Param>;
     }
 
     #[test]
-    fn test_fpmul_row() {
+    fn test_fpquad() {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type Fp = Fp25519;
-        type S = TestStark<FpMulTest, F, D>;
+        type S = TestStark<FpInnerProductTest, F, D>;
 
-        // Build the circuit.
-        let mut builder = StarkBuilder::<FpMulTest, F, D>::new();
+        // Construct the circuit.
+        let mut builder = StarkBuilder::<FpInnerProductTest, F, D>::new();
         let a = builder.alloc::<Fp>();
         let b = builder.alloc::<Fp>();
-        let (_, ab_ins) = builder.fpmul(&a, &b).unwrap();
+        let c = builder.alloc::<Fp>();
+        let d = builder.alloc::<Fp>();
+        let (result, quad) = builder.fp_inner_product(&vec![a, b], &vec![c, d]);
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
+        builder.write_data(&c).unwrap();
+        builder.write_data(&d).unwrap();
         let (chip, spec) = builder.build();
 
-        // Generate the trace.
-        let num_rows = 2u64.pow(16) as usize;
+        // Construct the trace.
+        let num_rows = 2u64.pow(16);
         let (handle, generator) = trace::<F, D>(spec);
         let p = Fp25519Param::modulus();
         let mut rng = thread_rng();
         for i in 0..num_rows {
             let a_int: BigUint = rng.gen_biguint(256) % &p;
             let b_int = rng.gen_biguint(256) % &p;
-            handle.write_field(i, &a_int, a).unwrap();
-            handle.write_field(i, &b_int, b).unwrap();
-            let res = handle.write_fpmul(i, &a_int, &b_int, ab_ins).unwrap();
-            assert_eq!(res, (a_int * b_int) % &p);
+            let c_int = rng.gen_biguint(256) % &p;
+            let d_int = rng.gen_biguint(256) % &p;
+            let handle = handle.clone();
+            handle.write_field(i as usize, &a_int, a).unwrap();
+            handle.write_field(i as usize, &b_int, b).unwrap();
+            handle.write_field(i as usize, &c_int, c).unwrap();
+            handle.write_field(i as usize, &d_int, d).unwrap();
+            let result = handle
+                .write_fp_inner_product(
+                    i as usize,
+                    vec![&a_int, &b_int],
+                    vec![&c_int, &d_int],
+                    quad.clone(),
+                )
+                .unwrap();
+            assert_eq!(result, (a_int * c_int + b_int * d_int) % &p);
         }
         drop(handle);
-        let trace = generator.generate_trace(&chip, num_rows).unwrap();
+        let trace = generator.generate_trace(&chip, num_rows as usize).unwrap();
 
-        // Generate the proof.
+        // Construct the proof.
         let config = StarkConfig::standard_fast_config();
         let stark = TestStark::new(chip);
         let proof = prove::<F, C, S, D>(
@@ -274,7 +343,7 @@ mod tests {
         .unwrap();
         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
 
-        // Generate the recursive proof.
+        // Verify recursive proof in a circuit.
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
         let degree_bits = proof.proof.recover_degree_bits(&config);

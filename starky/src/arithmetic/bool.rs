@@ -7,7 +7,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::builder::StarkBuilder;
 use super::chip::StarkParameters;
-use super::instruction::Instruction;
+use super::instruction::{Instruction, InstructionTrace};
 use super::register::{BitRegister, MemorySlice, Register};
 use super::trace::TraceWriter;
 use crate::arithmetic::register::RegisterSerializable;
@@ -16,13 +16,15 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 #[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ConstraintBool(pub MemorySlice);
 
-impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for ConstraintBool {
-    fn witness_layout(&self) -> Vec<MemorySlice> {
+impl<F: RichField + Extendable<D>, const D: usize> InstructionTrace<F, D> for ConstraintBool {
+    fn layout(&self) -> Vec<MemorySlice> {
         Vec::new()
     }
 
     fn assign_row(&self, _trace_rows: &mut [Vec<F>], _row: &mut [F], _row_index: usize) {}
+}
 
+impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for ConstraintBool {
     fn packed_generic_constraints<
         FE,
         P,
@@ -78,7 +80,6 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         L::Instruction: From<Selector<T>>,
     {
         let instr = Selector::new(*bit, *a, *b, *result);
-        self.insert_instruction(instr.into())?;
         Ok(instr)
     }
 }
@@ -101,15 +102,19 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize, T: Register> Instruction<F, D> for Selector<T> {
-    fn witness_layout(&self) -> Vec<MemorySlice> {
+impl<F: RichField + Extendable<D>, const D: usize, T: Register> InstructionTrace<F, D>
+    for Selector<T>
+{
+    fn layout(&self) -> Vec<MemorySlice> {
         vec![*self.result.register()]
     }
 
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
         self.result.register().assign(trace_rows, 0, row, row_index);
     }
+}
 
+impl<F: RichField + Extendable<D>, const D: usize, T: Register> Instruction<F, D> for Selector<T> {
     fn packed_generic_constraints<
         FE,
         P,
