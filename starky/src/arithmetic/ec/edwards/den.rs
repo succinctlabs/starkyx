@@ -10,7 +10,7 @@ use super::*;
 use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::StarkParameters;
 use crate::arithmetic::field::modulus_field_iter;
-use crate::arithmetic::instruction::Instruction;
+use crate::arithmetic::instruction::{Instruction, InstructionTrace};
 use crate::arithmetic::polynomial::{
     to_u16_le_limbs_polynomial, Polynomial, PolynomialGadget, PolynomialOps,
 };
@@ -60,10 +60,10 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
+impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> InstructionTrace<F, D>
     for Den<P>
 {
-    fn witness_layout(&self) -> Vec<MemorySlice> {
+    fn layout(&self) -> Vec<MemorySlice> {
         vec![
             *self.result.register(),
             *self.carry.register(),
@@ -71,7 +71,11 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             *self.witness_high.register(),
         ]
     }
+}
 
+impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
+    for Den<P>
+{
     fn packed_generic_constraints<
         FE,
         PF,
