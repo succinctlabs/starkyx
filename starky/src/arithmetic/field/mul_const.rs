@@ -9,7 +9,9 @@ use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::constrain::packed_generic_constrain_field_operation;
+use super::constrain::{
+    ext_circuit_constrain_field_operation, packed_generic_constrain_field_operation,
+};
 use super::*;
 use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::StarkParameters;
@@ -170,8 +172,8 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        // get all the data
-        let a = self.a.register().ext_circuit_vars(&vars);
+        // Get the packed entries.
+        let p_a = self.a.register().ext_circuit_vars(&vars);
         let c_vec = self
             .c
             .into_iter()
@@ -179,46 +181,30 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             .take(P::NB_LIMBS)
             .collect::<Vec<_>>();
         let c = PolynomialGadget::constant_extension(builder, &c_vec);
-        let result = self.result.register().ext_circuit_vars(&vars);
+        let p_result = self.result.register().ext_circuit_vars(&vars);
+        let p_carry = self.carry.register().ext_circuit_vars(&vars);
+        let p_witness_low = self.witness_low.register().ext_circuit_vars(&vars);
+        let p_witness_high = self.witness_high.register().ext_circuit_vars(&vars);
 
-        let carry = self.carry.register().ext_circuit_vars(&vars);
-        let witness_low = self.witness_low.register().ext_circuit_vars(&vars);
-        let witness_high = self.witness_high.register().ext_circuit_vars(&vars);
-
-        // Construct the expected vanishing polynmial
-        let ac = PolynomialGadget::mul_extension(builder, a, &c);
-        let ac_minus_result = PolynomialGadget::sub_extension(builder, &ac, result);
-        let p_limbs = PolynomialGadget::constant_extension(
+        // Compute the vanishing polynomial a(x) * c - result(x) - carry(x) * p(x).
+        let p_a_mul_c = PolynomialGadget::mul_extension(builder, p_a, &c);
+        let p_a_mul_c_minus_result = PolynomialGadget::sub_extension(builder, &p_a_mul_c, p_result);
+        let p_modulus = PolynomialGadget::constant_extension(
             builder,
             &modulus_field_iter::<F::Extension, P>().collect::<Vec<_>>(),
         );
-        let mul_times_carry = PolynomialGadget::mul_extension(builder, carry, &p_limbs[..]);
-        let vanishing_poly =
-            PolynomialGadget::sub_extension(builder, &ac_minus_result, &mul_times_carry);
+        let p_carry_mul_modulus = PolynomialGadget::mul_extension(builder, p_carry, &p_modulus[..]);
+        let p_vanishing =
+            PolynomialGadget::sub_extension(builder, &p_a_mul_c_minus_result, &p_carry_mul_modulus);
 
-        // reconstruct witness
-
-        // Reconstruct and shift back the witness polynomial
-        let limb_const = F::Extension::from_canonical_u32(2u32.pow(16));
-        let limb = builder.constant_extension(limb_const);
-        let w_high_times_limb =
-            PolynomialGadget::ext_scalar_mul_extension(builder, witness_high, &limb);
-        let w_shifted = PolynomialGadget::add_extension(builder, witness_low, &w_high_times_limb);
-        let offset =
-            builder.constant_extension(F::Extension::from_canonical_u32(P::WITNESS_OFFSET as u32));
-        let w = PolynomialGadget::sub_constant_extension(builder, &w_shifted, &offset);
-
-        // Multiply by (x-2^16) and make the constraint
-        let neg_limb = builder.constant_extension(-limb_const);
-        let root_monomial = &[neg_limb, builder.constant_extension(F::Extension::ONE)];
-        let witness_times_root =
-            PolynomialGadget::mul_extension(builder, w.as_slice(), root_monomial);
-
-        let constraint =
-            PolynomialGadget::sub_extension(builder, &vanishing_poly, &witness_times_root);
-        for constr in constraint {
-            yield_constr.constraint(builder, constr);
-        }
+        // Check [a(x) * c - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
+        ext_circuit_constrain_field_operation::<F, D, P>(
+            builder,
+            yield_constr,
+            p_vanishing,
+            p_witness_low,
+            p_witness_high,
+        );
     }
 }
 
@@ -229,7 +215,6 @@ mod tests {
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
-    //use plonky2_maybe_rayon::*;
     use rand::thread_rng;
 
     use super::*;
@@ -246,22 +231,11 @@ mod tests {
     use crate::verifier::verify_stark_proof;
 
     #[derive(Clone, Debug, Copy)]
-    struct FpMulTest;
-
-    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpMulTest {
-        const NUM_ARITHMETIC_COLUMNS: usize = 124;
-        const NUM_FREE_COLUMNS: usize = 0;
-
-        type Instruction = FpMulInstruction<Fp25519Param>;
-    }
-
-    #[derive(Clone, Debug, Copy)]
     struct FpMulConstTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpMulConstTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 108;
         const NUM_FREE_COLUMNS: usize = 0;
-
         type Instruction = FpMulConstInstruction<Fp25519Param>;
     }
 
@@ -273,52 +247,40 @@ mod tests {
         type Fp = Fp25519;
         type S = TestStark<FpMulConstTest, F, D>;
 
+        // Build the circuit.
         let mut c: [u16; MAX_NB_LIMBS] = [0; MAX_NB_LIMBS];
         c[0] = 100;
         c[1] = 2;
         c[2] = 30000;
-
         let mut c_bigint = BigUint::zero();
         for i in 0..MAX_NB_LIMBS {
             c_bigint += BigUint::from(c[i]) << (i * 16);
         }
 
-        // build the stark
         let mut builder = StarkBuilder::<FpMulConstTest, F, D>::new();
-
         let a = builder.alloc::<Fp>();
-
-        //let ab = FMul::new(a, b, result);
-        //builder.insert_instruction(ab).unwrap();
-        let (result, ac_ins) = builder.fpmul_const(&a, c).unwrap();
+        let (_, ac_ins) = builder.fpmul_const(&a, c).unwrap();
         builder.write_data(&a).unwrap();
-
         let (chip, spec) = builder.build();
 
-        // Construct the trace
+        // Generate the trace.
         let num_rows = 2u64.pow(16) as usize;
         let (handle, generator) = trace::<F, D>(spec);
-
         let p = Fp25519Param::modulus();
-
         let mut rng = thread_rng();
         for i in 0..num_rows {
             let a_int: BigUint = rng.gen_biguint(256) % &p;
-            //let handle = handle.clone();
-            //rayon::spawn(move || {
             handle.write_field(i, &a_int, a).unwrap();
             let res = handle.write_fpmul_const(i, &a_int, ac_ins).unwrap();
             assert_eq!(res, (c_bigint.clone() * a_int) % &p);
-            //});
         }
-        drop(handle);
 
+        drop(handle);
         let trace = generator.generate_trace(&chip, num_rows).unwrap();
 
+        // Generate the proof.
         let config = StarkConfig::standard_fast_config();
         let stark = TestStark::new(chip);
-
-        // Verify proof as a stark
         let proof = prove::<F, C, S, D>(
             stark.clone(),
             &config,
@@ -329,10 +291,9 @@ mod tests {
         .unwrap();
         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
 
-        // Verify recursive proof in a circuit
+        // Build the recursive circuit.
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
-
         let degree_bits = proof.proof.recover_degree_bits(&config);
         let virtual_proof = add_virtual_stark_proof_with_pis(
             &mut recursive_builder,
@@ -340,21 +301,16 @@ mod tests {
             &config,
             degree_bits,
         );
-
         recursive_builder.print_gate_counts(0);
-
         let mut rec_pw = PartialWitness::new();
         set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-
         verify_stark_proof_circuit::<F, C, S, D>(
             &mut recursive_builder,
             stark,
             virtual_proof,
             &config,
         );
-
         let recursive_data = recursive_builder.build::<C>();
-
         let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
         let recursive_proof = plonky2::plonk::prover::prove(
             &recursive_data.prover_only,
@@ -363,7 +319,6 @@ mod tests {
             &mut timing,
         )
         .unwrap();
-
         timing.print();
         recursive_data.verify(recursive_proof).unwrap();
     }
