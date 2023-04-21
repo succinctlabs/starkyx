@@ -1,3 +1,7 @@
+//! Implements non-native field multiplication with a constant as an "instruction".
+//!
+//! To understand the implementation, it may be useful to refer to `mod.rs`.
+
 use anyhow::Result;
 use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
@@ -5,6 +9,7 @@ use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
+use super::constrain::packed_generic_constrain_field_operation;
 use super::*;
 use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::StarkParameters;
@@ -28,6 +33,7 @@ pub struct FpMulConstInstruction<P: FieldParameters> {
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
+    /// Given a field element `a` and a scalar constant `c`, computes the product `a * c = result`.
     pub fn fpmul_const<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,
@@ -54,6 +60,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
+    /// Writes a `FpMulConstInstruction` to the trace and returns the result.
     pub fn write_fpmul_const<P: FieldParameters>(
         &self,
         row_index: usize,
@@ -127,8 +134,8 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         FE: FieldExtension<D2, BaseField = F>,
         PF: PackedField<Scalar = FE>,
     {
-        // get all the data
-        let a = self.a.register().packed_entries(&vars);
+        // Get the packed entries.
+        let p_a = self.a.register().packed_entries(&vars);
         let c = self
             .c
             .into_iter()
@@ -136,39 +143,25 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             .map(PF::from)
             .take(P::NB_LIMBS)
             .collect::<Vec<_>>();
-        let result = self.result.register().packed_entries(&vars);
+        let p_result = self.result.register().packed_entries(&vars);
+        let p_carry = self.carry.register().packed_generic_vars(&vars);
+        let p_witness_low = self.witness_low.register().packed_generic_vars(&vars);
+        let p_witness_high = self.witness_high.register().packed_generic_vars(&vars);
 
-        let carry = self.carry.register().packed_generic_vars(&vars);
-        let witness_low = self.witness_low.register().packed_generic_vars(&vars);
-        let witness_high = self.witness_high.register().packed_generic_vars(&vars);
+        // Compute the vanishing polynomial a(x) * c - result(x) - carry(x) * p(x).
+        let p_a_mul_c = PolynomialOps::mul(&p_a, &c);
+        let p_a_mul_c_minus_result = PolynomialOps::sub(&p_a_mul_c, &p_result);
+        let p_modulus = Polynomial::<FE>::from_iter(modulus_field_iter::<FE, P>());
+        let p_carry_mul_modulus = PolynomialOps::scalar_poly_mul(p_carry, p_modulus.as_slice());
+        let p_vanishing = PolynomialOps::sub(&p_a_mul_c_minus_result, &p_carry_mul_modulus);
 
-        // Construct the expected vanishing polynmial
-        let ac = PolynomialOps::mul(&a, &c);
-        let ac_minus_result = PolynomialOps::sub(&ac, &result);
-        let p_limbs = Polynomial::<FE>::from_iter(modulus_field_iter::<FE, P>());
-        let mul_times_carry = PolynomialOps::scalar_poly_mul(carry, p_limbs.as_slice());
-        let vanishing_poly = PolynomialOps::sub(&ac_minus_result, &mul_times_carry);
-
-        // reconstruct witness
-        let limb = FE::from_canonical_u32(LIMB);
-
-        // Reconstruct and shift back the witness polynomial
-        let w_shifted = witness_low
-            .iter()
-            .zip(witness_high.iter())
-            .map(|(x, y)| *x + (*y * limb));
-
-        let offset = FE::from_canonical_u32(P::WITNESS_OFFSET as u32);
-        let w = w_shifted.map(|x| x - offset).collect::<Vec<PF>>();
-
-        // Multiply by (x-2^16) and make the constraint
-        let root_monomial: &[PF] = &[PF::from(-limb), PF::from(PF::Scalar::ONE)];
-        let witness_times_root = PolynomialOps::mul(&w, root_monomial);
-
-        //debug_assert!(vanishing_poly.len() == witness_times_root.len());
-        for i in 0..vanishing_poly.len() {
-            yield_constr.constraint(vanishing_poly[i] - witness_times_root[i]);
-        }
+        // Check [a(x) * c - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
+        packed_generic_constrain_field_operation::<F, D, FE, PF, D2, P>(
+            yield_constr,
+            p_vanishing,
+            p_witness_low,
+            p_witness_high,
+        );
     }
 
     fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(

@@ -62,6 +62,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
+    /// Writes a `FpMulInstruction` to the trace and returns the result.
     pub fn write_fpmul<P: FieldParameters>(
         &self,
         row_index: usize,
