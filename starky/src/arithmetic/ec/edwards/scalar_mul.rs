@@ -3,7 +3,6 @@ use super::*;
 use crate::arithmetic::bool::Selector;
 use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::StarkParameters;
-use crate::arithmetic::instruction::arithmetic_expressions::ArithmeticExpression;
 use crate::arithmetic::polynomial::Polynomial;
 use crate::arithmetic::register::{BitRegister, ElementRegister};
 use crate::arithmetic::utils::biguint_to_bits_le;
@@ -78,17 +77,8 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         let temp_next = self.alloc_ec_point()?;
         let result_next = self.alloc_ec_point()?;
 
-        let r_x = ArithmeticExpression::new(&result.x.next());
-        let r_y = ArithmeticExpression::new(&result.y.next());
-        let t_x = ArithmeticExpression::new(&temp.x.next());
-        let t_y = ArithmeticExpression::new(&temp.y.next());
-        let t_n_x = ArithmeticExpression::new(&temp_next.x);
-        let t_n_y = ArithmeticExpression::new(&temp_next.y);
-        let r_n_x = ArithmeticExpression::new(&result_next.x);
-        let r_n_y = ArithmeticExpression::new(&result_next.y);
-
-        let counter = ArithmeticExpression::new(cycle_counter);
-        let counter_next = ArithmeticExpression::new(&cycle_counter.next());
+        let counter = cycle_counter.expr();
+        let counter_next = cycle_counter.next().expr();
 
         // Counter constraints
         let group = F::two_adic_subgroup(8);
@@ -97,17 +87,20 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         let generator_inv = group[group.len() - 1];
         self.assert_expressions_equal(counter_next, counter.clone() * generator);
 
-        let res_x_consr = (counter.clone() - generator_inv) * (r_x - r_n_x);
-        let res_y_consr = (counter.clone() - generator_inv) * (r_y - r_n_y);
-        let temp_x_consr = (counter.clone() - generator_inv) * (t_x - t_n_x);
-        let temp_y_consr = (counter - generator_inv) * (t_y - t_n_y);
+        let res_x_consr =
+            (counter.clone() - generator_inv) * (result.x.next().expr() - result_next.x.expr());
+        let res_y_consr =
+            (counter.clone() - generator_inv) * (result.y.next().expr() - result_next.y.expr());
+        let temp_x_consr =
+            (counter.clone() - generator_inv) * (temp.x.next().expr() - temp_next.x.expr());
+        let temp_y_consr = (counter - generator_inv) * (temp.y.next().expr() - temp_next.y.expr());
 
-        let zero = ArithmeticExpression::from_constant(F::ZERO);
+        //let zero = ArithmeticExpression::from_constant(F::ZERO);
 
-        self.assert_expressions_equal(res_x_consr, zero.clone());
-        self.assert_expressions_equal(res_y_consr, zero.clone());
-        self.assert_expressions_equal(temp_x_consr, zero.clone());
-        self.assert_expressions_equal(temp_y_consr, zero);
+        self.assert_expression_zero(res_x_consr);
+        self.assert_expression_zero(res_y_consr);
+        self.assert_expression_zero(temp_x_consr);
+        self.assert_expression_zero(temp_y_consr);
 
         self.ed_double_and_add_step(scalar_bit, result, &result_next, temp, &temp_next)
     }

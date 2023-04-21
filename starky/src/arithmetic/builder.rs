@@ -245,32 +245,30 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         a: ArithmeticExpression<F, D>,
         b: ArithmeticExpression<F, D>,
     ) {
-        let constraint = EqualityConstraint::ArithmeticConstraint(a, b);
+        assert_eq!(a.size, b.size, "Expressions must have the same size");
+        let constraint = EqualityConstraint::ArithmeticConstraint(a.expression, b.expression);
+        self.constraints.push(constraint);
+    }
+
+    pub fn assert_expression_zero(&mut self, a: ArithmeticExpression<F, D>) {
+        let zeros = ArithmeticExpression::from_constant_vec(vec![F::ZERO; a.size]);
+        let constraint = EqualityConstraint::ArithmeticConstraint(a.expression, zeros.expression);
         self.constraints.push(constraint);
     }
 
     /// Asserts that a + b = c
     pub fn add_pointwise<T: Register>(&mut self, a: &T, b: &T, c: &T) {
-        let a_exp = ArithmeticExpression::new(a);
-        let b_exp = ArithmeticExpression::new(b);
-        let c_exp = ArithmeticExpression::new(c);
-        self.assert_expressions_equal(a_exp + b_exp, c_exp);
+        self.assert_expressions_equal(a.expr() + b.expr(), c.expr());
     }
 
     /// Asserts that a - b = c
     pub fn sub_pointwise<T: Register>(&mut self, a: &T, b: &T, c: &T) {
-        let a_exp = ArithmeticExpression::new(a);
-        let b_exp = ArithmeticExpression::new(b);
-        let c_exp = ArithmeticExpression::new(c);
-        self.assert_expressions_equal(a_exp - b_exp, c_exp);
+        self.assert_expressions_equal(a.expr() - b.expr(), c.expr());
     }
 
     /// Asserts that a * b = c
     pub fn mul<T: Register>(&mut self, a: &T, b: &T, c: &T) {
-        let a_exp = ArithmeticExpression::new(a);
-        let b_exp = ArithmeticExpression::new(b);
-        let c_exp = ArithmeticExpression::new(c);
-        self.assert_expressions_equal(a_exp * b_exp, c_exp);
+        self.assert_expressions_equal(a.expr() * b.expr(), c.expr());
     }
 }
 
@@ -318,7 +316,6 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type L = TestChipParameters<F, D>;
-        type A = ArithmeticExpression<F, D>;
         type S = TestStark<L, F, D>;
 
         // event logger to show messages
@@ -334,7 +331,7 @@ mod tests {
         // Asserts that x_0_next = x_1
         builder.assert_equal(&x_0.next(), &x_1);
         // Asserts that x_1_next = x_0 + x_1
-        builder.assert_expressions_equal(A::new(&x_0) + A::new(&x_1), A::new(&x_1.next()));
+        builder.assert_expressions_equal(x_0.expr() + x_1.expr(), x_1.next().expr());
 
         let (chip, spec) = builder.build();
 
