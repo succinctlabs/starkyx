@@ -6,14 +6,12 @@ use core::iter;
 use core::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub};
 
 pub use gadget::PolynomialGadget;
-use itertools::Itertools;
 use num::BigUint;
 pub use ops::PolynomialOps;
-use plonky2::field::extension::Extendable;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 
-use super::field::FieldParameters;
+use super::parameters::FieldParameters;
 use crate::arithmetic::utils::{bigint_into_u16_digits, biguint_to_16_digits_field};
 
 /// A wrapper around a vector of field elements that implements polynomial operations. Often used

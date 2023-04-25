@@ -1,12 +1,14 @@
 use anyhow::Result;
 
-use super::den::Den;
 use super::*;
 use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::StarkParameters;
+use crate::arithmetic::ec::affine::AffinePoint;
 use crate::arithmetic::field::{
-    FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction,
+    FpDenInstruction, FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction,
 };
+use crate::arithmetic::instruction::macros::FromInstructionSet;
+use crate::arithmetic::parameters::EdwardsParameters;
 use crate::arithmetic::trace::TraceWriter;
 
 #[derive(Debug, Clone)]
@@ -16,22 +18,14 @@ pub struct EcAddData<E: EdwardsParameters> {
     P: AffinePointRegister<E>,
     Q: AffinePointRegister<E>,
     R: AffinePointRegister<E>,
-    XNUM: FpInnerProductInstruction<E::FieldParam>,
-    YNUM: FpInnerProductInstruction<E::FieldParam>,
-    PXPY: FpMulInstruction<E::FieldParam>,
-    QXQY: FpMulInstruction<E::FieldParam>,
-    PXPYQXQY: FpMulInstruction<E::FieldParam>,
-    DXY: FpMulConstInstruction<E::FieldParam>,
-    XDEN: Den<E::FieldParam>,
-    YDEN: Den<E::FieldParam>,
-}
-
-pub trait FromEdwardsAdd<E: EdwardsParameters>:
-    From<FpMulInstruction<E::FieldParam>>
-    + From<FpInnerProductInstruction<E::FieldParam>>
-    + From<FpMulConstInstruction<E::FieldParam>>
-    + From<Den<E::FieldParam>>
-{
+    XNUM: FpInnerProductInstruction<E::FieldParameters>,
+    YNUM: FpInnerProductInstruction<E::FieldParameters>,
+    PXPY: FpMulInstruction<E::FieldParameters>,
+    QXQY: FpMulInstruction<E::FieldParameters>,
+    PXPYQXQY: FpMulInstruction<E::FieldParameters>,
+    DXY: FpMulConstInstruction<E::FieldParameters>,
+    XDEN: FpDenInstruction<E::FieldParameters>,
+    YDEN: FpDenInstruction<E::FieldParameters>,
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
@@ -43,7 +37,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         result: &AffinePointRegister<E>,
     ) -> Result<EcAddData<E>>
     where
-        L::Instruction: FromEdwardsAdd<E>,
+        L::Instruction: FromInstructionSet<E::FieldParameters>,
     {
         let (x_num_result, x_num_ins) = self.fp_inner_product(&vec![P.x, Q.x], &vec![Q.y, P.y]);
         let (y_num_result, y_num_ins) = self.fp_inner_product(&vec![P.y, P.x], &vec![Q.y, Q.x]);
@@ -79,7 +73,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         result: &AffinePointRegister<E>,
     ) -> Result<EcAddData<E>>
     where
-        L::Instruction: FromEdwardsAdd<E>,
+        L::Instruction: FromInstructionSet<E::FieldParameters>,
     {
         self.ed_add(P, P, result)
     }
@@ -146,7 +140,8 @@ mod tests {
     use super::*;
     use crate::arithmetic::builder::StarkBuilder;
     use crate::arithmetic::chip::{StarkParameters, TestStark};
-    use crate::arithmetic::ec::edwards::instructions::EdWardsMicroInstruction;
+    use crate::arithmetic::instruction::macros::InstructionSet;
+    use crate::arithmetic::parameters::ed25519::Ed25519Parameters;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;
@@ -162,7 +157,7 @@ mod tests {
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for EdAddTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 800;
         const NUM_FREE_COLUMNS: usize = 0;
-        type Instruction = EdWardsMicroInstruction<Ed25519Parameters>;
+        type Instruction = InstructionSet<Ed25519Parameters>;
     }
 
     #[allow(non_snake_case)]
@@ -288,7 +283,7 @@ mod tests {
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for EdDoubleTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 768;
         const NUM_FREE_COLUMNS: usize = 0;
-        type Instruction = EdWardsMicroInstruction<Ed25519Parameters>;
+        type Instruction = InstructionSet<Ed25519Parameters>;
     }
 
     #[allow(non_snake_case)]
@@ -307,7 +302,7 @@ mod tests {
         let P = builder.alloc_ec_point::<E>().unwrap();
         let R = builder.alloc_ec_point::<E>().unwrap();
 
-        let ed_double_data = builder.ed_double::<E>(&P, &R).unwrap();
+        let ed_double_data = builder.ed_double(&P, &R).unwrap();
         builder.write_ec_point(&P).unwrap();
 
         let (chip, spec) = builder.build();

@@ -10,7 +10,8 @@ use super::*;
 use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::StarkParameters;
 use crate::arithmetic::field::modulus_field_iter;
-use crate::arithmetic::instruction::{Instruction, InstructionTrace};
+use crate::arithmetic::instruction::Instruction;
+use crate::arithmetic::parameters::{FieldParameters, LIMB};
 use crate::arithmetic::polynomial::{
     to_u16_le_limbs_polynomial, Polynomial, PolynomialGadget, PolynomialOps,
 };
@@ -22,7 +23,7 @@ use crate::arithmetic::utils::{
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Debug, Clone, Copy)]
-pub struct Den<P: FieldParameters> {
+pub struct FpDenInstruction<P: FieldParameters> {
     a: FieldRegister<P>,
     b: FieldRegister<P>,
     sign: bool,
@@ -39,14 +40,14 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         b: &FieldRegister<P>,
         sign: bool,
         result: &FieldRegister<P>,
-    ) -> Result<Den<P>>
+    ) -> Result<FpDenInstruction<P>>
     where
-        L::Instruction: From<Den<P>>,
+        L::Instruction: From<FpDenInstruction<P>>,
     {
         let carry = self.alloc::<FieldRegister<P>>();
         let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
         let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
-        let instr = Den {
+        let instr = FpDenInstruction {
             a: *a,
             b: *b,
             sign,
@@ -60,10 +61,10 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> InstructionTrace<F, D>
-    for Den<P>
+impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
+    for FpDenInstruction<P>
 {
-    fn layout(&self) -> Vec<MemorySlice> {
+    fn trace_layout(&self) -> Vec<MemorySlice> {
         vec![
             *self.result.register(),
             *self.carry.register(),
@@ -71,11 +72,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             *self.witness_high.register(),
         ]
     }
-}
 
-impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
-    for Den<P>
-{
     fn packed_generic_constraints<
         FE,
         PF,
@@ -207,7 +204,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
         a: &BigUint,
         b: &BigUint,
         sign: bool,
-        instruction: Den<P>,
+        instruction: FpDenInstruction<P>,
     ) -> Result<BigUint> {
         let p = P::modulus();
 
@@ -279,7 +276,8 @@ mod tests {
     use super::*;
     use crate::arithmetic::builder::StarkBuilder;
     use crate::arithmetic::chip::{StarkParameters, TestStark};
-    use crate::arithmetic::field::{Fp25519, Fp25519Param};
+    use crate::arithmetic::instruction::macros::InstructionSet;
+    use crate::arithmetic::parameters::ed25519::Ed25519Parameters;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;
@@ -296,7 +294,7 @@ mod tests {
         const NUM_ARITHMETIC_COLUMNS: usize = 124;
         const NUM_FREE_COLUMNS: usize = 0;
 
-        type Instruction = Den<Fp25519Param>;
+        type Instruction = InstructionSet<Ed25519Parameters>;
     }
 
     #[test]
@@ -304,7 +302,7 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type Fp = Fp25519;
+        type Fp = FieldRegister<Ed25519Parameters>;
         type S = TestStark<DenTest, F, D>;
 
         // build the stark
@@ -325,7 +323,7 @@ mod tests {
         let num_rows = 2u64.pow(16);
         let (handle, generator) = trace::<F, D>(spec);
 
-        let p = Fp25519Param::modulus();
+        let p = Ed25519Parameters::modulus();
 
         let mut rng = thread_rng();
         for i in 0..num_rows {

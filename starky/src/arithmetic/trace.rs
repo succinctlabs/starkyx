@@ -51,7 +51,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
         instruction: T,
         values: Vec<Vec<F>>,
     ) -> Result<()> {
-        let witness_layout = instruction.layout();
+        let witness_layout = instruction.trace_layout();
         debug_assert!(witness_layout.len() == values.len());
         witness_layout
             .into_iter()
@@ -60,7 +60,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
                 debug_assert!(register.len() == value.len());
             });
         let row = values.into_iter().flatten().collect();
-        let id = InsID::CustomInstruction(instruction.layout());
+        let id = InsID::CustomInstruction(instruction.trace_layout());
         self.tx
             .send((row_index, id, row))
             .map_err(|_| anyhow!("Failed to send row"))?;
@@ -73,7 +73,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
         instruction: T,
         row: Vec<F>,
     ) -> Result<()> {
-        let id = InsID::CustomInstruction(instruction.layout());
+        let id = InsID::CustomInstruction(instruction.trace_layout());
         self.tx
             .send((row_index, id, row))
             .map_err(|_| anyhow!("Failed to send row"))?;

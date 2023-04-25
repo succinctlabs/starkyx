@@ -16,6 +16,7 @@ use super::*;
 use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::StarkParameters;
 use crate::arithmetic::instruction::Instruction;
+use crate::arithmetic::parameters::FieldParameters;
 use crate::arithmetic::polynomial::{
     to_u16_le_limbs_polynomial, Polynomial, PolynomialGadget, PolynomialOps,
 };
@@ -57,6 +58,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             witness_low,
             witness_high,
         };
+        self.insert_instruction(instr.clone().into()).unwrap();
         (result, instr)
     }
 }
@@ -121,10 +123,10 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> InstructionTrace<F, D>
+impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
     for FpInnerProductInstruction<P>
 {
-    fn layout(&self) -> Vec<MemorySlice> {
+    fn trace_layout(&self) -> Vec<MemorySlice> {
         vec![
             *self.result.register(),
             *self.carry.register(),
@@ -132,11 +134,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             *self.witness_high.register(),
         ]
     }
-}
 
-impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
-    for FpInnerProductInstruction<P>
-{
     fn packed_generic_constraints<
         FE,
         PF,
@@ -262,7 +260,7 @@ mod tests {
     use super::*;
     use crate::arithmetic::builder::StarkBuilder;
     use crate::arithmetic::chip::{StarkParameters, TestStark};
-    use crate::arithmetic::field::Fp25519Param;
+    use crate::arithmetic::parameters::ed25519::Ed25519Parameters;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;
@@ -278,7 +276,7 @@ mod tests {
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpInnerProductTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 156;
         const NUM_FREE_COLUMNS: usize = 0;
-        type Instruction = FpInnerProductInstruction<Fp25519Param>;
+        type Instruction = FpInnerProductInstruction<Ed25519Parameters>;
     }
 
     #[test]
@@ -286,7 +284,7 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type Fp = Fp25519;
+        type Fp = FieldRegister<Ed25519Parameters>;
         type S = TestStark<FpInnerProductTest, F, D>;
 
         // Construct the circuit.
@@ -305,7 +303,7 @@ mod tests {
         // Construct the trace.
         let num_rows = 2u64.pow(16);
         let (handle, generator) = trace::<F, D>(spec);
-        let p = Fp25519Param::modulus();
+        let p = Ed25519Parameters::modulus();
         let mut rng = thread_rng();
         for i in 0..num_rows {
             let a_int: BigUint = rng.gen_biguint(256) % &p;

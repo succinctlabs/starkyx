@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use super::cell::CellType;
 use super::{Register, RegisterSerializable, RegisterSized};
-use crate::arithmetic::field::FieldParameters;
+use crate::arithmetic::parameters::FieldParameters;
 use crate::arithmetic::register::memory::MemorySlice;
 
 /// A register for representing a field element. The value is decomposed into a series of U16 limbs

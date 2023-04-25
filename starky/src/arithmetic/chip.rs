@@ -21,7 +21,7 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 /// A layout for a circuit that emulates field operations
 pub trait StarkParameters<F: RichField + Extendable<D>, const D: usize>:
-    Sized + Send + Sync
+    Sized + Send + Sync + Clone
 {
     /// The number of columns that need to be ranged-checked to range 0..num_rows
     ///
