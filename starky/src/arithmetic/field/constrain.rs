@@ -5,7 +5,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::{FieldParameters, LIMB};
+use crate::arithmetic::parameters::{FieldParameters, LIMB};
 use crate::arithmetic::polynomial::{PolynomialGadget, PolynomialOps};
 
 pub fn packed_generic_constrain_field_operation<

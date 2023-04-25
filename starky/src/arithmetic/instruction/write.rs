@@ -10,17 +10,15 @@ impl WriteInstruction {
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> InstructionTrace<F, D> for WriteInstruction {
-    fn layout(&self) -> Vec<MemorySlice> {
+impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for WriteInstruction {
+    fn trace_layout(&self) -> Vec<MemorySlice> {
         vec![self.0]
     }
 
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
         self.0.assign(trace_rows, 0, row, row_index);
     }
-}
 
-impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for WriteInstruction {
     fn packed_generic_constraints<
         FE,
         P,

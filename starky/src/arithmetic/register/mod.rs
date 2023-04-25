@@ -49,7 +49,7 @@ pub trait RegisterSized {
 /// ever use the register type directly to access values. If you want to access the values, you
 /// should instead compose multiple different register types into a struct.
 pub trait Register:
-    RegisterSerializable + RegisterSized + 'static + Sized + Clone + Send + Sync
+    RegisterSerializable + RegisterSized + 'static + Sized + Clone + Send + Sync + Copy
 {
     /// Initializes the register given a memory slice with checks on length.
     fn from_register(register: MemorySlice) -> Self {

@@ -14,7 +14,8 @@ use super::*;
 use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::StarkParameters;
 use crate::arithmetic::field::constrain::ext_circuit_constrain_field_operation;
-use crate::arithmetic::instruction::{Instruction, InstructionTrace};
+use crate::arithmetic::instruction::Instruction;
+use crate::arithmetic::parameters::FieldParameters;
 use crate::arithmetic::polynomial::{
     to_u16_le_limbs_polynomial, Polynomial, PolynomialGadget, PolynomialOps,
 };
@@ -109,10 +110,10 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> InstructionTrace<F, D>
+impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
     for FpAddInstruction<P>
 {
-    fn layout(&self) -> Vec<MemorySlice> {
+    fn trace_layout(&self) -> Vec<MemorySlice> {
         vec![
             *self.result.register(),
             *self.carry.register(),
@@ -120,11 +121,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             *self.witness_high.register(),
         ]
     }
-}
 
-impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
-    for FpAddInstruction<P>
-{
     fn packed_generic_constraints<
         FE,
         PF,
@@ -202,6 +199,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
+    use plonky2::field::packable::Packable;
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
@@ -212,7 +210,8 @@ mod tests {
     use super::*;
     use crate::arithmetic::builder::StarkBuilder;
     use crate::arithmetic::chip::{StarkParameters, TestStark};
-    use crate::arithmetic::field::Fp25519Param;
+    use crate::arithmetic::instruction::macros::InstructionSet;
+    use crate::arithmetic::parameters::ed25519::Ed25519Parameters;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;
@@ -228,7 +227,7 @@ mod tests {
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpAddTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 124;
         const NUM_FREE_COLUMNS: usize = 0;
-        type Instruction = FpAddInstruction<Fp25519Param>;
+        type Instruction = InstructionSet<Ed25519Parameters>;
     }
 
     #[test]
@@ -236,9 +235,16 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type Fp = Fp25519;
+        type FE = <C as GenericConfig<D>>::FE;
+        type Fp = FieldRegister<Ed25519Parameters>;
         type S = TestStark<FpAddTest, F, D>;
         let _ = env_logger::builder().is_test(true).try_init();
+
+        const NUM_ARITHMETIC_COLUMNS: usize = 124;
+        const NUM_FREE_COLUMNS: usize = 0;
+        const NB_COLUMNS: usize = 100;
+        const PUBLIC_INPUTS: usize = 0;
+        type EvaluationVars<'a> = StarkEvaluationVars<'a, FE, <F as Packable>::Packing, 100, 0>;
 
         // Build the circuit.
         let mut builder = StarkBuilder::<FpAddTest, F, D>::new();
@@ -254,7 +260,7 @@ mod tests {
         let (handle, generator) = trace::<F, D>(spec);
         let mut timing = TimingTree::new("stark_proof", log::Level::Debug);
         let trace = timed!(timing, "generate trace", {
-            let p = Fp25519Param::modulus();
+            let p = Ed25519Parameters::modulus();
             let mut rng = thread_rng();
             for i in 0..num_rows {
                 let a_int: BigUint = rng.gen_biguint(256) % &p;
