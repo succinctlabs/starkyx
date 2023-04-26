@@ -1,13 +1,15 @@
-use num::{BigUint, Num, One, Zero};
+use num::{BigUint, Num, One};
 
 use super::{EdwardsParameters, EllipticCurveParameters, FieldParameters, MAX_NB_LIMBS};
 use crate::arithmetic::ec::affine::AffinePoint;
 
-/// The parameters for the Fp25519 field of modulues 2^255-19.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Ed25519Parameters;
+pub struct Ed25519;
 
-impl FieldParameters for Ed25519Parameters {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Ed25519BaseField;
+
+impl FieldParameters for Ed25519BaseField {
     const NB_BITS_PER_LIMB: usize = 16;
     const NB_LIMBS: usize = 16;
     const NB_WITNESS_LIMBS: usize = 2 * Self::NB_LIMBS - 2;
@@ -22,11 +24,11 @@ impl FieldParameters for Ed25519Parameters {
     }
 }
 
-impl EllipticCurveParameters for Ed25519Parameters {
-    type FieldParameters = Ed25519Parameters;
+impl EllipticCurveParameters for Ed25519 {
+    type BaseField = Ed25519BaseField;
 }
 
-impl EdwardsParameters for Ed25519Parameters {
+impl EdwardsParameters for Ed25519 {
     const D: [u16; MAX_NB_LIMBS] = [
         30883, 4953, 19914, 30187, 55467, 16705, 2637, 112, 59544, 30585, 16505, 36039, 65139,
         11119, 27886, 20995, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

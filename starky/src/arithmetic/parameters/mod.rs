@@ -1,7 +1,6 @@
-use num::{BigUint, Num, Zero};
+use num::{BigUint, Zero};
 
 use super::ec::affine::AffinePoint;
-use super::*;
 
 pub mod ed25519;
 
@@ -25,13 +24,12 @@ pub trait FieldParameters: Send + Sync + Copy + 'static {
 }
 
 pub trait EllipticCurveParameters: Send + Sync + Copy + 'static {
-    type FieldParameters: FieldParameters;
+    type BaseField: FieldParameters;
 }
 
 pub trait EdwardsParameters: EllipticCurveParameters {
     const D: [u16; MAX_NB_LIMBS];
 
-    /// Returns the canonical generator
     fn generator() -> AffinePoint<Self>;
 
     fn prime_group_order() -> BigUint;
@@ -45,7 +43,7 @@ pub trait EdwardsParameters: EllipticCurveParameters {
     }
 
     fn num_scalar_bits() -> usize {
-        Self::FieldParameters::NB_LIMBS * 16
+        Self::BaseField::NB_LIMBS * 16
     }
 
     fn neutral() -> AffinePoint<Self> {

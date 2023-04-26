@@ -1,4 +1,4 @@
-use num::{BigInt, BigUint, Zero};
+use num::{BigUint, Zero};
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 

@@ -38,7 +38,7 @@ pub struct FpAddInstruction<P: FieldParameters> {
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     /// Given two field elements `a` and `b`, computes the sum `a + b = c`.
-    pub fn fpadd<P: FieldParameters>(
+    pub fn fp_add<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,
         b: &FieldRegister<P>,
@@ -65,7 +65,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
     /// Writes a `FpAddInstruction` to the trace and returns the result.
-    pub fn write_fpadd<P: FieldParameters>(
+    pub fn write_fp_add<P: FieldParameters>(
         &self,
         row_index: usize,
         a: &BigUint,
@@ -199,7 +199,6 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
-    use plonky2::field::packable::Packable;
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
@@ -210,8 +209,9 @@ mod tests {
     use super::*;
     use crate::arithmetic::builder::StarkBuilder;
     use crate::arithmetic::chip::{StarkParameters, TestStark};
-    use crate::arithmetic::instruction::macros::InstructionSet;
-    use crate::arithmetic::parameters::ed25519::Ed25519Parameters;
+    use crate::arithmetic::instruction::InstructionSet;
+    use crate::arithmetic::parameters::ed25519::{Ed25519, Ed25519BaseField};
+    use crate::arithmetic::parameters::EllipticCurveParameters;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;
@@ -227,7 +227,7 @@ mod tests {
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpAddTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 124;
         const NUM_FREE_COLUMNS: usize = 0;
-        type Instruction = InstructionSet<Ed25519Parameters>;
+        type Instruction = InstructionSet<Ed25519BaseField>;
     }
 
     #[test]
@@ -235,22 +235,14 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type FE = <C as GenericConfig<D>>::FE;
-        type Fp = FieldRegister<Ed25519Parameters>;
         type S = TestStark<FpAddTest, F, D>;
-        let _ = env_logger::builder().is_test(true).try_init();
-
-        const NUM_ARITHMETIC_COLUMNS: usize = 124;
-        const NUM_FREE_COLUMNS: usize = 0;
-        const NB_COLUMNS: usize = 100;
-        const PUBLIC_INPUTS: usize = 0;
-        type EvaluationVars<'a> = StarkEvaluationVars<'a, FE, <F as Packable>::Packing, 100, 0>;
+        type P = Ed25519BaseField;
 
         // Build the circuit.
         let mut builder = StarkBuilder::<FpAddTest, F, D>::new();
-        let a = builder.alloc::<Fp>();
-        let b = builder.alloc::<Fp>();
-        let (_, a_add_b_ins) = builder.fpadd(&a, &b).unwrap();
+        let a = builder.alloc::<FieldRegister<P>>();
+        let b = builder.alloc::<FieldRegister<P>>();
+        let (_, a_add_b_ins) = builder.fp_add(&a, &b).unwrap();
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
         let (chip, spec) = builder.build();
@@ -260,14 +252,14 @@ mod tests {
         let (handle, generator) = trace::<F, D>(spec);
         let mut timing = TimingTree::new("stark_proof", log::Level::Debug);
         let trace = timed!(timing, "generate trace", {
-            let p = Ed25519Parameters::modulus();
+            let p = <Ed25519 as EllipticCurveParameters>::BaseField::modulus();
             let mut rng = thread_rng();
             for i in 0..num_rows {
                 let a_int: BigUint = rng.gen_biguint(256) % &p;
                 let b_int = rng.gen_biguint(256) % &p;
                 handle.write_field(i, &a_int, a).unwrap();
                 handle.write_field(i, &b_int, b).unwrap();
-                handle.write_fpadd(i, &a_int, &b_int, a_add_b_ins).unwrap();
+                handle.write_fp_add(i, &a_int, &b_int, a_add_b_ins).unwrap();
             }
             drop(handle);
             generator.generate_trace(&chip, num_rows as usize).unwrap()
