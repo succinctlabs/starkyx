@@ -17,7 +17,7 @@ use super::instruction::{EqualityConstraint, Instruction};
 use super::register::{ArrayRegister, CellType, MemorySlice, Register, RegisterSerializable};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
-pub enum InsID {
+pub enum InstructionId {
     CustomInstruction(Vec<MemorySlice>),
     Write(MemorySlice),
 }
@@ -31,7 +31,7 @@ where
     local_arithmetic_index: usize,
     next_arithmetic_index: usize,
     next_index: usize,
-    instruction_indices: BTreeMap<InsID, usize>,
+    instruction_indices: BTreeMap<InstructionId, usize>,
     instructions: Vec<L::Instruction>,
     write_instructions: Vec<WriteInstruction>,
     constraints: Vec<EqualityConstraint<F, D>>,
@@ -143,7 +143,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     /// be changed later.
     pub fn write_data<T: Register>(&mut self, data: &T) -> Result<()> {
         let register = data.register();
-        let label = InsID::Write(*register);
+        let label = InstructionId::Write(*register);
         let existing_value = self
             .instruction_indices
             .insert(label, self.write_instructions.len());
@@ -157,7 +157,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     /// Inserts a new instruction to the chip
     pub fn write_raw_register(&mut self, data: &MemorySlice) -> Result<()> {
         let register = data;
-        let label = InsID::Write(*register);
+        let label = InstructionId::Write(*register);
         let existing_value = self
             .instruction_indices
             .insert(label, self.write_instructions.len());
@@ -170,7 +170,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
 
     /// Registers a new instruction to the chip.
     pub fn insert_instruction(&mut self, instruction: L::Instruction) -> Result<()> {
-        let id = InsID::CustomInstruction(instruction.trace_layout());
+        let id = InstructionId::CustomInstruction(instruction.trace_layout());
         let existing_value = self.instruction_indices.insert(id, self.instructions.len());
         if existing_value.is_some() {
             return Err(anyhow!("Instruction label already exists"));
@@ -196,7 +196,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     }
 
     /// Build the chip
-    pub fn build(self) -> (Chip<L, F, D>, BTreeMap<InsID, usize>) {
+    pub fn build(self) -> (Chip<L, F, D>, BTreeMap<InstructionId, usize>) {
         let num_free_columns = self.local_index;
         if num_free_columns > L::NUM_FREE_COLUMNS {
             panic!(
@@ -287,7 +287,7 @@ mod tests {
 
     use super::*;
     use crate::arithmetic::chip::TestStark;
-    use crate::arithmetic::instruction::DefaultInstructions;
+    use crate::arithmetic::instruction::EmptyInstructionSet;
     use crate::arithmetic::register::ElementRegister;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
@@ -309,7 +309,7 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 2;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
-        type Instruction = DefaultInstructions<F, D>;
+        type Instruction = EmptyInstructionSet<F, D>;
     }
 
     #[test]

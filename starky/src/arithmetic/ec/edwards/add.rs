@@ -7,7 +7,7 @@ use crate::arithmetic::ec::affine::AffinePoint;
 use crate::arithmetic::field::{
     FpDenInstruction, FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction,
 };
-use crate::arithmetic::instruction::macros::FromInstructionSet;
+use crate::arithmetic::instruction::FromInstructionSet;
 use crate::arithmetic::parameters::EdwardsParameters;
 use crate::arithmetic::trace::TraceWriter;
 
@@ -18,14 +18,14 @@ pub struct EcAddData<E: EdwardsParameters> {
     P: AffinePointRegister<E>,
     Q: AffinePointRegister<E>,
     R: AffinePointRegister<E>,
-    XNUM: FpInnerProductInstruction<E::FieldParameters>,
-    YNUM: FpInnerProductInstruction<E::FieldParameters>,
-    PXPY: FpMulInstruction<E::FieldParameters>,
-    QXQY: FpMulInstruction<E::FieldParameters>,
-    PXPYQXQY: FpMulInstruction<E::FieldParameters>,
-    DXY: FpMulConstInstruction<E::FieldParameters>,
-    XDEN: FpDenInstruction<E::FieldParameters>,
-    YDEN: FpDenInstruction<E::FieldParameters>,
+    XNUM: FpInnerProductInstruction<E::BaseField>,
+    YNUM: FpInnerProductInstruction<E::BaseField>,
+    PXPY: FpMulInstruction<E::BaseField>,
+    QXQY: FpMulInstruction<E::BaseField>,
+    PXPYQXQY: FpMulInstruction<E::BaseField>,
+    DXY: FpMulConstInstruction<E::BaseField>,
+    XDEN: FpDenInstruction<E::BaseField>,
+    YDEN: FpDenInstruction<E::BaseField>,
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
@@ -37,7 +37,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         result: &AffinePointRegister<E>,
     ) -> Result<EcAddData<E>>
     where
-        L::Instruction: FromInstructionSet<E::FieldParameters>,
+        L::Instruction: FromInstructionSet<E::BaseField>,
     {
         let (x_num_result, x_num_ins) = self.fp_inner_product(&vec![P.x, Q.x], &vec![Q.y, P.y]);
         let (y_num_result, y_num_ins) = self.fp_inner_product(&vec![P.y, P.x], &vec![Q.y, Q.x]);
@@ -48,8 +48,8 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         let (all_xy_result, all_xy_ins) = self.fpmul(&px_py_result, &qx_qy_result)?;
         let (dxy_result, dxy_ins) = self.fpmul_const(&all_xy_result, E::D)?;
 
-        let r_x_ins = self.ed_den(&x_num_result, &dxy_result, true, &result.x)?;
-        let r_y_ins = self.ed_den(&y_num_result, &dxy_result, false, &result.y)?;
+        let r_x_ins = self.fp_den(&x_num_result, &dxy_result, true, &result.x)?;
+        let r_y_ins = self.fp_den(&y_num_result, &dxy_result, false, &result.y)?;
 
         Ok(EcAddData {
             P: *P,
@@ -73,7 +73,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         result: &AffinePointRegister<E>,
     ) -> Result<EcAddData<E>>
     where
-        L::Instruction: FromInstructionSet<E::FieldParameters>,
+        L::Instruction: FromInstructionSet<E::BaseField>,
     {
         self.ed_add(P, P, result)
     }
@@ -107,8 +107,8 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
         let all_xy = self.write_fpmul(row_index, &px_py, &qx_qy, chip_data.PXPYQXQY)?;
         let dxy = self.write_fpmul_const(row_index, &all_xy, chip_data.DXY)?;
 
-        let r_x = self.write_ed_den(row_index, &x_num, &dxy, true, chip_data.XDEN)?;
-        let r_y = self.write_ed_den(row_index, &y_num, &dxy, false, chip_data.YDEN)?;
+        let r_x = self.write_fp_den(row_index, &x_num, &dxy, true, chip_data.XDEN)?;
+        let r_y = self.write_fp_den(row_index, &y_num, &dxy, false, chip_data.YDEN)?;
 
         Ok(AffinePoint::new(r_x, r_y))
     }
@@ -140,8 +140,8 @@ mod tests {
     use super::*;
     use crate::arithmetic::builder::StarkBuilder;
     use crate::arithmetic::chip::{StarkParameters, TestStark};
-    use crate::arithmetic::instruction::macros::InstructionSet;
-    use crate::arithmetic::parameters::ed25519::Ed25519Parameters;
+    use crate::arithmetic::instruction::InstructionSet;
+    use crate::arithmetic::parameters::ed25519::{Ed25519, Ed25519BaseField};
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;
@@ -157,7 +157,7 @@ mod tests {
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for EdAddTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 800;
         const NUM_FREE_COLUMNS: usize = 0;
-        type Instruction = InstructionSet<Ed25519Parameters>;
+        type Instruction = InstructionSet<Ed25519BaseField>;
     }
 
     #[allow(non_snake_case)]
@@ -166,7 +166,7 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type E = Ed25519Parameters;
+        type E = Ed25519;
         type S = TestStark<EdAddTest, F, D>;
 
         let _ = env_logger::builder().is_test(true).try_init();
@@ -283,7 +283,7 @@ mod tests {
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for EdDoubleTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 768;
         const NUM_FREE_COLUMNS: usize = 0;
-        type Instruction = InstructionSet<Ed25519Parameters>;
+        type Instruction = InstructionSet<Ed25519BaseField>;
     }
 
     #[allow(non_snake_case)]
@@ -292,7 +292,7 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type E = Ed25519Parameters;
+        type E = Ed25519;
         type S = TestStark<EdDoubleTest, F, D>;
 
         let _ = env_logger::builder().is_test(true).try_init();

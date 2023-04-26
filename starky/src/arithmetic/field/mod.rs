@@ -221,7 +221,7 @@ mod tests {
     use super::*;
     use crate::arithmetic::builder::StarkBuilder;
     use crate::arithmetic::chip::{StarkParameters, TestStark};
-    use crate::arithmetic::parameters::ed25519::Ed25519Parameters;
+    use crate::arithmetic::parameters::ed25519::Ed25519BaseField;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;
@@ -237,7 +237,7 @@ mod tests {
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpInstructionTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 156;
         const NUM_FREE_COLUMNS: usize = 0;
-        type Instruction = FpInstruction<Ed25519Parameters>;
+        type Instruction = FpInstruction<Ed25519BaseField>;
     }
 
     #[test]
@@ -245,7 +245,7 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type Fp = FieldRegister<Ed25519Parameters>;
+        type Fp = FieldRegister<Ed25519BaseField>;
         type S = TestStark<FpInstructionTest, F, D>;
 
         // Build the STARK.
@@ -254,7 +254,7 @@ mod tests {
         let b = builder.alloc::<Fp>();
         let c = builder.alloc::<Fp>();
         let d = builder.alloc::<Fp>();
-        let (result, quad) = builder.fp_inner_product(&vec![a, b], &vec![c, d]);
+        let (_, quad) = builder.fp_inner_product(&vec![a, b], &vec![c, d]);
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
         builder.write_data(&c).unwrap();
@@ -264,7 +264,7 @@ mod tests {
         // Construct the trace.
         let num_rows = 2u64.pow(16);
         let (handle, generator) = trace::<F, D>(spec);
-        let p = Ed25519Parameters::modulus();
+        let p = Ed25519BaseField::modulus();
         let mut rng = thread_rng();
         for i in 0..num_rows {
             let a_int: BigUint = rng.gen_biguint(256) % &p;

@@ -18,8 +18,8 @@ use crate::arithmetic::trace::TraceWriter;
 #[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]
 pub struct AffinePointRegister<E: EllipticCurveParameters> {
-    x: FieldRegister<E::FieldParameters>,
-    y: FieldRegister<E::FieldParameters>,
+    x: FieldRegister<E::BaseField>,
+    y: FieldRegister<E::BaseField>,
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
@@ -31,11 +31,11 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     pub fn alloc_unchecked_ec_point<E: EllipticCurveParameters>(
         &mut self,
     ) -> Result<AffinePointRegister<E>> {
-        let x = FieldRegister::<E::FieldParameters>::from_register(
-            self.get_local_memory(E::FieldParameters::NB_LIMBS),
+        let x = FieldRegister::<E::BaseField>::from_register(
+            self.get_local_memory(E::BaseField::NB_LIMBS),
         );
-        let y = FieldRegister::<E::FieldParameters>::from_register(
-            self.get_local_memory(E::FieldParameters::NB_LIMBS),
+        let y = FieldRegister::<E::BaseField>::from_register(
+            self.get_local_memory(E::BaseField::NB_LIMBS),
         );
         Ok(AffinePointRegister::<E>::from_field_registers(x, y))
     }
@@ -47,16 +47,16 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     pub fn alloc_local_ec_point<E: EllipticCurveParameters>(
         &mut self,
     ) -> Result<AffinePointRegister<E>> {
-        let x = self.alloc::<FieldRegister<E::FieldParameters>>();
-        let y = self.alloc::<FieldRegister<E::FieldParameters>>();
+        let x = self.alloc::<FieldRegister<E::BaseField>>();
+        let y = self.alloc::<FieldRegister<E::BaseField>>();
         Ok(AffinePointRegister { x, y })
     }
 
     pub fn alloc_next_ec_point<E: EllipticCurveParameters>(
         &mut self,
     ) -> Result<AffinePointRegister<E>> {
-        let x = self.alloc_next::<FieldRegister<E::FieldParameters>>()?;
-        let y = self.alloc_next::<FieldRegister<E::FieldParameters>>()?;
+        let x = self.alloc_next::<FieldRegister<E::BaseField>>()?;
+        let y = self.alloc_next::<FieldRegister<E::BaseField>>()?;
         Ok(AffinePointRegister { x, y })
     }
 
@@ -92,8 +92,8 @@ impl<E: EllipticCurveParameters> AffinePointRegister<E> {
     }
 
     pub fn from_field_registers(
-        x: FieldRegister<E::FieldParameters>,
-        y: FieldRegister<E::FieldParameters>,
+        x: FieldRegister<E::BaseField>,
+        y: FieldRegister<E::BaseField>,
     ) -> Self {
         Self { x, y }
     }
