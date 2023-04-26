@@ -192,7 +192,6 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         self.constraints.push(constraint);
     }
 
-    /// Asserts that two registers are equal in all rows.
     pub fn assert_equal<T: Register>(&mut self, a: &T, b: &T) {
         let constraint = ArithmeticConstraint::All(a.expr() - b.expr());
         self.constraints.push(constraint);
