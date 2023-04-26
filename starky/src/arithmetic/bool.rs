@@ -13,51 +13,6 @@ use super::trace::TraceWriter;
 use crate::arithmetic::register::RegisterSerializable;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-#[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ConstraintBool(pub MemorySlice);
-
-impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for ConstraintBool {
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        Vec::new()
-    }
-
-    fn assign_row(&self, _trace_rows: &mut [Vec<F>], _row: &mut [F], _row_index: usize) {}
-
-    fn packed_generic_constraints<
-        FE,
-        P,
-        const D2: usize,
-        const COLUMNS: usize,
-        const PUBLIC_INPUTS: usize,
-    >(
-        &self,
-        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
-    ) where
-        FE: FieldExtension<D2, BaseField = F>,
-        P: PackedField<Scalar = FE>,
-    {
-        let values = self.0.packed_generic_vars(&vars);
-        for value in values.iter() {
-            yield_constr.constraint(value.square() - *value);
-        }
-    }
-
-    fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
-    ) {
-        let values = self.0.ext_circuit_vars(&vars);
-        for value in values.iter() {
-            let square = builder.square_extension(*value);
-            let constraint = builder.sub_extension(square, *value);
-            yield_constr.constraint(builder, constraint);
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct Selector<T> {
     bit: BitRegister,

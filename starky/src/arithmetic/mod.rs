@@ -1,5 +1,6 @@
 pub mod builder;
 pub mod chip;
+pub mod constraint;
 pub mod ec;
 
 pub mod bool;

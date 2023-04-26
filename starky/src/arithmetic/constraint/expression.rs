@@ -1,10 +1,3 @@
-//! Arithmetic expressions
-//!
-//! This module defines arithmetic expressions that can be used to define constraint
-//! equations in column entries. The arithmetic expressions are defined in terms of the
-//! `ArithmeticExpressionSlice` type.
-//!
-
 use core::ops::{Add, Mul, Sub};
 use std::sync::Arc;
 
@@ -17,11 +10,6 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use crate::arithmetic::register::{MemorySlice, Register};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-/// An arithmetic expression of trace column entries.
-///
-/// Arithmetic expressions represent a composition of additions, multiplications, subtractions,
-/// and scalar multiplications of trace column entries. These expression can be used in
-/// an EqualityConstraint to define a constraint equation.
 #[derive(Clone, Debug)]
 pub struct ArithmeticExpression<F, const D: usize> {
     pub(crate) expression: ArithmeticExpressionSlice<F, D>,

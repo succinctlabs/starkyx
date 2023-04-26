@@ -9,7 +9,7 @@ use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::constrain::{
+use super::constraint::{
     ext_circuit_constrain_field_operation, packed_generic_constrain_field_operation,
 };
 use super::*;

@@ -29,7 +29,7 @@
 //! overflow.
 
 mod add;
-mod constrain;
+mod constraint;
 mod den;
 mod inner_product;
 mod mul;

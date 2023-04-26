@@ -12,8 +12,9 @@ use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
+use super::constraint::ArithmeticConstraint;
 use super::instruction::write::WriteInstruction;
-use super::instruction::{ArithmeticConstraint, Instruction};
+use super::instruction::Instruction;
 use crate::lookup::{eval_lookups, eval_lookups_circuit};
 use crate::permutation::PermutationPair;
 use crate::stark::Stark;

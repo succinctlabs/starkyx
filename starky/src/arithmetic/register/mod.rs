@@ -16,7 +16,7 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
 pub use self::u16::U16Register;
-use super::instruction::arithmetic_expressions::{ArithmeticExpression, ArithmeticExpressionSlice};
+use super::constraint::expression::{ArithmeticExpression, ArithmeticExpressionSlice};
 
 /// Adds serialization and deserialization to a register for converting between the canonical type
 /// and `MemorySlice`.

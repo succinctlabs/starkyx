@@ -5,9 +5,10 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
 use super::chip::{Chip, StarkParameters};
-use super::instruction::arithmetic_expressions::ArithmeticExpression;
+use super::constraint::expression::ArithmeticExpression;
+use super::constraint::ArithmeticConstraint;
 use super::instruction::write::WriteInstruction;
-use super::instruction::{ArithmeticConstraint, Instruction};
+use super::instruction::Instruction;
 use super::register::{ArrayRegister, CellType, MemorySlice, Register, RegisterSerializable};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]

@@ -9,11 +9,11 @@ use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::constrain::packed_generic_constrain_field_operation;
+use super::constraint::packed_generic_constrain_field_operation;
 use super::*;
 use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::StarkParameters;
-use crate::arithmetic::field::constrain::ext_circuit_constrain_field_operation;
+use crate::arithmetic::field::constraint::ext_circuit_constrain_field_operation;
 use crate::arithmetic::instruction::Instruction;
 use crate::arithmetic::parameters::FieldParameters;
 use crate::arithmetic::polynomial::{
