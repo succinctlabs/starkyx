@@ -393,8 +393,8 @@ mod tests {
         let (handle, generator) = trace::<F, D>(spec);
 
         for i in 0..num_rows {
-            let a_val = F::rand();
-            let b_val = F::rand();
+            let a_val = F::ONES + F::ONES;
+            let b_val = F::ONES + F::ONES + F::ONES;
             let c_val = a_val * b_val;
             handle.write_data(i, input_1, vec![a_val]).unwrap();
             handle.write_data(i, input_2, vec![b_val]).unwrap();
