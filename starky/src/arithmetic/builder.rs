@@ -1,19 +1,13 @@
-//! An abstraction of Starks for emulated field operations handling all the range_checks
-//!
-//!
-//!
-
 use alloc::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
-use super::bool::ConstraintBool;
 use super::chip::{Chip, StarkParameters};
 use super::instruction::arithmetic_expressions::ArithmeticExpression;
 use super::instruction::write::WriteInstruction;
-use super::instruction::{EqualityConstraint, Instruction};
+use super::instruction::{ArithmeticConstraint, Instruction};
 use super::register::{ArrayRegister, CellType, MemorySlice, Register, RegisterSerializable};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
@@ -34,7 +28,7 @@ where
     instruction_indices: BTreeMap<InstructionId, usize>,
     instructions: Vec<L::Instruction>,
     write_instructions: Vec<WriteInstruction>,
-    constraints: Vec<EqualityConstraint<F, D>>,
+    constraints: Vec<ArithmeticConstraint<F, D>>,
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Default
@@ -98,8 +92,8 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             Some(CellType::U16) => self.get_local_u16_memory(T::size_of()),
             Some(CellType::Bit) => {
                 let reg = self.get_local_memory(T::size_of());
-                let consr = EqualityConstraint::<F, D>::Bool(ConstraintBool(reg));
-                self.constraints.push(consr);
+                let constraint = ArithmeticConstraint::All(reg.expr() * (reg.expr() - F::ONE));
+                self.constraints.push(constraint);
                 reg
             }
             None => self.get_local_memory(T::size_of()),
@@ -113,8 +107,8 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             Some(CellType::U16) => self.get_local_u16_memory(size_of),
             Some(CellType::Bit) => {
                 let reg = self.get_local_memory(size_of);
-                let consr = EqualityConstraint::Bool(ConstraintBool(reg));
-                self.constraints.push(consr);
+                let constraint = ArithmeticConstraint::All(reg.expr() * (reg.expr() - F::ONE));
+                self.constraints.push(constraint);
                 reg
             }
             None => self.get_local_memory(size_of),
@@ -129,8 +123,8 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             Some(CellType::U16) => self.get_next_u16_memory(T::size_of()),
             Some(CellType::Bit) => {
                 let reg = self.get_next_memory(T::size_of());
-                let consr = EqualityConstraint::<F, D>::Bool(ConstraintBool(reg));
-                self.constraints.push(consr);
+                let constraint = ArithmeticConstraint::All(reg.expr() * (reg.expr() - F::ONE));
+                self.constraints.push(constraint);
                 reg
             }
             None => self.get_next_memory(T::size_of()),
@@ -179,19 +173,111 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         Ok(())
     }
 
-    // pub fn insert_instruction_v2<T: Instruction<F, D>>(&mut self, instruction: T) {
-    // }
+    /// Asserts that two registers are equal in the first row.
+    pub fn assert_equal_first_row<T: Register>(&mut self, a: &T, b: &T) {
+        let constraint = ArithmeticConstraint::First(a.expr() - b.expr());
+        self.constraints.push(constraint);
+    }
 
-    /// Asserts that two elements are equal
+    /// Asserts that two registers are equal in the last row.
+    pub fn assert_equal_last_row<T: Register>(&mut self, a: &T, b: &T) {
+        let constraint = ArithmeticConstraint::Last(a.expr() - b.expr());
+        self.constraints.push(constraint);
+    }
+
+    /// Asserts that two registers are equal in all rows but the last (useful for when dealing with
+    /// registers between the local and next row).
+    pub fn assert_equal_transition<T: Register>(&mut self, a: &T, b: &T) {
+        let constraint = ArithmeticConstraint::Transition(a.expr() - b.expr());
+        self.constraints.push(constraint);
+    }
+
+    /// Asserts that two registers are equal in all rows.
     pub fn assert_equal<T: Register>(&mut self, a: &T, b: &T) {
-        let a = a.register();
-        let b = b.register();
-        let constraint = EqualityConstraint::Equal(*a, *b);
+        let constraint = ArithmeticConstraint::All(a.expr() - b.expr());
+        self.constraints.push(constraint);
+    }
+
+    /// Asserts that two expressions (note that expressions are actually vectors of expression) are
+    /// equal in the first row.
+    pub fn assert_expressions_equal_first_row(
+        &mut self,
+        a: ArithmeticExpression<F, D>,
+        b: ArithmeticExpression<F, D>,
+    ) {
+        assert_eq!(a.size, b.size, "Expressions must have the same size");
+        let constraint = ArithmeticConstraint::First(a - b);
+        self.constraints.push(constraint);
+    }
+
+    /// Asserts that two expressions (note that expressions are actually vectors of expression) are
+    /// equal in the last row.
+    pub fn assert_expressions_equal_last_row(
+        &mut self,
+        a: ArithmeticExpression<F, D>,
+        b: ArithmeticExpression<F, D>,
+    ) {
+        assert_eq!(a.size, b.size, "Expressions must have the same size");
+        let constraint = ArithmeticConstraint::Last(a - b);
+        self.constraints.push(constraint);
+    }
+
+    /// Asserts that two expressions (note that expressions are actually vectors of expression) are
+    /// equal in all rows but the last (useful for when dealing with registers between the local and
+    /// next row).
+    pub fn assert_expressions_equal_transition(
+        &mut self,
+        a: ArithmeticExpression<F, D>,
+        b: ArithmeticExpression<F, D>,
+    ) {
+        assert_eq!(a.size, b.size, "Expressions must have the same size");
+        let constraint = ArithmeticConstraint::Transition(a - b);
+        self.constraints.push(constraint);
+    }
+
+    /// Asserts that two expressions (note that expressions are actually vectors of expression) are
+    /// equal in all rows.
+    pub fn assert_expressions_equal(
+        &mut self,
+        a: ArithmeticExpression<F, D>,
+        b: ArithmeticExpression<F, D>,
+    ) {
+        assert_eq!(a.size, b.size, "Expressions must have the same size");
+        let constraint = ArithmeticConstraint::All(a - b);
+        self.constraints.push(constraint);
+    }
+
+    /// Asserts that two expressions (note that expressions are actually vectors of expression) are
+    /// equal in the first row.
+    pub fn assert_expression_zero_first_row(&mut self, a: ArithmeticExpression<F, D>) {
+        let constraint = ArithmeticConstraint::First(a);
+        self.constraints.push(constraint);
+    }
+
+    /// Asserts that two expressions (note that expressions are actually vectors of expression) are
+    /// equal in the last row.
+    pub fn assert_expression_zero_last_row(&mut self, a: ArithmeticExpression<F, D>) {
+        let constraint = ArithmeticConstraint::Last(a);
+        self.constraints.push(constraint);
+    }
+
+    /// Asserts that two expressions (note that expressions are actually vectors of expression) are
+    /// equal in all rows but the last (useful for when dealing with registers between the local and
+    /// next row).
+    pub fn assert_expression_zero_transition(&mut self, a: ArithmeticExpression<F, D>) {
+        let constraint = ArithmeticConstraint::Transition(a);
+        self.constraints.push(constraint);
+    }
+
+    /// Asserts that two expressions (note that expressions are actually vectors of expression) are
+    /// equal in all rows.
+    pub fn assert_expression_zero(&mut self, a: ArithmeticExpression<F, D>) {
+        let constraint = ArithmeticConstraint::All(a);
         self.constraints.push(constraint);
     }
 
     /// Asserts that two elements are equal
-    pub fn insert_raw_constraint(&mut self, constraint: EqualityConstraint<F, D>) {
+    pub fn insert_raw_constraint(&mut self, constraint: ArithmeticConstraint<F, D>) {
         self.constraints.push(constraint);
     }
 
@@ -240,24 +326,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
 }
 
 // Implement methods for the basic operations
-
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
-    pub fn assert_expressions_equal(
-        &mut self,
-        a: ArithmeticExpression<F, D>,
-        b: ArithmeticExpression<F, D>,
-    ) {
-        assert_eq!(a.size, b.size, "Expressions must have the same size");
-        let constraint = EqualityConstraint::ArithmeticConstraint(a.expression, b.expression);
-        self.constraints.push(constraint);
-    }
-
-    pub fn assert_expression_zero(&mut self, a: ArithmeticExpression<F, D>) {
-        let zeros = ArithmeticExpression::from_constant_vec(vec![F::ZERO; a.size]);
-        let constraint = EqualityConstraint::ArithmeticConstraint(a.expression, zeros.expression);
-        self.constraints.push(constraint);
-    }
-
     /// Asserts that a + b = c
     pub fn add_pointwise<T: Register>(&mut self, a: &T, b: &T, c: &T) {
         self.assert_expressions_equal(a.expr() + b.expr(), c.expr());
@@ -320,31 +389,20 @@ mod tests {
         type L = TestChipParameters<F, D>;
         type S = TestStark<L, F, D>;
 
-        // event logger to show messages
-        let _ = env_logger::builder().is_test(true).try_init();
-
         let mut builder = StarkBuilder::<L, F, D>::new();
-
         let x_0 = builder.alloc::<ElementRegister>();
         let x_1 = builder.alloc::<ElementRegister>();
         builder.write_data(&x_0).unwrap();
         builder.write_data(&x_1).unwrap();
-
-        // Asserts that x_0_next = x_1
-        builder.assert_equal(&x_0.next(), &x_1);
-        // Asserts that x_1_next = x_0 + x_1
-        builder.assert_expressions_equal(x_0.expr() + x_1.expr(), x_1.next().expr());
-
+        builder.assert_equal_transition(&x_0.next(), &x_1);
+        builder.assert_expressions_equal_transition(x_0.expr() + x_1.expr(), x_1.next().expr());
         let (chip, spec) = builder.build();
 
         let num_rows = 1 << 5;
         let (handle, generator) = trace::<F, D>(spec);
-
         let mut timing = TimingTree::new("Fibonacchi stark", log::Level::Debug);
-
-        let mut x_0_val = F::ONE;
+        let mut x_0_val = F::ZERO;
         let mut x_1_val = F::ONE;
-
         let trace = timed!(timing, "generate trace", {
             for i in 0..num_rows {
                 handle.write_data(i, x_0, vec![x_0_val]).unwrap();
@@ -357,7 +415,6 @@ mod tests {
             drop(handle);
             generator.generate_trace(&chip, num_rows as usize).unwrap()
         });
-
         info!("The 32 fibonacchi numbers is {:?}", x_0_val);
         let config = StarkConfig::standard_fast_config();
         let stark = TestStark::new(chip);

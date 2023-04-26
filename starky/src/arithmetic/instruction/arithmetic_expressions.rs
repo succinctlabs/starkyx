@@ -117,7 +117,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
                 let right = right.packed_generic(vars);
                 left.iter()
                     .zip(right.iter())
-                    .map(|(l, r)| *r - *l)
+                    .map(|(l, r)| *l - *r)
                     .collect()
             }
             ArithmeticExpressionSlice::ScalarMul(scalar, expr) => {
@@ -320,7 +320,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Mul for ArithmeticExpression<
 
 #[cfg(test)]
 mod tests {
-    use plonky2::field::types::Sample;
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};

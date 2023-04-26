@@ -13,7 +13,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::instruction::write::WriteInstruction;
-use super::instruction::{EqualityConstraint, Instruction};
+use super::instruction::{ArithmeticConstraint, Instruction};
 use crate::lookup::{eval_lookups, eval_lookups_circuit};
 use crate::permutation::PermutationPair;
 use crate::stark::Stark;
@@ -44,7 +44,7 @@ where
 {
     pub(crate) instructions: Vec<L::Instruction>,
     pub(crate) write_instructions: Vec<WriteInstruction>,
-    pub(crate) constraints: Vec<EqualityConstraint<F, D>>,
+    pub(crate) constraints: Vec<ArithmeticConstraint<F, D>>,
     pub(crate) range_checks_idx: (usize, usize),
     pub(crate) table_index: usize,
 }

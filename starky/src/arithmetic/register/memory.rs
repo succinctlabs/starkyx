@@ -1,7 +1,11 @@
-use plonky2::field::extension::FieldExtension;
+use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
+use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 
+use crate::arithmetic::instruction::arithmetic_expressions::{
+    ArithmeticExpression, ArithmeticExpressionSlice,
+};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 /// A row-wise contiguous chunk of memory in the trace. Corresponds to a slice in vars.local_values
@@ -174,6 +178,13 @@ impl MemorySlice {
             MemorySlice::Next(index, length) => &vars.next_values[*index..*index + length],
             MemorySlice::First(index, length) => &vars.public_inputs[*index..*index + length],
             MemorySlice::Last(index, length) => &vars.public_inputs[*index..*index + length],
+        }
+    }
+
+    pub fn expr<F: RichField + Extendable<D>, const D: usize>(&self) -> ArithmeticExpression<F, D> {
+        ArithmeticExpression {
+            expression: ArithmeticExpressionSlice::from_raw_register(*self),
+            size: self.len(),
         }
     }
 }

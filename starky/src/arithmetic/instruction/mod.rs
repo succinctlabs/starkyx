@@ -15,8 +15,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 pub use set::{FromInstructionSet, InstructionSet};
 
-use self::arithmetic_expressions::ArithmeticExpressionSlice;
-use super::bool::ConstraintBool;
+use self::arithmetic_expressions::ArithmeticExpression;
 use super::field::{
     FpAddInstruction, FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction,
 };
@@ -64,21 +63,15 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
     );
 }
 
-/// Constraints don't have any writing data or witness
-///
-/// These are only used to generate constrains and can therefore
-/// be held separate from instructions and all hold the same type.
-#[derive(Clone, Debug)]
-pub enum EqualityConstraint<F, const D: usize> {
-    Bool(ConstraintBool),
-    Equal(MemorySlice, MemorySlice),
-    ArithmeticConstraint(
-        ArithmeticExpressionSlice<F, D>,
-        ArithmeticExpressionSlice<F, D>,
-    ),
+#[derive(Debug, Clone)]
+pub enum ArithmeticConstraint<F: RichField + Extendable<D>, const D: usize> {
+    First(ArithmeticExpression<F, D>),
+    Last(ArithmeticExpression<F, D>),
+    Transition(ArithmeticExpression<F, D>),
+    All(ArithmeticExpression<F, D>),
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> EqualityConstraint<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> ArithmeticConstraint<F, D> {
     pub fn packed_generic_constraints<
         FE,
         P,
@@ -94,31 +87,28 @@ impl<F: RichField + Extendable<D>, const D: usize> EqualityConstraint<F, D> {
         P: PackedField<Scalar = FE>,
     {
         match self {
-            EqualityConstraint::Bool(constraint) => {
-                <ConstraintBool as Instruction<F, D>>::packed_generic_constraints(
-                    constraint,
-                    vars,
-                    yield_constr,
-                )
-            }
-            EqualityConstraint::Equal(a, b) => {
-                let a_vals = a.packed_generic_vars(&vars);
-                let b_vals = b.packed_generic_vars(&vars);
-                if let (MemorySlice::Local(_, _), MemorySlice::Local(_, _)) = (a, b) {
-                    for (&a, &b) in a_vals.iter().zip(b_vals.iter()) {
-                        yield_constr.constraint(a - b);
-                    }
-                } else {
-                    for (&a, &b) in a_vals.iter().zip(b_vals.iter()) {
-                        yield_constr.constraint_transition(a - b);
-                    }
+            ArithmeticConstraint::First(constraint) => {
+                let vals = constraint.expression.packed_generic(&vars);
+                for &val in vals.iter() {
+                    yield_constr.constraint_first_row(val);
                 }
             }
-            EqualityConstraint::ArithmeticConstraint(left, right) => {
-                let left_vals = left.packed_generic(&vars);
-                let right_vals = right.packed_generic(&vars);
-                for (a, b) in left_vals.iter().zip(right_vals.iter()) {
-                    yield_constr.constraint_transition(*a - *b);
+            ArithmeticConstraint::Last(constraint) => {
+                let vals = constraint.expression.packed_generic(&vars);
+                for &val in vals.iter() {
+                    yield_constr.constraint_last_row(val);
+                }
+            }
+            ArithmeticConstraint::Transition(constraint) => {
+                let vals = constraint.expression.packed_generic(&vars);
+                for &val in vals.iter() {
+                    yield_constr.constraint_transition(val);
+                }
+            }
+            ArithmeticConstraint::All(constraint) => {
+                let vals = constraint.expression.packed_generic(&vars);
+                for &val in vals.iter() {
+                    yield_constr.constraint(val);
                 }
             }
         }
@@ -131,35 +121,28 @@ impl<F: RichField + Extendable<D>, const D: usize> EqualityConstraint<F, D> {
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
         match self {
-            EqualityConstraint::Bool(constraint) => {
-                <ConstraintBool as Instruction<F, D>>::ext_circuit_constraints(
-                    constraint,
-                    builder,
-                    vars,
-                    yield_constr,
-                )
-            }
-            EqualityConstraint::Equal(a, b) => {
-                let a_vals = a.ext_circuit_vars(&vars);
-                let b_vals = b.ext_circuit_vars(&vars);
-                if let (MemorySlice::Local(_, _), MemorySlice::Local(_, _)) = (a, b) {
-                    for (&a, &b) in a_vals.iter().zip(b_vals.iter()) {
-                        let constr = builder.sub_extension(a, b);
-                        yield_constr.constraint_transition(builder, constr);
-                    }
-                } else {
-                    for (&a, &b) in a_vals.iter().zip(b_vals.iter()) {
-                        let constr = builder.sub_extension(a, b);
-                        yield_constr.constraint_transition(builder, constr);
-                    }
+            ArithmeticConstraint::First(constraint) => {
+                let vals = constraint.expression.ext_circuit(builder, &vars);
+                for &val in vals.iter() {
+                    yield_constr.constraint_first_row(builder, val);
                 }
             }
-            EqualityConstraint::ArithmeticConstraint(left, right) => {
-                let left_vals = left.ext_circuit(builder, &vars);
-                let right_vals = right.ext_circuit(builder, &vars);
-                for (a, b) in left_vals.iter().zip(right_vals.iter()) {
-                    let constr = builder.sub_extension(*a, *b);
-                    yield_constr.constraint_transition(builder, constr);
+            ArithmeticConstraint::Last(constraint) => {
+                let vals = constraint.expression.ext_circuit(builder, &vars);
+                for &val in vals.iter() {
+                    yield_constr.constraint_last_row(builder, val);
+                }
+            }
+            ArithmeticConstraint::Transition(constraint) => {
+                let vals = constraint.expression.ext_circuit(builder, &vars);
+                for &val in vals.iter() {
+                    yield_constr.constraint_transition(builder, val);
+                }
+            }
+            ArithmeticConstraint::All(constraint) => {
+                let vals = constraint.expression.ext_circuit(builder, &vars);
+                for &val in vals.iter() {
+                    yield_constr.constraint(builder, val);
                 }
             }
         }
