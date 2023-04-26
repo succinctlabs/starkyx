@@ -2,9 +2,8 @@ use core::ops::{Add, Mul};
 
 use num::BigUint;
 
-use super::super::AffinePoint;
-use super::EdwardsParameters;
-use crate::arithmetic::field::FieldParameters;
+use crate::arithmetic::ec::affine::AffinePoint;
+use crate::arithmetic::parameters::{EdwardsParameters, FieldParameters};
 use crate::arithmetic::utils::biguint_to_bits_le;
 
 impl<E: EdwardsParameters> AffinePoint<E> {
@@ -26,7 +25,7 @@ impl<E: EdwardsParameters> Add<&AffinePoint<E>> for &AffinePoint<E> {
     type Output = AffinePoint<E>;
 
     fn add(self, other: &AffinePoint<E>) -> AffinePoint<E> {
-        let p = E::FieldParam::modulus();
+        let p = E::BaseField::modulus();
         let x_3n = (&self.x * &other.y + &self.y * &other.x) % &p;
         let y_3n = (&self.y * &other.y + &self.x * &other.x) % &p;
 
@@ -89,13 +88,13 @@ mod tests {
     use num::BigUint;
     use rand::thread_rng;
 
-    use crate::arithmetic::ec::edwards::{Ed25519Parameters, EdwardsParameters};
     use crate::arithmetic::ec::EllipticCurveParameters;
-    use crate::arithmetic::field::FieldParameters;
+    use crate::arithmetic::parameters::ed25519::Ed25519;
+    use crate::arithmetic::parameters::{EdwardsParameters, FieldParameters};
 
     #[test]
     fn test_bigint_ed_add() {
-        type E = Ed25519Parameters;
+        type E = Ed25519;
         let netural = E::neutral();
         let base = E::generator();
 
@@ -106,11 +105,11 @@ mod tests {
 
     #[test]
     fn test_biguint_scalar_mul() {
-        type E = Ed25519Parameters;
+        type E = Ed25519;
         let base = E::generator();
 
         let d = E::d_biguint();
-        let p = <E as EllipticCurveParameters>::FieldParam::modulus();
+        let p = <E as EllipticCurveParameters>::BaseField::modulus();
         assert_eq!((d * 121666u32) % &p, (&p - 121665u32) % &p);
 
         let mut rng = thread_rng();

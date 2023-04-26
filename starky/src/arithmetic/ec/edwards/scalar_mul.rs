@@ -1,8 +1,10 @@
-use super::add::{EcAddData, FromEdwardsAdd};
+use super::add::EcAddData;
 use super::*;
 use crate::arithmetic::bool::Selector;
 use crate::arithmetic::builder::StarkBuilder;
 use crate::arithmetic::chip::StarkParameters;
+use crate::arithmetic::instruction::FromInstructionSet;
+use crate::arithmetic::parameters::EdwardsParameters;
 use crate::arithmetic::polynomial::Polynomial;
 use crate::arithmetic::register::{BitRegister, ElementRegister};
 use crate::arithmetic::utils::biguint_to_bits_le;
@@ -17,8 +19,8 @@ pub struct EdScalarMulData<E: EdwardsParameters> {
     scalar_bit: BitRegister,
     add: EcAddData<E>,
     double: EcAddData<E>,
-    selector_x: Selector<FieldRegister<E::FieldParam>>,
-    selector_y: Selector<FieldRegister<E::FieldParam>>,
+    selector_x: Selector<FieldRegister<E::BaseField>>,
+    selector_y: Selector<FieldRegister<E::BaseField>>,
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
@@ -38,7 +40,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         temp_next: &AffinePointRegister<E>,
     ) -> Result<EdScalarMulData<E>>
     where
-        L::Instruction: FromEdwardsAdd<E> + From<Selector<FieldRegister<E::FieldParam>>>,
+        L::Instruction: FromInstructionSet<E::BaseField>,
     {
         let result_plus_temp = self.alloc_ec_point()?;
         self.write_data(scalar_bit)?;
@@ -72,7 +74,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         cycle_counter: &ElementRegister,
     ) -> Result<EdScalarMulData<E>>
     where
-        L::Instruction: FromEdwardsAdd<E> + From<Selector<FieldRegister<E::FieldParam>>>,
+        L::Instruction: FromInstructionSet<E::BaseField>,
     {
         let temp_next = self.alloc_ec_point()?;
         let result_next = self.alloc_ec_point()?;
@@ -133,9 +135,9 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
             temp = self.write_ed_double(starting_row + i, &temp, chip_data.double.clone())?;
             res = if *bit { result_plus_temp } else { res };
             let res_x_field_vec =
-                Polynomial::from_biguint_field(&res.x, 16, E::FieldParam::NB_LIMBS).into_vec();
+                Polynomial::from_biguint_field(&res.x, 16, E::BaseField::NB_LIMBS).into_vec();
             let res_y_field_vec =
-                Polynomial::from_biguint_field(&res.y, 16, E::FieldParam::NB_LIMBS).into_vec();
+                Polynomial::from_biguint_field(&res.y, 16, E::BaseField::NB_LIMBS).into_vec();
             self.write(starting_row + i, chip_data.selector_x, res_x_field_vec)?;
             self.write(starting_row + i, chip_data.selector_y, res_y_field_vec)?;
 
@@ -165,7 +167,8 @@ mod tests {
     use super::*;
     use crate::arithmetic::builder::StarkBuilder;
     use crate::arithmetic::chip::{StarkParameters, TestStark};
-    use crate::arithmetic::ec::edwards::instructions::EdWardsMicroInstruction;
+    use crate::arithmetic::instruction::InstructionSet;
+    use crate::arithmetic::parameters::ed25519::{Ed25519, Ed25519BaseField};
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;
@@ -183,7 +186,7 @@ mod tests {
 
         const NUM_FREE_COLUMNS: usize = 2 + 2 * 2 * 16;
 
-        type Instruction = EdWardsMicroInstruction<Ed25519Parameters>;
+        type Instruction = InstructionSet<Ed25519BaseField>;
     }
 
     #[test]
@@ -191,7 +194,7 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type E = Ed25519Parameters;
+        type E = Ed25519;
         type S = TestStark<EdScalarMulTest, F, D>;
 
         let _ = env_logger::builder().is_test(true).try_init();
@@ -334,9 +337,9 @@ mod tests {
             temp = handle.write_ed_double(starting_row + i, &temp, chip_data.double.clone())?;
             res = if *bit { result_plus_temp } else { res };
             let res_x_field_vec =
-                Polynomial::from_biguint_field(&res.x, 16, E::FieldParam::NB_LIMBS).into_vec();
+                Polynomial::from_biguint_field(&res.x, 16, E::BaseField::NB_LIMBS).into_vec();
             let res_y_field_vec =
-                Polynomial::from_biguint_field(&res.y, 16, E::FieldParam::NB_LIMBS).into_vec();
+                Polynomial::from_biguint_field(&res.y, 16, E::BaseField::NB_LIMBS).into_vec();
             handle.write(starting_row + i, chip_data.selector_x, res_x_field_vec)?;
             handle.write(starting_row + i, chip_data.selector_y, res_y_field_vec)?;
 
@@ -356,7 +359,7 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type E = Ed25519Parameters;
+        type E = Ed25519;
         type S = TestStark<EdScalarMulTest, F, D>;
 
         let _ = env_logger::builder().is_test(true).try_init();

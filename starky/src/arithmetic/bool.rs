@@ -17,7 +17,7 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 pub struct ConstraintBool(pub MemorySlice);
 
 impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for ConstraintBool {
-    fn witness_layout(&self) -> Vec<MemorySlice> {
+    fn trace_layout(&self) -> Vec<MemorySlice> {
         Vec::new()
     }
 
@@ -67,7 +67,7 @@ pub struct Selector<T> {
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
-    pub fn selector<T: Copy>(
+    pub fn selector<T: Register>(
         &mut self,
         bit: &BitRegister,
         a: &T,
@@ -78,7 +78,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         L::Instruction: From<Selector<T>>,
     {
         let instr = Selector::new(*bit, *a, *b, *result);
-        self.insert_instruction(instr.into())?;
+        self.insert_instruction(instr.clone().into())?;
         Ok(instr)
     }
 }
@@ -102,7 +102,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize, T: Register> Instruction<F, D> for Selector<T> {
-    fn witness_layout(&self) -> Vec<MemorySlice> {
+    fn trace_layout(&self) -> Vec<MemorySlice> {
         vec![*self.result.register()]
     }
 

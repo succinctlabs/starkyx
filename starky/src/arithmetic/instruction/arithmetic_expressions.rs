@@ -330,7 +330,7 @@ mod tests {
     use crate::arithmetic::builder::StarkBuilder;
     use crate::arithmetic::chip::{StarkParameters, TestStark};
     use crate::arithmetic::instruction::write::WriteInstruction;
-    use crate::arithmetic::register::{ElementRegister, U16Register};
+    use crate::arithmetic::register::U16Register;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;

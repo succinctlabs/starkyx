@@ -30,48 +30,28 @@
 
 mod add;
 mod constrain;
+mod den;
 mod inner_product;
 mod mul;
 mod mul_const;
 
 use anyhow::Result;
-use num::{BigUint, One, Zero};
-use plonky2::field::extension::{Extendable, FieldExtension};
-use plonky2::field::packed::PackedField;
+use num::{BigUint, Zero};
+use plonky2::field::extension::Extendable;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
-use plonky2::iop::ext_target::ExtensionTarget;
-use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 pub use self::add::FpAddInstruction;
+pub use self::den::FpDenInstruction;
 pub use self::inner_product::FpInnerProductInstruction;
 pub use self::mul::FpMulInstruction;
 pub use self::mul_const::FpMulConstInstruction;
 use super::instruction::Instruction;
-use super::polynomial::{Polynomial, PolynomialOps};
+use super::parameters::FieldParameters;
+use super::polynomial::Polynomial;
 use super::register::FieldRegister;
 use super::trace::TraceWriter;
-use crate::arithmetic::polynomial::PolynomialGadget;
 use crate::arithmetic::register::MemorySlice;
-
-pub const MAX_NB_LIMBS: usize = 32;
-pub const LIMB: u32 = 2u32.pow(16);
-
-pub trait FieldParameters: Send + Sync + Copy + 'static {
-    const NB_BITS_PER_LIMB: usize;
-    const NB_LIMBS: usize;
-    const NB_WITNESS_LIMBS: usize;
-    const MODULUS: [u16; MAX_NB_LIMBS];
-    const WITNESS_OFFSET: usize;
-
-    fn modulus() -> BigUint {
-        let mut modulus = BigUint::zero();
-        for (i, limb) in Self::MODULUS.iter().enumerate() {
-            modulus += BigUint::from(*limb) << (16 * i);
-        }
-        modulus
-    }
-}
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
     pub fn write_field<P: FieldParameters>(
@@ -90,27 +70,6 @@ pub fn modulus_field_iter<F: Field, P: FieldParameters>() -> impl Iterator<Item 
         .into_iter()
         .map(|x| F::from_canonical_u16(x))
         .take(P::NB_LIMBS)
-}
-
-/// The parameters for the Fp25519 field of modulues 2^255-19.
-#[derive(Debug, Clone, Copy)]
-pub struct Fp25519Param;
-
-pub type Fp25519 = FieldRegister<Fp25519Param>;
-
-impl FieldParameters for Fp25519Param {
-    const NB_BITS_PER_LIMB: usize = 16;
-    const NB_LIMBS: usize = 16;
-    const NB_WITNESS_LIMBS: usize = 2 * Self::NB_LIMBS - 2;
-    const MODULUS: [u16; MAX_NB_LIMBS] = [
-        65517, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535,
-        65535, 65535, 32767, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    ];
-    const WITNESS_OFFSET: usize = 1usize << 20;
-
-    fn modulus() -> BigUint {
-        (BigUint::one() << 255) - BigUint::from(19u32)
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -142,19 +101,19 @@ impl<P: FieldParameters> From<FpInnerProductInstruction<P>> for FpInstruction<P>
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
     for FpInstruction<P>
 {
-    fn witness_layout(&self) -> Vec<MemorySlice> {
+    fn trace_layout(&self) -> Vec<MemorySlice> {
         match self {
             FpInstruction::Add(add) => {
-                <FpAddInstruction<P> as Instruction<F, D>>::witness_layout(add)
+                <FpAddInstruction<P> as Instruction<F, D>>::trace_layout(add)
             }
             FpInstruction::Mul(mul) => {
-                <FpMulInstruction<P> as Instruction<F, D>>::witness_layout(mul)
+                <FpMulInstruction<P> as Instruction<F, D>>::trace_layout(mul)
             }
             FpInstruction::Quad(quad) => {
-                <FpInnerProductInstruction<P> as Instruction<F, D>>::witness_layout(quad)
+                <FpInnerProductInstruction<P> as Instruction<F, D>>::trace_layout(quad)
             }
             FpInstruction::MulConst(mul_const) => {
-                <FpMulConstInstruction<P> as Instruction<F, D>>::witness_layout(mul_const)
+                <FpMulConstInstruction<P> as Instruction<F, D>>::trace_layout(mul_const)
             }
         }
     }
@@ -262,7 +221,7 @@ mod tests {
     use super::*;
     use crate::arithmetic::builder::StarkBuilder;
     use crate::arithmetic::chip::{StarkParameters, TestStark};
-    use crate::arithmetic::field::Fp25519Param;
+    use crate::arithmetic::parameters::ed25519::Ed25519BaseField;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;
@@ -278,7 +237,7 @@ mod tests {
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpInstructionTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 156;
         const NUM_FREE_COLUMNS: usize = 0;
-        type Instruction = FpInstruction<Fp25519Param>;
+        type Instruction = FpInstruction<Ed25519BaseField>;
     }
 
     #[test]
@@ -286,7 +245,7 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type Fp = Fp25519;
+        type Fp = FieldRegister<Ed25519BaseField>;
         type S = TestStark<FpInstructionTest, F, D>;
 
         // Build the STARK.
@@ -295,7 +254,7 @@ mod tests {
         let b = builder.alloc::<Fp>();
         let c = builder.alloc::<Fp>();
         let d = builder.alloc::<Fp>();
-        let (result, quad) = builder.fp_inner_product(&vec![a, b], &vec![c, d]);
+        let (_, quad) = builder.fp_inner_product(&vec![a, b], &vec![c, d]);
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
         builder.write_data(&c).unwrap();
@@ -305,7 +264,7 @@ mod tests {
         // Construct the trace.
         let num_rows = 2u64.pow(16);
         let (handle, generator) = trace::<F, D>(spec);
-        let p = Fp25519Param::modulus();
+        let p = Ed25519BaseField::modulus();
         let mut rng = thread_rng();
         for i in 0..num_rows {
             let a_int: BigUint = rng.gen_biguint(256) % &p;

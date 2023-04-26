@@ -110,7 +110,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
 impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instruction<F, D>
     for FpMulInstruction<P>
 {
-    fn witness_layout(&self) -> Vec<MemorySlice> {
+    fn trace_layout(&self) -> Vec<MemorySlice> {
         vec![
             *self.result.register(),
             *self.carry.register(),
@@ -205,7 +205,7 @@ mod tests {
     use super::*;
     use crate::arithmetic::builder::StarkBuilder;
     use crate::arithmetic::chip::{StarkParameters, TestStark};
-    use crate::arithmetic::field::Fp25519Param;
+    use crate::arithmetic::parameters::ed25519::Ed25519BaseField;
     use crate::arithmetic::trace::trace;
     use crate::config::StarkConfig;
     use crate::prover::prove;
@@ -221,7 +221,7 @@ mod tests {
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpMulTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 124;
         const NUM_FREE_COLUMNS: usize = 0;
-        type Instruction = FpMulInstruction<Fp25519Param>;
+        type Instruction = FpMulInstruction<Ed25519BaseField>;
     }
 
     #[test]
@@ -229,7 +229,7 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type Fp = Fp25519;
+        type Fp = FieldRegister<Ed25519BaseField>;
         type S = TestStark<FpMulTest, F, D>;
 
         // Build the circuit.
@@ -244,7 +244,7 @@ mod tests {
         // Generate the trace.
         let num_rows = 2u64.pow(16) as usize;
         let (handle, generator) = trace::<F, D>(spec);
-        let p = Fp25519Param::modulus();
+        let p = Ed25519BaseField::modulus();
         let mut rng = thread_rng();
         for i in 0..num_rows {
             let a_int: BigUint = rng.gen_biguint(256) % &p;

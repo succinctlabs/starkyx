@@ -4,15 +4,22 @@
 //! lowest level of abstraction in the arithmetic module.
 
 pub mod arithmetic_expressions;
+pub mod empty;
+mod set;
 pub mod write;
 
+pub use empty::EmptyInstructionSet;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
+pub use set::{FromInstructionSet, InstructionSet};
 
 use self::arithmetic_expressions::ArithmeticExpressionSlice;
 use super::bool::ConstraintBool;
+use super::field::{
+    FpAddInstruction, FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction,
+};
 use super::register::MemorySlice;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -21,12 +28,12 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
 {
     /// Returns a vector of memory slices or contiguous memory regions of the row in the trace that
     /// instruction relies on. These registers must be filled in by the `TraceWriter`.
-    fn witness_layout(&self) -> Vec<MemorySlice>;
+    fn trace_layout(&self) -> Vec<MemorySlice>;
 
     /// Assigns the row in the trace according to the `witness_layout`. Usually called by the
     /// `TraceWriter`.
     fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
-        self.witness_layout()
+        self.trace_layout()
             .into_iter()
             .fold(0, |local_index, memory_slice| {
                 memory_slice.assign(trace_rows, local_index, row, row_index)
@@ -156,43 +163,5 @@ impl<F: RichField + Extendable<D>, const D: usize> EqualityConstraint<F, D> {
                 }
             }
         }
-    }
-}
-
-/// A defult instruction set that contains no custom instructions
-#[derive(Clone, Debug)]
-pub struct DefaultInstructions<F, const D: usize> {
-    _marker: core::marker::PhantomData<F>,
-}
-
-impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for DefaultInstructions<F, D> {
-    fn assign_row(&self, _trace_rows: &mut [Vec<F>], _row: &mut [F], _row_index: usize) {}
-
-    fn witness_layout(&self) -> Vec<MemorySlice> {
-        Vec::new()
-    }
-
-    fn packed_generic_constraints<
-        FE,
-        P,
-        const D2: usize,
-        const COLUMNS: usize,
-        const PUBLIC_INPUTS: usize,
-    >(
-        &self,
-        _vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
-        _yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
-    ) where
-        FE: FieldExtension<D2, BaseField = F>,
-        P: PackedField<Scalar = FE>,
-    {
-    }
-
-    fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        &self,
-        _builder: &mut CircuitBuilder<F, D>,
-        _vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-        _yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
-    ) {
     }
 }

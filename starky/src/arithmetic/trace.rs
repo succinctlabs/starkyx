@@ -8,7 +8,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::util::transpose;
 use plonky2_maybe_rayon::*;
 
-use super::builder::InsID;
+use super::builder::InstructionId;
 use super::chip::StarkParameters;
 use super::instruction::Instruction;
 use super::register::{MemorySlice, Register};
@@ -20,17 +20,17 @@ pub struct TraceWriter<F, const D: usize>
 where
     F: RichField + Extendable<D>,
 {
-    tx: Sender<(usize, InsID, Vec<F>)>,
+    tx: Sender<(usize, InstructionId, Vec<F>)>,
 }
 
 #[derive(Debug)]
 pub struct TraceGenerator<F: RichField + Extendable<D>, const D: usize> {
-    spec: BTreeMap<InsID, usize>,
-    rx: Receiver<(usize, InsID, Vec<F>)>,
+    spec: BTreeMap<InstructionId, usize>,
+    rx: Receiver<(usize, InstructionId, Vec<F>)>,
 }
 
 pub fn trace<F: RichField + Extendable<D>, const D: usize>(
-    spec: BTreeMap<InsID, usize>,
+    spec: BTreeMap<InstructionId, usize>,
 ) -> (TraceWriter<F, D>, TraceGenerator<F, D>) {
     let (tx, rx) = std::sync::mpsc::channel();
     (TraceWriter { tx }, TraceGenerator { spec, rx })
@@ -51,7 +51,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
         instruction: T,
         values: Vec<Vec<F>>,
     ) -> Result<()> {
-        let witness_layout = instruction.witness_layout();
+        let witness_layout = instruction.trace_layout();
         debug_assert!(witness_layout.len() == values.len());
         witness_layout
             .into_iter()
@@ -60,7 +60,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
                 debug_assert!(register.len() == value.len());
             });
         let row = values.into_iter().flatten().collect();
-        let id = InsID::CustomInstruction(instruction.witness_layout());
+        let id = InstructionId::CustomInstruction(instruction.trace_layout());
         self.tx
             .send((row_index, id, row))
             .map_err(|_| anyhow!("Failed to send row"))?;
@@ -73,7 +73,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
         instruction: T,
         row: Vec<F>,
     ) -> Result<()> {
-        let id = InsID::CustomInstruction(instruction.witness_layout());
+        let id = InstructionId::CustomInstruction(instruction.trace_layout());
         self.tx
             .send((row_index, id, row))
             .map_err(|_| anyhow!("Failed to send row"))?;
@@ -81,7 +81,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
     }
 
     pub fn write_data<T: Register>(&self, row_index: usize, data: T, row: Vec<F>) -> Result<()> {
-        let id = InsID::Write(*data.register());
+        let id = InstructionId::Write(*data.register());
         self.tx
             .send((row_index, id, row))
             .map_err(|_| anyhow!("Failed to send row"))?;
@@ -94,7 +94,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
         data: &MemorySlice,
         row: Vec<F>,
     ) -> Result<()> {
-        let id = InsID::Write(*data);
+        let id = InstructionId::Write(*data);
         self.tx
             .send((row_index, id, row))
             .map_err(|_| anyhow!("Failed to send row"))?;
@@ -118,10 +118,10 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
                 .get(&id)
                 .ok_or_else(|| anyhow!("Invalid instruction"))?;
             match id {
-                InsID::CustomInstruction(_) => {
+                InstructionId::CustomInstruction(_) => {
                     chip.instructions[*op_index].assign_row(&mut trace_rows, &mut row, row_index)
                 }
-                InsID::Write(_) => chip.write_instructions[*op_index].assign_row(
+                InstructionId::Write(_) => chip.write_instructions[*op_index].assign_row(
                     &mut trace_rows,
                     &mut row,
                     row_index,

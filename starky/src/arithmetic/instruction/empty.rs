@@ -1,22 +1,23 @@
-use super::*;
+use plonky2::field::extension::{Extendable, FieldExtension};
+use plonky2::field::packed::PackedField;
+use plonky2::hash::hash_types::RichField;
+use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-#[derive(Clone, Debug, Copy)]
-pub struct WriteInstruction(pub MemorySlice);
+use super::Instruction;
+use crate::arithmetic::register::MemorySlice;
+use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-impl WriteInstruction {
-    #[inline]
-    pub fn into_register(self) -> MemorySlice {
-        self.0
-    }
+/// A defult instruction set that contains no custom instructions
+#[derive(Clone, Debug)]
+pub struct EmptyInstructionSet<F, const D: usize> {
+    _marker: core::marker::PhantomData<F>,
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for WriteInstruction {
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        vec![self.0]
-    }
+impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for EmptyInstructionSet<F, D> {
+    fn assign_row(&self, _trace_rows: &mut [Vec<F>], _row: &mut [F], _row_index: usize) {}
 
-    fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
-        self.0.assign(trace_rows, 0, row, row_index);
+    fn trace_layout(&self) -> Vec<MemorySlice> {
+        Vec::new()
     }
 
     fn packed_generic_constraints<
