@@ -12,10 +12,10 @@ extern crate alloc;
 
 mod get_challenges;
 
-pub mod arithmetic;
 pub mod benchmark;
 pub mod config;
 pub mod constraint_consumer;
+pub mod curta;
 pub mod lookup;
 pub mod permutation;
 pub mod proof;
