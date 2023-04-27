@@ -1,11 +1,11 @@
 use super::{FpAddInstruction, FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction};
-use crate::curta::bool::SelectInstruction;
 use crate::curta::field::FpDenInstruction;
 use crate::curta::instruction::{
     CircuitBuilder, Extendable, FieldExtension, Instruction, PackedField, RichField,
 };
 use crate::curta::parameters::FieldParameters;
 use crate::curta::register::{FieldRegister, MemorySlice};
+use crate::curta::select::SelectInstruction;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 macro_rules! instruction_set {

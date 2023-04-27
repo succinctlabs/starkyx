@@ -1,12 +1,12 @@
 use super::add::Ed25519AddGadget;
 use super::*;
-use crate::curta::bool::SelectInstruction;
 use crate::curta::builder::StarkBuilder;
 use crate::curta::chip::StarkParameters;
 use crate::curta::instruction::FromInstructionSet;
 use crate::curta::parameters::EdwardsParameters;
 use crate::curta::polynomial::Polynomial;
 use crate::curta::register::{BitRegister, ElementRegister};
+use crate::curta::select::SelectInstruction;
 use crate::curta::utils::biguint_to_bits_le;
 
 #[derive(Clone)]

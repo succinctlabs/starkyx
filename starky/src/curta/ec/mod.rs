@@ -1,5 +1,5 @@
 pub mod affine;
-pub mod edwards;
+pub mod ed25519;
 
 use anyhow::Result;
 use num::BigUint;
