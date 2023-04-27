@@ -206,8 +206,8 @@ mod tests {
 
         // Build the stark.
         let mut builder = StarkBuilder::<Ed25519AddTest, F, D>::new();
-        let p = builder.alloc_local_ec_point::<E>().unwrap();
-        let q = builder.alloc_local_ec_point::<E>().unwrap();
+        let p = builder.alloc_local_ec_point::<E>();
+        let q = builder.alloc_local_ec_point::<E>();
         let ed25519_add_gadget = builder.ed25519_add::<E>(&p, &q);
         builder.write_ec_point(&p).unwrap();
         builder.write_ec_point(&q).unwrap();
@@ -323,7 +323,7 @@ mod tests {
         // build the stark
         let mut builder = StarkBuilder::<EdDoubleTest, F, D>::new();
 
-        let P = builder.alloc_ec_point::<E>().unwrap();
+        let P = builder.alloc_ec_point::<E>();
 
         let ed_double_data = builder.ed25519_double(&P);
         builder.write_ec_point(&P).unwrap();

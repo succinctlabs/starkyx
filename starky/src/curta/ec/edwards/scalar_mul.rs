@@ -23,6 +23,13 @@ pub struct Ed25519DoubleAndAddGadget<E: EdwardsParameters> {
     select_y_ins: SelectInstruction<FieldRegister<E::BaseField>>,
 }
 
+#[derive(Clone)]
+#[allow(dead_code)]
+pub struct Ed25519ScalarMulGadget<E: EdwardsParameters> {
+    cyclic_counter: ElementRegister,
+    double_and_add_gadget: Ed25519DoubleAndAddGadget<E>,
+}
+
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     /// Computes one step of the double-and-add algorithm for scalar multiplication over elliptic
     /// curves. The algorithm the computes the function f(bit, result, temp):
@@ -30,8 +37,8 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     ///     result = if bit == 1 then result + temp else result
     ///     temp = temp + temp
     ///
-    /// This function also adds a write option for the bits to scalar_bit.
-    pub fn ed25519_double_and_add_step<E: EdwardsParameters>(
+    /// This function should probably never be used directly and is used in `ed25519_double_and_add`
+    fn ed25519_double_and_add<E: EdwardsParameters>(
         &mut self,
         bit: &BitRegister,
         result: &AffinePointRegister<E>,
@@ -40,8 +47,6 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     where
         L::Instruction: FromInstructionSet<E::BaseField>,
     {
-        self.write_data(bit).unwrap();
-
         // result = result + temp.
         let add_gadget = self.ed25519_add(result, temp);
 
@@ -66,17 +71,17 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         }
     }
 
-    pub fn ed_double_and_add<E: EdwardsParameters>(
+    pub fn ed25519_scalar_mul<E: EdwardsParameters>(
         &mut self,
         bit: &BitRegister,
         result: &AffinePointRegister<E>,
         temp: &AffinePointRegister<E>,
-        cursor: &ElementRegister,
-    ) -> Ed25519DoubleAndAddGadget<E>
+    ) -> Ed25519ScalarMulGadget<E>
     where
         L::Instruction: FromInstructionSet<E::BaseField>,
     {
-        let scalar_mul_gadget = self.ed25519_double_and_add_step(bit, result, temp);
+        let cyclic_counter = self.alloc::<ElementRegister>();
+        let double_and_add_gadget = self.ed25519_double_and_add(bit, result, temp);
 
         // Generate a multiplicative subgroup of order 256 (i.e., 2^8).
         let group = F::two_adic_subgroup(8);
@@ -87,82 +92,94 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         // Copy over the result of the double and add step to the next row for every row but not for
         // every 256th row. By doing this trick, we can compute multiple scalar multiplications
         // in a single STARK.
-        let result = scalar_mul_gadget.result;
-        let result_next = scalar_mul_gadget.result_next;
-        let temp = scalar_mul_gadget.temp;
-        let temp_next = scalar_mul_gadget.temp_next;
+        let result = double_and_add_gadget.result;
+        let result_next = double_and_add_gadget.result_next;
+        let temp = double_and_add_gadget.temp;
+        let temp_next = double_and_add_gadget.temp_next;
 
         // Note that result and result_next live on the same row.
         // if log_generator(cursor[LOCAL]) % 2^8 == 0 then result[NEXT] <= result_next[LOCAL].
-        let result_x_copy_constraint =
-            (cursor.expr() - generator_inv) * (result.x.next().expr() - result_next.x.expr());
+        let result_x_copy_constraint = (cyclic_counter.expr() - generator_inv)
+            * (result.x.next().expr() - result_next.x.expr());
         self.assert_expression_zero(result_x_copy_constraint);
-        let result_y_copy_constraint =
-            (cursor.expr() - generator_inv) * (result.y.next().expr() - result_next.y.expr());
+        let result_y_copy_constraint = (cyclic_counter.expr() - generator_inv)
+            * (result.y.next().expr() - result_next.y.expr());
         self.assert_expression_zero(result_y_copy_constraint);
 
         // Note that temp and temp_next live on the same row.
         // if log_generator(cursor[LOCAL]) % 2^8 == 0 then temp[NEXT] <= temp_next[LOCAL]
         let temp_x_copy_constraint =
-            (cursor.expr() - generator_inv) * (temp.x.next().expr() - temp_next.x.expr());
+            (cyclic_counter.expr() - generator_inv) * (temp.x.next().expr() - temp_next.x.expr());
         self.assert_expression_zero(temp_x_copy_constraint);
         let temp_y_copy_constraint =
-            (cursor.expr() - generator_inv) * (temp.y.next().expr() - temp_next.y.expr());
+            (cyclic_counter.expr() - generator_inv) * (temp.y.next().expr() - temp_next.y.expr());
         self.assert_expression_zero(temp_y_copy_constraint);
 
         // cursor[NEXT] = cursor[LOCAL] * generator
-        self.assert_expressions_equal(cursor.next().expr(), cursor.expr() * generator);
+        self.assert_expressions_equal(
+            cyclic_counter.next().expr(),
+            cyclic_counter.expr() * generator,
+        );
 
-        scalar_mul_gadget
+        Ed25519ScalarMulGadget {
+            cyclic_counter,
+            double_and_add_gadget,
+        }
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
-    /// Writes the double-and-add algorithm for scalar multiplication to the trace.
-    ///
-    /// Assumes the scalar is already reduced modulo the order of the curve group
+    /// Writes the double-and-add algorithm for scalar multiplication to the trace. Assumes the
+    /// scalar is already reduced modulo the order of the curve group.
     #[allow(non_snake_case)]
-    pub fn write_ed_double_and_add<E: EdwardsParameters>(
+    pub fn write_ed25519_double_and_add<E: EdwardsParameters>(
         &self,
         starting_row: usize,
         scalar: &BigUint,
         point: &AffinePoint<E>,
-        chip_data: Ed25519DoubleAndAddGadget<E>,
+        double_and_add_gadget: Ed25519DoubleAndAddGadget<E>,
     ) -> Result<AffinePoint<E>> {
-        let num_bits = E::num_scalar_bits();
-        let scalar_bits = biguint_to_bits_le(scalar, num_bits);
+        let nb_bits = E::nb_scalar_bits();
+        let scalar_bits = biguint_to_bits_le(scalar, nb_bits);
 
         let mut res = E::neutral();
-        self.write_ec_point(starting_row, &res, &chip_data.result)?;
+        self.write_ec_point(starting_row, &res, &double_and_add_gadget.result)?;
         let mut temp = point.clone();
-        self.write_ec_point(starting_row, &temp, &chip_data.temp)?;
+        self.write_ec_point(starting_row, &temp, &double_and_add_gadget.temp)?;
 
         for (i, bit) in scalar_bits.iter().enumerate() {
-            self.write_bit(starting_row + i, *bit, &chip_data.bit)?;
+            self.write_bit(starting_row + i, *bit, &double_and_add_gadget.bit)?;
             let result_plus_temp = self.write_ed25519_add(
                 starting_row + i,
                 &res,
                 &temp,
-                chip_data.add_gadget.clone(),
+                double_and_add_gadget.add_gadget.clone(),
             )?;
             temp = self.write_ed25519_double(
                 starting_row + i,
                 &temp,
-                chip_data.double_gadget.clone(),
+                double_and_add_gadget.double_gadget.clone(),
             )?;
             res = if *bit { result_plus_temp } else { res };
             let res_x_field_vec =
                 Polynomial::from_biguint_field(&res.x, 16, E::BaseField::NB_LIMBS).into_vec();
             let res_y_field_vec =
                 Polynomial::from_biguint_field(&res.y, 16, E::BaseField::NB_LIMBS).into_vec();
-            self.write(starting_row + i, chip_data.select_x_ins, res_x_field_vec)?;
-            self.write(starting_row + i, chip_data.select_y_ins, res_y_field_vec)?;
-
-            if i == num_bits - 1 {
+            self.write(
+                starting_row + i,
+                double_and_add_gadget.select_x_ins,
+                res_x_field_vec,
+            )?;
+            self.write(
+                starting_row + i,
+                double_and_add_gadget.select_y_ins,
+                res_y_field_vec,
+            )?;
+            if i == nb_bits - 1 {
                 break;
             }
-            self.write_ec_point(starting_row + i + 1, &res, &chip_data.result)?;
-            self.write_ec_point(starting_row + i + 1, &temp, &chip_data.temp)?;
+            self.write_ec_point(starting_row + i + 1, &res, &double_and_add_gadget.result)?;
+            self.write_ec_point(starting_row + i + 1, &temp, &double_and_add_gadget.temp)?;
         }
         Ok(res)
     }
@@ -196,13 +213,11 @@ mod tests {
     use crate::verifier::verify_stark_proof;
 
     #[derive(Clone, Debug, Copy)]
-    pub struct EdScalarMulTest;
+    pub struct Ed25519ScalarMulTest;
 
-    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for EdScalarMulTest {
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for Ed25519ScalarMulTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 1504;
-
         const NUM_FREE_COLUMNS: usize = 2 + 2 * 2 * 16;
-
         type Instruction = InstructionSet<Ed25519BaseField>;
     }
 
@@ -212,62 +227,62 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type E = Ed25519;
-        type S = TestStark<EdScalarMulTest, F, D>;
-
+        type S = TestStark<Ed25519ScalarMulTest, F, D>;
         let _ = env_logger::builder().is_test(true).try_init();
-        // build the stark
-        let mut builder = StarkBuilder::<EdScalarMulTest, F, D>::new();
 
-        let res = builder.alloc_unchecked_ec_point::<E>().unwrap();
-        let temp = builder.alloc_unchecked_ec_point::<E>().unwrap();
-        let bit = builder.alloc::<BitRegister>();
-        let counter = builder.alloc::<ElementRegister>();
-
-        builder.write_data(&counter).unwrap();
-
-        let ed_data = builder.ed_double_and_add(&bit, &res, &temp, &counter);
+        // Build the stark.
+        let mut builder = StarkBuilder::<Ed25519ScalarMulTest, F, D>::new();
+        let res = builder.alloc_unchecked_ec_point::<E>();
+        let temp = builder.alloc_unchecked_ec_point::<E>();
+        let scalar_bit = builder.alloc::<BitRegister>();
+        let scalar_mul_gadget = builder.ed25519_scalar_mul(&scalar_bit, &res, &temp);
+        builder.write_data(&scalar_bit).unwrap();
+        builder
+            .write_data(&scalar_mul_gadget.cyclic_counter)
+            .unwrap();
         builder.write_ec_point(&res).unwrap();
         builder.write_ec_point(&temp).unwrap();
-
         let (chip, spec) = builder.build();
 
-        // Construct the trace
-        // Construct the trace
+        // Generate the trace.
         let num_rows = 2u64.pow(16);
         let (handle, generator) = trace::<F, D>(spec);
-
         let mut timing = TimingTree::new("Ed_Add row", log::Level::Debug);
-
         let trace = timed!(timing, "generate trace", {
             let mut counter_val = F::ONE;
             let counter_gen = F::primitive_root_of_unity(8);
             for j in 0..(1 << 16) {
-                handle.write_data(j, counter, vec![counter_val]).unwrap();
+                handle
+                    .write_data(j, scalar_mul_gadget.cyclic_counter, vec![counter_val])
+                    .unwrap();
                 counter_val *= counter_gen;
             }
             for i in 0..256usize {
                 let handle = handle.clone();
-                let ed_data_copy = ed_data.clone();
+                let scalar_mul_gadget = scalar_mul_gadget.clone();
                 rayon::spawn(move || {
                     let mut rng = thread_rng();
                     let a = rng.gen_biguint(256);
                     let point = E::generator() * a;
                     let scalar = rng.gen_biguint(256);
                     let res = handle
-                        .write_ed_double_and_add(256 * i, &scalar, &point, ed_data_copy.clone())
+                        .write_ed25519_double_and_add(
+                            256 * i,
+                            &scalar,
+                            &point,
+                            scalar_mul_gadget.clone().double_and_add_gadget,
+                        )
                         .unwrap();
                     assert_eq!(res, point * scalar);
                 });
             }
             drop(handle);
-
             generator.generate_trace(&chip, num_rows as usize).unwrap()
         });
 
+        // Generate the proof.
         let config = StarkConfig::standard_fast_config();
         let stark = TestStark::new(chip);
-
-        // Verify proof as a stark
         let proof = timed!(
             timing,
             "generate stark proof",
@@ -282,10 +297,9 @@ mod tests {
         );
         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
 
-        // Verify recursive proof in a circuit
+        // Verify recursive proof in a circuit.
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
-
         let degree_bits = proof.proof.recover_degree_bits(&config);
         let virtual_proof = add_virtual_stark_proof_with_pis(
             &mut recursive_builder,
@@ -293,21 +307,16 @@ mod tests {
             &config,
             degree_bits,
         );
-
         recursive_builder.print_gate_counts(0);
-
         let mut rec_pw = PartialWitness::new();
         set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-
         verify_stark_proof_circuit::<F, C, S, D>(
             &mut recursive_builder,
             stark,
             virtual_proof,
             &config,
         );
-
         let recursive_data = recursive_builder.build::<C>();
-
         let recursive_proof = timed!(
             timing,
             "generate recursive proof",
@@ -337,7 +346,7 @@ mod tests {
         point: &AffinePoint<E>,
         chip_data: Ed25519DoubleAndAddGadget<E>,
     ) -> Result<AffinePoint<E>> {
-        let num_bits = E::num_scalar_bits();
+        let num_bits = E::nb_scalar_bits();
         let scalar_bits = biguint_to_bits_le(scalar, num_bits);
 
         let mut res = E::neutral();
@@ -383,41 +392,39 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type E = Ed25519;
-        type S = TestStark<EdScalarMulTest, F, D>;
-
+        type S = TestStark<Ed25519ScalarMulTest, F, D>;
         let _ = env_logger::builder().is_test(true).try_init();
-        // build the stark
-        let mut builder = StarkBuilder::<EdScalarMulTest, F, D>::new();
 
-        let res = builder.alloc_unchecked_ec_point::<E>().unwrap();
-        let temp = builder.alloc_unchecked_ec_point::<E>().unwrap();
+        // Build the stark.
+        let mut builder = StarkBuilder::<Ed25519ScalarMulTest, F, D>::new();
+        let res = builder.alloc_unchecked_ec_point::<E>();
+        let temp = builder.alloc_unchecked_ec_point::<E>();
         let bit = builder.alloc::<BitRegister>();
-        let counter = builder.alloc::<ElementRegister>();
-
-        builder.write_data(&counter).unwrap();
-
-        let ed_data = builder.ed_double_and_add(&bit, &res, &temp, &counter);
+        builder.write_data(&bit).unwrap();
+        let scalar_mul_gadget = builder.ed25519_scalar_mul(&bit, &res, &temp);
+        builder
+            .write_data(&scalar_mul_gadget.cyclic_counter)
+            .unwrap();
         builder.write_ec_point(&res).unwrap();
         builder.write_ec_point(&temp).unwrap();
-
         let (chip, spec) = builder.build();
 
-        // Construct the trace
+        // Generate the trace.
         let num_rows = 2u64.pow(16);
         let (handle, generator) = trace::<F, D>(spec);
-
         let mut timing = TimingTree::new("Ed_Add row", log::Level::Debug);
-
         let trace = timed!(timing, "generate trace", {
             let mut counter_val = F::ONE;
             let counter_gen = F::primitive_root_of_unity(8);
             for j in 0..(1 << 16) {
-                handle.write_data(j, counter, vec![counter_val]).unwrap();
+                handle
+                    .write_data(j, scalar_mul_gadget.cyclic_counter, vec![counter_val])
+                    .unwrap();
                 counter_val *= counter_gen;
             }
             for i in 0..256usize {
                 let handle = handle.clone();
-                let ed_data_copy = ed_data.clone();
+                let scalar_mul_gadget = scalar_mul_gadget.clone();
                 rayon::spawn(move || {
                     let mut rng = thread_rng();
                     let a = rng.gen_biguint(256);
@@ -428,21 +435,19 @@ mod tests {
                         256 * i,
                         &scalar,
                         &point,
-                        ed_data_copy.clone(),
+                        scalar_mul_gadget.clone().double_and_add_gadget,
                     )
                     .unwrap();
                     assert_ne!(res, point * scalar);
                 });
             }
             drop(handle);
-
             generator.generate_trace(&chip, num_rows as usize).unwrap()
         });
-
         let config = StarkConfig::standard_fast_config();
         let stark = TestStark::new(chip);
 
-        // Verify proof as a stark
+        // Verify proof as a stark.
         let proof = timed!(
             timing,
             "generate stark proof",
@@ -455,7 +460,6 @@ mod tests {
             )
             .unwrap()
         );
-
         let res = verify_stark_proof(stark.clone(), proof, &config);
         assert!(res.is_err());
     }

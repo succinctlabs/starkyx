@@ -119,7 +119,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
 
     /// Allocates a new register on the next row according to type `T` which implements the Register
     /// trait and returns it.
-    pub fn alloc_next<T: Register>(&mut self) -> Result<T> {
+    pub fn alloc_next<T: Register>(&mut self) -> T {
         let register = match T::CELL {
             Some(CellType::U16) => self.get_next_u16_memory(T::size_of()),
             Some(CellType::Bit) => {
@@ -130,7 +130,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             }
             None => self.get_next_memory(T::size_of()),
         };
-        Ok(T::from_register(register))
+        T::from_register(register)
     }
 
     /// This method should be applied to any data that needs to be manually written to the trace by

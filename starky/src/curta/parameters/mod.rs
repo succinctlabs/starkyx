@@ -42,7 +42,7 @@ pub trait EdwardsParameters: EllipticCurveParameters {
         modulus
     }
 
-    fn num_scalar_bits() -> usize {
+    fn nb_scalar_bits() -> usize {
         Self::BaseField::NB_LIMBS * 16
     }
 

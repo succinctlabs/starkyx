@@ -10,7 +10,7 @@ impl<E: EdwardsParameters> AffinePoint<E> {
     fn scalar_mul(&self, scalar: &BigUint) -> Self {
         let mut result = E::neutral();
         let mut temp = self.clone();
-        let bits = biguint_to_bits_le(scalar, E::num_scalar_bits());
+        let bits = biguint_to_bits_le(scalar, E::nb_scalar_bits());
         for bit in bits {
             if bit {
                 result = &result + &temp;
