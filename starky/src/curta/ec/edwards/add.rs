@@ -11,122 +11,157 @@ use crate::curta::instruction::FromInstructionSet;
 use crate::curta::parameters::EdwardsParameters;
 use crate::curta::trace::TraceWriter;
 
-#[derive(Debug, Clone)]
-#[allow(non_snake_case)]
 #[allow(dead_code)]
-pub struct EcAddData<E: EdwardsParameters> {
-    P: AffinePointRegister<E>,
-    Q: AffinePointRegister<E>,
-    R: AffinePointRegister<E>,
-    XNUM: FpInnerProductInstruction<E::BaseField>,
-    YNUM: FpInnerProductInstruction<E::BaseField>,
-    PXPY: FpMulInstruction<E::BaseField>,
-    QXQY: FpMulInstruction<E::BaseField>,
-    PXPYQXQY: FpMulInstruction<E::BaseField>,
-    DXY: FpMulConstInstruction<E::BaseField>,
-    XDEN: FpDenInstruction<E::BaseField>,
-    YDEN: FpDenInstruction<E::BaseField>,
+#[derive(Debug, Clone)]
+pub struct Ed25519AddGadget<E: EdwardsParameters> {
+    p: AffinePointRegister<E>,
+    q: AffinePointRegister<E>,
+    pub result: AffinePointRegister<E>,
+    x3_numerator_ins: FpInnerProductInstruction<E::BaseField>,
+    y3_numerator_ins: FpInnerProductInstruction<E::BaseField>,
+    x1_mul_y1_ins: FpMulInstruction<E::BaseField>,
+    x2_mul_y2_ins: FpMulInstruction<E::BaseField>,
+    f_ins: FpMulInstruction<E::BaseField>,
+    d_mul_f_ins: FpMulConstInstruction<E::BaseField>,
+    x3_ins: FpDenInstruction<E::BaseField>,
+    y3_ins: FpDenInstruction<E::BaseField>,
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
-    #[allow(non_snake_case)]
-    pub fn ed_add<E: EdwardsParameters>(
+    /// Adds two elliptic curve points `P` and `Q` on the Ed25519 elliptic curve.
+    pub fn ed25519_add<E: EdwardsParameters>(
         &mut self,
-        P: &AffinePointRegister<E>,
-        Q: &AffinePointRegister<E>,
-        result: &AffinePointRegister<E>,
-    ) -> Result<EcAddData<E>>
+        p: &AffinePointRegister<E>,
+        q: &AffinePointRegister<E>,
+    ) -> Ed25519AddGadget<E>
     where
         L::Instruction: FromInstructionSet<E::BaseField>,
     {
-        let (x_num_result, x_num_ins) = self.fp_inner_product(&vec![P.x, Q.x], &vec![Q.y, P.y]);
-        let (y_num_result, y_num_ins) = self.fp_inner_product(&vec![P.y, P.x], &vec![Q.y, Q.x]);
+        // Ed25519 Elliptic Curve Addition Formula
+        //
+        // Given two elliptic curve points (x1, y1) and (x2, y2), compute the sum (x3, y3) with
+        //
+        // x3 = (x1 * y2 + x2 * y1) / (1 + d * f)
+        // y3 = (y1 * y2 + x1 * x2) / (1 - d * f)
+        //
+        // where f = x1 * x2 * y1 * y2.
+        //
+        // Reference: https://datatracker.ietf.org/doc/html/draft-josefsson-eddsa-ed25519-02
 
-        let (px_py_result, px_py_ins) = self.fpmul(&P.x, &P.y)?;
-        let (qx_qy_result, qx_qy_ins) = self.fpmul(&Q.x, &Q.y)?;
+        let x1 = p.x;
+        let x2 = q.x;
+        let y1 = p.y;
+        let y2 = q.y;
 
-        let (all_xy_result, all_xy_ins) = self.fpmul(&px_py_result, &qx_qy_result)?;
-        let (dxy_result, dxy_ins) = self.fpmul_const(&all_xy_result, E::D)?;
+        // x3_numerator = x1 * y2 + x2 * y1.
+        let x3_numerator_ins = self.fp_inner_product(&vec![x1, x2], &vec![y2, y1]);
 
-        let r_x_ins = self.fp_den(&x_num_result, &dxy_result, true, &result.x)?;
-        let r_y_ins = self.fp_den(&y_num_result, &dxy_result, false, &result.y)?;
+        // y3_numerator = y1 * y2 + x1 * x2.
+        let y3_numerator_ins = self.fp_inner_product(&vec![y1, x1], &vec![y2, x2]);
 
-        Ok(EcAddData {
-            P: *P,
-            Q: *Q,
-            R: *result,
-            XNUM: x_num_ins,
-            YNUM: y_num_ins,
-            PXPY: px_py_ins,
-            QXQY: qx_qy_ins,
-            PXPYQXQY: all_xy_ins,
-            DXY: dxy_ins,
-            XDEN: r_x_ins,
-            YDEN: r_y_ins,
-        })
+        // f = x1 * x2 * y1 * y2.
+        let x1_mul_y1_ins = self.fp_mul(&x1, &y1);
+        let x2_mul_y2_ins = self.fp_mul(&x2, &y2);
+        let f_ins = self.fp_mul(&x1_mul_y1_ins.result, &x2_mul_y2_ins.result);
+
+        // d * f.
+        let d_mul_f_ins = self.fp_mul_const(&f_ins.result, E::D);
+
+        // x3 = x3_numerator / (1 + d * f).
+        let x3_ins = self.fp_den(&x3_numerator_ins.result, &d_mul_f_ins.result, true);
+
+        // y3 = y3_numerator / (1 - d * f).
+        let y3_ins = self.fp_den(&y3_numerator_ins.result, &d_mul_f_ins.result, false);
+
+        // R = (x3, y3).
+        let result = AffinePointRegister::new(x3_ins.result, y3_ins.result);
+
+        Ed25519AddGadget {
+            p: *p,
+            q: *q,
+            result,
+            x3_numerator_ins,
+            y3_numerator_ins,
+            x1_mul_y1_ins,
+            x2_mul_y2_ins,
+            f_ins,
+            d_mul_f_ins,
+            x3_ins,
+            y3_ins,
+        }
     }
 
-    #[allow(non_snake_case)]
-    pub fn ed_double<E: EdwardsParameters>(
+    /// Doubles an elliptic curve point `P` on the Ed25519 elliptic curve. Under the hood, the
+    /// addition formula is used.
+    pub fn ed25519_double<E: EdwardsParameters>(
         &mut self,
-        P: &AffinePointRegister<E>,
-        result: &AffinePointRegister<E>,
-    ) -> Result<EcAddData<E>>
+        p: &AffinePointRegister<E>,
+    ) -> Ed25519AddGadget<E>
     where
         L::Instruction: FromInstructionSet<E::BaseField>,
     {
-        self.ed_add(P, P, result)
+        self.ed25519_add(p, p)
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
-    #[allow(non_snake_case)]
-    pub fn write_ed_add<E: EdwardsParameters>(
+    pub fn write_ed25519_add<E: EdwardsParameters>(
         &self,
         row_index: usize,
-        P: &AffinePoint<E>,
-        Q: &AffinePoint<E>,
-        chip_data: EcAddData<E>,
+        p: &AffinePoint<E>,
+        q: &AffinePoint<E>,
+        gadget: Ed25519AddGadget<E>,
     ) -> Result<AffinePoint<E>> {
-        let x_num = self.write_fp_inner_product(
+        let x1 = &p.x;
+        let x2 = &q.x;
+        let y1 = &p.y;
+        let y2 = &q.y;
+
+        // x3_numerator = x1 * y2 + x2 * y1.
+        let x3_numerator = self.write_fp_inner_product(
             row_index,
-            vec![&P.x, &Q.x],
-            vec![&Q.y, &P.y],
-            chip_data.XNUM,
+            vec![&x1, &x2],
+            vec![&y2, &y1],
+            gadget.x3_numerator_ins,
         )?;
-        let y_num = self.write_fp_inner_product(
+
+        // y3_numerator = y1 * y2 + x1 * x2.
+        let y3_numerator = self.write_fp_inner_product(
             row_index,
-            vec![&P.y, &P.x],
-            vec![&Q.y, &Q.x],
-            chip_data.YNUM,
+            vec![&y1, &x1],
+            vec![&y2, &x2],
+            gadget.y3_numerator_ins,
         )?;
 
-        let px_py = self.write_fpmul(row_index, &P.x, &P.y, chip_data.PXPY)?;
-        let qx_qy = self.write_fpmul(row_index, &Q.x, &Q.y, chip_data.QXQY)?;
+        // f = x1 * x2 * y1 * y2.
+        let x1_mul_y1 = self.write_fpmul(row_index, &p.x, &p.y, gadget.x1_mul_y1_ins)?;
+        let x2_mul_y2 = self.write_fpmul(row_index, &q.x, &q.y, gadget.x2_mul_y2_ins)?;
+        let f = self.write_fpmul(row_index, &x1_mul_y1, &x2_mul_y2, gadget.f_ins)?;
 
-        let all_xy = self.write_fpmul(row_index, &px_py, &qx_qy, chip_data.PXPYQXQY)?;
-        let dxy = self.write_fpmul_const(row_index, &all_xy, chip_data.DXY)?;
+        // d * f.
+        let d_mul_f = self.write_fpmul_const(row_index, &f, gadget.d_mul_f_ins)?;
 
-        let r_x = self.write_fp_den(row_index, &x_num, &dxy, true, chip_data.XDEN)?;
-        let r_y = self.write_fp_den(row_index, &y_num, &dxy, false, chip_data.YDEN)?;
+        // x3 = x3_numerator / (1 + d * f).
+        let x3 = self.write_fp_den(row_index, &x3_numerator, &d_mul_f, true, gadget.x3_ins)?;
 
-        Ok(AffinePoint::new(r_x, r_y))
+        // y3 = y3_numerator / (1 - d * f).
+        let y3 = self.write_fp_den(row_index, &y3_numerator, &d_mul_f, false, gadget.y3_ins)?;
+
+        Ok(AffinePoint::new(x3, y3))
     }
 
-    #[allow(non_snake_case)]
-    pub fn write_ed_double<E: EdwardsParameters>(
+    pub fn write_ed25519_double<E: EdwardsParameters>(
         &self,
         row_index: usize,
-        P: &AffinePoint<E>,
-        chip_data: EcAddData<E>,
+        p: &AffinePoint<E>,
+        gadget: Ed25519AddGadget<E>,
     ) -> Result<AffinePoint<E>> {
-        self.write_ed_add(row_index, P, P, chip_data)
+        self.write_ed25519_add(row_index, p, p, gadget)
     }
 }
 
 #[cfg(test)]
 mod tests {
-
     use num::bigint::RandBigInt;
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_builder::CircuitBuilder;
@@ -152,78 +187,74 @@ mod tests {
     use crate::verifier::verify_stark_proof;
 
     #[derive(Clone, Debug, Copy)]
-    pub struct EdAddTest;
+    pub struct Ed25519AddTest;
 
-    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for EdAddTest {
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for Ed25519AddTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 800;
         const NUM_FREE_COLUMNS: usize = 0;
         type Instruction = InstructionSet<Ed25519BaseField>;
     }
 
-    #[allow(non_snake_case)]
     #[test]
-    fn test_ed_add_row() {
+    fn test_ed25519_add() {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type E = Ed25519;
-        type S = TestStark<EdAddTest, F, D>;
-
+        type S = TestStark<Ed25519AddTest, F, D>;
         let _ = env_logger::builder().is_test(true).try_init();
-        // build the stark
-        let mut builder = StarkBuilder::<EdAddTest, F, D>::new();
 
-        let P = builder.alloc_local_ec_point::<E>().unwrap();
-        let Q = builder.alloc_local_ec_point::<E>().unwrap();
-        let R = builder.alloc_local_ec_point::<E>().unwrap();
-
-        let ed_data = builder.ed_add::<E>(&P, &Q, &R).unwrap();
-        builder.write_ec_point(&P).unwrap();
-        builder.write_ec_point(&Q).unwrap();
-
+        // Build the stark.
+        let mut builder = StarkBuilder::<Ed25519AddTest, F, D>::new();
+        let p = builder.alloc_local_ec_point::<E>().unwrap();
+        let q = builder.alloc_local_ec_point::<E>().unwrap();
+        let ed25519_add_gadget = builder.ed25519_add::<E>(&p, &q);
+        builder.write_ec_point(&p).unwrap();
+        builder.write_ec_point(&q).unwrap();
         let (chip, spec) = builder.build();
 
-        // Construct the trace
-        // Construct the trace
-        let num_rows = 2u64.pow(16);
-        let (handle, generator) = trace::<F, D>(spec);
-
+        // Generate the trace.
+        let mut timing = TimingTree::new("ed25519 add", log::Level::Debug);
         let base = E::generator();
-        let mut timing = TimingTree::new("Ed_Add row", log::Level::Debug);
-
-        let trace = timed!(timing, "generate trace", {
-            for i in 0..256usize {
+        let nb_rows = 2u64.pow(16);
+        let (handle, generator) = trace::<F, D>(spec);
+        let trace = timed!(timing, "witness generation", {
+            for i in 0..256 {
                 let handle = handle.clone();
                 let base = base.clone();
-                let ed_data_copy = ed_data.clone();
-                let mut rng = thread_rng();
-                let a = rng.gen_biguint(256);
-                let b = rng.gen_biguint(256);
-                let P_int = &base * &a;
-                let Q_int = &base * &b;
-                let R_exp = &P_int + &Q_int;
-
-                for j in 0..256usize {
-                    handle.write_ec_point(256 * i + j, &P_int, &P).unwrap();
-                    handle.write_ec_point(256 * i + j, &Q_int, &Q).unwrap();
-                    let R = handle
-                        .write_ed_add(256 * i + j, &P_int, &Q_int, ed_data_copy.clone())
-                        .unwrap();
-                    assert_eq!(R, R_exp);
-                }
+                let ed25519_add_gadget = ed25519_add_gadget.clone();
+                rayon::spawn(move || {
+                    let mut rng = thread_rng();
+                    let a = rng.gen_biguint(256);
+                    let b = rng.gen_biguint(256);
+                    let p_int = &base * &a;
+                    let q_int = &base * &b;
+                    let r_exp = &p_int + &q_int;
+                    for j in 0..256 {
+                        handle.write_ec_point(256 * i + j, &p_int, &p).unwrap();
+                        handle.write_ec_point(256 * i + j, &q_int, &q).unwrap();
+                        let r = handle
+                            .write_ed25519_add(
+                                256 * i + j,
+                                &p_int,
+                                &q_int,
+                                ed25519_add_gadget.clone(),
+                            )
+                            .unwrap();
+                        assert_eq!(r, r_exp);
+                    }
+                })
             }
             drop(handle);
-
-            generator.generate_trace(&chip, num_rows as usize).unwrap()
+            generator.generate_trace(&chip, nb_rows as usize).unwrap()
         });
 
+        // Verify proof as a stark
         let config = StarkConfig::standard_fast_config();
         let stark = TestStark::new(chip);
-
-        // Verify proof as a stark
         let proof = timed!(
             timing,
-            "generate stark proof",
+            "proof generation",
             prove::<F, C, S, D>(
                 stark.clone(),
                 &config,
@@ -235,10 +266,9 @@ mod tests {
         );
         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
 
-        // Verify recursive proof in a circuit
+        // Verify recursive proof in a circuit.
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
-
         let degree_bits = proof.proof.recover_degree_bits(&config);
         let virtual_proof = add_virtual_stark_proof_with_pis(
             &mut recursive_builder,
@@ -246,21 +276,16 @@ mod tests {
             &config,
             degree_bits,
         );
-
         recursive_builder.print_gate_counts(0);
-
         let mut rec_pw = PartialWitness::new();
         set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-
         verify_stark_proof_circuit::<F, C, S, D>(
             &mut recursive_builder,
             stark,
             virtual_proof,
             &config,
         );
-
         let recursive_data = recursive_builder.build::<C>();
-
         let recursive_proof = timed!(
             timing,
             "generate recursive proof",
@@ -272,9 +297,8 @@ mod tests {
             )
             .unwrap()
         );
-
-        timing.print();
         recursive_data.verify(recursive_proof).unwrap();
+        timing.print();
     }
 
     #[derive(Clone, Debug, Copy)]
@@ -300,9 +324,8 @@ mod tests {
         let mut builder = StarkBuilder::<EdDoubleTest, F, D>::new();
 
         let P = builder.alloc_ec_point::<E>().unwrap();
-        let R = builder.alloc_ec_point::<E>().unwrap();
 
-        let ed_double_data = builder.ed_double(&P, &R).unwrap();
+        let ed_double_data = builder.ed25519_double(&P);
         builder.write_ec_point(&P).unwrap();
 
         let (chip, spec) = builder.build();
@@ -329,7 +352,7 @@ mod tests {
                     for j in 0..256usize {
                         handle.write_ec_point(256 * i + j, &P_int, &P).unwrap();
                         let R = handle
-                            .write_ed_double(256 * i + j, &P_int, ed_double_data_copy.clone())
+                            .write_ed25519_double(256 * i + j, &P_int, ed_double_data_copy.clone())
                             .unwrap();
                         assert_eq!(R, R_exp);
                     }

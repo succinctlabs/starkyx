@@ -14,38 +14,27 @@ use crate::curta::register::RegisterSerializable;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Debug, Clone, Copy)]
-pub struct Selector<T> {
+pub struct SelectInstruction<T> {
     bit: BitRegister,
     true_value: T,
     false_value: T,
-    result: T,
+    pub result: T,
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
-    pub fn selector<T: Register>(
-        &mut self,
-        bit: &BitRegister,
-        a: &T,
-        b: &T,
-        result: &T,
-    ) -> Result<Selector<T>>
+    pub fn select<T: Register>(&mut self, bit: &BitRegister, a: &T, b: &T) -> SelectInstruction<T>
     where
-        L::Instruction: From<Selector<T>>,
+        L::Instruction: From<SelectInstruction<T>>,
     {
-        let instr = Selector::new(*bit, *a, *b, *result);
-        self.insert_instruction(instr.clone().into())?;
-        Ok(instr)
-    }
-}
-
-impl<T> Selector<T> {
-    pub fn new(bit: BitRegister, true_value: T, false_value: T, result: T) -> Self {
-        Self {
-            bit,
-            true_value,
-            false_value,
-            result,
-        }
+        let result = self.alloc::<T>();
+        let instr = SelectInstruction {
+            bit: *bit,
+            true_value: *a,
+            false_value: *b,
+            result: result,
+        };
+        self.insert_instruction(instr.clone().into()).unwrap();
+        instr
     }
 }
 
@@ -56,13 +45,11 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize, T: Register> Instruction<F, D> for Selector<T> {
+impl<F: RichField + Extendable<D>, const D: usize, T: Register> Instruction<F, D>
+    for SelectInstruction<T>
+{
     fn trace_layout(&self) -> Vec<MemorySlice> {
         vec![*self.result.register()]
-    }
-
-    fn assign_row(&self, trace_rows: &mut [Vec<F>], row: &mut [F], row_index: usize) {
-        self.result.register().assign(trace_rows, 0, row, row_index);
     }
 
     fn packed_generic_constraints<
@@ -146,7 +133,7 @@ mod tests {
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for BoolTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 10;
         const NUM_FREE_COLUMNS: usize = 10;
-        type Instruction = Selector<BitRegister>;
+        type Instruction = SelectInstruction<BitRegister>;
     }
 
     #[test]
@@ -272,18 +259,13 @@ mod tests {
         type S = TestStark<BoolTest, F, D>;
 
         let mut builder = StarkBuilder::<BoolTest, F, D>::new();
-
         let bit = builder.alloc::<BitRegister>();
         builder.write_data(&bit).unwrap();
-
         let x = builder.alloc::<BitRegister>();
         builder.write_data(&x).unwrap();
         let y = builder.alloc::<BitRegister>();
         builder.write_data(&y).unwrap();
-        let result = builder.alloc::<BitRegister>();
-
-        let sel = builder.selector(&bit, &x, &y, &result).unwrap();
-
+        let sel = builder.select(&bit, &x, &y);
         let (chip, spec) = builder.build();
 
         // Test successful proof

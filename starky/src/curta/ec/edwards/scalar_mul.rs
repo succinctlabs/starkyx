@@ -1,6 +1,6 @@
-use super::add::EcAddData;
+use super::add::Ed25519AddGadget;
 use super::*;
-use crate::curta::bool::Selector;
+use crate::curta::bool::SelectInstruction;
 use crate::curta::builder::StarkBuilder;
 use crate::curta::chip::StarkParameters;
 use crate::curta::instruction::FromInstructionSet;
@@ -11,100 +11,109 @@ use crate::curta::utils::biguint_to_bits_le;
 
 #[derive(Clone)]
 #[allow(dead_code)]
-pub struct EdScalarMulData<E: EdwardsParameters> {
+pub struct Ed25519DoubleAndAddGadget<E: EdwardsParameters> {
+    bit: BitRegister,
     result: AffinePointRegister<E>,
-    result_next: AffinePointRegister<E>,
     temp: AffinePointRegister<E>,
+    result_next: AffinePointRegister<E>,
     temp_next: AffinePointRegister<E>,
-    scalar_bit: BitRegister,
-    add: EcAddData<E>,
-    double: EcAddData<E>,
-    selector_x: Selector<FieldRegister<E::BaseField>>,
-    selector_y: Selector<FieldRegister<E::BaseField>>,
+    add_gadget: Ed25519AddGadget<E>,
+    double_gadget: Ed25519AddGadget<E>,
+    select_x_ins: SelectInstruction<FieldRegister<E::BaseField>>,
+    select_y_ins: SelectInstruction<FieldRegister<E::BaseField>>,
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
-    /// This constraints of one step of the double-and-add algorithm for scalar multiplication.
+    /// Computes one step of the double-and-add algorithm for scalar multiplication over elliptic
+    /// curves. The algorithm the computes the function f(bit, result, temp):
     ///
-    /// The function performs the following operation:
-    ///     Add a write option for the bits to scalar_bit
-    ///     Asserts Result_next = if scalar_bit == 1 then result + temp else Result
-    ///     Asserts temp_next = temp + temp
+    ///     result = if bit == 1 then result + temp else result
+    ///     temp = temp + temp
     ///
-    pub fn ed_double_and_add_step<E: EdwardsParameters>(
+    /// This function also adds a write option for the bits to scalar_bit.
+    pub fn ed25519_double_and_add_step<E: EdwardsParameters>(
         &mut self,
-        scalar_bit: &BitRegister,
+        bit: &BitRegister,
         result: &AffinePointRegister<E>,
-        result_next: &AffinePointRegister<E>,
         temp: &AffinePointRegister<E>,
-        temp_next: &AffinePointRegister<E>,
-    ) -> Result<EdScalarMulData<E>>
+    ) -> Ed25519DoubleAndAddGadget<E>
     where
         L::Instruction: FromInstructionSet<E::BaseField>,
     {
-        let result_plus_temp = self.alloc_ec_point()?;
-        self.write_data(scalar_bit)?;
+        self.write_data(bit).unwrap();
 
-        let add = self.ed_add(result, temp, &result_plus_temp)?;
-        let double = self.ed_double(temp, temp_next)?;
+        // result = result + temp.
+        let add_gadget = self.ed25519_add(result, temp);
 
-        let selector_x =
-            self.selector(scalar_bit, &result_plus_temp.x, &result.x, &result_next.x)?;
-        let selector_y =
-            self.selector(scalar_bit, &result_plus_temp.y, &result.y, &result_next.y)?;
+        // temp = temo + temp.
+        let double_gadget = self.ed25519_double(temp);
 
-        Ok(EdScalarMulData {
+        // result = if bit == 1 then result + temp else result.
+        let select_x_ins = self.select(bit, &add_gadget.result.x, &result.x);
+        let select_y_ins = self.select(bit, &add_gadget.result.y, &result.y);
+        let result_next = AffinePointRegister::new(select_x_ins.result, select_y_ins.result);
+
+        Ed25519DoubleAndAddGadget {
+            bit: *bit,
             result: *result,
-            result_next: *result_next,
             temp: *temp,
-            temp_next: *temp_next,
-            scalar_bit: *scalar_bit,
-            add,
-            double,
-            selector_x,
-            selector_y,
-        })
+            result_next,
+            temp_next: double_gadget.result,
+            add_gadget,
+            double_gadget,
+            select_x_ins,
+            select_y_ins,
+        }
     }
 
     pub fn ed_double_and_add<E: EdwardsParameters>(
         &mut self,
-        scalar_bit: &BitRegister,
+        bit: &BitRegister,
         result: &AffinePointRegister<E>,
         temp: &AffinePointRegister<E>,
-        cycle_counter: &ElementRegister,
-    ) -> Result<EdScalarMulData<E>>
+        cursor: &ElementRegister,
+    ) -> Ed25519DoubleAndAddGadget<E>
     where
         L::Instruction: FromInstructionSet<E::BaseField>,
     {
-        let temp_next = self.alloc_ec_point()?;
-        let result_next = self.alloc_ec_point()?;
+        let scalar_mul_gadget = self.ed25519_double_and_add_step(bit, result, temp);
 
-        let counter = cycle_counter.expr();
-        let counter_next = cycle_counter.next().expr();
-
-        // Counter constraints
+        // Generate a multiplicative subgroup of order 256 (i.e., 2^8).
         let group = F::two_adic_subgroup(8);
         let generator = F::primitive_root_of_unity(8);
-        debug_assert_eq!(generator, group[1]);
         let generator_inv = group[group.len() - 1];
-        self.assert_expressions_equal(counter_next, counter.clone() * generator);
+        debug_assert_eq!(generator, group[1]);
 
-        let res_x_consr =
-            (counter.clone() - generator_inv) * (result.x.next().expr() - result_next.x.expr());
-        let res_y_consr =
-            (counter.clone() - generator_inv) * (result.y.next().expr() - result_next.y.expr());
-        let temp_x_consr =
-            (counter.clone() - generator_inv) * (temp.x.next().expr() - temp_next.x.expr());
-        let temp_y_consr = (counter - generator_inv) * (temp.y.next().expr() - temp_next.y.expr());
+        // Copy over the result of the double and add step to the next row for every row but not for
+        // every 256th row. By doing this trick, we can compute multiple scalar multiplications
+        // in a single STARK.
+        let result = scalar_mul_gadget.result;
+        let result_next = scalar_mul_gadget.result_next;
+        let temp = scalar_mul_gadget.temp;
+        let temp_next = scalar_mul_gadget.temp_next;
 
-        //let zero = ArithmeticExpression::from_constant(F::ZERO);
+        // Note that result and result_next live on the same row.
+        // if log_generator(cursor[LOCAL]) % 2^8 == 0 then result[NEXT] <= result_next[LOCAL].
+        let result_x_copy_constraint =
+            (cursor.expr() - generator_inv) * (result.x.next().expr() - result_next.x.expr());
+        self.assert_expression_zero(result_x_copy_constraint);
+        let result_y_copy_constraint =
+            (cursor.expr() - generator_inv) * (result.y.next().expr() - result_next.y.expr());
+        self.assert_expression_zero(result_y_copy_constraint);
 
-        self.assert_expression_zero(res_x_consr);
-        self.assert_expression_zero(res_y_consr);
-        self.assert_expression_zero(temp_x_consr);
-        self.assert_expression_zero(temp_y_consr);
+        // Note that temp and temp_next live on the same row.
+        // if log_generator(cursor[LOCAL]) % 2^8 == 0 then temp[NEXT] <= temp_next[LOCAL]
+        let temp_x_copy_constraint =
+            (cursor.expr() - generator_inv) * (temp.x.next().expr() - temp_next.x.expr());
+        self.assert_expression_zero(temp_x_copy_constraint);
+        let temp_y_copy_constraint =
+            (cursor.expr() - generator_inv) * (temp.y.next().expr() - temp_next.y.expr());
+        self.assert_expression_zero(temp_y_copy_constraint);
 
-        self.ed_double_and_add_step(scalar_bit, result, &result_next, temp, &temp_next)
+        // cursor[NEXT] = cursor[LOCAL] * generator
+        self.assert_expressions_equal(cursor.next().expr(), cursor.expr() * generator);
+
+        scalar_mul_gadget
     }
 }
 
@@ -118,7 +127,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
         starting_row: usize,
         scalar: &BigUint,
         point: &AffinePoint<E>,
-        chip_data: EdScalarMulData<E>,
+        chip_data: Ed25519DoubleAndAddGadget<E>,
     ) -> Result<AffinePoint<E>> {
         let num_bits = E::num_scalar_bits();
         let scalar_bits = biguint_to_bits_le(scalar, num_bits);
@@ -129,17 +138,25 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
         self.write_ec_point(starting_row, &temp, &chip_data.temp)?;
 
         for (i, bit) in scalar_bits.iter().enumerate() {
-            self.write_bit(starting_row + i, *bit, &chip_data.scalar_bit)?;
-            let result_plus_temp =
-                self.write_ed_add(starting_row + i, &res, &temp, chip_data.add.clone())?;
-            temp = self.write_ed_double(starting_row + i, &temp, chip_data.double.clone())?;
+            self.write_bit(starting_row + i, *bit, &chip_data.bit)?;
+            let result_plus_temp = self.write_ed25519_add(
+                starting_row + i,
+                &res,
+                &temp,
+                chip_data.add_gadget.clone(),
+            )?;
+            temp = self.write_ed25519_double(
+                starting_row + i,
+                &temp,
+                chip_data.double_gadget.clone(),
+            )?;
             res = if *bit { result_plus_temp } else { res };
             let res_x_field_vec =
                 Polynomial::from_biguint_field(&res.x, 16, E::BaseField::NB_LIMBS).into_vec();
             let res_y_field_vec =
                 Polynomial::from_biguint_field(&res.y, 16, E::BaseField::NB_LIMBS).into_vec();
-            self.write(starting_row + i, chip_data.selector_x, res_x_field_vec)?;
-            self.write(starting_row + i, chip_data.selector_y, res_y_field_vec)?;
+            self.write(starting_row + i, chip_data.select_x_ins, res_x_field_vec)?;
+            self.write(starting_row + i, chip_data.select_y_ins, res_y_field_vec)?;
 
             if i == num_bits - 1 {
                 break;
@@ -208,9 +225,7 @@ mod tests {
 
         builder.write_data(&counter).unwrap();
 
-        let ed_data = builder
-            .ed_double_and_add(&bit, &res, &temp, &counter)
-            .unwrap();
+        let ed_data = builder.ed_double_and_add(&bit, &res, &temp, &counter);
         builder.write_ec_point(&res).unwrap();
         builder.write_ec_point(&temp).unwrap();
 
@@ -320,7 +335,7 @@ mod tests {
         starting_row: usize,
         scalar: &BigUint,
         point: &AffinePoint<E>,
-        chip_data: EdScalarMulData<E>,
+        chip_data: Ed25519DoubleAndAddGadget<E>,
     ) -> Result<AffinePoint<E>> {
         let num_bits = E::num_scalar_bits();
         let scalar_bits = biguint_to_bits_le(scalar, num_bits);
@@ -331,17 +346,25 @@ mod tests {
         handle.write_ec_point(starting_row, &temp, &chip_data.temp)?;
 
         for (i, bit) in scalar_bits.iter().enumerate() {
-            handle.write_bit(starting_row + i, *bit, &chip_data.scalar_bit)?;
-            let result_plus_temp =
-                handle.write_ed_add(starting_row + i, &res, &temp, chip_data.add.clone())?;
-            temp = handle.write_ed_double(starting_row + i, &temp, chip_data.double.clone())?;
+            handle.write_bit(starting_row + i, *bit, &chip_data.bit)?;
+            let result_plus_temp = handle.write_ed25519_add(
+                starting_row + i,
+                &res,
+                &temp,
+                chip_data.add_gadget.clone(),
+            )?;
+            temp = handle.write_ed25519_double(
+                starting_row + i,
+                &temp,
+                chip_data.double_gadget.clone(),
+            )?;
             res = if *bit { result_plus_temp } else { res };
             let res_x_field_vec =
                 Polynomial::from_biguint_field(&res.x, 16, E::BaseField::NB_LIMBS).into_vec();
             let res_y_field_vec =
                 Polynomial::from_biguint_field(&res.y, 16, E::BaseField::NB_LIMBS).into_vec();
-            handle.write(starting_row + i, chip_data.selector_x, res_x_field_vec)?;
-            handle.write(starting_row + i, chip_data.selector_y, res_y_field_vec)?;
+            handle.write(starting_row + i, chip_data.select_x_ins, res_x_field_vec)?;
+            handle.write(starting_row + i, chip_data.select_y_ins, res_y_field_vec)?;
 
             if i == num_bits - 1 {
                 break;
@@ -373,9 +396,7 @@ mod tests {
 
         builder.write_data(&counter).unwrap();
 
-        let ed_data = builder
-            .ed_double_and_add(&bit, &res, &temp, &counter)
-            .unwrap();
+        let ed_data = builder.ed_double_and_add(&bit, &res, &temp, &counter);
         builder.write_ec_point(&res).unwrap();
         builder.write_ec_point(&temp).unwrap();
 

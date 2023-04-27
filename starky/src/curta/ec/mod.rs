@@ -22,6 +22,12 @@ pub struct AffinePointRegister<E: EllipticCurveParameters> {
     y: FieldRegister<E::BaseField>,
 }
 
+impl<E: EllipticCurveParameters> AffinePointRegister<E> {
+    pub fn new(x: FieldRegister<E::BaseField>, y: FieldRegister<E::BaseField>) -> Self {
+        Self { x, y }
+    }
+}
+
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     /// Allocates registers for an affine elliptic curve point.
     ///

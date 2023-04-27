@@ -28,7 +28,7 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 pub struct FpMulInstruction<P: FieldParameters> {
     a: FieldRegister<P>,
     b: FieldRegister<P>,
-    result: FieldRegister<P>,
+    pub result: FieldRegister<P>,
     carry: FieldRegister<P>,
     witness_low: ArrayRegister<U16Register>,
     witness_high: ArrayRegister<U16Register>,
@@ -36,11 +36,11 @@ pub struct FpMulInstruction<P: FieldParameters> {
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     /// Given two field elements `a` and `b`, computes the product `a * b = c`.
-    pub fn fpmul<P: FieldParameters>(
+    pub fn fp_mul<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,
         b: &FieldRegister<P>,
-    ) -> Result<(FieldRegister<P>, FpMulInstruction<P>)>
+    ) -> FpMulInstruction<P>
     where
         L::Instruction: From<FpMulInstruction<P>>,
     {
@@ -56,8 +56,8 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             witness_low,
             witness_high,
         };
-        self.insert_instruction(instr.into())?;
-        Ok((result, instr))
+        self.insert_instruction(instr.into()).unwrap();
+        instr
     }
 }
 
@@ -236,7 +236,7 @@ mod tests {
         let mut builder = StarkBuilder::<FpMulTest, F, D>::new();
         let a = builder.alloc::<Fp>();
         let b = builder.alloc::<Fp>();
-        let (_, ab_ins) = builder.fpmul(&a, &b).unwrap();
+        let ab_ins = builder.fp_mul(&a, &b);
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
         let (chip, spec) = builder.build();

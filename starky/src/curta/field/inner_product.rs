@@ -29,7 +29,7 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 pub struct FpInnerProductInstruction<P: FieldParameters> {
     a: Vec<FieldRegister<P>>,
     b: Vec<FieldRegister<P>>,
-    result: FieldRegister<P>,
+    pub result: FieldRegister<P>,
     carry: FieldRegister<P>,
     witness_low: ArrayRegister<U16Register>,
     witness_high: ArrayRegister<U16Register>,
@@ -40,7 +40,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         &mut self,
         a: &Vec<FieldRegister<P>>,
         b: &Vec<FieldRegister<P>>,
-    ) -> (FieldRegister<P>, FpInnerProductInstruction<P>)
+    ) -> FpInnerProductInstruction<P>
     where
         L::Instruction: From<FpInnerProductInstruction<P>>,
     {
@@ -59,7 +59,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             witness_high,
         };
         self.insert_instruction(instr.clone().into()).unwrap();
-        (result, instr)
+        instr
     }
 }
 
@@ -293,7 +293,7 @@ mod tests {
         let b = builder.alloc::<Fp>();
         let c = builder.alloc::<Fp>();
         let d = builder.alloc::<Fp>();
-        let (_, quad) = builder.fp_inner_product(&vec![a, b], &vec![c, d]);
+        let quad = builder.fp_inner_product(&vec![a, b], &vec![c, d]);
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
         builder.write_data(&c).unwrap();

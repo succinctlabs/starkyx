@@ -31,7 +31,7 @@ pub struct FpDenInstruction<P: FieldParameters> {
     a: FieldRegister<P>,
     b: FieldRegister<P>,
     sign: bool,
-    result: FieldRegister<P>,
+    pub result: FieldRegister<P>,
     carry: FieldRegister<P>,
     witness_low: ArrayRegister<U16Register>,
     witness_high: ArrayRegister<U16Register>,
@@ -43,11 +43,11 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         a: &FieldRegister<P>,
         b: &FieldRegister<P>,
         sign: bool,
-        result: &FieldRegister<P>,
-    ) -> Result<FpDenInstruction<P>>
+    ) -> FpDenInstruction<P>
     where
         L::Instruction: From<FpDenInstruction<P>>,
     {
+        let result = self.alloc::<FieldRegister<P>>();
         let carry = self.alloc::<FieldRegister<P>>();
         let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
         let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
@@ -55,13 +55,13 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             a: *a,
             b: *b,
             sign,
-            result: *result,
+            result,
             carry,
             witness_low,
             witness_high,
         };
-        self.insert_instruction(instr.into())?;
-        Ok(instr)
+        self.insert_instruction(instr.into()).unwrap();
+        instr
     }
 }
 
@@ -278,9 +278,8 @@ mod tests {
         let a = builder.alloc::<Fp>();
         let b = builder.alloc::<Fp>();
         let sign = false;
-        let result = builder.alloc::<Fp>();
 
-        let den_ins = builder.fp_den(&a, &b, sign, &result).unwrap();
+        let den_ins = builder.fp_den(&a, &b, sign);
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
 

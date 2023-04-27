@@ -42,7 +42,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         &mut self,
         a: &FieldRegister<P>,
         b: &FieldRegister<P>,
-    ) -> Result<(FieldRegister<P>, FpAddInstruction<P>)>
+    ) -> Result<FpAddInstruction<P>>
     where
         L::Instruction: From<FpAddInstruction<P>>,
     {
@@ -59,7 +59,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             witness_high,
         };
         self.insert_instruction(instr.into())?;
-        Ok((result, instr))
+        Ok(instr)
     }
 }
 
@@ -242,7 +242,7 @@ mod tests {
         let mut builder = StarkBuilder::<FpAddTest, F, D>::new();
         let a = builder.alloc::<FieldRegister<P>>();
         let b = builder.alloc::<FieldRegister<P>>();
-        let (_, a_add_b_ins) = builder.fp_add(&a, &b).unwrap();
+        let a_add_b_ins = builder.fp_add(&a, &b).unwrap();
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
         let (chip, spec) = builder.build();

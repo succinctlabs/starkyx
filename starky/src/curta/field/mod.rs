@@ -254,7 +254,7 @@ mod tests {
         let b = builder.alloc::<Fp>();
         let c = builder.alloc::<Fp>();
         let d = builder.alloc::<Fp>();
-        let (_, quad) = builder.fp_inner_product(&vec![a, b], &vec![c, d]);
+        let quad = builder.fp_inner_product(&vec![a, b], &vec![c, d]);
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
         builder.write_data(&c).unwrap();

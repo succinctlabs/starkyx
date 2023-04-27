@@ -1,5 +1,5 @@
 use super::{FpAddInstruction, FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction};
-use crate::curta::bool::Selector;
+use crate::curta::bool::SelectInstruction;
 use crate::curta::field::FpDenInstruction;
 use crate::curta::instruction::{
     CircuitBuilder, Extendable, FieldExtension, Instruction, PackedField, RichField,
@@ -78,7 +78,7 @@ macro_rules! instruction_set {
 
 }
 
-type FieldSelectorInstruction<P> = Selector<FieldRegister<P>>;
+type FieldSelectorInstruction<P> = SelectInstruction<FieldRegister<P>>;
 
 instruction_set! {
     FpAddInstruction<P>,
