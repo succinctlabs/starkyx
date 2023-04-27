@@ -36,34 +36,30 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     /// Allocates registers for a next affine elliptic curve point without range-checking.
     pub fn alloc_unchecked_ec_point<E: EllipticCurveParameters>(
         &mut self,
-    ) -> Result<AffinePointRegister<E>> {
+    ) -> AffinePointRegister<E> {
         let x = FieldRegister::<E::BaseField>::from_register(
             self.get_local_memory(E::BaseField::NB_LIMBS),
         );
         let y = FieldRegister::<E::BaseField>::from_register(
             self.get_local_memory(E::BaseField::NB_LIMBS),
         );
-        Ok(AffinePointRegister::<E>::from_field_registers(x, y))
+        AffinePointRegister::<E>::from_field_registers(x, y)
     }
 
-    pub fn alloc_ec_point<E: EllipticCurveParameters>(&mut self) -> Result<AffinePointRegister<E>> {
+    pub fn alloc_ec_point<E: EllipticCurveParameters>(&mut self) -> AffinePointRegister<E> {
         self.alloc_local_ec_point()
     }
 
-    pub fn alloc_local_ec_point<E: EllipticCurveParameters>(
-        &mut self,
-    ) -> Result<AffinePointRegister<E>> {
+    pub fn alloc_local_ec_point<E: EllipticCurveParameters>(&mut self) -> AffinePointRegister<E> {
         let x = self.alloc::<FieldRegister<E::BaseField>>();
         let y = self.alloc::<FieldRegister<E::BaseField>>();
-        Ok(AffinePointRegister { x, y })
+        AffinePointRegister { x, y }
     }
 
-    pub fn alloc_next_ec_point<E: EllipticCurveParameters>(
-        &mut self,
-    ) -> Result<AffinePointRegister<E>> {
-        let x = self.alloc_next::<FieldRegister<E::BaseField>>()?;
-        let y = self.alloc_next::<FieldRegister<E::BaseField>>()?;
-        Ok(AffinePointRegister { x, y })
+    pub fn alloc_next_ec_point<E: EllipticCurveParameters>(&mut self) -> AffinePointRegister<E> {
+        let x = self.alloc_next::<FieldRegister<E::BaseField>>();
+        let y = self.alloc_next::<FieldRegister<E::BaseField>>();
+        AffinePointRegister { x, y }
     }
 
     pub fn write_ec_point<E: EllipticCurveParameters>(
