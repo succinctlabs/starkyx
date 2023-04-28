@@ -2,6 +2,7 @@ pub mod builder;
 pub mod chip;
 pub mod constraint;
 pub mod ec;
+pub mod hash;
 
 pub mod bool;
 pub mod field;
