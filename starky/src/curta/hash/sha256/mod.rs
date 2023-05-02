@@ -285,7 +285,7 @@ mod tests {
             );
         }
 
-        fn xor2_constraint(
+        fn u32_xor2_constraint(
             a: ArithmeticExpression<F, D>,
             b: ArithmeticExpression<F, D>,
             c: ArithmeticExpression<F, D>,
@@ -299,33 +299,33 @@ mod tests {
         let w_j_minus_15_shifted_3_bits = w_j_minus_15_bits.expr().shr(3);
         let s0_witness = builder.alloc_array::<BitRegister>(32);
         let s0 = builder.alloc_array::<BitRegister>(32);
-        builder.constrain(xor2_constraint(
+        builder.constrain(u32_xor2_constraint(
             w_j_minus_15_rotated_7_bits,
             w_j_minus_15_rotated_18_bits,
             s0_witness.expr(),
         ));
-        builder.constrain(xor2_constraint(
+        builder.constrain(u32_xor2_constraint(
             s0_witness.expr(),
             w_j_minus_15_shifted_3_bits,
             s0.expr(),
         ));
 
         // s1 = xor3(rotate(w[j - 2], 17), rotate(w[j - 2], 19), shr(w[j - 2], 10))
-        // let w_j_minus_2_rotated_17_bits = w_j_minus_2_bits.expr().rotate(17);
-        // let w_j_minus_2_rotated_19_bits = w_j_minus_2_bits.expr().rotate(19);
-        // let w_j_minus_2_shifted_10_bits = w_j_minus_2_bits.expr().shr(10);
-        // let s1_witness = builder.alloc_array::<BitRegister>(32);
-        // let s1 = builder.alloc_array::<BitRegister>(32);
-        // builder.constrain(xor2_constraint(
-        //     w_j_minus_2_rotated_17_bits,
-        //     w_j_minus_2_rotated_19_bits,
-        //     s1_witness.expr(),
-        // ));
-        // builder.constrain(xor2_constraint(
-        //     s1_witness.expr(),
-        //     w_j_minus_2_shifted_10_bits,
-        //     s1.expr(),
-        // ));
+        let w_j_minus_2_rotated_17_bits = w_j_minus_2_bits.expr().rotate(17);
+        let w_j_minus_2_rotated_19_bits = w_j_minus_2_bits.expr().rotate(19);
+        let w_j_minus_2_shifted_10_bits = w_j_minus_2_bits.expr().shr(10);
+        let s1_witness = builder.alloc_array::<BitRegister>(32);
+        let s1 = builder.alloc_array::<BitRegister>(32);
+        builder.constrain(u32_xor2_constraint(
+            w_j_minus_2_rotated_17_bits,
+            w_j_minus_2_rotated_19_bits,
+            s1_witness.expr(),
+        ));
+        builder.constrain(u32_xor2_constraint(
+            s1_witness.expr(),
+            w_j_minus_2_shifted_10_bits,
+            s1.expr(),
+        ));
 
         let (chip, spec) = builder.build();
 
@@ -392,6 +392,14 @@ mod tests {
 
                     let s0_value = xor2(s0_witness_val, shr(w_j_minus_15_val, 3));
                     handle.write_data_v2(i, s0, bits_to_field_bits(s0_value));
+
+                    let w_j_minus_2_val = usize_to_be_bits::<32>(w[j - 2] as usize);
+                    let s1_witness_val =
+                        xor2(rotate(w_j_minus_2_val, 17), rotate(w_j_minus_2_val, 19));
+                    handle.write_data_v2(i, s1_witness, bits_to_field_bits(s1_witness_val));
+
+                    let s1_value = xor2(s1_witness_val, shr(w_j_minus_2_val, 10));
+                    handle.write_data_v2(i, s1, bits_to_field_bits(s1_value));
                 }
             }
             drop(handle);
