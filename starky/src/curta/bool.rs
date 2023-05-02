@@ -40,8 +40,9 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
     #[allow(dead_code)]
-    pub fn write_bit(&self, row_index: usize, bit: bool, data: &BitRegister) -> Result<()> {
+    pub fn write_bit(&self, row_index: usize, bit: bool, data: &BitRegister) {
         self.write_data(row_index, *data, vec![F::from_canonical_u16(bit as u16)])
+            .unwrap()
     }
 }
 
@@ -277,7 +278,7 @@ mod tests {
             let x_i = 0u16;
             let y_i = 1u16;
             let bit_i = if i % 2 == 0 { true } else { false };
-            handle.write_bit(i, bit_i, &bit).unwrap();
+            handle.write_bit(i, bit_i, &bit);
             let res = if i % 2 == 0 { x_i } else { y_i };
             handle
                 .write_data(i, x, vec![F::from_canonical_u16(x_i)])

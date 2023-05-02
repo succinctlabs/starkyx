@@ -1,4 +1,5 @@
 use core::ops::{Add, Mul, Sub};
+use std::os::unix::raw::off_t;
 use std::sync::Arc;
 
 use plonky2::field::extension::{Extendable, FieldExtension};
@@ -28,6 +29,37 @@ impl<F, const D: usize> ArithmeticExpression<F, D> {
     pub fn from_constant(constant: F) -> Self {
         Self::from_constant_vec(vec![constant])
     }
+
+    /// Sums the elements of the expression.
+    pub fn sum(self) -> Self {
+        Self {
+            expression: ArithmeticExpressionSlice::Sum(Arc::new(self.expression)),
+            size: 1,
+        }
+    }
+
+    /// Sums the elements of the expression using big-endian weighting. Assumes the length of the
+    /// expression is 32.
+    pub fn be_sum(self) -> Self {
+        Self {
+            expression: ArithmeticExpressionSlice::U32BigEndianSum(Arc::new(self.expression)),
+            size: 1,
+        }
+    }
+
+    pub fn rotate(self, offset: usize) -> Self {
+        Self {
+            expression: ArithmeticExpressionSlice::Rotate(Arc::new(self.expression), offset),
+            size: self.size,
+        }
+    }
+
+    pub fn shr(self, offset: usize) -> Self {
+        Self {
+            expression: ArithmeticExpressionSlice::ShiftRight(Arc::new(self.expression), offset),
+            size: self.size,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -53,6 +85,10 @@ pub enum ArithmeticExpressionSlice<F, const D: usize> {
         Arc<ArithmeticExpressionSlice<F, D>>,
         Arc<ArithmeticExpressionSlice<F, D>>,
     ),
+    Sum(Arc<ArithmeticExpressionSlice<F, D>>),
+    U32BigEndianSum(Arc<ArithmeticExpressionSlice<F, D>>),
+    Rotate(Arc<ArithmeticExpressionSlice<F, D>>, usize),
+    ShiftRight(Arc<ArithmeticExpressionSlice<F, D>>, usize),
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, D> {
@@ -121,6 +157,41 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
                     .map(|(l, r)| *l * *r)
                     .collect()
             }
+            ArithmeticExpressionSlice::Sum(expr) => {
+                let vars = expr.packed_generic(vars);
+                vec![vars.iter().fold(P::ZEROS, |acc, x| acc + *x)]
+            }
+            ArithmeticExpressionSlice::U32BigEndianSum(expr) => {
+                let vars = expr.packed_generic(vars);
+                assert!(
+                    vars.len() == 32,
+                    "Can only big endian sum 32-vector expression"
+                );
+                let mut digit = P::ONES;
+                let mut acc = P::ZEROS;
+                for i in 0..vars.len() {
+                    acc += vars[32 - i - 1] * digit;
+                    digit = digit + digit;
+                }
+                vec![acc]
+            }
+            ArithmeticExpressionSlice::Rotate(expr, offset) => {
+                let mut vars = expr.packed_generic(vars);
+                vars.rotate_right(*offset);
+                vars
+            }
+            ArithmeticExpressionSlice::ShiftRight(expr, offset) => {
+                let vars = expr.packed_generic(vars);
+                let mut vars_copy = vars.clone();
+                for i in 0..vars.len() {
+                    vars_copy[i] = if i < *offset {
+                        P::ZEROS
+                    } else {
+                        vars[i - offset]
+                    };
+                }
+                vars_copy
+            }
         }
     }
 
@@ -165,6 +236,46 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
                     .zip(right_vals.iter())
                     .map(|(l, r)| builder.mul_extension(*l, *r))
                     .collect()
+            }
+            ArithmeticExpressionSlice::Sum(expr) => {
+                let vars = expr.ext_circuit(builder, vars);
+                let zero = builder.zero_extension();
+                vec![vars
+                    .iter()
+                    .fold(zero, |acc, x| builder.add_extension(acc, *x))]
+            }
+            ArithmeticExpressionSlice::U32BigEndianSum(expr) => {
+                let vars = expr.ext_circuit(builder, vars);
+                assert!(
+                    vars.len() == 32,
+                    "Can only big endian sum 32-vector expression"
+                );
+                let mut digit = F::ONE;
+                let mut acc = builder.zero_extension();
+                for i in 0..vars.len() {
+                    let limb = builder.mul_const_extension(digit, vars[32 - i - 1]);
+                    acc = builder.add_extension(acc, limb);
+                    digit = digit + digit;
+                }
+                vec![acc]
+            }
+            ArithmeticExpressionSlice::Rotate(expr, offset) => {
+                let mut vars = expr.ext_circuit(builder, vars);
+                vars.rotate_right(*offset);
+                vars
+            }
+            ArithmeticExpressionSlice::ShiftRight(expr, offset) => {
+                let vars = expr.ext_circuit(builder, vars);
+                let mut copy = Vec::new();
+                for i in 0..vars.len() {
+                    let val = if i < *offset {
+                        builder.zero_extension()
+                    } else {
+                        vars[i - offset]
+                    };
+                    copy.push(val);
+                }
+                copy
             }
         }
     }
@@ -252,7 +363,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Add<F> for ArithmeticExpressi
     type Output = Self;
 
     fn add(self, rhs: F) -> Self::Output {
-        self + vec![rhs]
+        let size = self.size;
+        self + vec![rhs].repeat(size)
     }
 }
 
@@ -260,7 +372,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Sub<F> for ArithmeticExpressi
     type Output = Self;
 
     fn sub(self, rhs: F) -> Self::Output {
-        self - vec![rhs]
+        let size = self.size;
+        self - vec![rhs].repeat(size)
     }
 }
 
@@ -314,12 +427,12 @@ mod tests {
     use plonky2::util::timing::TimingTree;
 
     use super::*;
+    use crate::config::StarkConfig;
     use crate::curta::builder::StarkBuilder;
     use crate::curta::chip::{StarkParameters, TestStark};
     use crate::curta::instruction::write::WriteInstruction;
     use crate::curta::register::U16Register;
     use crate::curta::trace::trace;
-    use crate::config::StarkConfig;
     use crate::prover::prove;
     use crate::recursive_verifier::{
         add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,

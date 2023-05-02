@@ -21,6 +21,8 @@
 //! COMPRESSING_SELECTOR = 0: A selector bit that determines whether we are in the compressing.
 //! ACCUMULATION_SELECTOR = 0: A selector bit that determines whether we are accumulating.
 //!
+//! STEP_SELECTORS[48 + 64 + 1] = [0, ..., 0]
+//!
 //! J_SELECTORS[64] = [0, ..., 0]: Keeps track of the index 'j' and used to select from arrays.
 //! J_SELECTORS[16] = 1
 //!
@@ -150,7 +152,7 @@ use plonky2::hash::hash_types::RichField;
 use crate::curta::builder::StarkBuilder;
 use crate::curta::chip::StarkParameters;
 use crate::curta::hash::sha256::helper::usize_to_be_bits;
-use crate::curta::register::{ArrayRegister, BitRegister, Register};
+use crate::curta::register::{ArrayRegister, BitRegister, ElementRegister, Register};
 
 pub mod educational;
 pub mod helper;
@@ -185,102 +187,266 @@ const SHA256_DIGEST_LENGTH: usize = 256;
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     #[allow(non_snake_case)]
-    pub fn sha256<const SHA256_INPUT_LENGTH: usize>(&mut self, input: ArrayRegister<BitRegister>) {
-        assert!(
-            input.len() == SHA256_INPUT_LENGTH,
-            "Input length does not match SHA256_INPUT_LENGTH"
-        );
+    pub fn sha256(&mut self) {
+        // The input message of length 512 bits condensed into 16 u32s.
+        let input_u32s = self.alloc_array::<ElementRegister>(16);
+    }
+}
 
-        // The length-encoded message length ("L + 1 + 64").
-        let SEPERATOR_LENGTH: usize = 1;
-        let U64_LENGTH: usize = 64;
-        let ENCODED_MESSAGE_LENGTH: usize = SHA256_INPUT_LENGTH + SEPERATOR_LENGTH + U64_LENGTH;
+mod tests {
+    use num::bigint::RandBigInt;
+    use plonky2::field::types::Field;
+    use plonky2::iop::witness::PartialWitness;
+    use plonky2::plonk::circuit_builder::CircuitBuilder;
+    use plonky2::plonk::circuit_data::CircuitConfig;
+    use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+    use plonky2::timed;
+    use plonky2::util::timing::TimingTree;
+    use plonky2_maybe_rayon::*;
+    use rand::thread_rng;
 
-        // The multiple of 512-bit padded message length. Padding length is "K".
-        let REMAINDER_LENGTH: usize = ENCODED_MESSAGE_LENGTH % 512;
-        let PADDING_LENGTH: usize = if REMAINDER_LENGTH == 0 {
-            0
-        } else {
-            512 - REMAINDER_LENGTH
-        };
-        let PADDED_MESSAGE_LENGTH: usize = ENCODED_MESSAGE_LENGTH + PADDING_LENGTH;
+    use super::*;
+    use crate::config::StarkConfig;
+    use crate::curta::builder::StarkBuilder;
+    use crate::curta::chip::{StarkParameters, TestStark};
+    use crate::curta::constraint::expression::ArithmeticExpression;
+    use crate::curta::hash::sha256::helper::{rotate, shr, xor2};
+    use crate::curta::instruction::InstructionSet;
+    use crate::curta::parameters::ed25519::{Ed25519, Ed25519BaseField};
+    use crate::curta::register::RegisterSerializable;
+    use crate::curta::trace::trace;
+    use crate::prover::prove;
+    use crate::recursive_verifier::{
+        add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
+        verify_stark_proof_circuit,
+    };
+    use crate::verifier::verify_stark_proof;
 
-        // Initialization of core variables.
-        let padded_message = self.alloc_array::<BitRegister>(PADDED_MESSAGE_LENGTH);
+    #[derive(Clone, Debug, Copy)]
+    pub struct Sha256Test;
 
-        // Note: THIS IS INEFFICIENT. We don't need to COPY, we can just READ.
+    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for Sha256Test {
+        const NUM_ARITHMETIC_COLUMNS: usize = 0;
+        const NUM_FREE_COLUMNS: usize = 385;
+        type Instruction = InstructionSet<Ed25519BaseField>;
+    }
 
-        // Begin with the original message of length "L".
-        for i in 0..SHA256_INPUT_LENGTH {
-            let constraint = padded_message.get(i).expr::<F, D>() - input.get(i).expr::<F, D>();
-            self.assert_expression_zero(constraint);
+    #[test]
+    fn test_sha256() {
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
+        type E = Ed25519;
+        type S = TestStark<Sha256Test, F, D>;
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        // Build the stark.
+        let mut builder = StarkBuilder::<Sha256Test, F, D>::new();
+
+        const NB_MIXING_STEPS: usize = 48;
+        const NB_COMPRESS_STEPS: usize = 64;
+        const NB_ACCUMULATE_STEPS: usize = 1;
+        const NB_STEPS: usize = NB_MIXING_STEPS + NB_COMPRESS_STEPS + NB_ACCUMULATE_STEPS;
+
+        let step_selectors = builder.alloc_array::<BitRegister>(NB_STEPS);
+
+        // Constrain step_selectors.sum() == 1.
+        builder.constrain(step_selectors.expr().sum() - F::ONE);
+
+        // Constrain step_selectors[i % NB_STEPS] == step_selectors[(i + 1) % NB_STEPS].next().
+        for i in 0..NB_STEPS {
+            builder.constrain_transition(
+                step_selectors.get(i % NB_STEPS).expr()
+                    - step_selectors.get((i + 1) % NB_STEPS).next().expr(),
+            )
         }
 
-        // Append a single '1' bit.
-        let constraint = padded_message.get(SHA256_INPUT_LENGTH).expr() - F::ONE;
-        self.assert_expression_zero(constraint);
-
-        // Append L as a 64-bit big-endian integer.
-        let sha256_input_length_bits = usize_to_be_bits::<U64_BIT_LENGTH>(SHA256_INPUT_LENGTH);
-        for i in 0..U64_BIT_LENGTH {
-            let zero_or_one = if sha256_input_length_bits[i] {
-                F::ONE
-            } else {
-                F::ZERO
-            };
-            let constraint = padded_message
-                .get(SHA256_INPUT_LENGTH + i + 1 + PADDING_LENGTH)
-                .expr()
-                - zero_or_one;
-            self.assert_expression_zero(constraint);
+        // The input message of length 512 bits condensed into 16 u32s.
+        let input = builder.alloc_array::<ElementRegister>(16);
+        let w_chunk_1 = builder.alloc_array::<ElementRegister>(64);
+        for j in 0..16 {
+            builder.constrain(
+                step_selectors.get(0).expr() * (w_chunk_1.get(j).expr() - input.get(j).expr()),
+            );
         }
 
-        // At this point, the padded message should be of the following form.
-        //      <message of length L> 1 <K zeros> <L as 64 bit integer>
-        // Now, we will process the padded message in 512 bit chunks and begin referring to the
-        // padded message as "message".
-        const SHA256_CHUNK_LENGTH: usize = 512;
-        const SHA256_WORD_LENGTH: usize = 32;
-        const SHA256_MESSAGE_SCHEDULE_ARRAY_LENGTH: usize = 64;
+        // Constrain w[j-15] and w[j-2] for j in 16..64.
+        let w_j_minus_15_bits = builder.alloc_array::<BitRegister>(32);
+        let w_j_minus_2_bits = builder.alloc_array::<BitRegister>(32);
+        for j in 16..64 {
+            let step = j - 16;
+            builder.constrain(
+                step_selectors.get(step).expr()
+                    * (w_j_minus_15_bits.expr().be_sum() - w_chunk_1.get(j - 15).expr()),
+            );
+            builder.constrain(
+                step_selectors.get(step).expr()
+                    * (w_j_minus_2_bits.expr().be_sum() - w_chunk_1.get(j - 2).expr()),
+            );
+        }
 
-        let message = padded_message;
-        let num_chunks = message.len() / SHA256_CHUNK_LENGTH;
+        fn xor2_constraint(
+            a: ArithmeticExpression<F, D>,
+            b: ArithmeticExpression<F, D>,
+            c: ArithmeticExpression<F, D>,
+        ) -> ArithmeticExpression<F, D> {
+            c - (a.clone() + b.clone() - a * b * F::TWO)
+        }
 
-        let mut h = H
-            .into_iter()
-            .map(|x| usize_to_be_bits::<SHA256_WORD_LENGTH>(x))
-            .collect::<Vec<_>>();
-        let k = K
-            .into_iter()
-            .map(|x| usize_to_be_bits::<SHA256_WORD_LENGTH>(x))
-            .collect::<Vec<_>>();
+        // s0 = xor3(rotate(w[j - 15], 7), rotate(w[j - 15], 18), shr(w[j - 15], 3))
+        let w_j_minus_15_rotated_7_bits = w_j_minus_15_bits.expr().rotate(7);
+        let w_j_minus_15_rotated_18_bits = w_j_minus_15_bits.expr().rotate(18);
+        let w_j_minus_15_shifted_3_bits = w_j_minus_15_bits.expr().shr(3);
+        let s0_witness = builder.alloc_array::<BitRegister>(32);
+        let s0 = builder.alloc_array::<BitRegister>(32);
+        builder.constrain(xor2_constraint(
+            w_j_minus_15_rotated_7_bits,
+            w_j_minus_15_rotated_18_bits,
+            s0_witness.expr(),
+        ));
+        builder.constrain(xor2_constraint(
+            s0_witness.expr(),
+            w_j_minus_15_shifted_3_bits,
+            s0.expr(),
+        ));
 
-        // For simplicity, we should just load all 1024 bits of the input into a register.
-        // Then, we copy the correct bits into the message schedule array. However, we don't need to
-        // allocate, it can just be a copy of the bits.
+        // s1 = xor3(rotate(w[j - 2], 17), rotate(w[j - 2], 19), shr(w[j - 2], 10))
+        // let w_j_minus_2_rotated_17_bits = w_j_minus_2_bits.expr().rotate(17);
+        // let w_j_minus_2_rotated_19_bits = w_j_minus_2_bits.expr().rotate(19);
+        // let w_j_minus_2_shifted_10_bits = w_j_minus_2_bits.expr().shr(10);
+        // let s1_witness = builder.alloc_array::<BitRegister>(32);
+        // let s1 = builder.alloc_array::<BitRegister>(32);
+        // builder.constrain(xor2_constraint(
+        //     w_j_minus_2_rotated_17_bits,
+        //     w_j_minus_2_rotated_19_bits,
+        //     s1_witness.expr(),
+        // ));
+        // builder.constrain(xor2_constraint(
+        //     s1_witness.expr(),
+        //     w_j_minus_2_shifted_10_bits,
+        //     s1.expr(),
+        // ));
 
-        // Register Layout
-        // > Note that the padded_message[512:1024] are all CONSTANTS.
-        // > Note that we only read the past 16 entries of w in the mixing step. On the next row,
-        // > we can simply read the next set of entires?
+        let (chip, spec) = builder.build();
 
-        for i in 0..num_chunks {
-            // The 64-entry message schedule array of 32-bit words.
-            let w = (0..SHA256_MESSAGE_SCHEDULE_ARRAY_LENGTH)
+        // Generate the trace.
+        let mut timing = TimingTree::new("sha256", log::Level::Debug);
+        let nb_rows = 2usize.pow(16);
+        let (handle, generator) = trace::<F, D>(spec);
+
+        let mut input_gt = [0u32; 16];
+        for i in 0..16 {
+            input_gt[i] = i as u32;
+        }
+
+        let mut w = [0u32; 64];
+        for i in 0..16 {
+            w[i] = input_gt[i];
+        }
+
+        fn u32_arr_to_field_array(x: &[u32]) -> Vec<F> {
+            x.into_iter()
+                .map(|x| F::from_canonical_u32(*x))
+                .collect::<Vec<_>>()
+        }
+
+        fn u32_to_be_field_bits(x: u32) -> Vec<F> {
+            usize_to_be_bits::<32>(x as usize)
                 .into_iter()
-                .map(|_| self.alloc_array::<BitRegister>(SHA256_WORD_LENGTH))
-                .collect::<Vec<_>>();
+                .map(|x| F::from_canonical_u32(x as u32))
+                .collect::<Vec<_>>()
+        }
 
-            // Copy chunk into first 16 words w[0..15] of the message schedule array.
-            let chunk_offset = i * SHA256_CHUNK_LENGTH;
-            for j in 0..16 {
-                let word_offset = j * 32;
-                for k in 0..32 {
-                    let constraint =
-                        w[j].get(k).expr() - message.get(chunk_offset + word_offset + k).expr();
-                    self.assert_expression_zero(constraint);
+        fn bits_to_field_bits<const L: usize>(x: [bool; L]) -> Vec<F> {
+            x.into_iter()
+                .map(|x| F::from_canonical_u32(x as u32))
+                .collect::<Vec<_>>()
+        }
+
+        let trace = timed!(timing, "witness generation", {
+            for i in 0..nb_rows {
+                // Write input.
+                handle.write_data_v2(i, input, u32_arr_to_field_array(&input_gt));
+
+                // Write step selectors.
+                let step = i % NB_STEPS;
+                for j in 0..NB_STEPS {
+                    handle.write_bit(i, j == step, &step_selectors.get(j))
+                }
+
+                // Write w.
+                handle.write_data_v2(i, w_chunk_1, u32_arr_to_field_array(&w));
+
+                let is_mixing = step < NB_MIXING_STEPS;
+                if is_mixing {
+                    let j = 16 + step;
+                    let w15 = u32_to_be_field_bits(w[j - 15]);
+                    handle.write_data_v2(i, w_j_minus_15_bits, w15);
+                    let w2 = u32_to_be_field_bits(w[j - 2]);
+                    handle.write_data_v2(i, w_j_minus_2_bits, w2);
+
+                    let w_j_minus_15_val = usize_to_be_bits::<32>(w[j - 15] as usize);
+                    let s0_witness_val =
+                        xor2(rotate(w_j_minus_15_val, 7), rotate(w_j_minus_15_val, 18));
+                    handle.write_data_v2(i, s0_witness, bits_to_field_bits(s0_witness_val));
+
+                    let s0_value = xor2(s0_witness_val, shr(w_j_minus_15_val, 3));
+                    handle.write_data_v2(i, s0, bits_to_field_bits(s0_value));
                 }
             }
-        }
+            drop(handle);
+            generator.generate_trace(&chip, nb_rows as usize).unwrap()
+        });
+
+        // Verify proof as a stark
+        let config = StarkConfig::standard_fast_config();
+        let stark = TestStark::new(chip);
+        let proof = timed!(
+            timing,
+            "proof generation",
+            prove::<F, C, S, D>(
+                stark.clone(),
+                &config,
+                trace,
+                [],
+                &mut TimingTree::default(),
+            )
+            .unwrap()
+        );
+        verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
+
+        // // Verify recursive proof in a circuit.
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
+        let degree_bits = proof.proof.recover_degree_bits(&config);
+        let virtual_proof = add_virtual_stark_proof_with_pis(
+            &mut recursive_builder,
+            stark.clone(),
+            &config,
+            degree_bits,
+        );
+        recursive_builder.print_gate_counts(0);
+        let mut rec_pw = PartialWitness::new();
+        set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
+        verify_stark_proof_circuit::<F, C, S, D>(
+            &mut recursive_builder,
+            stark,
+            virtual_proof,
+            &config,
+        );
+        let recursive_data = recursive_builder.build::<C>();
+        let recursive_proof = timed!(
+            timing,
+            "generate recursive proof",
+            plonky2::plonk::prover::prove(
+                &recursive_data.prover_only,
+                &recursive_data.common,
+                rec_pw,
+                &mut TimingTree::default(),
+            )
+            .unwrap()
+        );
+        recursive_data.verify(recursive_proof).unwrap();
+        timing.print();
     }
 }

@@ -101,19 +101,19 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         // if log_generator(cursor[LOCAL]) % 2^8 == 0 then result[NEXT] <= result_next[LOCAL].
         let result_x_copy_constraint = (cyclic_counter.expr() - generator_inv)
             * (result.x.next().expr() - result_next.x.expr());
-        self.assert_expression_zero(result_x_copy_constraint);
+        self.constrain(result_x_copy_constraint);
         let result_y_copy_constraint = (cyclic_counter.expr() - generator_inv)
             * (result.y.next().expr() - result_next.y.expr());
-        self.assert_expression_zero(result_y_copy_constraint);
+        self.constrain(result_y_copy_constraint);
 
         // Note that temp and temp_next live on the same row.
         // if log_generator(cursor[LOCAL]) % 2^8 == 0 then temp[NEXT] <= temp_next[LOCAL]
         let temp_x_copy_constraint =
             (cyclic_counter.expr() - generator_inv) * (temp.x.next().expr() - temp_next.x.expr());
-        self.assert_expression_zero(temp_x_copy_constraint);
+        self.constrain(temp_x_copy_constraint);
         let temp_y_copy_constraint =
             (cyclic_counter.expr() - generator_inv) * (temp.y.next().expr() - temp_next.y.expr());
-        self.assert_expression_zero(temp_y_copy_constraint);
+        self.constrain(temp_y_copy_constraint);
 
         // cursor[NEXT] = cursor[LOCAL] * generator
         self.assert_expressions_equal(
@@ -148,7 +148,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
         self.write_ec_point(starting_row, &temp, &double_and_add_gadget.temp)?;
 
         for (i, bit) in scalar_bits.iter().enumerate() {
-            self.write_bit(starting_row + i, *bit, &double_and_add_gadget.bit)?;
+            self.write_bit(starting_row + i, *bit, &double_and_add_gadget.bit);
             let result_plus_temp = self.write_ed25519_add(
                 starting_row + i,
                 &res,
@@ -355,7 +355,7 @@ mod tests {
         handle.write_ec_point(starting_row, &temp, &chip_data.temp)?;
 
         for (i, bit) in scalar_bits.iter().enumerate() {
-            handle.write_bit(starting_row + i, *bit, &chip_data.bit)?;
+            handle.write_bit(starting_row + i, *bit, &chip_data.bit);
             let result_plus_temp = handle.write_ed25519_add(
                 starting_row + i,
                 &res,

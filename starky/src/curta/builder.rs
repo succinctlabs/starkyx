@@ -99,7 +99,9 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             }
             None => self.get_local_memory(T::size_of()),
         };
-        T::from_register(register)
+        let register = T::from_register(register);
+        self.write_data(&register).unwrap();
+        register
     }
 
     pub fn alloc_array<T: Register>(&mut self, length: usize) -> ArrayRegister<T> {
@@ -114,7 +116,12 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             }
             None => self.get_local_memory(size_of),
         };
-        ArrayRegister::<T>::from_register_unsafe(register)
+        let register = ArrayRegister::<T>::from_register_unsafe(register);
+        self.write_data(&register).unwrap();
+        for i in 0..register.len() {
+            self.write_data(&register.get(i)).unwrap()
+        }
+        register
     }
 
     /// Allocates a new register on the next row according to type `T` which implements the Register
@@ -136,7 +143,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     /// This method should be applied to any data that needs to be manually written to the trace by
     /// the user during trace generation. It currently does not do any actual checks, but this can
     /// be changed later.
-    pub fn write_data<T: Register>(&mut self, data: &T) -> Result<()> {
+    pub fn write_data<T: RegisterSerializable>(&mut self, data: &T) -> Result<()> {
         let register = data.register();
         let label = InstructionId::Write(*register);
         let existing_value = self
@@ -249,14 +256,14 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
 
     /// Asserts that two expressions (note that expressions are actually vectors of expression) are
     /// equal in the first row.
-    pub fn assert_expression_zero_first_row(&mut self, a: ArithmeticExpression<F, D>) {
+    pub fn constrain_first_row(&mut self, a: ArithmeticExpression<F, D>) {
         let constraint = ArithmeticConstraint::First(a);
         self.constraints.push(constraint);
     }
 
     /// Asserts that two expressions (note that expressions are actually vectors of expression) are
     /// equal in the last row.
-    pub fn assert_expression_zero_last_row(&mut self, a: ArithmeticExpression<F, D>) {
+    pub fn constrain_last_row(&mut self, a: ArithmeticExpression<F, D>) {
         let constraint = ArithmeticConstraint::Last(a);
         self.constraints.push(constraint);
     }
@@ -264,14 +271,14 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     /// Asserts that two expressions (note that expressions are actually vectors of expression) are
     /// equal in all rows but the last (useful for when dealing with registers between the local and
     /// next row).
-    pub fn assert_expression_zero_transition(&mut self, a: ArithmeticExpression<F, D>) {
+    pub fn constrain_transition(&mut self, a: ArithmeticExpression<F, D>) {
         let constraint = ArithmeticConstraint::Transition(a);
         self.constraints.push(constraint);
     }
 
     /// Asserts that two expressions (note that expressions are actually vectors of expression) are
     /// equal in all rows.
-    pub fn assert_expression_zero(&mut self, a: ArithmeticExpression<F, D>) {
+    pub fn constrain(&mut self, a: ArithmeticExpression<F, D>) {
         let constraint = ArithmeticConstraint::All(a);
         self.constraints.push(constraint);
     }
@@ -296,7 +303,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
                 L::NUM_FREE_COLUMNS - num_free_columns
             );
         }
-        let num_arithmetic_columns = self.local_arithmetic_index - self.local_index;
+        let num_arithmetic_columns = self.local_arithmetic_index - L::NUM_FREE_COLUMNS;
         if num_arithmetic_columns > L::NUM_ARITHMETIC_COLUMNS {
             panic!(
                 "Not enough arithmetic columns. Expected {} arithmetic columns, got {}.",

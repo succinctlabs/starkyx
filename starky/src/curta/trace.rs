@@ -11,7 +11,7 @@ use plonky2_maybe_rayon::*;
 use super::builder::InstructionId;
 use super::chip::StarkParameters;
 use super::instruction::Instruction;
-use super::register::{MemorySlice, Register};
+use super::register::{MemorySlice, Register, RegisterSerializable};
 use crate::curta::chip::Chip;
 use crate::lookup::permuted_cols;
 
@@ -80,12 +80,22 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
         Ok(())
     }
 
-    pub fn write_data<T: Register>(&self, row_index: usize, data: T, row: Vec<F>) -> Result<()> {
+    pub fn write_data<T: RegisterSerializable>(
+        &self,
+        row_index: usize,
+        data: T,
+        row: Vec<F>,
+    ) -> Result<()> {
         let id = InstructionId::Write(*data.register());
         self.tx
             .send((row_index, id, row))
             .map_err(|_| anyhow!("Failed to send row"))?;
         Ok(())
+    }
+
+    pub fn write_data_v2<T: RegisterSerializable>(&self, row_index: usize, data: T, row: Vec<F>) {
+        let id = InstructionId::Write(*data.register());
+        self.tx.send((row_index, id, row)).unwrap();
     }
 
     pub fn write_unsafe_raw(
