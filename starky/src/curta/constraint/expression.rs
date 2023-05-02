@@ -26,6 +26,10 @@ impl<F, const D: usize> ArithmeticExpression<F, D> {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.size
+    }
+
     pub fn from_constant(constant: F) -> Self {
         Self::from_constant_vec(vec![constant])
     }
