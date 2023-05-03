@@ -210,7 +210,9 @@ mod tests {
     use crate::curta::builder::StarkBuilder;
     use crate::curta::chip::{StarkParameters, TestStark};
     use crate::curta::constraint::expression::ArithmeticExpression;
-    use crate::curta::hash::sha256::helper::{be_bits_to_usize, rotate, shr, xor2};
+    use crate::curta::hash::sha256::helper::{
+        and2, be_bits_to_usize, not, rotate, shr, xor2, xor3,
+    };
     use crate::curta::instruction::InstructionSet;
     use crate::curta::parameters::ed25519::{Ed25519, Ed25519BaseField};
     use crate::curta::register::{RegisterSerializable, U16Register};
@@ -227,7 +229,7 @@ mod tests {
 
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for Sha256Test {
         const NUM_ARITHMETIC_COLUMNS: usize = 2;
-        const NUM_FREE_COLUMNS: usize = 450;
+        const NUM_FREE_COLUMNS: usize = 900;
         type Instruction = InstructionSet<Ed25519BaseField>;
     }
 
@@ -237,15 +239,24 @@ mod tests {
         w: ArrayRegister<ElementRegister>,
         w_j_minus_15_bits: ArrayRegister<BitRegister>,
         w_j_minus_2_bits: ArrayRegister<BitRegister>,
-        s0_witness: ArrayRegister<BitRegister>,
-        s0: ArrayRegister<BitRegister>,
-        s1_witness: ArrayRegister<BitRegister>,
-        s1: ArrayRegister<BitRegister>,
+        mixing_s0_witness: ArrayRegister<BitRegister>,
+        mixing_s0: ArrayRegister<BitRegister>,
+        mixing_s1_witness: ArrayRegister<BitRegister>,
+        mixing_s1: ArrayRegister<BitRegister>,
         w_j_minus_16: ElementRegister,
         w_j_minus_7: ElementRegister,
         mixing_add4_carry: ElementRegister,
         mixing_add4_result_low: U16Register,
         mixing_add4_result_high: U16Register,
+        h: ArrayRegister<ElementRegister>,
+        compress_se_bits: ArrayRegister<BitRegister>,
+        compress_sf_bits: ArrayRegister<BitRegister>,
+        compress_sg_bits: ArrayRegister<BitRegister>,
+        compress_s1_witness: ArrayRegister<BitRegister>,
+        compress_s1: ArrayRegister<BitRegister>,
+        compress_ch_witness_1: ArrayRegister<BitRegister>,
+        compress_ch_witness_2: ArrayRegister<BitRegister>,
+        compress_ch: ArrayRegister<BitRegister>,
     }
 
     impl Sha256Gadget {
@@ -274,21 +285,41 @@ mod tests {
             let witness_low = builder.alloc::<U16Register>();
             let witness_high = builder.alloc::<U16Register>();
 
+            // Compress.
+            let h = builder.alloc_array::<ElementRegister>(8);
+            let compress_se_bits = builder.alloc_array::<BitRegister>(32);
+            let compress_sf_bits = builder.alloc_array::<BitRegister>(32);
+            let compress_sg_bits = builder.alloc_array::<BitRegister>(32);
+            let compress_s1_witness = builder.alloc_array::<BitRegister>(32);
+            let compress_s1 = builder.alloc_array::<BitRegister>(32);
+            let compress_ch_witness_1 = builder.alloc_array::<BitRegister>(32);
+            let compress_ch_witness_2 = builder.alloc_array::<BitRegister>(32);
+            let compress_ch = builder.alloc_array::<BitRegister>(32);
+
             let gadget = Self {
                 pc,
                 input,
                 w,
                 w_j_minus_15_bits,
                 w_j_minus_2_bits,
-                s0_witness,
-                s0,
-                s1_witness,
-                s1,
+                mixing_s0_witness: s0_witness,
+                mixing_s0: s0,
+                mixing_s1_witness: s1_witness,
+                mixing_s1: s1,
                 w_j_minus_16,
                 w_j_minus_7,
                 mixing_add4_carry: carry,
                 mixing_add4_result_low: witness_low,
                 mixing_add4_result_high: witness_high,
+                h,
+                compress_se_bits,
+                compress_sf_bits,
+                compress_sg_bits,
+                compress_s1_witness,
+                compress_s1,
+                compress_ch_witness_1,
+                compress_ch_witness_2,
+                compress_ch,
             };
 
             gadget.constraints(builder);
@@ -352,51 +383,6 @@ mod tests {
             }
         }
 
-        /// s0 = xor3(rotate(w[j - 15], 7), rotate(w[j - 15], 18), shr(w[j - 15], 3)).
-        fn s0_constraints<
-            L: StarkParameters<F, D>,
-            F: RichField + Extendable<D>,
-            const D: usize,
-        >(
-            &self,
-            builder: &mut StarkBuilder<L, F, D>,
-        ) {
-            let w_j_minus_15_rotated_7_bits = self.w_j_minus_15_bits.expr::<F, D>().rotate(7);
-            let w_j_minus_15_rotated_18_bits = self.w_j_minus_15_bits.expr::<F, D>().rotate(18);
-            let w_j_minus_15_shifted_3_bits = self.w_j_minus_15_bits.expr::<F, D>().shr(3);
-            builder.constrain(self.xor2::<L, F, D>(
-                w_j_minus_15_rotated_7_bits,
-                w_j_minus_15_rotated_18_bits,
-                self.s0_witness.expr(),
-            ));
-            builder.constrain(self.xor2::<L, F, D>(
-                self.s0_witness.expr(),
-                w_j_minus_15_shifted_3_bits,
-                self.s0.expr(),
-            ));
-        }
-
-        /// s1 = xor3(rotate(w[j - 2], 17), rotate(w[j - 2], 19), shr(w[j - 2], 10)).
-        fn s1_constraints<
-            L: StarkParameters<F, D>,
-            F: RichField + Extendable<D>,
-            const D: usize,
-        >(
-            &self,
-            builder: &mut StarkBuilder<L, F, D>,
-        ) {
-            builder.constrain(self.xor2::<L, F, D>(
-                self.w_j_minus_2_bits.expr::<F, D>().rotate(17),
-                self.w_j_minus_2_bits.expr::<F, D>().rotate(19),
-                self.s1_witness.expr(),
-            ));
-            builder.constrain(self.xor2::<L, F, D>(
-                self.s1_witness.expr(),
-                self.w_j_minus_2_bits.expr::<F, D>().shr(10),
-                self.s1.expr(),
-            ));
-        }
-
         fn mixing_constraints<
             L: StarkParameters<F, D>,
             F: RichField + Extendable<D>,
@@ -426,17 +412,38 @@ mod tests {
             }
 
             // Compute s0 & s1.
-            self.s0_constraints(builder);
-            self.s1_constraints(builder);
+            let w_j_minus_15_rotated_7_bits = self.w_j_minus_15_bits.expr::<F, D>().rotate(7);
+            let w_j_minus_15_rotated_18_bits = self.w_j_minus_15_bits.expr::<F, D>().rotate(18);
+            let w_j_minus_15_shifted_3_bits = self.w_j_minus_15_bits.expr::<F, D>().shr(3);
+            builder.constrain(self.xor2::<L, F, D>(
+                w_j_minus_15_rotated_7_bits,
+                w_j_minus_15_rotated_18_bits,
+                self.mixing_s0_witness.expr(),
+            ));
+            builder.constrain(self.xor2::<L, F, D>(
+                self.mixing_s0_witness.expr(),
+                w_j_minus_15_shifted_3_bits,
+                self.mixing_s0.expr(),
+            ));
+            builder.constrain(self.xor2::<L, F, D>(
+                self.w_j_minus_2_bits.expr::<F, D>().rotate(17),
+                self.w_j_minus_2_bits.expr::<F, D>().rotate(19),
+                self.mixing_s1_witness.expr(),
+            ));
+            builder.constrain(self.xor2::<L, F, D>(
+                self.mixing_s1_witness.expr(),
+                self.w_j_minus_2_bits.expr::<F, D>().shr(10),
+                self.mixing_s1.expr(),
+            ));
 
             // w[j] = add4(w[j - 16], s0, w[j - 7], s1) is equivalent to
             // w[j-16] + s0 + w[j-7] + s1 - carry_bit * 2^32 - witness_low - witness_high * 2^16 == 0
             builder.constrain(self.add::<L, F, D>(
                 vec![
                     self.w_j_minus_16.expr(),
-                    self.s0.expr().be_sum(),
+                    self.mixing_s0.expr().be_sum(),
                     self.w_j_minus_7.expr(),
-                    self.s1.expr().be_sum(),
+                    self.mixing_s1.expr().be_sum(),
                 ],
                 self.mixing_add4_carry.expr(),
                 self.mixing_add4_result_low.expr(),
@@ -465,20 +472,76 @@ mod tests {
             }
         }
 
+        fn compressing_constraints<
+            L: StarkParameters<F, D>,
+            F: RichField + Extendable<D>,
+            const D: usize,
+        >(
+            &self,
+            builder: &mut StarkBuilder<L, F, D>,
+        ) {
+            let sa = self.h.get(0);
+            let sb = self.h.get(1);
+            let sc = self.h.get(2);
+            let sd = self.h.get(3);
+            let se = self.h.get(4);
+            let sf = self.h.get(5);
+            let sg = self.h.get(6);
+            let sh = self.h.get(7);
+
+            // COMPUTE S1
+
+            // decompose se to bits
+            builder.constrain(self.compress_se_bits.expr().be_sum() - se.expr());
+            builder.constrain(self.compress_sf_bits.expr().be_sum() - sf.expr());
+            builder.constrain(self.compress_sg_bits.expr().be_sum() - sg.expr());
+
+            // s1 = xor3(rotate(se, 6), rotate(se, 11), rotate(se, 25))
+            builder.constrain(self.xor2::<L, F, D>(
+                self.compress_se_bits.expr().rotate(6),
+                self.compress_se_bits.expr().rotate(11),
+                self.compress_s1_witness.expr(),
+            ));
+            builder.constrain(self.xor2::<L, F, D>(
+                self.compress_s1_witness.expr(),
+                self.compress_se_bits.expr().rotate(25),
+                self.compress_s1.expr(),
+            ));
+
+            // COMPUTE CH
+            // ch = xor2(and2(se, sf), and2(not(se), sg))
+            builder.constrain(
+                self.compress_ch_witness_1.expr()
+                    - self.compress_se_bits.expr() * self.compress_sf_bits.expr(),
+            );
+            builder.constrain(
+                self.compress_ch_witness_2.expr()
+                    - (ArithmeticExpression::from_constant_vec([F::ONE; 32].to_vec())
+                        - self.compress_se_bits.expr())
+                        * self.compress_sg_bits.expr(),
+            );
+            builder.constrain(self.xor2::<L, F, D>(
+                self.compress_ch_witness_1.expr(),
+                self.compress_ch_witness_2.expr(),
+                self.compress_ch.expr(),
+            ));
+        }
+
         fn constraints<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize>(
             &self,
-            stark: &mut StarkBuilder<L, F, D>,
+            builder: &mut StarkBuilder<L, F, D>,
         ) {
-            self.pc_constraints(stark);
+            self.pc_constraints(builder);
 
             // The input message of length 512 bits condensed into 16 u32s.
             for j in 0..16 {
-                stark.constrain(
+                builder.constrain(
                     self.pc.get(0).expr() * (self.w.get(j).expr() - self.input.get(j).expr()),
                 );
             }
 
-            self.mixing_constraints(stark);
+            self.mixing_constraints(builder);
+            self.compressing_constraints(builder);
         }
     }
 
@@ -538,6 +601,12 @@ mod tests {
                 .collect::<Vec<_>>()
         }
 
+        const SHA256_WORD_LENGTH: usize = 32;
+        let mut h = H
+            .into_iter()
+            .map(|x| usize_to_be_bits::<SHA256_WORD_LENGTH>(x))
+            .collect::<Vec<_>>();
+
         let trace = timed!(timing, "witness generation", {
             for i in 0..nb_rows {
                 // Write input.
@@ -556,6 +625,10 @@ mod tests {
                     for i in 16..64 {
                         wiggle[i] = 0;
                     }
+                    h = H
+                        .into_iter()
+                        .map(|x| usize_to_be_bits::<SHA256_WORD_LENGTH>(x))
+                        .collect::<Vec<_>>();
                 }
 
                 // Write w.
@@ -572,18 +645,26 @@ mod tests {
                     let w_j_minus_15_val = usize_to_be_bits::<32>(wiggle[j - 15] as usize);
                     let s0_witness_val =
                         xor2(rotate(w_j_minus_15_val, 7), rotate(w_j_minus_15_val, 18));
-                    handle.write_data_v2(i, gadget.s0_witness, bits_to_field_bits(s0_witness_val));
+                    handle.write_data_v2(
+                        i,
+                        gadget.mixing_s0_witness,
+                        bits_to_field_bits(s0_witness_val),
+                    );
 
                     let s0_value = xor2(s0_witness_val, shr(w_j_minus_15_val, 3));
-                    handle.write_data_v2(i, gadget.s0, bits_to_field_bits(s0_value));
+                    handle.write_data_v2(i, gadget.mixing_s0, bits_to_field_bits(s0_value));
 
                     let w_j_minus_2_val = usize_to_be_bits::<32>(wiggle[j - 2] as usize);
                     let s1_witness_val =
                         xor2(rotate(w_j_minus_2_val, 17), rotate(w_j_minus_2_val, 19));
-                    handle.write_data_v2(i, gadget.s1_witness, bits_to_field_bits(s1_witness_val));
+                    handle.write_data_v2(
+                        i,
+                        gadget.mixing_s1_witness,
+                        bits_to_field_bits(s1_witness_val),
+                    );
 
                     let s1_value = xor2(s1_witness_val, shr(w_j_minus_2_val, 10));
-                    handle.write_data_v2(i, gadget.s1, bits_to_field_bits(s1_value));
+                    handle.write_data_v2(i, gadget.mixing_s1, bits_to_field_bits(s1_value));
 
                     let w16 = wiggle[j - 16];
                     handle.write_data_v2(i, gadget.w_j_minus_16, vec![F::from_canonical_u32(w16)]);
@@ -626,12 +707,52 @@ mod tests {
                             == 0
                     );
 
-                    // wiggle[j] = (F::TWO * F::TWO).to_canonical_u64() as u32;
                     wiggle[j] = (((reduced_sum as usize) % (1 << 16))
                         + ((reduced_sum as usize) >> 16) * (1 << 16))
                         as u32;
-                    println!("wiggle {}", wiggle[j]);
                 }
+
+                handle.write_data_v2(
+                    i,
+                    gadget.h,
+                    h.clone()
+                        .into_iter()
+                        .map(|x| F::from_canonical_u64(be_bits_to_usize(x) as u64))
+                        .collect(),
+                );
+
+                let se = h[4];
+                let sf = h[5];
+                let sg = h[6];
+                let se_field_bits = bits_to_field_bits(se);
+                let sf_field_bits = bits_to_field_bits(sf);
+                let sg_field_bits = bits_to_field_bits(sg);
+                handle.write_data_v2(i, gadget.compress_se_bits, se_field_bits);
+                handle.write_data_v2(i, gadget.compress_sf_bits, sf_field_bits);
+                handle.write_data_v2(i, gadget.compress_sg_bits, sg_field_bits);
+
+                let compressing_s1_witness_bits =
+                    bits_to_field_bits(xor2(rotate(se, 6), rotate(se, 11)));
+                handle.write_data_v2(i, gadget.compress_s1_witness, compressing_s1_witness_bits);
+
+                let compressing_s1_bits =
+                    bits_to_field_bits(xor3(rotate(se, 6), rotate(se, 11), rotate(se, 25)));
+                handle.write_data_v2(i, gadget.compress_s1, compressing_s1_bits);
+
+                let compressing_ch_witness_1 = and2(se, sf);
+                let compressing_ch_witness_2 = and2(not(se), sg);
+                let compressing_ch = xor2(and2(se, sf), and2(not(se), sg));
+                handle.write_data_v2(
+                    i,
+                    gadget.compress_ch_witness_1,
+                    bits_to_field_bits(compressing_ch_witness_1),
+                );
+                handle.write_data_v2(
+                    i,
+                    gadget.compress_ch_witness_2,
+                    bits_to_field_bits(compressing_ch_witness_2),
+                );
+                handle.write_data_v2(i, gadget.compress_ch, bits_to_field_bits(compressing_ch));
             }
             drop(handle);
             generator.generate_trace(&chip, nb_rows as usize).unwrap()
