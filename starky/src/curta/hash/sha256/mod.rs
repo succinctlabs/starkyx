@@ -1,150 +1,5 @@
 //! This module implements the SHA256 hash function with an input message length of
-//! 512 bits as an AIR-based recursive relation. The algorithm is summarized below.
-//!
-//! The pseudocode will make more sense if you reference `educational.rs`.
-//!
-//! <CONSTANTS>
-//!
-//! CONST_K_U32S[64]: First 32 bits of the fractional parts of the cube roots of the first 64 primes.
-//! CONST_H_BITS[8][32]: First 32 bits of the fractional parts of the square roots of the first 8 primes.
-//!
-//! <REGISTERS>
-//!
-//! INPUT_U32S[16]: The input message of length 512 bits condensed into 16 u32's.
-//! H_BITS[8][32]: The hash values array.
-//! W_U32S[64]: The message schedule array.
-//!
-//! CHUNK_SELECTOR = 0: A selector bit that determines whether we are reading the first or the
-//! second chunk of the message schedule array.
-//!
-//! MIXING_SELECTOR = 1: A selector bit that determines whether we are in the mixing selector.
-//! COMPRESSING_SELECTOR = 0: A selector bit that determines whether we are in the compressing.
-//! ACCUMULATION_SELECTOR = 0: A selector bit that determines whether we are accumulating.
-//!
-//! STEP_SELECTORS[48 + 64 + 1] = [0, ..., 0]
-//!
-//! J_SELECTORS[64] = [0, ..., 0]: Keeps track of the index 'j' and used to select from arrays.
-//! J_SELECTORS[16] = 1
-//!
-//! <SELECTOR RANGE CHECKS>
-//!
-//! CHUNK_SELECTOR * (1 - CHUNK_SELECTOR) === 0
-//! MIXING_SELECTOR * (1 - MIXING_SELECTOR) === 0
-//! COMPRESSING_SELECTOR * (1 - COMPRESSING_SELECTOR) === 0
-//! ACCUMULATION_SELECTOR * (1 - ACCUMULATION_SELECTOR) === 0
-//! MIXING_SELECTOR + COMPRESSING_SELECTOR + ACCUMULATION_SELECTOR === 1
-//! J_SELECTORS.SUM() === 1
-//! for i in 0..64
-//!     J_SELECTORS[i] * (1 - J_SELECTORS[i]) === 0
-//!
-//! <COORDINATOR>
-//!
-//! > Selects the correct message schedule array to use in the next 48 + 64 rows in the STARK.
-//! W_CHUNK_1_U32S <== SOME_QUADRATIC_1(INPUT_U32S)
-//! W_CHUNK_2_U32S <== SOME_QUADRATIC_2(INPUT_U32S)
-//! W_U32S <== (1 - CHUNK_SELECTOR) * W_CHUNK_1_U32S + CHUNK_SELECTOR * W_CHUNK_1_U32S
-//!
-//! > Only increment if we are mixing or compressing.
-//! J_INCREMENT_CONDITION <== MIXING_SELECTOR + COMPRESSING_SELECTOR
-//!                         - MIXING_SELECTOR * COMPRESSING_SELECTOR
-//!
-//! > If we are in the accumulation stage it's time to reset j.
-//! J_RESET_CONDITION <== ACCUMULATION_SELECTOR
-//!
-//! > If it's time to reset j, then reset j.
-//! J_RESET_CONDITION * (J_SELECTOR[16].NEXT() - 1) === 0
-//! for i in 0..64 except 16
-//!     J_RESET_CONDITION * (J_SELECTOR[i].NEXT()) === 0
-//!
-//! > If it's not time to reset j, then increment j.
-//! for i in 0..64
-//!      (J_SELECTOR[i % 64].NEXT() - J_SELECTOR[(i - 1) % 64]) * (1 - J_RESET_CONDITION) === 0
-//!
-//! > Conditions for transitioning between phases.
-//! MIXING_TO_COMPRESSING_CONDITION <== J_SELECTOR[63] * MIXING_SELECTOR
-//! COMPRESSING_TO_ACCUMULATING_CONDITION <== J_SELECTOR[63] * COMPRESSING_SELECTOR
-//! ACCUMULATING_TO_MIXING_CONDITION <== ACCUMULATION_SELECTOR
-//!
-//! > Transition between mixing to compressing.
-//! COMPRESSSING_SELECTOR.NEXT() <== MIXING_TO_COMPRESSING
-//! MIXING_SELECTOR.NEXT() <== MIXING_TO_COMPRESSING * 0 + (1 - MIXING_TO_COMPRESSING) * MIXING_SELECTOR
-//!
-//! > Transition between compressing to accumulating.
-//! ACCUMULATION_SELECTOR.NEXT() <== COMPRESSING_TO_ACCUMULATING
-//! COMPRESSING_SELECTOR.NEXT() <== COMPRESSING_TO_ACCUMULATING * 0 + (1 - COMPRESSING_TO_ACCUMULATING) * COMPRESSING_SELECTOR
-//!
-//! > Transition between accumulating to mixing.
-//! MIXING_SELECTOR.NEXT() <== ACCUMULATING_TO_MIXING
-//! ACCUMULATION_SELECTOR.NEXT() <== ACCUMULATING_TO_MIXING * 0 + (1 - ACCUMULATING_TO_MIXING) * ACCUMULATION_SELECTOR
-//!
-//! <MIXING>
-//!
-//! W_J_MINUS_15[32] <== J_SELECTOR.ROTATE(-15).DOT(W_U32).BITS()
-//! W_J_MINUS_2_[32] <== J_SELECTOR.ROTATE(-2).DOT(W_U32).BITS()
-//!
-//! S0_WITNESS[32] <== W_J_MINUS_15.ROTATE(7).XOR(W_J_MINUS_15.ROTATE(18))
-//! S0[32] <== S0_WITNESS[32].XOR(W_J_MINUS_15.SHR(3))
-//!
-//! S1_WITNESS[32] <== W_J_MINUS_2.ROTATE(17).XOR(W_J_MINUS_2.ROTATE(19))
-//! S1[32] <== S1_WITNESS[32].XOR(W_J_MINUS_2.SHR(10))
-//!
-//! WARNING: OVERFLOW ISSUES WITH SMALL PROBABILITY?
-//! W_U32.NEXT().DOT(J_SELECTOR) <== (1 - MIXING_PHASE_SELECTOR) * [W_J_MINUS_16.U32()
-//!                                 + S0.U32()
-//!                                 + W_J_MINUS_7.U32()
-//!                                 + S1.U32()]
-//!
-//! <COMPRESSING>
-//!
-//! > Just copy, don't allocate.
-//! SA <== H[0]
-//! SB <== H[1]
-//! SC <== H[2]
-//! SD <== H[3]
-//! SE <== H[4]
-//! SF <== H[5]
-//! SG <== H[6]
-//! SH <== H[7]
-//!
-//! S1_WITNESS[32] <== SE.ROTATE(6).XOR(SE.ROTATE(11))
-//! S1[32] <== S1_WITNESS.XOR(SE.ROTATE(25))
-//!
-//! CH_WITNESS_1[32] <== SE.AND(SF)
-//! CH_WITNESS_2[32] <== SE.NOT().AND(SG)
-//! CH[32] <== CH_WITNESS_1.XOR(CH_WITNESS_2)
-//!
-//! TEMP1[32] <== SH.U32() + S1.U32() + CH.U32() + K_U32.DOT(J_SELECTOR) + W_U32.DOT(J_SELECTOR)
-//!
-//! S0_WITNESS[32] <== SA.ROTATE(2).XOR(SA.ROTATE(13))
-//! S0[32] <== S0_WITNESS.XOR(SA.ROTATE(22))
-//!
-//! MAJ_WITNESS_1[32] <== SA.AND(SB)
-//! MAJ_WITNESS_2[32] <== SA.AND(SC)
-//! MAJ_WITNESS_3[32] <== SB.AND(SC)
-//! MAJ_WITNESS_4[32] <== MAJ_WITNESS_1.XOR(MAJ_WITNESS_2)
-//! MAJ_WITNESS[32] <== MAJ_WITNESS_4.XOR(MAJ_WITNESS_3)
-//!
-//! TEMP2[32] <== (S0.U32() + MAJ.U32()).BITS()
-//!
-//! SH.NEXT() <== SG
-//! SG.NEXT() <== SF
-//! SF.NEXT() <== SE
-//! SE.NEXT() <== (SD + TEMP1.U32()).BITS()
-//! SD.NEXT() <== SC
-//! SC.NEXT() <== SB
-//! SB.NEXT() <== SA
-//! SA.NEXT() <== (TEMP1.U32() + TEMP2.U32()).BITS()
-//!
-//! <ACCUMULATING>
-//!
-//! H_BITS[0] <== (H_BITS[0].U32() + SA.U32().BITS()
-//! H_BITS[1] <== (H_BITS[1].U32() + SB.U32().BITS()
-//! H_BITS[2] <== (H_BITS[2].U32() + SC.U32().BITS()
-//! H_BITS[3] <== (H_BITS[3].U32() + SD.U32().BITS()
-//! H_BITS[4] <== (H_BITS[4].U32() + SE.U32().BITS()
-//! H_BITS[5] <== (H_BITS[5].U32() + SF.U32().BITS()
-//! H_BITS[6] <== (H_BITS[6].U32() + SG.U32().BITS()
-//! H_BITS[7] <== (H_BITS[7].U32() + SH.U32().BITS()
+//! 512 bits as an AIR-based recursive relation.
 
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
@@ -157,10 +12,6 @@ use crate::curta::register::{ArrayRegister, BitRegister, ElementRegister, Regist
 pub mod educational;
 pub mod helper;
 pub mod reference;
-
-pub struct Sha256Gadget {
-    input: ArrayRegister<BitRegister>,
-}
 
 // First 32 bits of the fractional parts of the square roots of the first 8 primes.
 // Reference: https://en.wikipedia.org/wiki/SHA-2
@@ -228,7 +79,7 @@ mod tests {
     pub struct Sha256Test;
 
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for Sha256Test {
-        const NUM_ARITHMETIC_COLUMNS: usize = 2;
+        const NUM_ARITHMETIC_COLUMNS: usize = 4;
         const NUM_FREE_COLUMNS: usize = 900;
         type Instruction = InstructionSet<Ed25519BaseField>;
     }
@@ -249,14 +100,22 @@ mod tests {
         mixing_add4_result_low: U16Register,
         mixing_add4_result_high: U16Register,
         h: ArrayRegister<ElementRegister>,
+        compress_sa_bits: ArrayRegister<BitRegister>,
+        compress_sb_bits: ArrayRegister<BitRegister>,
+        compress_sc_bits: ArrayRegister<BitRegister>,
+        compress_sd_bits: ArrayRegister<BitRegister>,
         compress_se_bits: ArrayRegister<BitRegister>,
         compress_sf_bits: ArrayRegister<BitRegister>,
         compress_sg_bits: ArrayRegister<BitRegister>,
+        compress_sh_bits: ArrayRegister<BitRegister>,
         compress_s1_witness: ArrayRegister<BitRegister>,
         compress_s1: ArrayRegister<BitRegister>,
         compress_ch_witness_1: ArrayRegister<BitRegister>,
         compress_ch_witness_2: ArrayRegister<BitRegister>,
         compress_ch: ArrayRegister<BitRegister>,
+        compress_temp1_carry: ElementRegister,
+        compress_temp1_witness_low: U16Register,
+        compress_temp1_witness_high: U16Register,
     }
 
     impl Sha256Gadget {
@@ -287,14 +146,22 @@ mod tests {
 
             // Compress.
             let h = builder.alloc_array::<ElementRegister>(8);
+            let compress_sa_bits = builder.alloc_array::<BitRegister>(32);
+            let compress_sb_bits = builder.alloc_array::<BitRegister>(32);
+            let compress_sc_bits = builder.alloc_array::<BitRegister>(32);
+            let compress_sd_bits = builder.alloc_array::<BitRegister>(32);
             let compress_se_bits = builder.alloc_array::<BitRegister>(32);
             let compress_sf_bits = builder.alloc_array::<BitRegister>(32);
             let compress_sg_bits = builder.alloc_array::<BitRegister>(32);
+            let compress_sh_bits = builder.alloc_array::<BitRegister>(32);
             let compress_s1_witness = builder.alloc_array::<BitRegister>(32);
             let compress_s1 = builder.alloc_array::<BitRegister>(32);
             let compress_ch_witness_1 = builder.alloc_array::<BitRegister>(32);
             let compress_ch_witness_2 = builder.alloc_array::<BitRegister>(32);
             let compress_ch = builder.alloc_array::<BitRegister>(32);
+            let compress_temp1_carry = builder.alloc::<ElementRegister>();
+            let compress_temp1_witness_low = builder.alloc::<U16Register>();
+            let compress_temp1_witness_high = builder.alloc::<U16Register>();
 
             let gadget = Self {
                 pc,
@@ -312,14 +179,22 @@ mod tests {
                 mixing_add4_result_low: witness_low,
                 mixing_add4_result_high: witness_high,
                 h,
+                compress_sa_bits,
+                compress_sb_bits,
+                compress_sc_bits,
+                compress_sd_bits,
                 compress_se_bits,
                 compress_sf_bits,
                 compress_sg_bits,
+                compress_sh_bits,
                 compress_s1_witness,
                 compress_s1,
                 compress_ch_witness_1,
                 compress_ch_witness_2,
                 compress_ch,
+                compress_temp1_carry,
+                compress_temp1_witness_low,
+                compress_temp1_witness_high,
             };
 
             gadget.constraints(builder);
@@ -492,9 +367,14 @@ mod tests {
             // COMPUTE S1
 
             // decompose se to bits
+            builder.constrain(self.compress_sa_bits.expr().be_sum() - sa.expr());
+            builder.constrain(self.compress_sb_bits.expr().be_sum() - sb.expr());
+            builder.constrain(self.compress_sc_bits.expr().be_sum() - sc.expr());
+            builder.constrain(self.compress_sd_bits.expr().be_sum() - sd.expr());
             builder.constrain(self.compress_se_bits.expr().be_sum() - se.expr());
             builder.constrain(self.compress_sf_bits.expr().be_sum() - sf.expr());
             builder.constrain(self.compress_sg_bits.expr().be_sum() - sg.expr());
+            builder.constrain(self.compress_sh_bits.expr().be_sum() - sh.expr());
 
             // s1 = xor3(rotate(se, 6), rotate(se, 11), rotate(se, 25))
             builder.constrain(self.xor2::<L, F, D>(
@@ -524,6 +404,28 @@ mod tests {
                 self.compress_ch_witness_1.expr(),
                 self.compress_ch_witness_2.expr(),
                 self.compress_ch.expr(),
+            ));
+
+            // COMPUTE TEMP1
+
+            let mut w_j = ArithmeticExpression::from_constant(F::ZERO);
+            let mut k_j = ArithmeticExpression::from_constant(F::ZERO);
+            for j in 0..64 {
+                w_j = w_j + self.pc.get(48 + j).expr() * self.w.get(j).expr();
+                k_j = k_j + self.pc.get(48 + j).expr() * F::from_canonical_u64(K[j] as u64);
+            }
+
+            builder.constrain(self.add::<L, F, D>(
+                vec![
+                    self.compress_sh_bits.expr().be_sum(),
+                    self.compress_s1.expr().be_sum(),
+                    self.compress_ch.expr().be_sum(),
+                    k_j,
+                    w_j,
+                ],
+                self.compress_temp1_carry.expr(),
+                self.compress_temp1_witness_low.expr(),
+                self.compress_temp1_witness_high.expr(),
             ));
         }
 
@@ -721,22 +623,37 @@ mod tests {
                         .collect(),
                 );
 
+                let sa = h[0];
+                let sb = h[1];
+                let sc = h[2];
+                let sd = h[3];
                 let se = h[4];
                 let sf = h[5];
                 let sg = h[6];
+                let sh = h[7];
+                let sa_field_bits = bits_to_field_bits(sa);
+                let sb_field_bits = bits_to_field_bits(sb);
+                let sc_field_bits = bits_to_field_bits(sc);
+                let sd_field_bits = bits_to_field_bits(sd);
                 let se_field_bits = bits_to_field_bits(se);
                 let sf_field_bits = bits_to_field_bits(sf);
                 let sg_field_bits = bits_to_field_bits(sg);
+                let sh_field_bits = bits_to_field_bits(sh);
+                handle.write_data_v2(i, gadget.compress_sa_bits, sa_field_bits);
+                handle.write_data_v2(i, gadget.compress_sb_bits, sb_field_bits);
+                handle.write_data_v2(i, gadget.compress_sc_bits, sc_field_bits);
+                handle.write_data_v2(i, gadget.compress_sd_bits, sd_field_bits);
                 handle.write_data_v2(i, gadget.compress_se_bits, se_field_bits);
                 handle.write_data_v2(i, gadget.compress_sf_bits, sf_field_bits);
                 handle.write_data_v2(i, gadget.compress_sg_bits, sg_field_bits);
+                handle.write_data_v2(i, gadget.compress_sh_bits, sh_field_bits);
 
                 let compressing_s1_witness_bits =
                     bits_to_field_bits(xor2(rotate(se, 6), rotate(se, 11)));
                 handle.write_data_v2(i, gadget.compress_s1_witness, compressing_s1_witness_bits);
 
-                let compressing_s1_bits =
-                    bits_to_field_bits(xor3(rotate(se, 6), rotate(se, 11), rotate(se, 25)));
+                let s1 = xor3(rotate(se, 6), rotate(se, 11), rotate(se, 25));
+                let compressing_s1_bits = bits_to_field_bits(s1);
                 handle.write_data_v2(i, gadget.compress_s1, compressing_s1_bits);
 
                 let compressing_ch_witness_1 = and2(se, sf);
@@ -753,6 +670,48 @@ mod tests {
                     bits_to_field_bits(compressing_ch_witness_2),
                 );
                 handle.write_data_v2(i, gadget.compress_ch, bits_to_field_bits(compressing_ch));
+
+                let mut sum: usize = 0;
+                if NB_MIXING_STEPS <= step && step < NB_MIXING_STEPS + NB_COMPRESS_STEPS {
+                    let j = step - 48;
+                    sum = be_bits_to_usize(sh)
+                        + be_bits_to_usize(s1)
+                        + be_bits_to_usize(compressing_ch)
+                        + K[j]
+                        + (wiggle[j] as usize);
+                } else {
+                    sum = be_bits_to_usize(sh)
+                        + be_bits_to_usize(s1)
+                        + be_bits_to_usize(compressing_ch);
+                }
+
+                let carry_val = sum / (1 << 32);
+                handle.write_data_v2(
+                    i,
+                    gadget.compress_temp1_carry,
+                    vec![F::from_canonical_u64(carry_val as u64)],
+                );
+                let reduced_sum = sum - (carry_val as usize) * (1 << 32);
+
+                // Decompose reduced_sum into two limbs, where the base is 2^16.
+                let witness_low_value = F::from_canonical_u64((reduced_sum % (1 << 16)) as u64);
+                let witness_high_value = F::from_canonical_u64((reduced_sum >> 16) as u64);
+                assert!(witness_high_value.to_canonical_u64() < (1 << 16));
+                assert!(
+                    witness_low_value + witness_high_value * F::from_canonical_u64(1 << 16)
+                        == F::from_canonical_u64(reduced_sum as u64)
+                );
+                assert!(witness_low_value.to_canonical_u64() < (1 << 16));
+                handle.write_data_v2(
+                    i,
+                    gadget.compress_temp1_witness_low,
+                    vec![witness_low_value],
+                );
+                handle.write_data_v2(
+                    i,
+                    gadget.compress_temp1_witness_high,
+                    vec![witness_high_value],
+                );
             }
             drop(handle);
             generator.generate_trace(&chip, nb_rows as usize).unwrap()
