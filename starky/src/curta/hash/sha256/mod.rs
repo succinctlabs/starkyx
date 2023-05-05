@@ -79,7 +79,7 @@ mod tests {
     pub struct Sha256Test;
 
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for Sha256Test {
-        const NUM_ARITHMETIC_COLUMNS: usize = 6;
+        const NUM_ARITHMETIC_COLUMNS: usize = 10;
         const NUM_FREE_COLUMNS: usize = 1500;
         type Instruction = InstructionSet<Ed25519BaseField>;
     }
@@ -126,6 +126,12 @@ mod tests {
         compress_temp2_carry: ElementRegister,
         compress_temp2_witness_low: U16Register,
         compress_temp2_witness_high: U16Register,
+        compress_se_carry: ElementRegister,
+        compress_se_witness_low: U16Register,
+        compress_se_witness_high: U16Register,
+        compress_sa_carry: ElementRegister,
+        compress_sa_witness_low: U16Register,
+        compress_sa_witness_high: U16Register,
     }
 
     impl Sha256Gadget {
@@ -185,6 +191,14 @@ mod tests {
             let compress_temp2_witness_low = builder.alloc::<U16Register>();
             let compress_temp2_witness_high = builder.alloc::<U16Register>();
 
+            let compress_se_carry = builder.alloc::<ElementRegister>();
+            let compress_se_witness_low = builder.alloc::<U16Register>();
+            let compress_se_witness_high = builder.alloc::<U16Register>();
+
+            let compress_sa_carry = builder.alloc::<ElementRegister>();
+            let compress_sa_witness_low = builder.alloc::<U16Register>();
+            let compress_sa_witness_high = builder.alloc::<U16Register>();
+
             let gadget = Self {
                 pc,
                 input,
@@ -227,6 +241,12 @@ mod tests {
                 compress_temp2_carry,
                 compress_temp2_witness_low,
                 compress_temp2_witness_high,
+                compress_se_carry,
+                compress_se_witness_low,
+                compress_se_witness_high,
+                compress_sa_carry,
+                compress_sa_witness_low,
+                compress_sa_witness_high,
             };
 
             gadget.constraints(builder);
@@ -513,6 +533,34 @@ mod tests {
                 self.compress_temp2_witness_high.expr(),
             ));
 
+            builder.constrain(self.add::<L, F, D>(
+                vec![
+                    self.compress_sd_bits.expr().be_sum(),
+                    self.u32_witnesses_to_element::<L, F, D>(
+                        self.compress_temp1_witness_low,
+                        self.compress_temp1_witness_high,
+                    ),
+                ],
+                self.compress_se_carry.expr(),
+                self.compress_se_witness_low.expr(),
+                self.compress_se_witness_high.expr(),
+            ));
+            builder.constrain(self.add::<L, F, D>(
+                vec![
+                    self.u32_witnesses_to_element::<L, F, D>(
+                        self.compress_temp1_witness_low,
+                        self.compress_temp1_witness_high,
+                    ),
+                    self.u32_witnesses_to_element::<L, F, D>(
+                        self.compress_temp2_witness_low,
+                        self.compress_temp2_witness_high,
+                    ),
+                ],
+                self.compress_sa_carry.expr(),
+                self.compress_sa_witness_low.expr(),
+                self.compress_sa_witness_high.expr(),
+            ));
+
             // TODO: why only works until 60?
             for j in 0..61 {
                 let filter = self.pc.get(48 + j).expr();
@@ -526,7 +574,6 @@ mod tests {
                         * (self.compress_sg_bits.next().expr().be_sum()
                             - self.compress_sf_bits.expr().be_sum()),
                 );
-                // // TODO
                 builder.constrain_transition(
                     filter.clone()
                         * (self.compress_sd_bits.next().expr().be_sum()
@@ -882,6 +929,48 @@ mod tests {
                     gadget.compress_temp2_witness_high,
                     vec![witness_high_value],
                 );
+
+                let sum = be_bits_to_usize(sd) + temp1;
+                let carry_val = sum / (1 << 32);
+                handle.write_data_v2(
+                    i,
+                    gadget.compress_se_carry,
+                    vec![F::from_canonical_u64(carry_val as u64)],
+                );
+                let reduced_sum = sum - (carry_val as usize) * (1 << 32);
+
+                // Decompose reduced_sum into two limbs, where the base is 2^16.
+                let witness_low_value = F::from_canonical_u64((reduced_sum % (1 << 16)) as u64);
+                let witness_high_value = F::from_canonical_u64((reduced_sum >> 16) as u64);
+                assert!(witness_high_value.to_canonical_u64() < (1 << 16));
+                assert!(
+                    witness_low_value + witness_high_value * F::from_canonical_u64(1 << 16)
+                        == F::from_canonical_u64(reduced_sum as u64)
+                );
+                assert!(witness_low_value.to_canonical_u64() < (1 << 16));
+                handle.write_data_v2(i, gadget.compress_se_witness_low, vec![witness_low_value]);
+                handle.write_data_v2(i, gadget.compress_se_witness_high, vec![witness_high_value]);
+
+                let sum = temp2 + temp1;
+                let carry_val = sum / (1 << 32);
+                handle.write_data_v2(
+                    i,
+                    gadget.compress_sa_carry,
+                    vec![F::from_canonical_u64(carry_val as u64)],
+                );
+                let reduced_sum = sum - (carry_val as usize) * (1 << 32);
+
+                // Decompose reduced_sum into two limbs, where the base is 2^16.
+                let witness_low_value = F::from_canonical_u64((reduced_sum % (1 << 16)) as u64);
+                let witness_high_value = F::from_canonical_u64((reduced_sum >> 16) as u64);
+                assert!(witness_high_value.to_canonical_u64() < (1 << 16));
+                assert!(
+                    witness_low_value + witness_high_value * F::from_canonical_u64(1 << 16)
+                        == F::from_canonical_u64(reduced_sum as u64)
+                );
+                assert!(witness_low_value.to_canonical_u64() < (1 << 16));
+                handle.write_data_v2(i, gadget.compress_sa_witness_low, vec![witness_low_value]);
+                handle.write_data_v2(i, gadget.compress_sa_witness_high, vec![witness_high_value]);
 
                 // TODO: fix
                 if NB_MIXING_STEPS <= step && step < NB_MIXING_STEPS + NB_COMPRESS_STEPS {
