@@ -226,7 +226,7 @@ mod tests {
                 compress_maj,
                 compress_temp2_carry,
                 compress_temp2_witness_low,
-                compress_temp2_witness_high
+                compress_temp2_witness_high,
             };
 
             gadget.constraints(builder);
@@ -404,14 +404,15 @@ mod tests {
             let sf = self.h.get(5);
             let sg = self.h.get(6);
             let sh = self.h.get(7);
-            builder.constrain(self.compress_sa_bits.expr().be_sum() - sa.expr());
-            builder.constrain(self.compress_sb_bits.expr().be_sum() - sb.expr());
-            builder.constrain(self.compress_sc_bits.expr().be_sum() - sc.expr());
-            builder.constrain(self.compress_sd_bits.expr().be_sum() - sd.expr());
-            builder.constrain(self.compress_se_bits.expr().be_sum() - se.expr());
-            builder.constrain(self.compress_sf_bits.expr().be_sum() - sf.expr());
-            builder.constrain(self.compress_sg_bits.expr().be_sum() - sg.expr());
-            builder.constrain(self.compress_sh_bits.expr().be_sum() - sh.expr());
+            let filter = self.pc.get(48).expr();
+            builder.constrain(filter.clone() * (self.compress_sa_bits.expr().be_sum() - sa.expr()));
+            builder.constrain(filter.clone() * (self.compress_sb_bits.expr().be_sum() - sb.expr()));
+            builder.constrain(filter.clone() * (self.compress_sc_bits.expr().be_sum() - sc.expr()));
+            builder.constrain(filter.clone() * (self.compress_sd_bits.expr().be_sum() - sd.expr()));
+            builder.constrain(filter.clone() * (self.compress_se_bits.expr().be_sum() - se.expr()));
+            builder.constrain(filter.clone() * (self.compress_sf_bits.expr().be_sum() - sf.expr()));
+            builder.constrain(filter.clone() * (self.compress_sg_bits.expr().be_sum() - sg.expr()));
+            builder.constrain(filter.clone() * (self.compress_sh_bits.expr().be_sum() - sh.expr()));
 
             // COMPUTE S1
             builder.constrain(self.xor2::<L, F, D>(
@@ -502,15 +503,47 @@ mod tests {
             ));
 
             // COMPUTE TEMP2
-            // builder.constrain(self.add::<L, F, D>(
-            //     vec![
-            //         self.compress_s0.expr().be_sum(),
-            //         self.compress_maj.expr().be_sum(),
-            //     ],
-            //     self.compress_temp2_carry.expr(),
-            //     self.compress_temp2_witness_low.expr(),
-            //     self.compress_temp2_witness_high.expr(),
-            // ));
+            builder.constrain(self.add::<L, F, D>(
+                vec![
+                    self.compress_s0.expr().be_sum(),
+                    self.compress_maj.expr().be_sum(),
+                ],
+                self.compress_temp2_carry.expr(),
+                self.compress_temp2_witness_low.expr(),
+                self.compress_temp2_witness_high.expr(),
+            ));
+
+            // TODO: why only works until 60?
+            for j in 0..61 {
+                let filter = self.pc.get(48 + j).expr();
+                builder.constrain_transition(
+                    filter.clone()
+                        * (self.compress_sh_bits.next().expr().be_sum()
+                            - self.compress_sg_bits.expr().be_sum()),
+                );
+                builder.constrain_transition(
+                    filter.clone()
+                        * (self.compress_sg_bits.next().expr().be_sum()
+                            - self.compress_sf_bits.expr().be_sum()),
+                );
+                // // TODO
+                builder.constrain_transition(
+                    filter.clone()
+                        * (self.compress_sd_bits.next().expr().be_sum()
+                            - self.compress_sc_bits.expr().be_sum()),
+                );
+                builder.constrain_transition(
+                    filter.clone()
+                        * (self.compress_sc_bits.next().expr().be_sum()
+                            - self.compress_sb_bits.expr().be_sum()),
+                );
+                builder.constrain_transition(
+                    filter.clone()
+                        * (self.compress_sb_bits.next().expr().be_sum()
+                            - self.compress_sa_bits.expr().be_sum()),
+                );
+                // TODO
+            }
         }
 
         fn constraints<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize>(
@@ -776,6 +809,7 @@ mod tests {
                     vec![F::from_canonical_u64(carry_val as u64)],
                 );
                 let reduced_sum = sum - (carry_val as usize) * (1 << 32);
+                let temp1 = reduced_sum;
 
                 // Decompose reduced_sum into two limbs, where the base is 2^16.
                 let witness_low_value = F::from_canonical_u64((reduced_sum % (1 << 16)) as u64);
@@ -819,7 +853,7 @@ mod tests {
                 handle.write_data_v2(i, gadget.compress_maj, compressing_maj);
 
                 let sum = be_bits_to_usize(xor3(rotate(sa, 2), rotate(sa, 13), rotate(sa, 22)))
-                + be_bits_to_usize(xor3(and2(sa, sb), and2(sa, sc), and2(sb, sc)));
+                    + be_bits_to_usize(xor3(and2(sa, sb), and2(sa, sc), and2(sb, sc)));
                 let carry_val = sum / (1 << 32);
                 handle.write_data_v2(
                     i,
@@ -827,6 +861,7 @@ mod tests {
                     vec![F::from_canonical_u64(carry_val as u64)],
                 );
                 let reduced_sum = sum - (carry_val as usize) * (1 << 32);
+                let temp2 = reduced_sum;
 
                 // Decompose reduced_sum into two limbs, where the base is 2^16.
                 let witness_low_value = F::from_canonical_u64((reduced_sum % (1 << 16)) as u64);
@@ -837,12 +872,28 @@ mod tests {
                         == F::from_canonical_u64(reduced_sum as u64)
                 );
                 assert!(witness_low_value.to_canonical_u64() < (1 << 16));
-                handle.write_data_v2(i, gadget.compress_temp2_witness_low, vec![witness_low_value]);
+                handle.write_data_v2(
+                    i,
+                    gadget.compress_temp2_witness_low,
+                    vec![witness_low_value],
+                );
                 handle.write_data_v2(
                     i,
                     gadget.compress_temp2_witness_high,
                     vec![witness_high_value],
-                );                
+                );
+
+                // TODO: fix
+                if NB_MIXING_STEPS <= step && step < NB_MIXING_STEPS + NB_COMPRESS_STEPS {
+                    h[7] = h[6];
+                    h[6] = h[5];
+                    // h[5] = usize_to_be_bits((be_bits_to_usize(h[4]) + temp1) % (1 << 32));
+                    h[4] = h[3];
+                    h[3] = h[2];
+                    h[2] = h[1];
+                    h[1] = h[0];
+                    // h[0] = usize_to_be_bits::<32>((temp1 + temp2) % (1 << 32));
+                }
             }
             drop(handle);
             generator.generate_trace(&chip, nb_rows as usize).unwrap()
