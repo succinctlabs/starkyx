@@ -562,7 +562,7 @@ mod tests {
             ));
 
             // TODO: why only works until 60?
-            for j in 0..61 {
+            for j in 0..63 {
                 let filter = self.pc.get(48 + j).expr();
                 builder.constrain_transition(
                     filter.clone()
@@ -573,6 +573,19 @@ mod tests {
                     filter.clone()
                         * (self.compress_sg_bits.next().expr().be_sum()
                             - self.compress_sf_bits.expr().be_sum()),
+                );
+                builder.constrain_transition(
+                    filter.clone()
+                        * (self.compress_sf_bits.next().expr().be_sum()
+                            - self.compress_se_bits.expr().be_sum()),
+                );
+                builder.constrain_transition(
+                    filter.clone()
+                        * (self.compress_se_bits.next().expr().be_sum()
+                            - (self.u32_witnesses_to_element::<L, F, D>(
+                                self.compress_se_witness_low,
+                                self.compress_se_witness_high,
+                            ))),
                 );
                 builder.constrain_transition(
                     filter.clone()
@@ -589,7 +602,14 @@ mod tests {
                         * (self.compress_sb_bits.next().expr().be_sum()
                             - self.compress_sa_bits.expr().be_sum()),
                 );
-                // TODO
+                builder.constrain_transition(
+                    filter.clone()
+                        * (self.compress_sa_bits.next().expr().be_sum()
+                            - (self.u32_witnesses_to_element::<L, F, D>(
+                                self.compress_sa_witness_low,
+                                self.compress_sa_witness_high,
+                            ))),
+                );
             }
         }
 
@@ -976,8 +996,8 @@ mod tests {
                 if NB_MIXING_STEPS <= step && step < NB_MIXING_STEPS + NB_COMPRESS_STEPS {
                     h[7] = h[6];
                     h[6] = h[5];
-                    h[5] = usize_to_be_bits((be_bits_to_usize(h[4]) + temp1) % (1 << 32));
-                    h[4] = h[3];
+                    h[5] = h[4];
+                    h[4] = usize_to_be_bits((be_bits_to_usize(h[3]) + temp1) % (1 << 32));
                     h[3] = h[2];
                     h[2] = h[1];
                     h[1] = h[0];
