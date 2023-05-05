@@ -887,12 +887,12 @@ mod tests {
                 if NB_MIXING_STEPS <= step && step < NB_MIXING_STEPS + NB_COMPRESS_STEPS {
                     h[7] = h[6];
                     h[6] = h[5];
-                    // h[5] = usize_to_be_bits((be_bits_to_usize(h[4]) + temp1) % (1 << 32));
+                    h[5] = usize_to_be_bits((be_bits_to_usize(h[4]) + temp1) % (1 << 32));
                     h[4] = h[3];
                     h[3] = h[2];
                     h[2] = h[1];
                     h[1] = h[0];
-                    // h[0] = usize_to_be_bits::<32>((temp1 + temp2) % (1 << 32));
+                    h[0] = usize_to_be_bits::<32>((temp1 + temp2) % (1 << 32));
                 }
             }
             drop(handle);
