@@ -173,7 +173,7 @@ where
     }
 
     fn constraint_degree(&self) -> usize {
-        2
+        3
     }
 
     fn permutation_pairs(&self) -> Vec<PermutationPair> {

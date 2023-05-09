@@ -7,6 +7,7 @@ use self::expression::ArithmeticExpression;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub mod expression;
+pub mod instruction;
 
 #[derive(Debug, Clone)]
 pub enum ArithmeticConstraint<F: RichField + Extendable<D>, const D: usize> {
