@@ -1,7 +1,6 @@
 //! An implementation of the cubic extension F[X]/(X^3 - X - 1).
 //!
 //!
-//!
 
 pub mod cubic_expression;
 pub mod goldilocks_cubic;
@@ -13,20 +12,23 @@ use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAss
 use plonky2::field::types::{Field, Sample};
 use rand::Rng;
 
+/// Parameters for the cubic extension F[X]/(X^3 - X - 1)
 pub trait CubicParameters<F>:
     'static + Sized + Copy + Clone + Send + Sync + PartialEq + Eq + std::fmt::Debug
 {
-    const GALOIS_ORBIT: [[F; 3]; 3];
+    /// The Galois orbit of the generator.
+    ///
+    /// These are the roots of X^3 - X - 1 in the extension field not equal to X.
+    const GALOIS_ORBIT: [[F; 3]; 2];
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CubicExtension<F: Field, P: CubicParameters<F>>(pub [F; 3], PhantomData<P>);
 
 impl<F: Field, P: CubicParameters<F>> CubicExtension<F, P> {
-    const ORBIT: [Self; 3] = [
+    const ORBIT: [Self; 2] = [
         Self(P::GALOIS_ORBIT[0], PhantomData),
         Self(P::GALOIS_ORBIT[1], PhantomData),
-        Self(P::GALOIS_ORBIT[2], PhantomData),
     ];
 
     pub const ZERO: Self = Self([F::ZERO, F::ZERO, F::ZERO], PhantomData);
@@ -40,7 +42,7 @@ impl<F: Field, P: CubicParameters<F>> CubicExtension<F, P> {
         let (a, b, c) = (self.0[0], self.0[1], self.0[2]);
         let gal =
             |i: usize| Self::from(a) + Self::ORBIT[i] * b + (Self::ORBIT[i] * Self::ORBIT[i]) * c;
-        let (gal_1, gal_2) = (gal(1), gal(2));
+        let (gal_1, gal_2) = (gal(0), gal(1));
 
         let gal_12 = gal_1 * gal_2;
         let gal_prod = *self * gal_12;
@@ -83,8 +85,8 @@ impl<F: Field, P: CubicParameters<F>> Mul for CubicExtension<F, P> {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        let (x_0, x_1, x_2) = (self.0[0].clone(), self.0[1].clone(), self.0[2].clone());
-        let (y_0, y_1, y_2) = (rhs.0[0].clone(), rhs.0[1].clone(), rhs.0[2].clone());
+        let (x_0, x_1, x_2) = (self.0[0], self.0[1], self.0[2]);
+        let (y_0, y_1, y_2) = (rhs.0[0], rhs.0[1], rhs.0[2]);
 
         // Using u^3 = u-1 we get:
         // (x_0 + x_1 u + x_2 u^2) * (y_0 + y_1 u + y_2 u^2)

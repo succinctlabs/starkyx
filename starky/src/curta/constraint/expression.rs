@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
-use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
@@ -17,7 +16,7 @@ pub struct ArithmeticExpression<F, const D: usize> {
     pub(crate) size: usize,
 }
 
-impl<F: Field, const D: usize> ArithmeticExpression<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpression<F, D> {
     pub fn from_constant_vec(constants: Vec<F>) -> Self {
         let size = constants.len();
         Self {
@@ -36,6 +35,10 @@ impl<F: Field, const D: usize> ArithmeticExpression<F, D> {
 
     pub fn one() -> Self {
         Self::from_constant(F::ONE)
+    }
+
+    pub fn eval(&self, trace_rows: &[Vec<F>], row_index: usize) -> Vec<F> {
+        self.expression.eval(trace_rows, row_index)
     }
 }
 

@@ -3,6 +3,7 @@ use core::ops::{Add, Mul, Sub};
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
+use super::{CubicExtension, CubicParameters};
 use crate::curta::constraint::expression::ArithmeticExpression;
 use crate::curta::register::{ArrayRegister, ElementRegister, Register};
 
@@ -19,6 +20,23 @@ impl<F: RichField + Extendable<D>, const D: usize> CubicExpression<F, D> {
     pub fn from_element_array(arr: ArrayRegister<ElementRegister>) -> Self {
         assert_eq!(arr.len(), 3);
         Self([arr.get(0).expr(), arr.get(1).expr(), arr.get(2).expr()])
+    }
+
+    pub fn eval<P: CubicParameters<F>>(
+        &self,
+        trace_rows: &[Vec<F>],
+        row_index: usize,
+    ) -> CubicExtension<F, P> {
+        let value = (
+            self.0[0].eval(trace_rows, row_index),
+            self.0[1].eval(trace_rows, row_index),
+            self.0[2].eval(trace_rows, row_index),
+        );
+        assert_eq!(value.0.len(), 1);
+        assert_eq!(value.1.len(), 1);
+        assert_eq!(value.2.len(), 1);
+
+        CubicExtension::from([value.0[0], value.1[0], value.2[0]])
     }
 }
 
@@ -80,5 +98,71 @@ impl<F: RichField + Extendable<D>, const D: usize> Mul for CubicExpression<F, D>
                 + x_2.clone() * y_0.clone()
                 + x_2.clone() * y_2.clone(),
         ])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use plonky2::field::goldilocks_field::GoldilocksField as F;
+    use plonky2::field::types::Sample;
+
+    use super::super::goldilocks_cubic::GF3;
+    use super::*;
+    use crate::curta::extension::cubic::goldilocks_cubic::GoldilocksCubicParameters;
+    use crate::curta::register::{MemorySlice, RegisterSerializable};
+
+    #[test]
+    fn test_cubic_expression() {
+        type P = GoldilocksCubicParameters;
+        let num_tests = 100;
+
+        let a_reg =
+            ArrayRegister::<ElementRegister>::from_register_unsafe(MemorySlice::Local(0, 3));
+        let b_reg =
+            ArrayRegister::<ElementRegister>::from_register_unsafe(MemorySlice::Local(3, 3));
+        let c_reg =
+            ArrayRegister::<ElementRegister>::from_register_unsafe(MemorySlice::Local(6, 3));
+
+        let a = CubicExpression::<F, 1>::from_element_array(a_reg);
+        let b = CubicExpression::<F, 1>::from_element_array(b_reg);
+        let c = CubicExpression::<F, 1>::from_element_array(c_reg);
+
+        let expr_a_p_b = a.clone() + b.clone();
+        let expr_a_m_b = a.clone() - b.clone();
+        let expr_ab = a.clone() * b.clone();
+        let expr_ab_p_c = a.clone() * b.clone() + c.clone();
+
+        for _ in 0..num_tests {
+            let a_v = GF3::rand();
+            let b_v = GF3::rand();
+            let c_v = GF3::rand();
+
+            let row = a_v
+                .0
+                .iter()
+                .chain(b_v.0.iter())
+                .chain(c_v.0.iter())
+                .map(|x| *x)
+                .collect::<Vec<_>>();
+            let trace = vec![row];
+
+            let a_eval = a.eval::<P>(&trace, 0);
+            let b_eval = b.eval::<P>(&trace, 0);
+            let c_eval = c.eval::<P>(&trace, 0);
+
+            assert_eq!(a_eval, a_v);
+            assert_eq!(b_eval, b_v);
+            assert_eq!(c_eval, c_v);
+
+            let expr_a_p_b_eval = expr_a_p_b.eval::<P>(&trace, 0);
+            let expr_a_m_b_eval = expr_a_m_b.eval::<P>(&trace, 0);
+            let expr_ab_eval = expr_ab.eval::<P>(&trace, 0);
+            let expr_ab_p_c_eval = expr_ab_p_c.eval::<P>(&trace, 0);
+
+            assert_eq!(expr_a_p_b_eval, a_v + b_v);
+            assert_eq!(expr_a_m_b_eval, a_v - b_v);
+            assert_eq!(expr_ab_eval, a_v * b_v);
+            assert_eq!(expr_ab_p_c_eval, a_v * b_v + c_v);
+        }
     }
 }

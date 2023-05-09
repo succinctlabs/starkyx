@@ -1,5 +1,4 @@
 use plonky2::field::goldilocks_field::GoldilocksField;
-use plonky2::field::types::Field;
 
 use super::{CubicExtension, CubicParameters};
 
@@ -10,12 +9,7 @@ pub type GF3 = CubicExtension<GoldilocksField, GoldilocksCubicParameters>;
 pub struct GoldilocksCubicParameters;
 
 impl CubicParameters<GoldilocksField> for GoldilocksCubicParameters {
-    const GALOIS_ORBIT: [[GoldilocksField; 3]; 3] = [
-        [
-            GoldilocksField::ZERO,
-            GoldilocksField::ONE,
-            GoldilocksField::ZERO,
-        ],
+    const GALOIS_ORBIT: [[GoldilocksField; 3]; 2] = [
         [
             GoldilocksField(7831040667286096068),
             GoldilocksField(10050274602728160328),
@@ -48,7 +42,10 @@ mod tests {
 
             assert_eq!(a + b, b + a);
             assert_eq!(a, a + GF3::ZERO);
-            assert_eq!((a + b).0, [a_rr[0] + b_rr[0], a_rr[1] + b_rr[1], a_rr[2] + b_rr[2]]);
+            assert_eq!(
+                (a + b).0,
+                [a_rr[0] + b_rr[0], a_rr[1] + b_rr[1], a_rr[2] + b_rr[2]]
+            );
         }
     }
 
@@ -66,7 +63,7 @@ mod tests {
             assert_eq!(a * (b + c), a * b + a * c);
             assert_eq!(a * GF3::ONE, a);
             assert_eq!(a * GF3::ZERO, GF3::ZERO);
-        } 
+        }
     }
 
     #[test]
