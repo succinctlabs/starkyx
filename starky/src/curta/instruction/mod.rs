@@ -47,7 +47,7 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        vars: & StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
+        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
     ) -> Vec<P> where
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE> 

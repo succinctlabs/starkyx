@@ -66,10 +66,10 @@ impl<F: RichField + Extendable<D>, const D: usize, T: Register> Instruction<F, D
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
-        let bit_slice = self.bit.register().packed_generic_vars(&vars);
-        let true_value = self.true_value.register().packed_generic_vars(&vars);
-        let false_value = self.false_value.register().packed_generic_vars(&vars);
-        let result = self.result.register().packed_generic_vars(&vars);
+        let bit_slice = self.bit.register().packed_generic_vars(vars);
+        let true_value = self.true_value.register().packed_generic_vars(vars);
+        let false_value = self.false_value.register().packed_generic_vars(vars);
+        let result = self.result.register().packed_generic_vars(vars);
 
         debug_assert!(bit_slice.len() == 1);
         let bit = bit_slice[0];
@@ -84,10 +84,10 @@ impl<F: RichField + Extendable<D>, const D: usize, T: Register> Instruction<F, D
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        let bit_slice = self.bit.register().ext_circuit_vars(&vars);
-        let true_value = self.true_value.register().ext_circuit_vars(&vars);
-        let false_value = self.false_value.register().ext_circuit_vars(&vars);
-        let result = self.result.register().ext_circuit_vars(&vars);
+        let bit_slice = self.bit.register().ext_circuit_vars(vars);
+        let true_value = self.true_value.register().ext_circuit_vars(vars);
+        let false_value = self.false_value.register().ext_circuit_vars(vars);
+        let result = self.result.register().ext_circuit_vars(vars);
 
         debug_assert!(bit_slice.len() == 1);
         let bit = bit_slice[0];

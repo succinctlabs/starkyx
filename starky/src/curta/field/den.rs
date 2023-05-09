@@ -154,12 +154,12 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         PF: PackedField<Scalar = FE>,
     {
         // Get the packed entries.
-        let p_a = self.a.register().packed_generic_vars(&vars);
-        let p_b = self.b.register().packed_generic_vars(&vars);
-        let p_result = self.result.register().packed_generic_vars(&vars);
-        let p_carry = self.carry.register().packed_generic_vars(&vars);
-        let p_witness_low = self.witness_low.register().packed_generic_vars(&vars);
-        let p_witness_high = self.witness_high.register().packed_generic_vars(&vars);
+        let p_a = self.a.register().packed_generic_vars(vars);
+        let p_b = self.b.register().packed_generic_vars(vars);
+        let p_result = self.result.register().packed_generic_vars(vars);
+        let p_carry = self.carry.register().packed_generic_vars(vars);
+        let p_witness_low = self.witness_low.register().packed_generic_vars(vars);
+        let p_witness_high = self.witness_high.register().packed_generic_vars(vars);
 
         // Compute the vanishing polynomial:
         //      lhs(x) = sign * (b(x) * result(x) + result(x)) + (1 - sign) * (b(x) * result(x) + a(x))
@@ -192,12 +192,12 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
         // Get the packed entries.
-        let p_a = self.a.register().ext_circuit_vars(&vars);
-        let p_b = self.b.register().ext_circuit_vars(&vars);
-        let p_result = self.result.register().ext_circuit_vars(&vars);
-        let p_carry = self.carry.register().ext_circuit_vars(&vars);
-        let p_witness_low = self.witness_low.register().ext_circuit_vars(&vars);
-        let p_witness_high = self.witness_high.register().ext_circuit_vars(&vars);
+        let p_a = self.a.register().ext_circuit_vars(vars);
+        let p_b = self.b.register().ext_circuit_vars(vars);
+        let p_result = self.result.register().ext_circuit_vars(vars);
+        let p_carry = self.carry.register().ext_circuit_vars(vars);
+        let p_witness_low = self.witness_low.register().ext_circuit_vars(vars);
+        let p_witness_high = self.witness_high.register().ext_circuit_vars(vars);
 
         // Compute the vanishing polynomial:
         //      lhs(x) = sign * (b(x) * result(x) + result(x)) + (1 - sign) * (b(x) * result(x) + a(x))

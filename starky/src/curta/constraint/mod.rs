@@ -34,25 +34,25 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticConstraint<F, D> {
     {
         match self {
             ArithmeticConstraint::First(constraint) => {
-                let vals = constraint.expression.packed_generic(&vars);
+                let vals = constraint.expression.packed_generic(vars);
                 for &val in vals.iter() {
                     yield_constr.constraint_first_row(val);
                 }
             }
             ArithmeticConstraint::Last(constraint) => {
-                let vals = constraint.expression.packed_generic(&vars);
+                let vals = constraint.expression.packed_generic(vars);
                 for &val in vals.iter() {
                     yield_constr.constraint_last_row(val);
                 }
             }
             ArithmeticConstraint::Transition(constraint) => {
-                let vals = constraint.expression.packed_generic(&vars);
+                let vals = constraint.expression.packed_generic(vars);
                 for &val in vals.iter() {
                     yield_constr.constraint_transition(val);
                 }
             }
             ArithmeticConstraint::All(constraint) => {
-                let vals = constraint.expression.packed_generic(&vars);
+                let vals = constraint.expression.packed_generic(vars);
                 for &val in vals.iter() {
                     yield_constr.constraint(val);
                 }
@@ -68,25 +68,25 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticConstraint<F, D> {
     ) {
         match self {
             ArithmeticConstraint::First(constraint) => {
-                let vals = constraint.expression.ext_circuit(builder, &vars);
+                let vals = constraint.expression.ext_circuit(builder, vars);
                 for &val in vals.iter() {
                     yield_constr.constraint_first_row(builder, val);
                 }
             }
             ArithmeticConstraint::Last(constraint) => {
-                let vals = constraint.expression.ext_circuit(builder, &vars);
+                let vals = constraint.expression.ext_circuit(builder, vars);
                 for &val in vals.iter() {
                     yield_constr.constraint_last_row(builder, val);
                 }
             }
             ArithmeticConstraint::Transition(constraint) => {
-                let vals = constraint.expression.ext_circuit(builder, &vars);
+                let vals = constraint.expression.ext_circuit(builder, vars);
                 for &val in vals.iter() {
                     yield_constr.constraint_transition(builder, val);
                 }
             }
             ArithmeticConstraint::All(constraint) => {
-                let vals = constraint.expression.ext_circuit(builder, &vars);
+                let vals = constraint.expression.ext_circuit(builder, vars);
                 for &val in vals.iter() {
                     yield_constr.constraint(builder, val);
                 }

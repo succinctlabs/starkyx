@@ -154,18 +154,18 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             .a
             .clone()
             .into_iter()
-            .map(|x| x.register().packed_generic_vars(&vars))
+            .map(|x| x.register().packed_generic_vars(vars))
             .collect::<Vec<_>>();
         let p_b_vec = self
             .b
             .clone()
             .into_iter()
-            .map(|x| x.register().packed_generic_vars(&vars))
+            .map(|x| x.register().packed_generic_vars(vars))
             .collect::<Vec<_>>();
-        let p_result = self.result.register().packed_generic_vars(&vars);
-        let p_carry = self.carry.register().packed_generic_vars(&vars);
-        let p_witness_low = self.witness_low.register().packed_generic_vars(&vars);
-        let p_witness_high = self.witness_high.register().packed_generic_vars(&vars);
+        let p_result = self.result.register().packed_generic_vars(vars);
+        let p_carry = self.carry.register().packed_generic_vars(vars);
+        let p_witness_low = self.witness_low.register().packed_generic_vars(vars);
+        let p_witness_high = self.witness_high.register().packed_generic_vars(vars);
 
         // Construct the expected vanishing polynmial.
         let p_zero = vec![PF::ZEROS];
@@ -199,18 +199,18 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             .a
             .clone()
             .into_iter()
-            .map(|x| x.register().ext_circuit_vars(&vars))
+            .map(|x| x.register().ext_circuit_vars(vars))
             .collect::<Vec<_>>();
         let p_b_vec = self
             .b
             .clone()
             .into_iter()
-            .map(|x| x.register().ext_circuit_vars(&vars))
+            .map(|x| x.register().ext_circuit_vars(vars))
             .collect::<Vec<_>>();
-        let p_result = self.result.register().ext_circuit_vars(&vars);
-        let p_carry = self.carry.register().ext_circuit_vars(&vars);
-        let p_witness_low = self.witness_low.register().ext_circuit_vars(&vars);
-        let p_witness_high = self.witness_high.register().ext_circuit_vars(&vars);
+        let p_result = self.result.register().ext_circuit_vars(vars);
+        let p_carry = self.carry.register().ext_circuit_vars(vars);
+        let p_witness_low = self.witness_low.register().ext_circuit_vars(vars);
+        let p_witness_high = self.witness_high.register().ext_circuit_vars(vars);
 
         // Construct the expected vanishing polynmial
         let p_zero = vec![builder.zero_extension()];

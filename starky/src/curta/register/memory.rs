@@ -116,7 +116,7 @@ impl MemorySlice {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        vars: &StarkEvaluationVars<'a, FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
+        vars: StarkEvaluationVars<'a, FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
     ) -> &'a [P]
     where
         FE: FieldExtension<D2, BaseField = F>,
@@ -139,7 +139,7 @@ impl MemorySlice {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        vars: &StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
+        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
     ) -> Vec<P>
     where
         FE: FieldExtension<D2, BaseField = F>,
@@ -169,7 +169,7 @@ impl MemorySlice {
         const D: usize,
     >(
         &self,
-        vars: &StarkEvaluationTargets<'a, D, { COLUMNS }, { PUBLIC_INPUTS }>,
+        vars: StarkEvaluationTargets<'a, D, { COLUMNS }, { PUBLIC_INPUTS }>,
     ) -> &'a [ExtensionTarget<D>] {
         match self {
             MemorySlice::Local(index, length) => &vars.local_values[*index..*index + length],

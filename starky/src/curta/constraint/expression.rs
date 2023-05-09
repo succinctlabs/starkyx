@@ -126,7 +126,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        vars: &StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
+        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
     ) -> Vec<P>
     where
         FE: FieldExtension<D2, BaseField = F>,
@@ -173,7 +173,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
     pub fn ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
         builder: &mut CircuitBuilder<F, D>,
-        vars: &StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
+        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
     ) -> Vec<ExtensionTarget<D>> {
         match self {
             ArithmeticExpressionSlice::Input(input) => input.ext_circuit_vars(vars).to_vec(),

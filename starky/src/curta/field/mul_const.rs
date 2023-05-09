@@ -138,7 +138,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         PF: PackedField<Scalar = FE>,
     {
         // Get the packed entries.
-        let p_a = self.a.register().packed_entries(&vars);
+        let p_a = self.a.register().packed_entries(vars);
         let c = self
             .c
             .into_iter()
@@ -146,10 +146,10 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             .map(PF::from)
             .take(P::NB_LIMBS)
             .collect::<Vec<_>>();
-        let p_result = self.result.register().packed_entries(&vars);
-        let p_carry = self.carry.register().packed_generic_vars(&vars);
-        let p_witness_low = self.witness_low.register().packed_generic_vars(&vars);
-        let p_witness_high = self.witness_high.register().packed_generic_vars(&vars);
+        let p_result = self.result.register().packed_entries(vars);
+        let p_carry = self.carry.register().packed_generic_vars(vars);
+        let p_witness_low = self.witness_low.register().packed_generic_vars(vars);
+        let p_witness_high = self.witness_high.register().packed_generic_vars(vars);
 
         // Compute the vanishing polynomial a(x) * c - result(x) - carry(x) * p(x).
         let p_a_mul_c = PolynomialOps::mul(&p_a, &c);
@@ -174,7 +174,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
         // Get the packed entries.
-        let p_a = self.a.register().ext_circuit_vars(&vars);
+        let p_a = self.a.register().ext_circuit_vars(vars);
         let c_vec = self
             .c
             .into_iter()
@@ -182,10 +182,10 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             .take(P::NB_LIMBS)
             .collect::<Vec<_>>();
         let c = PolynomialGadget::constant_extension(builder, &c_vec);
-        let p_result = self.result.register().ext_circuit_vars(&vars);
-        let p_carry = self.carry.register().ext_circuit_vars(&vars);
-        let p_witness_low = self.witness_low.register().ext_circuit_vars(&vars);
-        let p_witness_high = self.witness_high.register().ext_circuit_vars(&vars);
+        let p_result = self.result.register().ext_circuit_vars(vars);
+        let p_carry = self.carry.register().ext_circuit_vars(vars);
+        let p_witness_low = self.witness_low.register().ext_circuit_vars(vars);
+        let p_witness_high = self.witness_high.register().ext_circuit_vars(vars);
 
         // Compute the vanishing polynomial a(x) * c - result(x) - carry(x) * p(x).
         let p_a_mul_c = PolynomialGadget::mul_extension(builder, p_a, &c);
