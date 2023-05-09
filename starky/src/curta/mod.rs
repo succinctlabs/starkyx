@@ -4,6 +4,7 @@ pub mod constraint;
 pub mod ec;
 
 pub mod bool;
+pub mod extension;
 pub mod field;
 pub mod instruction;
 pub mod parameters;

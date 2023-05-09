@@ -103,11 +103,11 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
-    pub fn generate_trace<L: StarkParameters<F, D>>(
+    pub fn generate_trace_rows<L: StarkParameters<F, D>>(
         &self,
         chip: &Chip<L, F, D>,
         row_capacity: usize,
-    ) -> Result<Vec<PolynomialValues<F>>> {
+    ) -> Result<Vec<Vec<F>>> {
         // Initiaze the trace with capacity given by the user
         let num_cols = chip.num_columns_no_range_checks();
         let mut trace_rows = vec![vec![F::ZERO; num_cols + 1]; row_capacity];
@@ -128,6 +128,16 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
                 ),
             };
         }
+        Ok(trace_rows)
+    }
+
+    pub fn generate_trace<L: StarkParameters<F, D>>(
+        &self,
+        chip: &Chip<L, F, D>,
+        row_capacity: usize,
+    ) -> Result<Vec<PolynomialValues<F>>> {
+        // Get trace rows
+        let trace_rows = self.generate_trace_rows(chip, row_capacity)?;
 
         // Transpose the trace to get the columns and resize to the correct size
         let mut trace_cols = transpose(&trace_rows);

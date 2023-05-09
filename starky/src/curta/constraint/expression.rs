@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
+use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
@@ -16,7 +17,7 @@ pub struct ArithmeticExpression<F, const D: usize> {
     pub(crate) size: usize,
 }
 
-impl<F, const D: usize> ArithmeticExpression<F, D> {
+impl<F: Field, const D: usize> ArithmeticExpression<F, D> {
     pub fn from_constant_vec(constants: Vec<F>) -> Self {
         let size = constants.len();
         Self {
@@ -27,6 +28,14 @@ impl<F, const D: usize> ArithmeticExpression<F, D> {
 
     pub fn from_constant(constant: F) -> Self {
         Self::from_constant_vec(vec![constant])
+    }
+
+    pub fn zero() -> Self {
+        Self::from_constant(F::ZERO)
+    }
+
+    pub fn one() -> Self {
+        Self::from_constant(F::ONE)
     }
 }
 
@@ -70,6 +79,40 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
 
     pub fn from_constant_vec(constants: Vec<F>) -> Self {
         ArithmeticExpressionSlice::Const(constants)
+    }
+
+    pub fn eval(&self, trace_rows: &[Vec<F>], row_index: usize) -> Vec<F> {
+        match self {
+            ArithmeticExpressionSlice::Input(memory) => {
+                let mut value = vec![F::ZERO; memory.len()];
+                memory.read(trace_rows, &mut value, row_index);
+                value
+            }
+            ArithmeticExpressionSlice::Const(constants) => constants.clone(),
+            ArithmeticExpressionSlice::Add(left, right) => left
+                .eval(trace_rows, row_index)
+                .iter()
+                .zip(right.eval(trace_rows, row_index).iter())
+                .map(|(l, r)| *l + *r)
+                .collect(),
+            ArithmeticExpressionSlice::Sub(left, right) => left
+                .eval(trace_rows, row_index)
+                .iter()
+                .zip(right.eval(trace_rows, row_index).iter())
+                .map(|(l, r)| *l - *r)
+                .collect(),
+            ArithmeticExpressionSlice::ScalarMul(scalar, expr) => expr
+                .eval(trace_rows, row_index)
+                .iter()
+                .map(|e| *e * *scalar)
+                .collect(),
+            ArithmeticExpressionSlice::Mul(left, right) => left
+                .eval(trace_rows, row_index)
+                .iter()
+                .zip(right.eval(trace_rows, row_index).iter())
+                .map(|(l, r)| *l * *r)
+                .collect(),
+        }
     }
 
     pub fn packed_generic<
@@ -314,12 +357,12 @@ mod tests {
     use plonky2::util::timing::TimingTree;
 
     use super::*;
+    use crate::config::StarkConfig;
     use crate::curta::builder::StarkBuilder;
     use crate::curta::chip::{StarkParameters, TestStark};
     use crate::curta::instruction::write::WriteInstruction;
     use crate::curta::register::U16Register;
     use crate::curta::trace::trace;
-    use crate::config::StarkConfig;
     use crate::prover::prove;
     use crate::recursive_verifier::{
         add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
@@ -372,7 +415,8 @@ mod tests {
         builder.write_data(&input_2).unwrap();
         builder.write_data(&output).unwrap();
 
-        builder.mul(&input_1, &input_2, &output);
+        let mul_expr = input_1.expr() * input_2.expr();
+        builder.assert_expressions_equal(mul_expr.clone(), output.expr());
 
         let (chip, spec) = builder.build();
 
