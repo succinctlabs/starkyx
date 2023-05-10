@@ -335,9 +335,7 @@ mod tests {
         // let a_add_b_ins_0 = builder
         //     .fp_add_constraint(&a, &b, None)
         //     .unwrap();
-        let a_add_b_ins = builder
-            .fp_add_constraint(&a, &b, None)
-            .unwrap();
+        let a_add_b_ins = builder.fp_add_constraint(&a, &b, None).unwrap();
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
         let (chip, spec) = builder.build();

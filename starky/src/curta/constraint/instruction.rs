@@ -3,27 +3,40 @@
 //! The instructions constraints can be multiplied by an arithmetic expression. This is usually
 //! used for a selector.
 
+use core::ops::{Add, Mul, Sub};
+use std::sync::Arc;
+
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
+use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::expression::ArithmeticExpression;
 use crate::curta::instruction::Instruction;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-#[derive(Debug, Clone)]
-pub enum InstructionConstraint<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize> {
-    First(I, Option<ArithmeticExpression<F, D>>),
-    Last(I, Option<ArithmeticExpression<F, D>>),
-    Transition(I, Option<ArithmeticExpression<F, D>>),
-    All(I, Option<ArithmeticExpression<F, D>>),
+#[derive(Clone, Debug)]
+pub enum ConstraintExpression<I, F, const D: usize> {
+    Instruction(I),
+    Mul(
+        Arc<ConstraintExpression<I, F, D>>,
+        ArithmeticExpression<F, D>,
+    ),
+    Add(
+        Arc<ConstraintExpression<I, F, D>>,
+        Arc<ConstraintExpression<I, F, D>>,
+    ),
+    Sub(
+        Arc<ConstraintExpression<I, F, D>>,
+        Arc<ConstraintExpression<I, F, D>>,
+    ),
 }
 
 impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
-    InstructionConstraint<I, F, D>
+    ConstraintExpression<I, F, D>
 {
-    pub fn packed_generic_constraints<
+    pub fn packed_generic<
         FE,
         P,
         const D2: usize,
@@ -32,162 +45,101 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
     >(
         &self,
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
-    ) where
+    ) -> Vec<P>
+    where
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
         match self {
-            InstructionConstraint::First(instruction, maybe_multiplier) => {
+            ConstraintExpression::Instruction(instruction) => instruction.packed_generic(vars),
+            ConstraintExpression::Mul(instruction, multiplier) => {
                 let vals = instruction.packed_generic(vars);
-                match maybe_multiplier {
-                    Some(multiplier) => {
-                        assert_eq!(multiplier.size, 1, "Multiplier must be a single element");
-                        let mult = multiplier.expression.packed_generic(vars)[0];
-                        for &val in vals.iter() {
-                            yield_constr.constraint_first_row(val * mult);
-                        }
-                    }
-                    None => {
-                        for &val in vals.iter() {
-                            yield_constr.constraint_first_row(val);
-                        }
-                    }
-                }
+                assert_eq!(multiplier.size, 1, "Multiplier must be a single element");
+                let mult = multiplier.expression.packed_generic(vars)[0];
+                vals.iter().map(|&val| val * mult).collect()
             }
-            InstructionConstraint::Last(instruction, maybe_multiplier) => {
-                let vals = instruction.packed_generic(vars);
-                match maybe_multiplier {
-                    Some(multiplier) => {
-                        assert_eq!(multiplier.size, 1, "Multiplier must be a single element");
-                        let mult = multiplier.expression.packed_generic(vars)[0];
-                        for &val in vals.iter() {
-                            yield_constr.constraint_last_row(val * mult);
-                        }
-                    }
-                    None => {
-                        for &val in vals.iter() {
-                            yield_constr.constraint_last_row(val);
-                        }
-                    }
-                }
+            ConstraintExpression::Add(left, right) => {
+                let left = left.packed_generic(vars);
+                let right = right.packed_generic(vars);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| *r + *l)
+                    .collect()
             }
-            InstructionConstraint::Transition(instruction, maybe_multiplier) => {
-                let vals = instruction.packed_generic(vars);
-                match maybe_multiplier {
-                    Some(multiplier) => {
-                        assert_eq!(multiplier.size, 1, "Multiplier must be a single element");
-                        let mult = multiplier.expression.packed_generic(vars)[0];
-                        for &val in vals.iter() {
-                            yield_constr.constraint_transition(val * mult);
-                        }
-                    }
-                    None => {
-                        for &val in vals.iter() {
-                            yield_constr.constraint_transition(val);
-                        }
-                    }
-                }
-            }
-            InstructionConstraint::All(instruction, maybe_multiplier) => {
-                let vals = instruction.packed_generic(vars);
-                match maybe_multiplier {
-                    Some(multiplier) => {
-                        assert_eq!(multiplier.size, 1, "Multiplier must be a single element");
-                        let mult = multiplier.expression.packed_generic(vars)[0];
-                        for &val in vals.iter() {
-                            yield_constr.constraint(val * mult);
-                        }
-                    }
-                    None => {
-                        for &val in vals.iter() {
-                            yield_constr.constraint(val);
-                        }
-                    }
-                }
+            ConstraintExpression::Sub(left, right) => {
+                let left = left.packed_generic(vars);
+                let right = right.packed_generic(vars);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| *r - *l)
+                    .collect()
             }
         }
     }
 
-    pub fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+    pub fn ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
-    ) {
+    ) -> Vec<ExtensionTarget<D>> {
         match self {
-            InstructionConstraint::First(instruction, maybe_multiplier) => {
-                let vals = instruction.ext_circuit(builder, vars);
-                match maybe_multiplier {
-                    Some(multiplier) => {
-                        assert_eq!(multiplier.size, 1, "Multiplier must be a single element");
-                        let mult = multiplier.expression.ext_circuit(builder, vars)[0];
-                        for &val in vals.iter() {
-                            let consr = builder.mul_extension(val, mult);
-                            yield_constr.constraint_first_row(builder, consr);
-                        }
-                    }
-                    None => {
-                        for &val in vals.iter() {
-                            yield_constr.constraint_first_row(builder, val);
-                        }
-                    }
-                }
+            ConstraintExpression::Instruction(instruction) => {
+                instruction.ext_circuit(builder, vars)
             }
-            InstructionConstraint::Last(instruction, maybe_multiplier) => {
+            ConstraintExpression::Mul(instruction, multiplier) => {
                 let vals = instruction.ext_circuit(builder, vars);
-                match maybe_multiplier {
-                    Some(multiplier) => {
-                        assert_eq!(multiplier.size, 1, "Multiplier must be a single element");
-                        let mult = multiplier.expression.ext_circuit(builder, vars)[0];
-                        for &val in vals.iter() {
-                            let consr = builder.mul_extension(val, mult);
-                            yield_constr.constraint_last_row(builder, consr);
-                        }
-                    }
-                    None => {
-                        for &val in vals.iter() {
-                            yield_constr.constraint_last_row(builder, val);
-                        }
-                    }
-                }
+                assert_eq!(multiplier.size, 1, "Multiplier must be a single element");
+                let mult = multiplier.expression.ext_circuit(builder, vars)[0];
+                vals.iter()
+                    .map(|val| builder.mul_extension(*val, mult))
+                    .collect()
             }
-            InstructionConstraint::Transition(instruction, maybe_multiplier) => {
-                let vals = instruction.ext_circuit(builder, vars);
-                match maybe_multiplier {
-                    Some(multiplier) => {
-                        assert_eq!(multiplier.size, 1, "Multiplier must be a single element");
-                        let mult = multiplier.expression.ext_circuit(builder, vars)[0];
-                        for &val in vals.iter() {
-                            let consr = builder.mul_extension(val, mult);
-                            yield_constr.constraint_transition(builder, consr);
-                        }
-                    }
-                    None => {
-                        for &val in vals.iter() {
-                            yield_constr.constraint_transition(builder, val);
-                        }
-                    }
-                }
+            ConstraintExpression::Add(left, right) => {
+                let left = left.ext_circuit(builder, vars);
+                let right = right.ext_circuit(builder, vars);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| builder.add_extension(*l, *r))
+                    .collect()
             }
-            InstructionConstraint::All(instruction, maybe_multiplier) => {
-                let vals = instruction.ext_circuit(builder, vars);
-                match maybe_multiplier {
-                    Some(multiplier) => {
-                        assert_eq!(multiplier.size, 1, "Multiplier must be a single element");
-                        let mult = multiplier.expression.ext_circuit(builder, vars)[0];
-                        for &val in vals.iter() {
-                            let consr = builder.mul_extension(val, mult);
-                            yield_constr.constraint(builder, consr);
-                        }
-                    }
-                    None => {
-                        for &val in vals.iter() {
-                            yield_constr.constraint(builder, val);
-                        }
-                    }
-                }
+            ConstraintExpression::Sub(left, right) => {
+                let left = left.ext_circuit(builder, vars);
+                let right = right.ext_circuit(builder, vars);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| builder.sub_extension(*l, *r))
+                    .collect()
             }
         }
+    }
+}
+
+impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize> Add
+    for ConstraintExpression<I, F, D>
+{
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        ConstraintExpression::Add(Arc::new(self), Arc::new(rhs))
+    }
+}
+
+impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize> Sub
+    for ConstraintExpression<I, F, D>
+{
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        ConstraintExpression::Sub(Arc::new(self), Arc::new(rhs))
+    }
+}
+
+impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
+    Mul<ArithmeticExpression<F, D>> for ConstraintExpression<I, F, D>
+{
+    type Output = Self;
+
+    fn mul(self, rhs: ArithmeticExpression<F, D>) -> Self::Output {
+        ConstraintExpression::Mul(Arc::new(self), rhs)
     }
 }

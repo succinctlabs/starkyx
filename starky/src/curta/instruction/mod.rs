@@ -15,6 +15,7 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 pub use set::{FromInstructionSet, InstructionSet};
 
+use super::constraint::expression::ArithmeticExpression;
 use super::field::{
     FpAddInstruction, FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction,
 };
@@ -47,7 +48,9 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
-        vec![]
+        ArithmeticExpression::from_constant(F::ONE)
+            .expression
+            .packed_generic(vars)
     }
 
     /// Evaluates the vanishing polynomial inside a recursive circuit.
@@ -56,7 +59,9 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
     ) -> Vec<ExtensionTarget<D>> {
-        vec![]
+        ArithmeticExpression::from_constant(F::ONE)
+            .expression
+            .ext_circuit(builder, vars)
     }
 
     /// Constrains the instruction properly within the STARK by using the `ConstraintConsumer`.

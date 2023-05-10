@@ -6,8 +6,8 @@ use plonky2::hash::hash_types::RichField;
 
 use super::chip::{Chip, StarkParameters};
 use super::constraint::expression::ArithmeticExpression;
-use super::constraint::instruction::InstructionConstraint;
-use super::constraint::ArithmeticConstraint;
+use super::constraint::instruction::ConstraintExpression;
+use super::constraint::{ArithmeticConstraint, InstructionConstraint};
 use super::instruction::write::WriteInstruction;
 use super::instruction::Instruction;
 use super::register::{ArrayRegister, CellType, MemorySlice, Register, RegisterSerializable};
@@ -185,7 +185,12 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     ) -> Result<()> {
         self.insert_instruction(instruction.clone())?;
 
-        let constraint = InstructionConstraint::Transition(instruction, multiplier);
+        let expr = ConstraintExpression::Instruction(instruction);
+        let constraint = match multiplier {
+            Some(multiplier) => InstructionConstraint::Transition(expr * multiplier),
+            None => InstructionConstraint::Transition(expr),
+        };
+
         self.instruction_constraints.push(constraint);
         Ok(())
     }
@@ -198,7 +203,12 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     ) -> Result<()> {
         self.insert_instruction(instruction.clone())?;
 
-        let constraint = InstructionConstraint::All(instruction, multiplier);
+        let expr = ConstraintExpression::Instruction(instruction);
+        let constraint = match multiplier {
+            Some(multiplier) => InstructionConstraint::All(expr * multiplier),
+            None => InstructionConstraint::All(expr),
+        };
+
         self.instruction_constraints.push(constraint);
         Ok(())
     }
