@@ -38,32 +38,26 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
             });
     }
 
-    /// Constrains the instruction properly within the STARK by using the `ConstraintConsumer`.
-    fn packed_generic<
-        FE,
-        P,
-        const D2: usize,
-        const COLUMNS: usize,
-        const PUBLIC_INPUTS: usize,
-    >(
+    /// Outputs the values of vanishing polynomial on packed elements.
+    fn packed_generic<FE, P, const D2: usize, const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
-    ) -> Vec<P> where
+    ) -> Vec<P>
+    where
         FE: FieldExtension<D2, BaseField = F>,
-        P: PackedField<Scalar = FE> 
-        {
-            vec![]
-        }
+        P: PackedField<Scalar = FE>,
+    {
+        vec![]
+    }
 
-    /// Constrains the instruction properly within Plonky2 by using the `RecursiveConstraintConsumer`.
+    /// Evaluates the vanishing polynomial inside a recursive circuit.
     fn ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-    ) -> Vec<ExtensionTarget<D>>  {
+    ) -> Vec<ExtensionTarget<D>> {
         vec![]
     }
-
 
     /// Constrains the instruction properly within the STARK by using the `ConstraintConsumer`.
     fn packed_generic_constraints<

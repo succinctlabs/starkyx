@@ -81,3 +81,75 @@ pub fn ext_circuit_constrain_field_operation<
         yield_constr.constraint(builder, constr);
     }
 }
+
+pub fn packed_generic_field_operation<
+    F: RichField + Extendable<D>,
+    const D: usize,
+    FE,
+    PF,
+    const D2: usize,
+    P: FieldParameters,
+>(
+    p_vanishing: Vec<PF>,
+    p_witness_low: &[PF],
+    p_witness_high: &[PF],
+) -> Vec<PF>
+where
+    FE: FieldExtension<D2, BaseField = F>,
+    PF: PackedField<Scalar = FE>,
+{
+    // Compute the witness polynomial using the automatically range checked columns.
+    let limb = FE::from_canonical_u32(LIMB);
+    let p_witness_shifted = p_witness_low
+        .iter()
+        .zip(p_witness_high.iter())
+        .map(|(x, y)| *x + (*y * limb));
+
+    // Shift down the witness polynomial. Shifting is needed to range check that each
+    // coefficient w_i of the witness polynomial satisfies |w_i| < 2^20.
+    let offset = FE::from_canonical_u32(P::WITNESS_OFFSET as u32);
+    let w = p_witness_shifted.map(|x| x - offset).collect::<Vec<PF>>();
+
+    // Multiply by (x-2^16) and make the constraint
+    let root_monomial: &[PF] = &[PF::from(-limb), PF::from(PF::Scalar::ONE)];
+    let witness_times_root = PolynomialOps::mul(&w, root_monomial);
+
+    p_vanishing
+        .iter()
+        .zip(witness_times_root.iter())
+        .map(|(x, y)| *x - *y)
+        .collect()
+}
+
+pub fn ext_circuit_field_operation<
+    F: RichField + Extendable<D>,
+    const D: usize,
+    P: FieldParameters,
+>(
+    builder: &mut CircuitBuilder<F, D>,
+    p_vanishing: Vec<ExtensionTarget<D>>,
+    p_witness_low: &[ExtensionTarget<D>],
+    p_witness_high: &[ExtensionTarget<D>],
+) -> Vec<ExtensionTarget<D>> {
+    type PG = PolynomialGadget;
+
+    // Reconstruct and shift back the witness polynomial
+    let limb_fe = F::Extension::from_canonical_u32(2u32.pow(16));
+    let limb = builder.constant_extension(limb_fe);
+    let p_witness_high_mul_limb = PG::ext_scalar_mul_extension(builder, p_witness_high, &limb);
+    let p_witness_shifted = PG::add_extension(builder, p_witness_low, &p_witness_high_mul_limb);
+
+    // Shift down the witness polynomial. Shifting is needed to range check that each
+    // coefficient w_i of the witness polynomial satisfies |w_i| < 2^20.
+    let offset_fe = F::Extension::from_canonical_u32(P::WITNESS_OFFSET as u32);
+    let offset = builder.constant_extension(offset_fe);
+    let p_witness = PG::sub_constant_extension(builder, &p_witness_shifted, &offset);
+
+    // Multiply by (x-2^16) and make the constraint
+    let neg_limb = builder.constant_extension(-limb_fe);
+    let root_monomial = &[neg_limb, builder.constant_extension(F::Extension::ONE)];
+    let p_witness_mul_root = PG::mul_extension(builder, &p_witness.as_slice(), root_monomial);
+
+    // Check [a(x) + b(x) - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
+    PG::sub_extension(builder, &p_vanishing, &p_witness_mul_root)
+}

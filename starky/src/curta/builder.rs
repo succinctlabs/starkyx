@@ -6,6 +6,7 @@ use plonky2::hash::hash_types::RichField;
 
 use super::chip::{Chip, StarkParameters};
 use super::constraint::expression::ArithmeticExpression;
+use super::constraint::instruction::InstructionConstraint;
 use super::constraint::ArithmeticConstraint;
 use super::instruction::write::WriteInstruction;
 use super::instruction::Instruction;
@@ -30,6 +31,7 @@ where
     instructions: Vec<L::Instruction>,
     write_instructions: Vec<WriteInstruction>,
     constraints: Vec<ArithmeticConstraint<F, D>>,
+    instruction_constraints: Vec<InstructionConstraint<L::Instruction, F, D>>,
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Default
@@ -51,6 +53,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             instructions: Vec::new(),
             write_instructions: Vec::new(),
             constraints: Vec::new(),
+            instruction_constraints: Vec::new(),
         }
     }
 
@@ -171,6 +174,32 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             return Err(anyhow!("Instruction label already exists"));
         }
         self.instructions.push(instruction);
+        Ok(())
+    }
+
+    /// Registers a new instruction to the chip with constraints times the multiplier.
+    pub fn insert_instruction_constraint_transition(
+        &mut self,
+        instruction: L::Instruction,
+        multiplier: Option<ArithmeticExpression<F, D>>,
+    ) -> Result<()> {
+        self.insert_instruction(instruction.clone())?;
+
+        let constraint = InstructionConstraint::Transition(instruction, multiplier);
+        self.instruction_constraints.push(constraint);
+        Ok(())
+    }
+
+    /// Registers a new instruction to the chip and with constraints times the multiplier
+    pub fn insert_instruction_constraint(
+        &mut self,
+        instruction: L::Instruction,
+        multiplier: Option<ArithmeticExpression<F, D>>,
+    ) -> Result<()> {
+        self.insert_instruction(instruction.clone())?;
+
+        let constraint = InstructionConstraint::All(instruction, multiplier);
+        self.instruction_constraints.push(constraint);
         Ok(())
     }
 
@@ -314,6 +343,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
                 instructions: self.instructions,
                 write_instructions: self.write_instructions,
                 constraints: self.constraints,
+                instruction_constraints: self.instruction_constraints,
                 range_checks_idx: (
                     L::NUM_FREE_COLUMNS,
                     L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS,

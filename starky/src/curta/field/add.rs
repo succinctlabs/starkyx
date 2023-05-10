@@ -7,13 +7,17 @@ use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
+use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::constraint::packed_generic_constrain_field_operation;
+use super::constraint::{packed_generic_constrain_field_operation, packed_generic_field_operation};
 use super::*;
 use crate::curta::builder::StarkBuilder;
 use crate::curta::chip::StarkParameters;
-use crate::curta::field::constraint::ext_circuit_constrain_field_operation;
+use crate::curta::constraint::expression::ArithmeticExpression;
+use crate::curta::field::constraint::{
+    ext_circuit_constrain_field_operation, ext_circuit_field_operation,
+};
 use crate::curta::instruction::Instruction;
 use crate::curta::parameters::FieldParameters;
 use crate::curta::polynomial::{
@@ -59,6 +63,31 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             witness_high,
         };
         self.insert_instruction(instr.into())?;
+        Ok(instr)
+    }
+
+    pub fn fp_add_constraint<P: FieldParameters>(
+        &mut self,
+        a: &FieldRegister<P>,
+        b: &FieldRegister<P>,
+        multiplier: Option<ArithmeticExpression<F, D>>,
+    ) -> Result<FpAddInstruction<P>>
+    where
+        L::Instruction: From<FpAddInstruction<P>>,
+    {
+        let result = self.alloc::<FieldRegister<P>>();
+        let carry = self.alloc::<FieldRegister<P>>();
+        let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        let instr = FpAddInstruction {
+            a: *a,
+            b: *b,
+            result,
+            carry,
+            witness_low,
+            witness_high,
+        };
+        self.insert_instruction_constraint(instr.into(), multiplier)?;
         Ok(instr)
     }
 }
@@ -194,6 +223,67 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             p_witness_high,
         );
     }
+
+    //  new code
+
+    fn packed_generic<FE, PF, const D2: usize, const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+        &self,
+        vars: StarkEvaluationVars<FE, PF, { COLUMNS }, { PUBLIC_INPUTS }>,
+    ) -> Vec<PF>
+    where
+        FE: FieldExtension<D2, BaseField = F>,
+        PF: PackedField<Scalar = FE>,
+    {
+        // Get the packed entries.
+        let p_a = self.a.register().packed_generic_vars(vars);
+        let p_b = self.b.register().packed_generic_vars(vars);
+        let p_result = self.result.register().packed_generic_vars(vars);
+        let p_carry = self.carry.register().packed_generic_vars(vars);
+        let p_witness_low = self.witness_low.register().packed_generic_vars(vars);
+        let p_witness_high = self.witness_high.register().packed_generic_vars(vars);
+
+        // Compute the vanishing polynomial a(x) + b(x) - result(x) - carry(x) * p(x).
+        let p_a_plus_b = PolynomialOps::add(p_a, p_b);
+        let p_a_plus_b_minus_result = PolynomialOps::sub(&p_a_plus_b, p_result);
+        let p_modulus = Polynomial::<FE>::from_iter(modulus_field_iter::<FE, P>());
+        let p_carry_mul_modulus = PolynomialOps::scalar_poly_mul(p_carry, p_modulus.as_slice());
+        let p_vanishing = PolynomialOps::sub(&p_a_plus_b_minus_result, &p_carry_mul_modulus);
+
+        // Check [a(x) + b(x) - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
+        packed_generic_field_operation::<F, D, FE, PF, D2, P>(
+            p_vanishing,
+            p_witness_low,
+            p_witness_high,
+        )
+    }
+
+    fn ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
+    ) -> Vec<ExtensionTarget<D>> {
+        type PG = PolynomialGadget;
+
+        // Get the packed entries.
+        let p_a = self.a.register().ext_circuit_vars(vars);
+        let p_b = self.b.register().ext_circuit_vars(vars);
+        let p_result = self.result.register().ext_circuit_vars(vars);
+        let p_carry = self.carry.register().ext_circuit_vars(vars);
+        let p_witness_low = self.witness_low.register().ext_circuit_vars(vars);
+        let p_witness_high = self.witness_high.register().ext_circuit_vars(vars);
+
+        // Compute the vanishing polynomial a(x) + b(x) - result(x) - carry(x) * p(x).
+        let p_a_plus_b = PG::add_extension(builder, p_a, p_b);
+        let p_a_plus_b_minus_result = PG::sub_extension(builder, &p_a_plus_b, p_result);
+        let p_limbs = PG::constant_extension(
+            builder,
+            &modulus_field_iter::<F::Extension, P>().collect::<Vec<_>>()[..],
+        );
+        let p_mul_times_carry = PG::mul_extension(builder, p_carry, &p_limbs[..]);
+        let p_vanishing = PG::sub_extension(builder, &p_a_plus_b_minus_result, &p_mul_times_carry);
+
+        ext_circuit_field_operation::<F, D, P>(builder, p_vanishing, p_witness_low, p_witness_high)
+    }
 }
 
 #[cfg(test)]
@@ -242,7 +332,12 @@ mod tests {
         let mut builder = StarkBuilder::<FpAddTest, F, D>::new();
         let a = builder.alloc::<FieldRegister<P>>();
         let b = builder.alloc::<FieldRegister<P>>();
-        let a_add_b_ins = builder.fp_add(&a, &b).unwrap();
+        // let a_add_b_ins_0 = builder
+        //     .fp_add_constraint(&a, &b, None)
+        //     .unwrap();
+        let a_add_b_ins = builder
+            .fp_add_constraint(&a, &b, None)
+            .unwrap();
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
         let (chip, spec) = builder.build();
