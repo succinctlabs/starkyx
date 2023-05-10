@@ -12,7 +12,7 @@ use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::constraint::{ArithmeticConstraint, InstructionConstraint};
+use super::constraint::{ArithmeticConstraint, Constraint};
 use super::instruction::write::WriteInstruction;
 use super::instruction::Instruction;
 use crate::lookup::{eval_lookups, eval_lookups_circuit};
@@ -46,7 +46,7 @@ where
     pub(crate) instructions: Vec<L::Instruction>,
     pub(crate) write_instructions: Vec<WriteInstruction>,
     pub(crate) constraints: Vec<ArithmeticConstraint<F, D>>,
-    pub(crate) instruction_constraints: Vec<InstructionConstraint<L::Instruction, F, D>>,
+    pub(crate) instruction_constraints: Vec<Constraint<L::Instruction, F, D>>,
     pub(crate) range_checks_idx: (usize, usize),
     pub(crate) table_index: usize,
 }

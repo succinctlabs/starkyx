@@ -112,6 +112,23 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
             }
         }
     }
+
+    pub fn instructions(&self) -> Vec<I> {
+        match self {
+            ConstraintExpression::Instruction(instruction) => vec![instruction.clone()],
+            ConstraintExpression::Mul(instruction, _) => instruction.instructions(),
+            ConstraintExpression::Add(left, right) => {
+                let mut instructions = left.instructions();
+                instructions.extend(right.instructions());
+                instructions
+            }
+            ConstraintExpression::Sub(left, right) => {
+                let mut instructions = left.instructions();
+                instructions.extend(right.instructions());
+                instructions
+            }
+        }
+    }
 }
 
 impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize> Add

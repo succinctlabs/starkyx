@@ -16,6 +16,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 pub use set::{FromInstructionSet, InstructionSet};
 
 use super::constraint::expression::ArithmeticExpression;
+use super::constraint::instruction::ConstraintExpression;
 use super::field::{
     FpAddInstruction, FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction,
 };
@@ -89,5 +90,9 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
 
     fn constraint_degree() -> usize {
         2
+    }
+
+    fn expr(&self) -> ConstraintExpression<Self, F, D> {
+        ConstraintExpression::Instruction(self.clone())
     }
 }

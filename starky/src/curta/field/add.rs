@@ -14,7 +14,6 @@ use super::constraint::{packed_generic_constrain_field_operation, packed_generic
 use super::*;
 use crate::curta::builder::StarkBuilder;
 use crate::curta::chip::StarkParameters;
-use crate::curta::constraint::expression::ArithmeticExpression;
 use crate::curta::field::constraint::{
     ext_circuit_constrain_field_operation, ext_circuit_field_operation,
 };
@@ -66,11 +65,10 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         Ok(instr)
     }
 
-    pub fn fp_add_constraint<P: FieldParameters>(
+    pub fn alloc_fp_add_instruction<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,
         b: &FieldRegister<P>,
-        multiplier: Option<ArithmeticExpression<F, D>>,
     ) -> Result<FpAddInstruction<P>>
     where
         L::Instruction: From<FpAddInstruction<P>>,
@@ -87,7 +85,6 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             witness_low,
             witness_high,
         };
-        self.insert_instruction_constraint(instr.into(), multiplier)?;
         Ok(instr)
     }
 }
@@ -300,6 +297,7 @@ mod tests {
     use crate::config::StarkConfig;
     use crate::curta::builder::StarkBuilder;
     use crate::curta::chip::{StarkParameters, TestStark};
+    use crate::curta::constraint::expression::ArithmeticExpression;
     use crate::curta::instruction::InstructionSet;
     use crate::curta::parameters::ed25519::{Ed25519, Ed25519BaseField};
     use crate::curta::parameters::EllipticCurveParameters;
@@ -332,10 +330,11 @@ mod tests {
         let mut builder = StarkBuilder::<FpAddTest, F, D>::new();
         let a = builder.alloc::<FieldRegister<P>>();
         let b = builder.alloc::<FieldRegister<P>>();
-        // let a_add_b_ins_0 = builder
-        //     .fp_add_constraint(&a, &b, None)
-        //     .unwrap();
-        let a_add_b_ins = builder.fp_add_constraint(&a, &b, None).unwrap();
+        let e = ArithmeticExpression::one();
+        let a_add_b_ins = builder.alloc_fp_add_instruction(&a, &b).unwrap();
+        let a_add_b_ins_s = InstructionSet::from(a_add_b_ins);
+        let a_b_expr = a_add_b_ins_s.expr();
+        builder.constraint(a_b_expr.clone() * e).unwrap();
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
         let (chip, spec) = builder.build();

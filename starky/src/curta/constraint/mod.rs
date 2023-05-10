@@ -1,7 +1,6 @@
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
-use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use self::expression::ArithmeticExpression;
@@ -99,16 +98,14 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticConstraint<F, D> {
 }
 
 #[derive(Debug, Clone)]
-pub enum InstructionConstraint<I, F: RichField + Extendable<D>, const D: usize> {
+pub enum Constraint<I, F: RichField + Extendable<D>, const D: usize> {
     First(ConstraintExpression<I, F, D>),
     Last(ConstraintExpression<I, F, D>),
     Transition(ConstraintExpression<I, F, D>),
     All(ConstraintExpression<I, F, D>),
 }
 
-impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
-    InstructionConstraint<I, F, D>
-{
+impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize> Constraint<I, F, D> {
     pub fn packed_generic_constraints<
         FE,
         P,
@@ -124,25 +121,25 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
         P: PackedField<Scalar = FE>,
     {
         match self {
-            InstructionConstraint::First(constraint) => {
+            Constraint::First(constraint) => {
                 let vals = constraint.packed_generic(vars);
                 for &val in vals.iter() {
                     yield_constr.constraint_first_row(val);
                 }
             }
-            InstructionConstraint::Last(constraint) => {
+            Constraint::Last(constraint) => {
                 let vals = constraint.packed_generic(vars);
                 for &val in vals.iter() {
                     yield_constr.constraint_last_row(val);
                 }
             }
-            InstructionConstraint::Transition(constraint) => {
+            Constraint::Transition(constraint) => {
                 let vals = constraint.packed_generic(vars);
                 for &val in vals.iter() {
                     yield_constr.constraint_transition(val);
                 }
             }
-            InstructionConstraint::All(constraint) => {
+            Constraint::All(constraint) => {
                 let vals = constraint.packed_generic(vars);
                 for &val in vals.iter() {
                     yield_constr.constraint(val);
@@ -158,25 +155,25 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
         match self {
-            InstructionConstraint::First(constraint) => {
+            Constraint::First(constraint) => {
                 let vals = constraint.ext_circuit(builder, vars);
                 for &val in vals.iter() {
                     yield_constr.constraint_first_row(builder, val);
                 }
             }
-            InstructionConstraint::Last(constraint) => {
+            Constraint::Last(constraint) => {
                 let vals = constraint.ext_circuit(builder, vars);
                 for &val in vals.iter() {
                     yield_constr.constraint_last_row(builder, val);
                 }
             }
-            InstructionConstraint::Transition(constraint) => {
+            Constraint::Transition(constraint) => {
                 let vals = constraint.ext_circuit(builder, vars);
                 for &val in vals.iter() {
                     yield_constr.constraint_transition(builder, val);
                 }
             }
-            InstructionConstraint::All(constraint) => {
+            Constraint::All(constraint) => {
                 let vals = constraint.ext_circuit(builder, vars);
                 for &val in vals.iter() {
                     yield_constr.constraint(builder, val);

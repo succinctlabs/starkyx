@@ -7,7 +7,7 @@ use plonky2::hash::hash_types::RichField;
 use super::chip::{Chip, StarkParameters};
 use super::constraint::expression::ArithmeticExpression;
 use super::constraint::instruction::ConstraintExpression;
-use super::constraint::{ArithmeticConstraint, InstructionConstraint};
+use super::constraint::{ArithmeticConstraint, Constraint};
 use super::instruction::write::WriteInstruction;
 use super::instruction::Instruction;
 use super::register::{ArrayRegister, CellType, MemorySlice, Register, RegisterSerializable};
@@ -31,7 +31,7 @@ where
     instructions: Vec<L::Instruction>,
     write_instructions: Vec<WriteInstruction>,
     constraints: Vec<ArithmeticConstraint<F, D>>,
-    instruction_constraints: Vec<InstructionConstraint<L::Instruction, F, D>>,
+    instruction_constraints: Vec<Constraint<L::Instruction, F, D>>,
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Default
@@ -177,38 +177,15 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         Ok(())
     }
 
-    /// Registers a new instruction to the chip with constraints times the multiplier.
-    pub fn insert_instruction_constraint_transition(
+    pub fn constraint(
         &mut self,
-        instruction: L::Instruction,
-        multiplier: Option<ArithmeticExpression<F, D>>,
+        constraint_expr: ConstraintExpression<L::Instruction, F, D>,
     ) -> Result<()> {
-        self.insert_instruction(instruction.clone())?;
-
-        let expr = ConstraintExpression::Instruction(instruction);
-        let constraint = match multiplier {
-            Some(multiplier) => InstructionConstraint::Transition(expr * multiplier),
-            None => InstructionConstraint::Transition(expr),
-        };
-
-        self.instruction_constraints.push(constraint);
-        Ok(())
-    }
-
-    /// Registers a new instruction to the chip and with constraints times the multiplier
-    pub fn insert_instruction_constraint(
-        &mut self,
-        instruction: L::Instruction,
-        multiplier: Option<ArithmeticExpression<F, D>>,
-    ) -> Result<()> {
-        self.insert_instruction(instruction.clone())?;
-
-        let expr = ConstraintExpression::Instruction(instruction);
-        let constraint = match multiplier {
-            Some(multiplier) => InstructionConstraint::All(expr * multiplier),
-            None => InstructionConstraint::All(expr),
-        };
-
+        let instructions = constraint_expr.instructions();
+        for instr in instructions {
+            self.insert_instruction(instr)?;
+        }
+        let constraint = Constraint::All(constraint_expr);
         self.instruction_constraints.push(constraint);
         Ok(())
     }
