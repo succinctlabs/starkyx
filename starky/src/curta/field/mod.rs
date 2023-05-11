@@ -4,20 +4,20 @@
 //! We want to compute a + b = result mod p. In the integers, this is equivalent to witnessing some
 //! carry such that:
 //!
-//!     a + b - result - carry * p = 0.
+//! a + b - result - carry * p = 0.
 //!
 //! Let us encode the integers as polynomials in the Goldilocks field, where each coefficient is
 //! at most 16 bits. In other words, the integers are encoded as an array of little-endian base 16
 //! limbs. We can then write the above equation as:
 //!
-//!    a(x) + b(x) - result(x) - carry(x) * p(x)
+//! a(x) + b(x) - result(x) - carry(x) * p(x)
 //!
 //! where the polynomial should evaluate to 0 if x = 2^16. To prove that the polynomial has a root
 //! at 2^16, we can have the prover witness a polynomial `w(x)` such that the above polynomial
 //! is divisble by (x - 2^16):
 //!
 //!
-//!    a(x) + b(x) - result(x) - carry(x) * p(x) - (x - 2^16) * w(x) = 0
+//! a(x) + b(x) - result(x) - carry(x) * p(x) - (x - 2^16) * w(x) = 0
 //!
 //! Thus, if we can prove that above polynomial is 0, we can conclude that the addition has been
 //! computed correctly. Note that this relies on the fact that any quadratic sum of a sufficiently
@@ -40,6 +40,7 @@ use num::{BigUint, Zero};
 use plonky2::field::extension::Extendable;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
+use plonky2::iop::ext_target::ExtensionTarget;
 
 pub use self::add::FpAddInstruction;
 pub use self::den::FpDenInstruction;
@@ -118,89 +119,50 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         }
     }
 
-    fn packed_generic_constraints<
-        FE,
-        PF,
-        const D2: usize,
-        const COLUMNS: usize,
-        const PUBLIC_INPUTS: usize,
-    >(
+    fn packed_generic<FE, PF, const D2: usize, const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
         vars: crate::vars::StarkEvaluationVars<FE, PF, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<PF>,
-    ) where
+    ) -> Vec<PF>
+    where
         FE: plonky2::field::extension::FieldExtension<D2, BaseField = F>,
         PF: plonky2::field::packed::PackedField<Scalar = FE>,
     {
         match self {
             FpInstruction::Add(add) => {
-                <FpAddInstruction<P> as Instruction<F, D>>::packed_generic_constraints(
-                    add,
-                    vars,
-                    yield_constr,
-                )
+                <FpAddInstruction<P> as Instruction<F, D>>::packed_generic(add, vars)
             }
             FpInstruction::Mul(mul) => {
-                <FpMulInstruction<P> as Instruction<F, D>>::packed_generic_constraints(
-                    mul,
-                    vars,
-                    yield_constr,
-                )
+                <FpMulInstruction<P> as Instruction<F, D>>::packed_generic(mul, vars)
             }
             FpInstruction::Quad(quad) => {
-                <FpInnerProductInstruction<P> as Instruction<F, D>>::packed_generic_constraints(
-                    quad,
-                    vars,
-                    yield_constr,
-                )
+                <FpInnerProductInstruction<P> as Instruction<F, D>>::packed_generic(quad, vars)
             }
             FpInstruction::MulConst(mul_const) => {
-                <FpMulConstInstruction<P> as Instruction<F, D>>::packed_generic_constraints(
-                    mul_const,
-                    vars,
-                    yield_constr,
-                )
+                <FpMulConstInstruction<P> as Instruction<F, D>>::packed_generic(mul_const, vars)
             }
         }
     }
 
-    fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+    fn ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
         builder: &mut plonky2::plonk::circuit_builder::CircuitBuilder<F, D>,
         vars: crate::vars::StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
-    ) {
+    ) -> Vec<ExtensionTarget<D>> {
         match self {
             FpInstruction::Add(add) => {
-                <FpAddInstruction<P> as Instruction<F, D>>::ext_circuit_constraints(
-                    add,
-                    builder,
-                    vars,
-                    yield_constr,
-                )
+                <FpAddInstruction<P> as Instruction<F, D>>::ext_circuit(add, builder, vars)
             }
             FpInstruction::Mul(mul) => {
-                <FpMulInstruction<P> as Instruction<F, D>>::ext_circuit_constraints(
-                    mul,
-                    builder,
-                    vars,
-                    yield_constr,
-                )
+                <FpMulInstruction<P> as Instruction<F, D>>::ext_circuit(mul, builder, vars)
             }
             FpInstruction::Quad(quad) => {
-                <FpInnerProductInstruction<P> as Instruction<F, D>>::ext_circuit_constraints(
-                    quad,
-                    builder,
-                    vars,
-                    yield_constr,
+                <FpInnerProductInstruction<P> as Instruction<F, D>>::ext_circuit(
+                    quad, builder, vars,
                 )
             }
             FpInstruction::MulConst(mul_const) => {
-                <FpMulConstInstruction<P> as Instruction<F, D>>::ext_circuit_constraints(
-                    mul_const,
-                    builder,
-                    vars,
-                    yield_constr,
+                <FpMulConstInstruction<P> as Instruction<F, D>>::ext_circuit(
+                    mul_const, builder, vars,
                 )
             }
         }

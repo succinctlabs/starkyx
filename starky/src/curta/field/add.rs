@@ -10,13 +10,11 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::constraint::{packed_generic_constrain_field_operation, packed_generic_field_operation};
+use super::constraint::packed_generic_field_operation;
 use super::*;
 use crate::curta::builder::StarkBuilder;
 use crate::curta::chip::StarkParameters;
-use crate::curta::field::constraint::{
-    ext_circuit_constrain_field_operation, ext_circuit_field_operation,
-};
+use crate::curta::field::constraint::ext_circuit_field_operation;
 use crate::curta::instruction::Instruction;
 use crate::curta::parameters::FieldParameters;
 use crate::curta::polynomial::{
@@ -61,7 +59,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             witness_low,
             witness_high,
         };
-        self.insert_instruction(instr.into())?;
+        self.constrain_instruction(instr.into())?;
         Ok(instr)
     }
 
@@ -147,81 +145,6 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             *self.witness_high.register(),
         ]
     }
-
-    fn packed_generic_constraints<
-        FE,
-        PF,
-        const D2: usize,
-        const COLUMNS: usize,
-        const PUBLIC_INPUTS: usize,
-    >(
-        &self,
-        vars: StarkEvaluationVars<FE, PF, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<PF>,
-    ) where
-        FE: FieldExtension<D2, BaseField = F>,
-        PF: PackedField<Scalar = FE>,
-    {
-        // Get the packed entries.
-        let p_a = self.a.register().packed_generic_vars(vars);
-        let p_b = self.b.register().packed_generic_vars(vars);
-        let p_result = self.result.register().packed_generic_vars(vars);
-        let p_carry = self.carry.register().packed_generic_vars(vars);
-        let p_witness_low = self.witness_low.register().packed_generic_vars(vars);
-        let p_witness_high = self.witness_high.register().packed_generic_vars(vars);
-
-        // Compute the vanishing polynomial a(x) + b(x) - result(x) - carry(x) * p(x).
-        let p_a_plus_b = PolynomialOps::add(p_a, p_b);
-        let p_a_plus_b_minus_result = PolynomialOps::sub(&p_a_plus_b, p_result);
-        let p_modulus = Polynomial::<FE>::from_iter(modulus_field_iter::<FE, P>());
-        let p_carry_mul_modulus = PolynomialOps::scalar_poly_mul(p_carry, p_modulus.as_slice());
-        let p_vanishing = PolynomialOps::sub(&p_a_plus_b_minus_result, &p_carry_mul_modulus);
-
-        // Check [a(x) + b(x) - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
-        packed_generic_constrain_field_operation::<F, D, FE, PF, D2, P>(
-            yield_constr,
-            p_vanishing,
-            p_witness_low,
-            p_witness_high,
-        );
-    }
-
-    fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
-    ) {
-        type PG = PolynomialGadget;
-
-        // Get the packed entries.
-        let p_a = self.a.register().ext_circuit_vars(vars);
-        let p_b = self.b.register().ext_circuit_vars(vars);
-        let p_result = self.result.register().ext_circuit_vars(vars);
-        let p_carry = self.carry.register().ext_circuit_vars(vars);
-        let p_witness_low = self.witness_low.register().ext_circuit_vars(vars);
-        let p_witness_high = self.witness_high.register().ext_circuit_vars(vars);
-
-        // Compute the vanishing polynomial a(x) + b(x) - result(x) - carry(x) * p(x).
-        let p_a_plus_b = PG::add_extension(builder, p_a, p_b);
-        let p_a_plus_b_minus_result = PG::sub_extension(builder, &p_a_plus_b, p_result);
-        let p_limbs = PG::constant_extension(
-            builder,
-            &modulus_field_iter::<F::Extension, P>().collect::<Vec<_>>()[..],
-        );
-        let p_mul_times_carry = PG::mul_extension(builder, p_carry, &p_limbs[..]);
-        let p_vanishing = PG::sub_extension(builder, &p_a_plus_b_minus_result, &p_mul_times_carry);
-
-        ext_circuit_constrain_field_operation::<F, D, P>(
-            builder,
-            yield_constr,
-            p_vanishing,
-            p_witness_low,
-            p_witness_high,
-        );
-    }
-
-    //  new code
 
     fn packed_generic<FE, PF, const D2: usize, const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,

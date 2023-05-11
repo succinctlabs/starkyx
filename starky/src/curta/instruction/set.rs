@@ -73,36 +73,6 @@ macro_rules! instruction_set {
                     $(InstructionSet::$var(variant) => Instruction::<F, D>::ext_circuit(variant, builder, vars),)*
                 }
             }
-
-            fn packed_generic_constraints<
-                FE,
-                Q,
-                const D2: usize,
-                const COLUMNS: usize,
-                const PUBLIC_INPUTS: usize,
-            >(
-                &self,
-                vars: StarkEvaluationVars<FE, Q, { COLUMNS }, { PUBLIC_INPUTS }>,
-                yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<Q>,
-            ) where
-                FE: FieldExtension<D2, BaseField = F>,
-                Q: PackedField<Scalar = FE>
-            {
-                match &self {
-                    $(InstructionSet::$var(variant) => Instruction::<F, D>::packed_generic_constraints(variant, vars, yield_constr),)*
-                }
-            }
-
-            fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-                &self,
-                builder: &mut CircuitBuilder<F, D>,
-                vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-                yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
-            ) {
-                match &self {
-                    $(InstructionSet::$var(variant) => Instruction::<F, D>::ext_circuit_constraints(variant, builder, vars, yield_constr),)*
-                }
-            }
         }
     }
 

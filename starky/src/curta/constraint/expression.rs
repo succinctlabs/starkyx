@@ -19,6 +19,7 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 #[derive(Clone, Debug)]
 pub enum ConstraintExpression<I, F, const D: usize> {
     Instruction(I),
+    Arithmetic(ArithmeticExpression<F, D>),
     Mul(
         Arc<ConstraintExpression<I, F, D>>,
         ArithmeticExpression<F, D>,
@@ -52,6 +53,7 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
     {
         match self {
             ConstraintExpression::Instruction(instruction) => instruction.packed_generic(vars),
+            ConstraintExpression::Arithmetic(expr) => expr.expression.packed_generic(vars),
             ConstraintExpression::Mul(instruction, multiplier) => {
                 let vals = instruction.packed_generic(vars);
                 assert_eq!(multiplier.size, 1, "Multiplier must be a single element");
@@ -86,6 +88,7 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
             ConstraintExpression::Instruction(instruction) => {
                 instruction.ext_circuit(builder, vars)
             }
+            ConstraintExpression::Arithmetic(expr) => expr.expression.ext_circuit(builder, vars),
             ConstraintExpression::Mul(instruction, multiplier) => {
                 let vals = instruction.ext_circuit(builder, vars);
                 assert_eq!(multiplier.size, 1, "Multiplier must be a single element");
@@ -116,6 +119,7 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
     pub fn instructions(&self) -> Vec<I> {
         match self {
             ConstraintExpression::Instruction(instruction) => vec![instruction.clone()],
+            ConstraintExpression::Arithmetic(_) => vec![],
             ConstraintExpression::Mul(instruction, _) => instruction.instructions(),
             ConstraintExpression::Add(left, right) => {
                 let mut instructions = left.instructions();
@@ -128,6 +132,14 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
                 instructions
             }
         }
+    }
+}
+
+impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
+    From<ArithmeticExpression<F, D>> for ConstraintExpression<I, F, D>
+{
+    fn from(expr: ArithmeticExpression<F, D>) -> Self {
+        ConstraintExpression::Arithmetic(expr)
     }
 }
 

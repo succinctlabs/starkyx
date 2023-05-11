@@ -15,8 +15,7 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 pub use set::{FromInstructionSet, InstructionSet};
 
-use super::constraint::arithmetic::ArithmeticExpression;
-use super::constraint::instruction::ConstraintExpression;
+use super::constraint::expression::ConstraintExpression;
 use super::field::{
     FpAddInstruction, FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction,
 };
@@ -47,46 +46,14 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
     ) -> Vec<P>
     where
         FE: FieldExtension<D2, BaseField = F>,
-        P: PackedField<Scalar = FE>,
-    {
-        ArithmeticExpression::from_constant(F::ONE)
-            .expression
-            .packed_generic(vars)
-    }
+        P: PackedField<Scalar = FE>;
 
     /// Evaluates the vanishing polynomial inside a recursive circuit.
     fn ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-    ) -> Vec<ExtensionTarget<D>> {
-        ArithmeticExpression::from_constant(F::ONE)
-            .expression
-            .ext_circuit(builder, vars)
-    }
-
-    /// Constrains the instruction properly within the STARK by using the `ConstraintConsumer`.
-    fn packed_generic_constraints<
-        FE,
-        P,
-        const D2: usize,
-        const COLUMNS: usize,
-        const PUBLIC_INPUTS: usize,
-    >(
-        &self,
-        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
-    ) where
-        FE: FieldExtension<D2, BaseField = F>,
-        P: PackedField<Scalar = FE>;
-
-    /// Constrains the instruction properly within Plonky2 by using the `RecursiveConstraintConsumer`.
-    fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
-    );
+    ) -> Vec<ExtensionTarget<D>>;
 
     fn constraint_degree() -> usize {
         2
