@@ -18,6 +18,7 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Clone, Debug)]
 pub enum ConstraintExpression<I, F, const D: usize> {
+    Empty,
     Instruction(I),
     Arithmetic(ArithmeticExpression<F, D>),
     Mul(
@@ -29,6 +30,10 @@ pub enum ConstraintExpression<I, F, const D: usize> {
         Arc<ConstraintExpression<I, F, D>>,
     ),
     Sub(
+        Arc<ConstraintExpression<I, F, D>>,
+        Arc<ConstraintExpression<I, F, D>>,
+    ),
+    Union(
         Arc<ConstraintExpression<I, F, D>>,
         Arc<ConstraintExpression<I, F, D>>,
     ),
@@ -52,6 +57,7 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
         P: PackedField<Scalar = FE>,
     {
         match self {
+            ConstraintExpression::Empty => vec![],
             ConstraintExpression::Instruction(instruction) => instruction.packed_generic(vars),
             ConstraintExpression::Arithmetic(expr) => expr.expression.packed_generic(vars),
             ConstraintExpression::Mul(instruction, multiplier) => {
@@ -76,6 +82,11 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
                     .map(|(l, r)| *r - *l)
                     .collect()
             }
+            ConstraintExpression::Union(left, right) => {
+                let mut constraints = left.packed_generic(vars);
+                constraints.extend(right.packed_generic(vars));
+                constraints
+            }
         }
     }
 
@@ -85,6 +96,7 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
     ) -> Vec<ExtensionTarget<D>> {
         match self {
+            ConstraintExpression::Empty => vec![],
             ConstraintExpression::Instruction(instruction) => {
                 instruction.ext_circuit(builder, vars)
             }
@@ -113,11 +125,17 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
                     .map(|(l, r)| builder.sub_extension(*l, *r))
                     .collect()
             }
+            ConstraintExpression::Union(left, right) => {
+                let mut constraints = left.ext_circuit(builder, vars);
+                constraints.extend(right.ext_circuit(builder, vars));
+                constraints
+            }
         }
     }
 
     pub fn instructions(&self) -> Vec<I> {
         match self {
+            ConstraintExpression::Empty => vec![],
             ConstraintExpression::Instruction(instruction) => vec![instruction.clone()],
             ConstraintExpression::Arithmetic(_) => vec![],
             ConstraintExpression::Mul(instruction, _) => instruction.instructions(),
@@ -131,7 +149,24 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
                 instructions.extend(right.instructions());
                 instructions
             }
+            ConstraintExpression::Union(left, right) => {
+                let mut instructions = left.instructions();
+                instructions.extend(right.instructions());
+                instructions
+            }
         }
+    }
+
+    pub fn union(self, other: Self) -> Self {
+        ConstraintExpression::Union(Arc::new(self), Arc::new(other))
+    }
+
+    pub fn union_from_iter(expressions : impl Iterator<Item = Self>) -> Self {
+        expressions.fold(ConstraintExpression::Empty, |acc, expr| acc.union(expr))
+    }
+
+    pub fn union_all(expressions : impl IntoIterator<Item = Self>) -> Self {
+        Self::union_from_iter(expressions.into_iter())
     }
 }
 
