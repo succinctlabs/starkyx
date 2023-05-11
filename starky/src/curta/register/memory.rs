@@ -3,7 +3,7 @@ use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 
-use crate::curta::constraint::expression::{ArithmeticExpression, ArithmeticExpressionSlice};
+use crate::curta::constraint::arithmetic::{ArithmeticExpression, ArithmeticExpressionSlice};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 /// A row-wise contiguous chunk of memory in the trace. Corresponds to a slice in vars.local_values

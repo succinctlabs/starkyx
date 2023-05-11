@@ -4,7 +4,7 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
 use super::{CubicExtension, CubicParameters};
-use crate::curta::constraint::expression::ArithmeticExpression;
+use crate::curta::constraint::arithmetic::ArithmeticExpression;
 use crate::curta::register::{ArrayRegister, ElementRegister, Register};
 
 /// An element of the cubic extension

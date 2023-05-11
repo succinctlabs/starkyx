@@ -12,7 +12,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::expression::ArithmeticExpression;
+use super::arithmetic::ArithmeticExpression;
 use crate::curta::instruction::Instruction;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -158,5 +158,15 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
 
     fn mul(self, rhs: ArithmeticExpression<F, D>) -> Self::Output {
         ConstraintExpression::Mul(Arc::new(self), rhs)
+    }
+}
+
+impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize> Mul<F>
+    for ConstraintExpression<I, F, D>
+{
+    type Output = Self;
+
+    fn mul(self, rhs: F) -> Self::Output {
+        ConstraintExpression::Mul(Arc::new(self), ArithmeticExpression::from_constant(rhs))
     }
 }

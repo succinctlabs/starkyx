@@ -297,7 +297,7 @@ mod tests {
     use crate::config::StarkConfig;
     use crate::curta::builder::StarkBuilder;
     use crate::curta::chip::{StarkParameters, TestStark};
-    use crate::curta::constraint::expression::ArithmeticExpression;
+    use crate::curta::constraint::arithmetic::ArithmeticExpression;
     use crate::curta::instruction::InstructionSet;
     use crate::curta::parameters::ed25519::{Ed25519, Ed25519BaseField};
     use crate::curta::parameters::EllipticCurveParameters;

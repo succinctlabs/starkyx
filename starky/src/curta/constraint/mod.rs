@@ -3,12 +3,12 @@ use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use self::expression::ArithmeticExpression;
+use self::arithmetic::ArithmeticExpression;
 use self::instruction::ConstraintExpression;
 use super::instruction::Instruction;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-pub mod expression;
+pub mod arithmetic;
 pub mod instruction;
 
 #[derive(Debug, Clone)]

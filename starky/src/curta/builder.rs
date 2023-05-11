@@ -5,7 +5,7 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
 use super::chip::{Chip, StarkParameters};
-use super::constraint::expression::ArithmeticExpression;
+use super::constraint::arithmetic::ArithmeticExpression;
 use super::constraint::instruction::ConstraintExpression;
 use super::constraint::{ArithmeticConstraint, Constraint};
 use super::instruction::write::WriteInstruction;

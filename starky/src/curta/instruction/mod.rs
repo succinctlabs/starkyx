@@ -15,7 +15,7 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 pub use set::{FromInstructionSet, InstructionSet};
 
-use super::constraint::expression::ArithmeticExpression;
+use super::constraint::arithmetic::ArithmeticExpression;
 use super::constraint::instruction::ConstraintExpression;
 use super::field::{
     FpAddInstruction, FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction,
