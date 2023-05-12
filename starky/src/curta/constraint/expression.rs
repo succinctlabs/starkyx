@@ -16,23 +16,32 @@ use super::arithmetic::ArithmeticExpression;
 use crate::curta::instruction::Instruction;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
+/// An abstract representation of a general AIR vanishing polynomial
+///
 #[derive(Clone, Debug)]
 pub enum ConstraintExpression<I, F, const D: usize> {
+    /// An empty constraint
     Empty,
+    /// The constraints contained in a single instruction
     Instruction(I),
+    /// A constraint asserting the arithmetic expression to be zero
     Arithmetic(ArithmeticExpression<F, D>),
+    /// A constraint P * Multiplier for a constraint expression P and an arithmetic expression Multiplier
     Mul(
         Arc<ConstraintExpression<I, F, D>>,
         ArithmeticExpression<F, D>,
     ),
+    /// Adding the constraints of two expressions Left + Right
     Add(
         Arc<ConstraintExpression<I, F, D>>,
         Arc<ConstraintExpression<I, F, D>>,
     ),
+    /// Subtracting the constraints of two expressions Left - Right
     Sub(
         Arc<ConstraintExpression<I, F, D>>,
         Arc<ConstraintExpression<I, F, D>>,
     ),
+    /// A constraint for the constraints of left and right
     Union(
         Arc<ConstraintExpression<I, F, D>>,
         Arc<ConstraintExpression<I, F, D>>,
@@ -161,11 +170,11 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
         ConstraintExpression::Union(Arc::new(self), Arc::new(other))
     }
 
-    pub fn union_from_iter(expressions : impl Iterator<Item = Self>) -> Self {
+    pub fn union_from_iter(expressions: impl Iterator<Item = Self>) -> Self {
         expressions.fold(ConstraintExpression::Empty, |acc, expr| acc.union(expr))
     }
 
-    pub fn union_all(expressions : impl IntoIterator<Item = Self>) -> Self {
+    pub fn union_all(expressions: impl IntoIterator<Item = Self>) -> Self {
         Self::union_from_iter(expressions.into_iter())
     }
 }

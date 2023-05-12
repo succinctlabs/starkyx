@@ -10,6 +10,20 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use crate::curta::register::{MemorySlice, Register};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
+/// An abstract representation of an arithmetic expression.
+///
+/// An arithmetic expression is a vector of polynomials in the trace columns, i.e.,
+/// [ P_1(q_1(x), q_2(x), ..., q_n(x)), ..., P_n(q_1(x), q_2(x), ..., q_n(x))]
+///
+/// Operations on Arithmetic expressions are done pointwise. For arithmetic expressions:
+/// P = [P_1, ..., P_n] and Q = [Q_1, ..., Q_n], we define:
+/// - P + Q = [P_1 + Q_1, ..., P_n + Q_n]
+/// - P - Q = [P_1 - Q_1, ..., P_n - Q_n]
+/// - c * P = [c * P_1, ..., c * P_n] for c in F
+///
+/// If Z = [Z_1] is a vector of length 1, we also define
+/// - P * Z = [P_1 * Z_1, ..., P_n * Z_1]
+///
 #[derive(Clone, Debug)]
 pub struct ArithmeticExpression<F, const D: usize> {
     pub(crate) expression: ArithmeticExpressionSlice<F, D>,

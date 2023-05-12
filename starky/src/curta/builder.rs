@@ -170,7 +170,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         let id = InstructionId::CustomInstruction(instruction.trace_layout());
         let existing_value = self.instruction_indices.insert(id, self.instructions.len());
         if existing_value.is_some() {
-            return Err(anyhow!("Instruction label already exists"));
+            //return Err(anyhow!("Instruction label already exists"));
         }
         self.instructions.push(instruction);
         Ok(())
