@@ -12,7 +12,7 @@ use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::constraint::ArithmeticConstraint;
+use super::constraint::Constraint;
 use super::instruction::write::WriteInstruction;
 use super::instruction::Instruction;
 use crate::lookup::{eval_lookups, eval_lookups_circuit};
@@ -45,7 +45,7 @@ where
 {
     pub(crate) instructions: Vec<L::Instruction>,
     pub(crate) write_instructions: Vec<WriteInstruction>,
-    pub(crate) constraints: Vec<ArithmeticConstraint<F, D>>,
+    pub(crate) constraints: Vec<Constraint<L::Instruction, F, D>>,
     pub(crate) range_checks_idx: (usize, usize),
     pub(crate) table_index: usize,
 }
@@ -118,9 +118,6 @@ where
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
-        for inst in self.instructions.iter() {
-            inst.packed_generic_constraints(vars, yield_constr);
-        }
         for consr in self.constraints.iter() {
             consr.packed_generic_constraints(vars, yield_constr);
         }
@@ -146,9 +143,6 @@ where
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        for inst in self.instructions.iter() {
-            inst.ext_circuit_constraints(builder, vars, yield_constr);
-        }
         for consr in self.constraints.iter() {
             consr.ext_circuit_constraints(builder, vars, yield_constr);
         }
@@ -173,7 +167,7 @@ where
     }
 
     fn constraint_degree(&self) -> usize {
-        2
+        3
     }
 
     fn permutation_pairs(&self) -> Vec<PermutationPair> {

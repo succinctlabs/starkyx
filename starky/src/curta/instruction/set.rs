@@ -1,3 +1,5 @@
+use plonky2::iop::ext_target::ExtensionTarget;
+
 use super::{FpAddInstruction, FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction};
 use crate::curta::bool::SelectInstruction;
 use crate::curta::field::FpDenInstruction;
@@ -44,7 +46,7 @@ macro_rules! instruction_set {
                 }
             }
 
-            fn packed_generic_constraints<
+            fn packed_generic<
                 FE,
                 Q,
                 const D2: usize,
@@ -53,24 +55,22 @@ macro_rules! instruction_set {
             >(
                 &self,
                 vars: StarkEvaluationVars<FE, Q, { COLUMNS }, { PUBLIC_INPUTS }>,
-                yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<Q>,
-            ) where
+            ) -> Vec<Q> where
                 FE: FieldExtension<D2, BaseField = F>,
                 Q: PackedField<Scalar = FE>
             {
                 match &self {
-                    $(InstructionSet::$var(variant) => Instruction::<F, D>::packed_generic_constraints(variant, vars, yield_constr),)*
+                    $(InstructionSet::$var(variant) => Instruction::<F, D>::packed_generic(variant, vars),)*
                 }
             }
 
-            fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+            fn ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
                 &self,
                 builder: &mut CircuitBuilder<F, D>,
                 vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-                yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
-            ) {
+            ) -> Vec<ExtensionTarget<D>> {
                 match &self {
-                    $(InstructionSet::$var(variant) => Instruction::<F, D>::ext_circuit_constraints(variant, builder, vars, yield_constr),)*
+                    $(InstructionSet::$var(variant) => Instruction::<F, D>::ext_circuit(variant, builder, vars),)*
                 }
             }
         }

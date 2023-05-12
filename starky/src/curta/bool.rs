@@ -3,6 +3,7 @@ use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
+use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::builder::StarkBuilder;
@@ -33,7 +34,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             false_value: *b,
             result: result,
         };
-        self.insert_instruction(instr.clone().into()).unwrap();
+        self.constrain_instruction(instr.clone().into()).unwrap();
         instr
     }
 }
@@ -52,54 +53,54 @@ impl<F: RichField + Extendable<D>, const D: usize, T: Register> Instruction<F, D
         vec![*self.result.register()]
     }
 
-    fn packed_generic_constraints<
-        FE,
-        P,
-        const D2: usize,
-        const COLUMNS: usize,
-        const PUBLIC_INPUTS: usize,
-    >(
+    fn packed_generic<FE, P, const D2: usize, const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
-    ) where
+    ) -> Vec<P>
+    where
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
-        let bit_slice = self.bit.register().packed_generic_vars(&vars);
-        let true_value = self.true_value.register().packed_generic_vars(&vars);
-        let false_value = self.false_value.register().packed_generic_vars(&vars);
-        let result = self.result.register().packed_generic_vars(&vars);
+        let bit_slice = self.bit.register().packed_generic_vars(vars);
+        let true_value = self.true_value.register().packed_generic_vars(vars);
+        let false_value = self.false_value.register().packed_generic_vars(vars);
+        let result = self.result.register().packed_generic_vars(vars);
 
         debug_assert!(bit_slice.len() == 1);
         let bit = bit_slice[0];
-        for ((x_true, x_false), x) in true_value.iter().zip(false_value.iter()).zip(result.iter()) {
-            yield_constr.constraint(*x_true * bit + *x_false * (P::from(FE::ONE) - bit) - *x);
-        }
+        true_value
+            .iter()
+            .zip(false_value.iter())
+            .zip(result.iter())
+            .map(|((x_true, x_false), x)| *x_true * bit + *x_false * (P::from(FE::ONE) - bit) - *x)
+            .collect()
     }
 
-    fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+    fn ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
-    ) {
-        let bit_slice = self.bit.register().ext_circuit_vars(&vars);
-        let true_value = self.true_value.register().ext_circuit_vars(&vars);
-        let false_value = self.false_value.register().ext_circuit_vars(&vars);
-        let result = self.result.register().ext_circuit_vars(&vars);
+    ) -> Vec<ExtensionTarget<D>> {
+        let bit_slice = self.bit.register().ext_circuit_vars(vars);
+        let true_value = self.true_value.register().ext_circuit_vars(vars);
+        let false_value = self.false_value.register().ext_circuit_vars(vars);
+        let result = self.result.register().ext_circuit_vars(vars);
 
         debug_assert!(bit_slice.len() == 1);
         let bit = bit_slice[0];
         let one = builder.constant_extension(F::Extension::ONE);
         let one_minus_bit = builder.sub_extension(one, bit);
-        for ((x_true, x_false), x) in true_value.iter().zip(false_value.iter()).zip(result.iter()) {
-            let bit_x_true = builder.mul_extension(*x_true, bit);
-            let one_minus_bit_x_false = builder.mul_extension(*x_false, one_minus_bit);
-            let expected_res = builder.add_extension(bit_x_true, one_minus_bit_x_false);
-            let constraint = builder.sub_extension(expected_res, *x);
-            yield_constr.constraint(builder, constraint);
-        }
+        true_value
+            .iter()
+            .zip(false_value.iter())
+            .zip(result.iter())
+            .map(|((x_true, x_false), x)| {
+                let bit_x_true = builder.mul_extension(*x_true, bit);
+                let one_minus_bit_x_false = builder.mul_extension(*x_false, one_minus_bit);
+                let expected_res = builder.add_extension(bit_x_true, one_minus_bit_x_false);
+                builder.sub_extension(expected_res, *x)
+            })
+            .collect()
     }
 }
 

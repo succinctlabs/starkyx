@@ -8,7 +8,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use crate::curta::parameters::{FieldParameters, LIMB};
 use crate::curta::polynomial::{PolynomialGadget, PolynomialOps};
 
-pub fn packed_generic_constrain_field_operation<
+pub fn packed_generic_field_operation<
     F: RichField + Extendable<D>,
     const D: usize,
     FE,
@@ -16,11 +16,11 @@ pub fn packed_generic_constrain_field_operation<
     const D2: usize,
     P: FieldParameters,
 >(
-    yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<PF>,
     p_vanishing: Vec<PF>,
     p_witness_low: &[PF],
     p_witness_high: &[PF],
-) where
+) -> Vec<PF>
+where
     FE: FieldExtension<D2, BaseField = F>,
     PF: PackedField<Scalar = FE>,
 {
@@ -40,22 +40,23 @@ pub fn packed_generic_constrain_field_operation<
     let root_monomial: &[PF] = &[PF::from(-limb), PF::from(PF::Scalar::ONE)];
     let witness_times_root = PolynomialOps::mul(&w, root_monomial);
 
-    for i in 0..p_vanishing.len() {
-        yield_constr.constraint(p_vanishing[i] - witness_times_root[i]);
-    }
+    p_vanishing
+        .iter()
+        .zip(witness_times_root.iter())
+        .map(|(x, y)| *x - *y)
+        .collect()
 }
 
-pub fn ext_circuit_constrain_field_operation<
+pub fn ext_circuit_field_operation<
     F: RichField + Extendable<D>,
     const D: usize,
     P: FieldParameters,
 >(
     builder: &mut CircuitBuilder<F, D>,
-    yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     p_vanishing: Vec<ExtensionTarget<D>>,
     p_witness_low: &[ExtensionTarget<D>],
     p_witness_high: &[ExtensionTarget<D>],
-) {
+) -> Vec<ExtensionTarget<D>> {
     type PG = PolynomialGadget;
 
     // Reconstruct and shift back the witness polynomial
@@ -76,8 +77,5 @@ pub fn ext_circuit_constrain_field_operation<
     let p_witness_mul_root = PG::mul_extension(builder, &p_witness.as_slice(), root_monomial);
 
     // Check [a(x) + b(x) - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
-    let constraint = PG::sub_extension(builder, &p_vanishing, &p_witness_mul_root);
-    for constr in constraint {
-        yield_constr.constraint(builder, constr);
-    }
+    PG::sub_extension(builder, &p_vanishing, &p_witness_mul_root)
 }

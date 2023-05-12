@@ -34,8 +34,8 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     /// Computes one step of the double-and-add algorithm for scalar multiplication over elliptic
     /// curves. The algorithm the computes the function f(bit, result, temp):
     ///
-    ///     result = if bit == 1 then result + temp else result
-    ///     temp = temp + temp
+    /// result = if bit == 1 then result + temp else result
+    /// temp = temp + temp
     ///
     /// This function should probably never be used directly and is used in `ed25519_double_and_add`
     fn ed25519_double_and_add<E: EdwardsParameters>(

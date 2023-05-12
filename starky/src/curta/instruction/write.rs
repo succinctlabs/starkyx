@@ -19,27 +19,22 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for WriteIn
         self.0.assign(trace_rows, 0, row, row_index);
     }
 
-    fn packed_generic_constraints<
-        FE,
-        P,
-        const D2: usize,
-        const COLUMNS: usize,
-        const PUBLIC_INPUTS: usize,
-    >(
+    fn packed_generic<FE, P, const D2: usize, const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
         _vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
-        _yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
-    ) where
+    ) -> Vec<P>
+    where
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
+        vec![]
     }
 
-    fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+    fn ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
         _builder: &mut CircuitBuilder<F, D>,
         _vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-        _yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
-    ) {
+    ) -> Vec<ExtensionTarget<D>> {
+        vec![]
     }
 }

@@ -11,9 +11,11 @@ pub use empty::EmptyInstructionSet;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
+use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 pub use set::{FromInstructionSet, InstructionSet};
 
+use super::constraint::expression::ConstraintExpression;
 use super::field::{
     FpAddInstruction, FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction,
 };
@@ -37,26 +39,27 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
             });
     }
 
-    /// Constrains the instruction properly within the STARK by using the `ConstraintConsumer`.
-    fn packed_generic_constraints<
-        FE,
-        P,
-        const D2: usize,
-        const COLUMNS: usize,
-        const PUBLIC_INPUTS: usize,
-    >(
+    /// Outputs the values of vanishing polynomial on packed elements.
+    fn packed_generic<FE, P, const D2: usize, const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
-    ) where
+    ) -> Vec<P>
+    where
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>;
 
-    /// Constrains the instruction properly within Plonky2 by using the `RecursiveConstraintConsumer`.
-    fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+    /// Evaluates the vanishing polynomial inside a recursive circuit.
+    fn ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
-    );
+    ) -> Vec<ExtensionTarget<D>>;
+
+    fn constraint_degree() -> usize {
+        2
+    }
+
+    fn expr(&self) -> ConstraintExpression<Self, F, D> {
+        ConstraintExpression::Instruction(self.clone())
+    }
 }

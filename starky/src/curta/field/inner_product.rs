@@ -9,9 +9,7 @@ use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::constraint::{
-    ext_circuit_constrain_field_operation, packed_generic_constrain_field_operation,
-};
+use super::constraint::{ext_circuit_field_operation, packed_generic_field_operation};
 use super::*;
 use crate::curta::builder::StarkBuilder;
 use crate::curta::chip::StarkParameters;
@@ -58,7 +56,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             witness_low,
             witness_high,
         };
-        self.insert_instruction(instr.clone().into()).unwrap();
+        self.constrain_instruction(instr.clone().into()).unwrap();
         instr
     }
 }
@@ -135,17 +133,11 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         ]
     }
 
-    fn packed_generic_constraints<
-        FE,
-        PF,
-        const D2: usize,
-        const COLUMNS: usize,
-        const PUBLIC_INPUTS: usize,
-    >(
+    fn packed_generic<FE, PF, const D2: usize, const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
         vars: StarkEvaluationVars<FE, PF, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<PF>,
-    ) where
+    ) -> Vec<PF>
+    where
         FE: FieldExtension<D2, BaseField = F>,
         PF: PackedField<Scalar = FE>,
     {
@@ -154,18 +146,18 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             .a
             .clone()
             .into_iter()
-            .map(|x| x.register().packed_generic_vars(&vars))
+            .map(|x| x.register().packed_generic_vars(vars))
             .collect::<Vec<_>>();
         let p_b_vec = self
             .b
             .clone()
             .into_iter()
-            .map(|x| x.register().packed_generic_vars(&vars))
+            .map(|x| x.register().packed_generic_vars(vars))
             .collect::<Vec<_>>();
-        let p_result = self.result.register().packed_generic_vars(&vars);
-        let p_carry = self.carry.register().packed_generic_vars(&vars);
-        let p_witness_low = self.witness_low.register().packed_generic_vars(&vars);
-        let p_witness_high = self.witness_high.register().packed_generic_vars(&vars);
+        let p_result = self.result.register().packed_generic_vars(vars);
+        let p_carry = self.carry.register().packed_generic_vars(vars);
+        let p_witness_low = self.witness_low.register().packed_generic_vars(vars);
+        let p_witness_high = self.witness_high.register().packed_generic_vars(vars);
 
         // Construct the expected vanishing polynmial.
         let p_zero = vec![PF::ZEROS];
@@ -180,37 +172,35 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         let p_vanishing = PolynomialOps::sub(&p_inner_product_minus_result, &mul_times_carry);
 
         // Check [(\sum_i a_i(x) + b_i(x)) - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
-        packed_generic_constrain_field_operation::<F, D, FE, PF, D2, P>(
-            yield_constr,
+        packed_generic_field_operation::<F, D, FE, PF, D2, P>(
             p_vanishing,
             p_witness_low,
             p_witness_high,
-        );
+        )
     }
 
-    fn ext_circuit_constraints<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+    fn ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
-    ) {
+    ) -> Vec<ExtensionTarget<D>> {
         // Get the packed entries.
         let p_a_vec = self
             .a
             .clone()
             .into_iter()
-            .map(|x| x.register().ext_circuit_vars(&vars))
+            .map(|x| x.register().ext_circuit_vars(vars))
             .collect::<Vec<_>>();
         let p_b_vec = self
             .b
             .clone()
             .into_iter()
-            .map(|x| x.register().ext_circuit_vars(&vars))
+            .map(|x| x.register().ext_circuit_vars(vars))
             .collect::<Vec<_>>();
-        let p_result = self.result.register().ext_circuit_vars(&vars);
-        let p_carry = self.carry.register().ext_circuit_vars(&vars);
-        let p_witness_low = self.witness_low.register().ext_circuit_vars(&vars);
-        let p_witness_high = self.witness_high.register().ext_circuit_vars(&vars);
+        let p_result = self.result.register().ext_circuit_vars(vars);
+        let p_carry = self.carry.register().ext_circuit_vars(vars);
+        let p_witness_low = self.witness_low.register().ext_circuit_vars(vars);
+        let p_witness_high = self.witness_high.register().ext_circuit_vars(vars);
 
         // Construct the expected vanishing polynmial
         let p_zero = vec![builder.zero_extension()];
@@ -237,13 +227,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         );
 
         // Check [(\sum_i a_i(x) + b_i(x)) - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
-        ext_circuit_constrain_field_operation::<F, D, P>(
-            builder,
-            yield_constr,
-            p_vanishing,
-            p_witness_low,
-            p_witness_high,
-        );
+        ext_circuit_field_operation::<F, D, P>(builder, p_vanishing, p_witness_low, p_witness_high)
     }
 }
 
