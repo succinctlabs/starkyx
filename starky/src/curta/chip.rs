@@ -15,6 +15,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use super::constraint::Constraint;
 use super::instruction::write::WriteInstruction;
 use super::instruction::Instruction;
+use super::range::RangeCheckData;
 use crate::lookup::{eval_lookups, eval_lookups_circuit};
 use crate::permutation::PermutationPair;
 use crate::stark::Stark;
@@ -48,6 +49,7 @@ where
     pub(crate) constraints: Vec<Constraint<L::Instruction, F, D>>,
     pub(crate) range_checks_idx: (usize, usize),
     pub(crate) table_index: usize,
+    pub(crate) range_data: Option<RangeCheckData>,
 }
 
 impl<L, F, const D: usize> Chip<L, F, D>

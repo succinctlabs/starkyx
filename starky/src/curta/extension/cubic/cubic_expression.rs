@@ -22,6 +22,18 @@ impl<F: RichField + Extendable<D>, const D: usize> CubicExpression<F, D> {
         Self([arr.get(0).expr(), arr.get(1).expr(), arr.get(2).expr()])
     }
 
+    pub fn from_constants(array: [F; 3]) -> Self {
+        Self([
+            ArithmeticExpression::from_constant(array[0]),
+            ArithmeticExpression::from_constant(array[1]),
+            ArithmeticExpression::from_constant(array[2]),
+        ])
+    }
+
+    pub fn into_expressions_array(self) -> [ArithmeticExpression<F, D>; 3] {
+        self.0
+    }
+
     pub fn eval<P: CubicParameters<F>>(
         &self,
         trace_rows: &[Vec<F>],
@@ -44,6 +56,18 @@ impl<F: RichField + Extendable<D>, const D: usize> From<ElementRegister> for Cub
     fn from(register: ElementRegister) -> Self {
         Self([
             register.expr(),
+            ArithmeticExpression::zero(),
+            ArithmeticExpression::zero(),
+        ])
+    }
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> From<ArithmeticExpression<F, D>>
+    for CubicExpression<F, D>
+{
+    fn from(expression: ArithmeticExpression<F, D>) -> Self {
+        Self([
+            expression,
             ArithmeticExpression::zero(),
             ArithmeticExpression::zero(),
         ])

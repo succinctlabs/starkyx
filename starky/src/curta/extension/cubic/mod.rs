@@ -3,7 +3,9 @@
 //!
 
 pub mod cubic_expression;
+pub mod gadget;
 pub mod goldilocks_cubic;
+pub mod register;
 
 use core::iter::{Product, Sum};
 use core::marker::PhantomData;

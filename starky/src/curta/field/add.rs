@@ -229,11 +229,12 @@ mod tests {
     use crate::curta::chip::{StarkParameters, TestStark};
     use crate::curta::constraint::arithmetic::ArithmeticExpression;
     use crate::curta::constraint::expression::ConstraintExpression;
+    use crate::curta::extension::cubic::goldilocks_cubic::GoldilocksCubicParameters;
     use crate::curta::instruction::InstructionSet;
     use crate::curta::parameters::ed25519::{Ed25519, Ed25519BaseField};
     use crate::curta::parameters::EllipticCurveParameters;
     use crate::curta::register::{BitRegister, Register};
-    use crate::curta::trace::trace;
+    use crate::curta::trace::{trace, trace_new};
     use crate::prover::prove;
     use crate::recursive_verifier::{
         add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
@@ -246,7 +247,7 @@ mod tests {
 
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpAddTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 140;
-        const NUM_FREE_COLUMNS: usize = 1;
+        const NUM_FREE_COLUMNS: usize = 8;
         type Instruction = InstructionSet<Ed25519BaseField>;
     }
 
@@ -257,6 +258,8 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type S = TestStark<FpAddTest, F, D>;
         type P = Ed25519BaseField;
+        type E = GoldilocksCubicParameters;
+        type L = FpAddTest;
 
         // Build the circuit.
         let mut builder = StarkBuilder::<FpAddTest, F, D>::new();
@@ -269,11 +272,14 @@ mod tests {
         builder.constraint(a_b_expr.clone() * e).unwrap();
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
+
+        let range_data = builder.arithmetic_range_checks::<E>();
+
         let (chip, spec) = builder.build();
 
         // Generate the trace.
         let num_rows = 2u64.pow(16) as usize;
-        let (handle, generator) = trace::<F, D>(spec);
+        let (handle, generator) = trace_new::<L, F, D>(&chip, num_rows, spec);
         let mut timing = TimingTree::new("stark_proof", log::Level::Debug);
         let trace = timed!(timing, "generate trace", {
             let p = <Ed25519 as EllipticCurveParameters>::BaseField::modulus();
@@ -286,7 +292,9 @@ mod tests {
                 handle.write_fp_add(i, &a_int, &b_int, a_add_b_ins).unwrap();
             }
             drop(handle);
-            generator.generate_trace(&chip, num_rows as usize).unwrap()
+            generator
+                .generate_trace_new::<L, E>(&chip, num_rows as usize)
+                .unwrap()
         });
 
         // Generate the proof.

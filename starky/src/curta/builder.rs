@@ -10,6 +10,7 @@ use super::constraint::expression::ConstraintExpression;
 use super::constraint::Constraint;
 use super::instruction::write::WriteInstruction;
 use super::instruction::Instruction;
+use super::range::RangeCheckData;
 use super::register::{ArrayRegister, CellType, MemorySlice, Register, RegisterSerializable};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
@@ -30,7 +31,8 @@ where
     instruction_indices: BTreeMap<InstructionId, usize>,
     instructions: Vec<L::Instruction>,
     write_instructions: Vec<WriteInstruction>,
-    constraints: Vec<Constraint<L::Instruction, F, D>>,
+    pub(crate) constraints: Vec<Constraint<L::Instruction, F, D>>,
+    pub(crate) range_data: Option<RangeCheckData>,
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Default
@@ -52,6 +54,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             instructions: Vec::new(),
             write_instructions: Vec::new(),
             constraints: Vec::new(),
+            range_data: None,
         }
     }
 
@@ -334,6 +337,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
                     L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS,
                 ),
                 table_index: L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS,
+                range_data: self.range_data,
             },
             self.instruction_indices,
         )
