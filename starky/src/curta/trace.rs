@@ -137,6 +137,48 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         row_capacity: usize,
     ) -> Result<Vec<PolynomialValues<F>>> {
         // Get trace rows
+        // Initiaze the trace with capacity given by the user
+        let num_cols = chip.num_columns_no_range_checks();
+        let mut trace_rows = vec![vec![F::ZERO; num_cols]; row_capacity];
+
+        while let Ok((row_index, id, mut row)) = self.rx.recv() {
+            let op_index = self
+                .spec
+                .get(&id)
+                .ok_or_else(|| anyhow!("Invalid instruction"))?;
+            match id {
+                InstructionId::CustomInstruction(_) => {
+                    chip.instructions[*op_index].assign_row(&mut trace_rows, &mut row, row_index)
+                }
+                InstructionId::Write(_) => chip.write_instructions[*op_index].assign_row(
+                    &mut trace_rows,
+                    &mut row,
+                    row_index,
+                ),
+            };
+        }
+
+        // Transpose the trace to get the columns and resize to the correct size
+        let mut trace_cols = transpose(&trace_rows);
+
+        // Resize the trace columns to include the range checks
+        trace_cols.resize(
+            Chip::<L, F, D>::num_columns(),
+            Vec::with_capacity(row_capacity),
+        );
+
+        Ok(trace_cols
+            .into_par_iter()
+            .map(PolynomialValues::new)
+            .collect())
+    }
+
+    pub fn generate_trace_permutation_range_check<L: StarkParameters<F, D>>(
+        &self,
+        chip: &Chip<L, F, D>,
+        row_capacity: usize,
+    ) -> Result<Vec<PolynomialValues<F>>> {
+        // Get trace rows
         let trace_rows = self.generate_trace_rows(chip, row_capacity)?;
 
         // Transpose the trace to get the columns and resize to the correct size

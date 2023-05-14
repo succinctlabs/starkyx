@@ -8,7 +8,7 @@ use core::ops::Range;
 
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
-use plonky2::field::types::Field;
+//use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
@@ -92,7 +92,8 @@ where
 
     #[inline]
     pub const fn num_columns() -> usize {
-        1 + L::NUM_FREE_COLUMNS + 3 * L::NUM_ARITHMETIC_COLUMNS
+        //1 + L::NUM_FREE_COLUMNS + 3 * L::NUM_ARITHMETIC_COLUMNS
+        L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS
     }
     #[inline]
     pub const fn arithmetic_range(&self) -> Range<usize> {
@@ -121,20 +122,20 @@ where
         for consr in self.constraints.iter() {
             consr.packed_generic_constraints(vars, yield_constr);
         }
-        // lookp table values
-        yield_constr.constraint_first_row(vars.local_values[self.table_index]);
-        let table_values_relation =
-            vars.local_values[self.table_index] + FE::ONE - vars.next_values[self.table_index];
-        yield_constr.constraint_transition(table_values_relation);
-        // permutations
-        for i in self.arithmetic_range() {
-            eval_lookups(
-                vars,
-                yield_constr,
-                self.col_perm_index(i),
-                self.table_perm_index(i),
-            );
-        }
+        // // lookp table values
+        // yield_constr.constraint_first_row(vars.local_values[self.table_index]);
+        // let table_values_relation =
+        //     vars.local_values[self.table_index] + FE::ONE - vars.next_values[self.table_index];
+        // yield_constr.constraint_transition(table_values_relation);
+        // // permutations
+        // for i in self.arithmetic_range() {
+        //     eval_lookups(
+        //         vars,
+        //         yield_constr,
+        //         self.col_perm_index(i),
+        //         self.table_perm_index(i),
+        //     );
+        // }
     }
 
     fn eval_ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
@@ -146,40 +147,40 @@ where
         for consr in self.constraints.iter() {
             consr.ext_circuit_constraints(builder, vars, yield_constr);
         }
-        // lookup table values
-        yield_constr.constraint_first_row(builder, vars.local_values[self.table_index]);
-        let one = builder.constant_extension(F::Extension::ONE);
-        let table_plus_one = builder.add_extension(vars.local_values[self.table_index], one);
-        let table_relation =
-            builder.sub_extension(table_plus_one, vars.next_values[self.table_index]);
-        yield_constr.constraint_transition(builder, table_relation);
+        // // lookup table values
+        // yield_constr.constraint_first_row(builder, vars.local_values[self.table_index]);
+        // let one = builder.constant_extension(F::Extension::ONE);
+        // let table_plus_one = builder.add_extension(vars.local_values[self.table_index], one);
+        // let table_relation =
+        //     builder.sub_extension(table_plus_one, vars.next_values[self.table_index]);
+        // yield_constr.constraint_transition(builder, table_relation);
 
-        // lookup argumment
-        for i in self.arithmetic_range() {
-            eval_lookups_circuit(
-                builder,
-                vars,
-                yield_constr,
-                self.col_perm_index(i),
-                self.table_perm_index(i),
-            );
-        }
+        // // lookup argumment
+        // for i in self.arithmetic_range() {
+        //     eval_lookups_circuit(
+        //         builder,
+        //         vars,
+        //         yield_constr,
+        //         self.col_perm_index(i),
+        //         self.table_perm_index(i),
+        //     );
+        // }
     }
 
     fn constraint_degree(&self) -> usize {
         3
     }
 
-    fn permutation_pairs(&self) -> Vec<PermutationPair> {
-        self.arithmetic_range()
-            .flat_map(|i| {
-                [
-                    PermutationPair::singletons(i, self.col_perm_index(i)),
-                    PermutationPair::singletons(self.table_index, self.table_perm_index(i)),
-                ]
-            })
-            .collect()
-    }
+    // fn permutation_pairs(&self) -> Vec<PermutationPair> {
+    //     self.arithmetic_range()
+    //         .flat_map(|i| {
+    //             [
+    //                 PermutationPair::singletons(i, self.col_perm_index(i)),
+    //                 PermutationPair::singletons(self.table_index, self.table_perm_index(i)),
+    //             ]
+    //         })
+    //         .collect()
+    // }
 }
 
 /// A Stark for emulated field operations
@@ -234,7 +235,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         self.chip.constraint_degree()
     }
 
-    fn permutation_pairs(&self) -> Vec<PermutationPair> {
-        self.chip.permutation_pairs()
-    }
+    // fn permutation_pairs(&self) -> Vec<PermutationPair> {
+    //     self.chip.permutation_pairs()
+    // }
 }

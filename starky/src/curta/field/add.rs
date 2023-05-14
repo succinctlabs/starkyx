@@ -346,7 +346,7 @@ mod tests {
     }
 
     #[test]
-    fn test_fpadd_expression() {
+    fn test_expression_fpadd() {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
