@@ -273,13 +273,13 @@ mod tests {
         builder.write_data(&a).unwrap();
         builder.write_data(&b).unwrap();
 
-        let range_data = builder.arithmetic_range_checks::<E>();
+        builder.arithmetic_range_checks::<E>();
 
         let (chip, spec) = builder.build();
 
         // Generate the trace.
         let num_rows = 2u64.pow(16) as usize;
-        let (handle, generator) = trace_new::<L, F, D>(&chip, num_rows, spec);
+        let (handle, generator) = trace::<F, D>(spec);
         let mut timing = TimingTree::new("stark_proof", log::Level::Debug);
         let trace = timed!(timing, "generate trace", {
             let p = <Ed25519 as EllipticCurveParameters>::BaseField::modulus();
