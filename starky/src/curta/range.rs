@@ -12,9 +12,10 @@ use super::chip::StarkParameters;
 use super::constraint::arithmetic::ArithmeticExpression;
 use super::extension::cubic::cubic_expression::CubicExpression;
 use super::extension::cubic::register::CubicElementRegister;
-use super::extension::cubic::{CubicParameters, CubicExtension};
-use super::register::{ElementRegister, Register, RegisterSerializable};
+use super::extension::cubic::{CubicExtension, CubicParameters};
+use super::register::{ArrayRegister, ElementRegister, Register, RegisterSerializable};
 use super::trace::TraceGenerator;
+use crate::curta::register::MemorySlice;
 
 const BETAS: [u64; 3] = [
     17800306513594245228,
@@ -27,6 +28,7 @@ pub struct RangeCheckData {
     table: ElementRegister,
     multiplicity: ElementRegister,
     multiplicity_table_log: CubicElementRegister,
+    row_accumulators: ArrayRegister<CubicElementRegister>,
     log_lookup_accumulator: CubicElementRegister,
 }
 
@@ -59,13 +61,52 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         // multiplicity_table_log = multiplicity / (beta - table))
         self.assert_cubic_expressions_equal(
             CubicExpression::from(multiplicity.expr()),
-            multiplicity_table_log.extension_expr() * (beta - table.expr().into()),
+            multiplicity_table_log.extension_expr() * (beta.clone() - table.expr().into()),
         );
+
+        assert_eq!(
+            L::NUM_ARITHMETIC_COLUMNS % 2,
+            0,
+            "The number of arithmetic columns must be even"
+        );
+        let num_accumulators = L::NUM_ARITHMETIC_COLUMNS / 2;
+        let row_accumulators = self.alloc_array::<CubicElementRegister>(num_accumulators);
+
+        let mut row_acc_iter = row_accumulators.iter().map(|r| r.extension_expr());
+
+        let range_idx = L::NUM_FREE_COLUMNS..L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS;
+        let mut range_pairs = range_idx
+            .step_by(2)
+            .map(|k| (MemorySlice::Local(k, 1), MemorySlice::Local(k + 1, 1)))
+            .map(|(a, b)| {
+                (
+                    beta.clone() - a.expr().into(),
+                    beta.clone() - b.expr().into(),
+                )
+            });
+
+        let ((beta_minus_a_0, beta_minus_b_0), acc_0) =
+            (range_pairs.next().unwrap(), row_acc_iter.next().unwrap());
+
+        self.assert_cubic_expressions_equal(
+            beta_minus_a_0.clone() + beta_minus_b_0.clone(),
+            acc_0.clone() * beta_minus_a_0 * beta_minus_b_0,
+        );
+
+        let mut prev = acc_0; 
+        for ((beta_minus_a, beta_minus_b), acc) in range_pairs.zip(row_acc_iter) {
+            self.assert_cubic_expressions_equal(
+                beta_minus_a.clone() + beta_minus_b.clone(),
+                (acc.clone() - prev.clone()) * beta_minus_a * beta_minus_b,
+            );
+            prev = acc;
+        }
 
         self.range_data = Some(RangeCheckData {
             table,
             multiplicity,
             multiplicity_table_log,
+            row_accumulators,
             log_lookup_accumulator,
         });
     }
@@ -77,7 +118,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         num_rows: usize,
         trace_rows: &mut Vec<Vec<F>>,
         range_data: &RangeCheckData,
-        range_idx : (usize, usize),
+        range_idx: (usize, usize),
     ) -> Result<()> {
         // write table constraints
         let table = range_data.table.register();
@@ -87,31 +128,64 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         }
 
         // Calculate multiplicities
-        let mut multiplicities = vec![F::ZERO ; num_rows];
+        let mut multiplicities = vec![F::ZERO; num_rows];
         for row in trace_rows.iter() {
             for value in row[range_idx.0..range_idx.1].iter() {
                 multiplicities[value.to_canonical_u64() as usize] += F::ONE;
             }
         }
         // write multiplicities into the trace
-        let multiplicity = range_data.multiplicity.register(); 
+        let multiplicity = range_data.multiplicity.register();
         for i in 0..num_rows {
             multiplicity.assign(trace_rows, 0, &mut vec![multiplicities[i]], i);
         }
 
         // Get the challenge
-        let betas = [F::from_canonical_u64(BETAS[0]), F::from_canonical_u64(BETAS[1]), F::from_canonical_u64(BETAS[2])];
+        let betas = [
+            F::from_canonical_u64(BETAS[0]),
+            F::from_canonical_u64(BETAS[1]),
+            F::from_canonical_u64(BETAS[2]),
+        ];
         let beta = CubicExtension::<F, E>::from(betas);
         // write multiplicity inverse constraint
-        let mult_table_log_entries = multiplicities.iter().enumerate().map(|(i, x)|{
-            let table = CubicExtension::from(F::from_canonical_usize(i));
-            CubicExtension::from(*x) / (beta - table)
-        })
-        .map(|x| x.0); 
+        let mult_table_log_entries = multiplicities
+            .iter()
+            .enumerate()
+            .map(|(i, x)| {
+                let table = CubicExtension::from(F::from_canonical_usize(i));
+                CubicExtension::from(*x) / (beta - table)
+            })
+            .map(|x| x.0);
 
         let mult_table_log = range_data.multiplicity_table_log.register();
-        for (i, mut value) in mult_table_log_entries.enumerate() {
-            mult_table_log.assign(trace_rows, 0, &mut value, i);
+        for (i, value) in mult_table_log_entries.enumerate() {
+            mult_table_log.assign(trace_rows, 0, &value, i);
+        }
+
+        // Log accumulator
+        let mut accumulators = vec![CubicExtension::<F, E>::from(F::ZERO); num_rows];
+
+        let acc_reg = range_data.row_accumulators;
+
+        for i in 0..num_rows {
+            let k_0 = range_idx.0;
+            let beta_minus_a = beta - trace_rows[i][k_0].into();
+            let beta_minus_b = beta - trace_rows[i][k_0 + 1].into();
+
+            let mut acc_reg_iter = acc_reg.iter();
+
+            accumulators[i] += CubicExtension::from(beta_minus_a).inverse()
+                + CubicExtension::from(beta_minus_b).inverse();
+            let entry = acc_reg_iter.next().unwrap();
+            entry.register().assign(trace_rows, 0, &accumulators[i].0, i);
+
+            for (k, acc) in (range_idx.0 + 2..range_idx.1).step_by(2).zip(acc_reg_iter) {
+                let beta_minus_a = beta - trace_rows[i][k].into();
+                let beta_minus_b = beta - trace_rows[i][k + 1].into();
+                accumulators[i] += CubicExtension::from(beta_minus_a).inverse()
+                    + CubicExtension::from(beta_minus_b).inverse();
+                acc.register().assign(trace_rows, 0, &accumulators[i].0, i);
+            }
         }
 
         Ok(())

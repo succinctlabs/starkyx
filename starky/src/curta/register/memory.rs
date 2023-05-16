@@ -84,7 +84,7 @@ impl MemorySlice {
         &self,
         trace_rows: &mut [Vec<T>],
         local_index: usize,
-        value: &mut [T],
+        value: &[T],
         row_index: usize,
     ) -> usize {
         let value = &value[local_index..local_index + self.len()];

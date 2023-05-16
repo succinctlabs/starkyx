@@ -38,10 +38,16 @@ impl<T: Register> ArrayRegister<T> {
         self.len() == 0
     }
 
+    #[inline]
     pub fn get(&self, idx: usize) -> T {
         if idx >= self.len() {
             panic!("Index out of bounds");
         }
+        self.get_unchecked(idx)
+    }
+
+    #[inline]
+    fn get_unchecked(&self, idx: usize) -> T {
         let offset = T::size_of() * idx;
         match self.register {
             MemorySlice::Local(col, _) => {
@@ -56,6 +62,43 @@ impl<T: Register> ArrayRegister<T> {
             MemorySlice::Last(col, _) => {
                 T::from_register(MemorySlice::Last(col + offset, T::size_of()))
             }
+        }
+    }
+
+    pub fn iter(&self) -> ArrayIterator<T> {
+        self.into_iter()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ArrayIterator<T: Register> {
+    register: ArrayRegister<T>,
+    length: usize,
+    idx: usize,
+}
+
+impl<T: Register> Iterator for ArrayIterator<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.idx >= self.length {
+            return None;
+        }
+        let item = self.register.get_unchecked(self.idx);
+        self.idx += 1;
+        Some(item)
+    }
+}
+
+impl<T: Register> IntoIterator for ArrayRegister<T> {
+    type Item = T;
+    type IntoIter = ArrayIterator<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        ArrayIterator {
+            register: self,
+            length: self.len(),
+            idx: 0,
         }
     }
 }

@@ -247,7 +247,7 @@ mod tests {
 
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpAddTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 140;
-        const NUM_FREE_COLUMNS: usize = 8;
+        const NUM_FREE_COLUMNS: usize = 218;
         type Instruction = InstructionSet<Ed25519BaseField>;
     }
 
@@ -260,6 +260,7 @@ mod tests {
         type P = Ed25519BaseField;
         type E = GoldilocksCubicParameters;
         type L = FpAddTest;
+        let _ = env_logger::builder().is_test(true).try_init();
 
         // Build the circuit.
         let mut builder = StarkBuilder::<FpAddTest, F, D>::new();
