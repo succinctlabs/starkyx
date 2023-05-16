@@ -1,8 +1,6 @@
 //! Range checks based on logarithmic derivatives.
 //!
 
-use core::ops::Range;
-
 use anyhow::Result;
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
@@ -74,7 +72,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
 
         let mut row_acc_iter = row_accumulators.iter().map(|r| r.extension_expr());
 
-        let range_idx = L::NUM_FREE_COLUMNS..L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS;
+        let range_idx = L::NUM_FREE_COLUMNS..(L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS);
         let mut range_pairs = range_idx
             .step_by(2)
             .map(|k| (MemorySlice::Local(k, 1), MemorySlice::Local(k + 1, 1)))
@@ -93,7 +91,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             acc_0.clone() * beta_minus_a_0 * beta_minus_b_0,
         );
 
-        let mut prev = acc_0; 
+        let mut prev = acc_0;
         for ((beta_minus_a, beta_minus_b), acc) in range_pairs.zip(row_acc_iter) {
             self.assert_cubic_expressions_equal(
                 beta_minus_a.clone() + beta_minus_b.clone(),
@@ -101,6 +99,23 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             );
             prev = acc;
         }
+
+        self.assert_cubic_expressions_equal_transition(
+            log_lookup_accumulator.extension_expr() + prev.clone()
+                - multiplicity_table_log.extension_expr(),
+            log_lookup_accumulator.next().extension_expr(),
+        );
+
+        self.assert_cubic_expressions_equal_first_row(
+            log_lookup_accumulator.extension_expr(),
+            CubicExpression::from_constants([F::ZERO; 3]),
+        );
+
+        self.assert_cubic_expressions_equal_last_row(
+            log_lookup_accumulator.extension_expr() + prev
+                - multiplicity_table_log.extension_expr(),
+            CubicExpression::from_constants([F::ZERO; 3]),
+        );
 
         self.range_data = Some(RangeCheckData {
             table,
@@ -127,19 +142,6 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
             table.assign(trace_rows, 0, &mut vec![value], i);
         }
 
-        // Calculate multiplicities
-        let mut multiplicities = vec![F::ZERO; num_rows];
-        for row in trace_rows.iter() {
-            for value in row[range_idx.0..range_idx.1].iter() {
-                multiplicities[value.to_canonical_u64() as usize] += F::ONE;
-            }
-        }
-        // write multiplicities into the trace
-        let multiplicity = range_data.multiplicity.register();
-        for i in 0..num_rows {
-            multiplicity.assign(trace_rows, 0, &mut vec![multiplicities[i]], i);
-        }
-
         // Get the challenge
         let betas = [
             F::from_canonical_u64(BETAS[0]),
@@ -147,6 +149,27 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
             F::from_canonical_u64(BETAS[2]),
         ];
         let beta = CubicExtension::<F, E>::from(betas);
+
+        // Calculate multiplicities
+        let mut multiplicities = vec![F::ZERO; num_rows];
+
+        let mut sum_check = CubicExtension::<F, E>::ZERO;
+        let one_ext = CubicExtension::<F, E>::ONE;
+        for row in trace_rows.iter() {
+            for value in row[range_idx.0..range_idx.1].iter() {
+                sum_check += one_ext / (beta - (*value).into());
+                let value = value.to_canonical_u64() as usize;
+                assert!(value < 1 << 16);
+                multiplicities[value] += F::ONE;
+            }
+        }
+
+        // write multiplicities into the trace
+        let multiplicity = range_data.multiplicity.register();
+        for i in 0..num_rows {
+            multiplicity.assign(trace_rows, 0, &mut vec![multiplicities[i]], i);
+        }
+
         // write multiplicity inverse constraint
         let mult_table_log_entries = multiplicities
             .iter()
@@ -155,36 +178,46 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
                 let table = CubicExtension::from(F::from_canonical_usize(i));
                 CubicExtension::from(*x) / (beta - table)
             })
-            .map(|x| x.0);
+            .collect::<Vec<_>>();
+
+        let log_sum = mult_table_log_entries.iter().sum::<CubicExtension<F, E>>();
+        assert_eq!(log_sum, sum_check, "Sum check failed");
 
         let mult_table_log = range_data.multiplicity_table_log.register();
-        for (i, value) in mult_table_log_entries.enumerate() {
-            mult_table_log.assign(trace_rows, 0, &value, i);
+        for (i, value) in mult_table_log_entries.iter().enumerate() {
+            mult_table_log.assign(trace_rows, 0, &value.0, i);
         }
 
         // Log accumulator
         let mut accumulators = vec![CubicExtension::<F, E>::from(F::ZERO); num_rows];
-
+        let mut sum_acc_check = CubicExtension::<F, E>::ZERO;
+        let mut value = CubicExtension::<F, E>::ZERO;
         let acc_reg = range_data.row_accumulators;
-
         for i in 0..num_rows {
-            let k_0 = range_idx.0;
-            let beta_minus_a = beta - trace_rows[i][k_0].into();
-            let beta_minus_b = beta - trace_rows[i][k_0 + 1].into();
-
-            let mut acc_reg_iter = acc_reg.iter();
-
-            accumulators[i] += CubicExtension::from(beta_minus_a).inverse()
-                + CubicExtension::from(beta_minus_b).inverse();
-            let entry = acc_reg_iter.next().unwrap();
-            entry.register().assign(trace_rows, 0, &accumulators[i].0, i);
-
-            for (k, acc) in (range_idx.0 + 2..range_idx.1).step_by(2).zip(acc_reg_iter) {
+            for (k, acc) in (range_idx.0..range_idx.1).step_by(2).zip(acc_reg.iter()) {
                 let beta_minus_a = beta - trace_rows[i][k].into();
                 let beta_minus_b = beta - trace_rows[i][k + 1].into();
                 accumulators[i] += CubicExtension::from(beta_minus_a).inverse()
                     + CubicExtension::from(beta_minus_b).inverse();
                 acc.register().assign(trace_rows, 0, &accumulators[i].0, i);
+            }
+
+            sum_acc_check += accumulators[i];
+
+            if i != num_rows - 1 {
+                let log_lookup_next = range_data.log_lookup_accumulator.register().next();
+                // let value = accumulators[i] - mult_table_log_entries[i];
+                value += accumulators[i] - mult_table_log_entries[i];
+                log_lookup_next.assign(trace_rows, 0, &value.0, i);
+            }
+
+            if i == num_rows - 1 {
+                assert_eq!(sum_acc_check, sum_check, "accumulator check failed");
+                assert_eq!(
+                    value + accumulators[i] - mult_table_log_entries[i],
+                    CubicExtension::ZERO,
+                    "value check failed"
+                );
             }
         }
 
