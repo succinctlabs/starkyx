@@ -22,14 +22,12 @@ pub struct TraceWriter<F, const D: usize>
 where
     F: RichField + Extendable<D>,
 {
-    pub lock: Arc<RwLock<Vec<Vec<F>>>>,
     tx: Sender<(usize, InstructionId, Vec<F>)>,
 }
 
 #[derive(Debug)]
 pub struct TraceGenerator<F: RichField + Extendable<D>, const D: usize> {
     spec: BTreeMap<InstructionId, usize>,
-    lock: Arc<RwLock<Vec<Vec<F>>>>,
     rx: Receiver<(usize, InstructionId, Vec<F>)>,
 }
 
@@ -37,39 +35,18 @@ pub fn trace<F: RichField + Extendable<D>, const D: usize>(
     spec: BTreeMap<InstructionId, usize>,
 ) -> (TraceWriter<F, D>, TraceGenerator<F, D>) {
     let (tx, rx) = std::sync::mpsc::channel();
-    let lock = Arc::new(RwLock::new(Vec::new()));
     (
         TraceWriter {
-            lock: lock.clone(),
             tx,
         },
-        TraceGenerator { spec, lock, rx },
+        TraceGenerator { spec, rx },
     )
 }
 
-pub fn trace_new<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize>(
-    chip: &Chip<L, F, D>,
-    row_capacity: usize,
-    spec: BTreeMap<InstructionId, usize>,
-) -> (TraceWriter<F, D>, TraceGenerator<F, D>) {
-    let (tx, rx) = std::sync::mpsc::channel();
-
-    let num_cols = chip.num_columns_no_range_checks();
-    let trace_rows = vec![vec![F::ZERO; num_cols]; row_capacity];
-    let lock = Arc::new(RwLock::new(trace_rows));
-    (
-        TraceWriter {
-            lock: lock.clone(),
-            tx,
-        },
-        TraceGenerator { spec, lock, rx },
-    )
-}
 
 impl<F: RichField + Extendable<D>, const D: usize> Clone for TraceWriter<F, D> {
     fn clone(&self) -> Self {
         Self {
-            lock: self.lock.clone(),
             tx: self.tx.clone(),
         }
     }
