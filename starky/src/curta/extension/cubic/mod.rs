@@ -2,7 +2,9 @@
 //!
 //!
 
+pub mod array;
 pub mod cubic_expression;
+pub mod expression_constraints;
 pub mod gadget;
 pub mod goldilocks_cubic;
 pub mod register;

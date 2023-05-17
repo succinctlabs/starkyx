@@ -16,8 +16,8 @@ use super::constraint::Constraint;
 use super::instruction::write::WriteInstruction;
 use super::instruction::Instruction;
 use super::range::RangeCheckData;
-use crate::lookup::{eval_lookups, eval_lookups_circuit};
-use crate::permutation::PermutationPair;
+// use crate::lookup::{eval_lookups, eval_lookups_circuit};
+// use crate::permutation::PermutationPair;
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -124,6 +124,12 @@ where
         for consr in self.constraints.iter() {
             consr.packed_generic_constraints(vars, yield_constr);
         }
+        if let Some(range_data) = &self.range_data {
+            range_data.packed_generic_constraints::<L, F, D, FE, P, D2, COLUMNS, PUBLIC_INPUTS>(
+                vars,
+                yield_constr,
+            );
+        }
         // // lookp table values
         // yield_constr.constraint_first_row(vars.local_values[self.table_index]);
         // let table_values_relation =
@@ -148,6 +154,13 @@ where
     ) {
         for consr in self.constraints.iter() {
             consr.ext_circuit_constraints(builder, vars, yield_constr);
+        }
+        if let Some(range_data) = &self.range_data {
+            range_data.ext_circuit_constraints::<L, F, D, COLUMNS, PUBLIC_INPUTS>(
+                builder,
+                vars,
+                yield_constr,
+            );
         }
         // // lookup table values
         // yield_constr.constraint_first_row(builder, vars.local_values[self.table_index]);

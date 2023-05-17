@@ -238,7 +238,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
     ) -> Result<Vec<PolynomialValues<F>>> {
         // Get trace rows
         // Initiaze the trace with capacity given by the user
-        let mut trace_rows = self.generate_trace_rows(chip, row_capacity)?;
+        let trace_rows = self.generate_trace_rows(chip, row_capacity)?;
 
         // Transpose the trace to get the columns and resize to the correct size
         let mut trace_cols = transpose(&trace_rows);

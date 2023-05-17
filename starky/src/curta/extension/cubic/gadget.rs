@@ -1,74 +1,106 @@
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
+use plonky2::iop::ext_target::ExtensionTarget;
+use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::cubic_expression::CubicExpression;
-use crate::curta::builder::StarkBuilder;
-use crate::curta::chip::StarkParameters;
-use crate::curta::constraint::Constraint;
+use super::array::CubicArray;
 
-impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
-    /// Asserts that two expressions (note that expressions are actually vectors of expression) are
-    /// equal in the first row.
-    pub fn assert_cubic_expressions_equal_first_row(
-        &mut self,
-        a: CubicExpression<F, D>,
-        b: CubicExpression<F, D>,
-    ) {
-        let a_array = a.into_expressions_array();
-        let b_array = b.into_expressions_array();
+#[derive(Debug, Clone, Copy)]
+pub struct CubicGadget<F, const D: usize>(core::marker::PhantomData<F>);
 
-        for (a, b) in a_array.into_iter().zip(b_array.into_iter()) {
-            let constraint = Constraint::First((a - b).into());
-            self.constraints.push(constraint);
-        }
+impl<F: RichField + Extendable<D>, const D: usize> CubicGadget<F, D> {
+    pub fn const_extension(
+        builder: &mut CircuitBuilder<F, D>,
+        a: [F::Extension; 3],
+    ) -> CubicArray<ExtensionTarget<D>> {
+        CubicArray([
+            builder.constant_extension(a[0]),
+            builder.constant_extension(a[1]),
+            builder.constant_extension(a[2]),
+        ])
     }
 
-    /// Asserts that two expressions (note that expressions are actually vectors of expression) are
-    /// equal in the last row.
-    pub fn assert_cubic_expressions_equal_last_row(
-        &mut self,
-        a: CubicExpression<F, D>,
-        b: CubicExpression<F, D>,
-    ) {
-        let a_array = a.into_expressions_array();
-        let b_array = b.into_expressions_array();
-
-        for (a, b) in a_array.into_iter().zip(b_array.into_iter()) {
-            let constraint = Constraint::Last((a - b).into());
-            self.constraints.push(constraint);
-        }
+    pub fn zero_extension(builder: &mut CircuitBuilder<F, D>) -> CubicArray<ExtensionTarget<D>> {
+        CubicArray([
+            builder.zero_extension(),
+            builder.zero_extension(),
+            builder.zero_extension(),
+        ])
     }
 
-    /// Asserts that two expressions (note that expressions are actually vectors of expression) are
-    /// equal in all rows but the last (useful for when dealing with registers between the local and
-    /// next row).
-    pub fn assert_cubic_expressions_equal_transition(
-        &mut self,
-        a: CubicExpression<F, D>,
-        b: CubicExpression<F, D>,
-    ) {
-        let a_array = a.into_expressions_array();
-        let b_array = b.into_expressions_array();
-
-        for (a, b) in a_array.into_iter().zip(b_array.into_iter()) {
-            let constraint = Constraint::Transition((a - b).into());
-            self.constraints.push(constraint);
-        }
+    pub fn one_extension(builder: &mut CircuitBuilder<F, D>) -> CubicArray<ExtensionTarget<D>> {
+        CubicArray([
+            builder.one_extension(),
+            builder.zero_extension(),
+            builder.zero_extension(),
+        ])
     }
 
-    /// Asserts that two expressions (note that expressions are actually vectors of expression) are
-    /// equal in all rows.
-    pub fn assert_cubic_expressions_equal(
-        &mut self,
-        a: CubicExpression<F, D>,
-        b: CubicExpression<F, D>,
-    ) {
-        let a_array = a.into_expressions_array();
-        let b_array = b.into_expressions_array();
+    pub fn from_base_extension(
+        builder: &mut CircuitBuilder<F, D>,
+        element: ExtensionTarget<D>,
+    ) -> CubicArray<ExtensionTarget<D>> {
+        CubicArray([element, builder.zero_extension(), builder.zero_extension()])
+    }
 
-        for (a, b) in a_array.into_iter().zip(b_array.into_iter()) {
-            let constraint = Constraint::All((a - b).into());
-            self.constraints.push(constraint);
-        }
+    pub fn add_extension(
+        builder: &mut CircuitBuilder<F, D>,
+        a: &CubicArray<ExtensionTarget<D>>,
+        b: &CubicArray<ExtensionTarget<D>>,
+    ) -> CubicArray<ExtensionTarget<D>> {
+        let (x_0, x_1, x_2) = (a.0[0], a.0[1], a.0[2]);
+        let (y_0, y_1, y_2) = (b.0[0], b.0[1], b.0[2]);
+        CubicArray([
+            builder.add_extension(x_0, y_0),
+            builder.add_extension(x_1, y_1),
+            builder.add_extension(x_2, y_2),
+        ])
+    }
+
+    pub fn sub_extension(
+        builder: &mut CircuitBuilder<F, D>,
+        a: &CubicArray<ExtensionTarget<D>>,
+        b: &CubicArray<ExtensionTarget<D>>,
+    ) -> CubicArray<ExtensionTarget<D>> {
+        let (x_0, x_1, x_2) = (a.0[0], a.0[1], a.0[2]);
+        let (y_0, y_1, y_2) = (b.0[0], b.0[1], b.0[2]);
+        CubicArray([
+            builder.sub_extension(x_0, y_0),
+            builder.sub_extension(x_1, y_1),
+            builder.sub_extension(x_2, y_2),
+        ])
+    }
+
+    pub fn mul_extension(
+        builder: &mut CircuitBuilder<F, D>,
+        a: &CubicArray<ExtensionTarget<D>>,
+        b: &CubicArray<ExtensionTarget<D>>,
+    ) -> CubicArray<ExtensionTarget<D>> {
+        let (x_0, x_1, x_2) = (a.0[0], a.0[1], a.0[2]);
+        let (y_0, y_1, y_2) = (b.0[0], b.0[1], b.0[2]);
+
+        let x_0y_0 = builder.mul_extension(x_0, y_0);
+        let x_0y_1 = builder.mul_extension(x_0, y_1);
+        let x_0y_2 = builder.mul_extension(x_0, y_2);
+        let x_1y_0 = builder.mul_extension(x_1, y_0);
+        let x_1y_1 = builder.mul_extension(x_1, y_1);
+        let x_1y_2 = builder.mul_extension(x_1, y_2);
+        let x_2y_0 = builder.mul_extension(x_2, y_0);
+        let x_2y_1 = builder.mul_extension(x_2, y_1);
+        let x_2y_2 = builder.mul_extension(x_2, y_2);
+
+        let mut z_0 = builder.sub_extension(x_0y_0, x_1y_2);
+        z_0 = builder.sub_extension(z_0, x_2y_1);
+
+        let mut z_1 = builder.add_extension(x_0y_1, x_1y_0);
+        z_1 = builder.add_extension(z_1, x_1y_2);
+        z_1 = builder.add_extension(z_1, x_2y_1);
+        z_1 = builder.sub_extension(z_1, x_2y_2);
+
+        let mut z_2 = builder.add_extension(x_0y_2, x_1y_1);
+        z_2 = builder.add_extension(z_2, x_2y_0);
+        z_2 = builder.add_extension(z_2, x_2y_2);
+
+        CubicArray([z_0, z_1, z_2])
     }
 }
