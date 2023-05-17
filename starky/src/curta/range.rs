@@ -2,11 +2,13 @@
 //!
 
 use alloc::collections::VecDeque;
+
 use anyhow::Result;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
+use plonky2_maybe_rayon::*;
 
 use super::builder::StarkBuilder;
 use super::chip::StarkParameters;
@@ -210,8 +212,10 @@ impl RangeCheckData {
             })
             .collect::<VecDeque<_>>();
 
-        let ((beta_minus_a_0, beta_minus_b_0), acc_0) =
-            (range_pairs.pop_front().unwrap(), row_acc_vec.pop_front().unwrap());
+        let ((beta_minus_a_0, beta_minus_b_0), acc_0) = (
+            range_pairs.pop_front().unwrap(),
+            row_acc_vec.pop_front().unwrap(),
+        );
 
         let beta_minus_a_b = CubicGadget::mul_extension(builder, &beta_minus_a_0, &beta_minus_b_0);
         let acc_beta_m_ab = CubicGadget::mul_extension(builder, &acc_0, &beta_minus_a_b);
@@ -300,7 +304,6 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         let num_accumulators = L::NUM_ARITHMETIC_COLUMNS / 2;
         let row_accumulators = self.alloc_array::<CubicElementRegister>(num_accumulators);
 
-
         self.range_data = Some(RangeCheckData {
             table,
             multiplicity,
@@ -354,7 +357,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
 
         // Write multiplicity inverse constraint
         let mult_table_log_entries = multiplicities
-            .iter()
+            .par_iter()
             .enumerate()
             .map(|(i, x)| {
                 let table = CubicExtension::from(F::from_canonical_usize(i));
@@ -368,30 +371,36 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         }
 
         // Log accumulator
-        let mut accumulators = vec![CubicExtension::<F, E>::from(F::ZERO); num_rows];
         let mut value = CubicExtension::<F, E>::ZERO;
         let acc_reg = range_data.row_accumulators;
+
+        let accumulators = trace_rows
+            .par_iter_mut()
+            .map(|row| {
+                let (write_row, arith_row) = row.split_at_mut(range_idx.0);
+                let mut accumumulator = CubicExtension::<F, E>::from(F::ZERO);
+                for (pair, acc) in arith_row.chunks(2).zip(acc_reg.iter()) {
+                    let beta_minus_a = beta - pair[0].into();
+                    let beta_minus_b = beta - pair[1].into();
+                    accumumulator += CubicExtension::from(beta_minus_a).inverse()
+                        + CubicExtension::from(beta_minus_b).inverse();
+                    let (acc_0, acc_1) = acc.register().get_range();
+                    write_row[acc_0..acc_1].copy_from_slice(&accumumulator.0);
+                }
+                accumumulator
+            })
+            .collect::<Vec<_>>();
+
         let log_lookup_next = range_data.log_lookup_accumulator.register().next();
-        for i in 0..num_rows {
-            for (k, acc) in (range_idx.0..range_idx.1).step_by(2).zip(acc_reg.iter()) {
-                let beta_minus_a = beta - trace_rows[i][k].into();
-                let beta_minus_b = beta - trace_rows[i][k + 1].into();
-                accumulators[i] += CubicExtension::from(beta_minus_a).inverse()
-                    + CubicExtension::from(beta_minus_b).inverse();
-                acc.register().assign(trace_rows, 0, &accumulators[i].0, i);
-            }
-
-            if i != num_rows - 1 {
-                value += accumulators[i] - mult_table_log_entries[i];
-                log_lookup_next.assign(trace_rows, 0, &value.0, i);
-            }
+        for (i, (acc, mult_table)) in accumulators
+            .into_iter()
+            .zip(mult_table_log_entries.into_iter())
+            .enumerate()
+            .filter(|(i, _)| *i != num_rows - 1)
+        {
+            value += acc - mult_table;
+            log_lookup_next.assign(trace_rows, 0, &value.0, i);
         }
-
-        // for (i, (acc, mult_table)) in accumulators.into_iter().zip(mult_table_log_entries.into_iter()).enumerate().filter(|(i, _)| *i != num_rows-1)  {
-        //     let log_lookup_next = range_data.log_lookup_accumulator.register().next();
-        //     value += accumulators[i] - mult_table_log_entries[i];
-        //     log_lookup_next.assign(trace_rows, 0, &value.0, i);
-        // }
         Ok(())
     }
 }

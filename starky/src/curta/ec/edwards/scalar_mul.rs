@@ -202,6 +202,7 @@ mod tests {
     use crate::config::StarkConfig;
     use crate::curta::builder::StarkBuilder;
     use crate::curta::chip::{StarkParameters, TestStark};
+    use crate::curta::extension::cubic::goldilocks_cubic::GoldilocksCubicParameters;
     use crate::curta::instruction::InstructionSet;
     use crate::curta::parameters::ed25519::{Ed25519, Ed25519BaseField};
     use crate::curta::trace::trace;
@@ -217,7 +218,7 @@ mod tests {
 
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for Ed25519ScalarMulTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 1504;
-        const NUM_FREE_COLUMNS: usize = 2 + 2 * 2 * 16;
+        const NUM_FREE_COLUMNS: usize = 2330;//2 + 2 * 2 * 16;
         type Instruction = InstructionSet<Ed25519BaseField>;
     }
 
@@ -228,6 +229,7 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type E = Ed25519;
         type S = TestStark<Ed25519ScalarMulTest, F, D>;
+        type CUB = GoldilocksCubicParameters;
         let _ = env_logger::builder().is_test(true).try_init();
 
         // Build the stark.
@@ -277,7 +279,7 @@ mod tests {
                 });
             }
             drop(handle);
-            generator.generate_trace(&chip, num_rows as usize).unwrap()
+            generator.generate_trace_new::<Ed25519ScalarMulTest, CUB>(&chip, num_rows as usize).unwrap()
         });
 
         // Generate the proof.

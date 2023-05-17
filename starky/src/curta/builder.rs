@@ -300,7 +300,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     }
 
     /// Build the chip
-    pub fn build(mut self) -> (Chip<L, F, D>, BTreeMap<InstructionId, usize>) {        
+    pub fn build(mut self) -> (Chip<L, F, D>, BTreeMap<InstructionId, usize>) {
         if L::NUM_ARITHMETIC_COLUMNS > 0 {
             self.arithmetic_range_checks();
         }

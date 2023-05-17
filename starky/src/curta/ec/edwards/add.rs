@@ -248,7 +248,9 @@ mod tests {
                 })
             }
             drop(handle);
-            generator.generate_trace_new::<Ed25519AddTest, Cubic>(&chip, nb_rows as usize).unwrap()
+            generator
+                .generate_trace_new::<Ed25519AddTest, Cubic>(&chip, nb_rows as usize)
+                .unwrap()
         });
 
         // Verify proof as a stark
