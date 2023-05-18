@@ -226,19 +226,19 @@ mod tests {
     use super::*;
     use crate::config::StarkConfig;
     use crate::curta::builder::StarkBuilder;
-    use crate::curta::chip::{StarkParameters, TestStark};
+    use crate::curta::chip::{StarkParameters, ChipStark};
     use crate::curta::constraint::arithmetic::ArithmeticExpression;
     use crate::curta::extension::cubic::goldilocks_cubic::GoldilocksCubicParameters;
     use crate::curta::instruction::InstructionSet;
     use crate::curta::parameters::ed25519::{Ed25519, Ed25519BaseField};
     use crate::curta::parameters::EllipticCurveParameters;
     use crate::curta::trace::trace;
-    use crate::prover::prove;
-    use crate::recursive_verifier::{
+    use crate::curta::prover::prove;
+    use crate::curta::recursive_verifier::{
         add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
         verify_stark_proof_circuit,
     };
-    use crate::verifier::verify_stark_proof;
+    use crate::curta::verifier::verify_stark_proof;
 
     #[derive(Clone, Debug, Copy)]
     struct FpAddTest;
@@ -254,7 +254,7 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type S = TestStark<FpAddTest, F, D>;
+        type S = ChipStark<FpAddTest, F, D>;
         type P = Ed25519BaseField;
         type E = GoldilocksCubicParameters;
         type L = FpAddTest;
@@ -296,7 +296,7 @@ mod tests {
 
         // Generate the proof.
         let config = StarkConfig::standard_fast_config();
-        let stark = TestStark::new(chip);
+        let stark = ChipStark::new(chip);
         let proof = timed!(
             timing,
             "generate proof",
@@ -355,7 +355,7 @@ mod tests {
     //     const D: usize = 2;
     //     type C = PoseidonGoldilocksConfig;
     //     type F = <C as GenericConfig<D>>::F;
-    //     type S = TestStark<FpAddTest, F, D>;
+    //     type S = ChipStark<FpAddTest, F, D>;
     //     type P = Ed25519BaseField;
 
     //     // Build the circuit.
@@ -414,7 +414,7 @@ mod tests {
 
     //     // Generate the proof.
     //     let config = StarkConfig::standard_fast_config();
-    //     let stark = TestStark::new(chip);
+    //     let stark = ChipStark::new(chip);
     //     let proof = timed!(
     //         timing,
     //         "generate proof",

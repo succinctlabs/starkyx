@@ -175,7 +175,7 @@ mod tests {
     use super::*;
     use crate::config::StarkConfig;
     use crate::curta::builder::StarkBuilder;
-    use crate::curta::chip::{StarkParameters, TestStark};
+    use crate::curta::chip::{StarkParameters, ChipStark};
     use crate::curta::extension::cubic::goldilocks_cubic::GoldilocksCubicParameters;
     use crate::curta::instruction::InstructionSet;
     use crate::curta::parameters::ed25519::{Ed25519, Ed25519BaseField};
@@ -202,7 +202,7 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type E = Ed25519;
-        type S = TestStark<Ed25519AddTest, F, D>;
+        type S = ChipStark<Ed25519AddTest, F, D>;
         type Cubic = GoldilocksCubicParameters;
         let _ = env_logger::builder().is_test(true).try_init();
 
@@ -255,7 +255,7 @@ mod tests {
 
         // Verify proof as a stark
         let config = StarkConfig::standard_fast_config();
-        let stark = TestStark::new(chip);
+        let stark = ChipStark::new(chip);
         let proof = timed!(
             timing,
             "proof generation",
@@ -321,7 +321,7 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type E = Ed25519;
-        type S = TestStark<EdDoubleTest, F, D>;
+        type S = ChipStark<EdDoubleTest, F, D>;
 
         let _ = env_logger::builder().is_test(true).try_init();
         // build the stark
@@ -368,7 +368,7 @@ mod tests {
         });
 
         let config = StarkConfig::standard_fast_config();
-        let stark = TestStark::new(chip);
+        let stark = ChipStark::new(chip);
 
         // Verify proof as a stark
         let proof = timed!(

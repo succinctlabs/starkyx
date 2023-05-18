@@ -27,6 +27,7 @@ impl Lookup {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
+        betas : &[[F; 3]],
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
@@ -36,6 +37,7 @@ impl Lookup {
         match self {
             Lookup::LogDerivative(log_lookup) => log_lookup
                 .packed_generic_constraints::<F, D, FE, P, D2, COLUMNS, PUBLIC_INPUTS>(
+                    betas,
                     vars,
                     yield_constr,
                 ),

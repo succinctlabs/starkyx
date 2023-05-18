@@ -13,3 +13,6 @@ pub mod polynomial;
 pub mod register;
 pub mod trace;
 pub mod utils;
+pub mod prover;
+pub mod verifier;
+pub mod recursive_verifier;

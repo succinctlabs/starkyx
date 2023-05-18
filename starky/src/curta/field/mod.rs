@@ -183,7 +183,7 @@ mod tests {
     use super::*;
     use crate::config::StarkConfig;
     use crate::curta::builder::StarkBuilder;
-    use crate::curta::chip::{StarkParameters, TestStark};
+    use crate::curta::chip::{StarkParameters, ChipStark};
     use crate::curta::parameters::ed25519::Ed25519BaseField;
     use crate::curta::trace::trace;
     use crate::prover::prove;
@@ -208,7 +208,7 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type Fp = FieldRegister<Ed25519BaseField>;
-        type S = TestStark<FpInstructionTest, F, D>;
+        type S = ChipStark<FpInstructionTest, F, D>;
 
         // Build the STARK.
         let mut builder = StarkBuilder::<FpInstructionTest, F, D>::new();
@@ -251,7 +251,7 @@ mod tests {
 
         // Verify proof as a stark.
         let config = StarkConfig::standard_fast_config();
-        let stark = TestStark::new(chip);
+        let stark = ChipStark::new(chip);
         let proof = prove::<F, C, S, D>(
             stark.clone(),
             &config,

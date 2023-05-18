@@ -21,6 +21,13 @@ use super::register::ElementRegister;
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
+const BETAS: [u64; 3] = [
+    17800306513594245228,
+    422882772345461752,
+    14491510587541603695,
+];
+
+
 /// A layout for a circuit that emulates field operations
 pub trait StarkParameters<F: RichField + Extendable<D>, const D: usize>:
     Sized + Send + Sync + Clone
@@ -48,9 +55,10 @@ where
     pub(crate) write_instructions: Vec<WriteInstruction>,
     pub(crate) constraints: Vec<Constraint<L::Instruction, F, D>>,
     pub(crate) range_checks_idx: (usize, usize),
-    pub(crate) table_index: usize,
     pub(crate) range_data: Option<Lookup>,
     pub(crate) range_table: Option<ElementRegister>,
+    pub(crate) num_verifier_challenges : usize,
+    pub(crate) betas : Vec<[F;3]>
 }
 
 impl<L, F, const D: usize> Chip<L, F, D>
@@ -58,15 +66,15 @@ where
     L: StarkParameters<F, D>,
     F: RichField + Extendable<D>,
 {
-    #[inline]
-    pub const fn table_index(&self) -> usize {
-        self.table_index
-    }
+    // #[inline]
+    // pub const fn table_index(&self) -> usize {
+    //     self.table_index
+    // }
 
-    #[inline]
-    pub const fn relative_table_index(&self) -> usize {
-        self.table_index
-    }
+    // #[inline]
+    // pub const fn relative_table_index(&self) -> usize {
+    //     self.table_index
+    // }
 
     #[inline]
     pub const fn range_checks_idx(&self) -> (usize, usize) {
@@ -83,15 +91,15 @@ where
         L::NUM_ARITHMETIC_COLUMNS
     }
 
-    #[inline]
-    pub const fn col_perm_index(&self, i: usize) -> usize {
-        2 * (i - self.range_checks_idx.0) + self.table_index + 1
-    }
+    // #[inline]
+    // pub const fn col_perm_index(&self, i: usize) -> usize {
+    //     2 * (i - self.range_checks_idx.0) + self.table_index + 1
+    // }
 
-    #[inline]
-    pub const fn table_perm_index(&self, i: usize) -> usize {
-        2 * (i - self.range_checks_idx.0) + 1 + self.table_index + 1
-    }
+    // #[inline]
+    // pub const fn table_perm_index(&self, i: usize) -> usize {
+    //     2 * (i - self.range_checks_idx.0) + 1 + self.table_index + 1
+    // }
 
     #[inline]
     pub const fn num_columns() -> usize {
@@ -127,6 +135,7 @@ where
         }
         if let Some(range_data) = &self.range_data {
             range_data.packed_generic_constraints::<F, D, FE, P, D2, COLUMNS, PUBLIC_INPUTS>(
+                &self.betas,
                 vars,
                 yield_constr,
             );
@@ -186,7 +195,6 @@ where
     fn constraint_degree(&self) -> usize {
         3
     }
-
     // fn permutation_pairs(&self) -> Vec<PermutationPair> {
     //     self.arithmetic_range()
     //         .flat_map(|i| {
@@ -203,7 +211,7 @@ where
 ///
 /// This stark handles the range checks for the limbs
 #[derive(Clone)]
-pub struct TestStark<L, F, const D: usize>
+pub struct ChipStark<L, F, const D: usize>
 where
     L: StarkParameters<F, D>,
     F: RichField + Extendable<D>,
@@ -211,7 +219,7 @@ where
     pub(crate) chip: Chip<L, F, D>,
 }
 
-impl<L, F, const D: usize> TestStark<L, F, D>
+impl<L, F, const D: usize> ChipStark<L, F, D>
 where
     L: StarkParameters<F, D>,
     F: RichField + Extendable<D>,
@@ -222,7 +230,7 @@ where
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Stark<F, D>
-    for TestStark<L, F, D>
+    for ChipStark<L, F, D>
 {
     const COLUMNS: usize = Chip::<L, F, D>::num_columns();
     const PUBLIC_INPUTS: usize = 0;

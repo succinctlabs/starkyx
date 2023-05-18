@@ -29,6 +29,7 @@ const BETAS: [u64; 3] = [
 
 #[derive(Debug, Clone)]
 pub struct LogLookup {
+    challenge_idx : usize,
     table: ElementRegister,
     values: ArrayRegister<ElementRegister>,
     multiplicity: ElementRegister,
@@ -95,6 +96,7 @@ impl LogLookup {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
+        betas : &[[F ; 3]],
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
@@ -347,7 +349,11 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         let log_lookup_accumulator = self.alloc::<CubicElementRegister>();
         let row_accumulators = self.alloc_array::<CubicElementRegister>(values.len() / 2);
 
+        let challenge_idx = self.num_verifier_challenges;
+        self.num_verifier_challenges += 1;
+
         self.range_data = Some(Lookup::LogDerivative(LogLookup {
+            challenge_idx,
             table: *table,
             values: *values,
             multiplicity,

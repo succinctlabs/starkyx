@@ -220,72 +220,72 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
             .collect())
     }
 
-    pub fn generate_trace_permutation_range_check<L: StarkParameters<F, D>>(
-        &self,
-        chip: &Chip<L, F, D>,
-        row_capacity: usize,
-    ) -> Result<Vec<PolynomialValues<F>>> {
-        // Get trace rows
-        // Initiaze the trace with capacity given by the user
-        let num_cols = chip.num_columns_no_range_checks();
-        let mut trace_rows = vec![vec![F::ZERO; num_cols + 1]; row_capacity];
+    // pub fn generate_trace_permutation_range_check<L: StarkParameters<F, D>>(
+    //     &self,
+    //     chip: &Chip<L, F, D>,
+    //     row_capacity: usize,
+    // ) -> Result<Vec<PolynomialValues<F>>> {
+    //     // Get trace rows
+    //     // Initiaze the trace with capacity given by the user
+    //     let num_cols = chip.num_columns_no_range_checks();
+    //     let mut trace_rows = vec![vec![F::ZERO; num_cols + 1]; row_capacity];
 
-        while let Ok((row_index, id, mut row)) = self.rx.recv() {
-            let op_index = self
-                .spec
-                .get(&id)
-                .ok_or_else(|| anyhow!("Invalid instruction"))?;
-            match id {
-                InstructionId::CustomInstruction(_) => {
-                    chip.instructions[*op_index].assign_row(&mut trace_rows, &mut row, row_index)
-                }
-                InstructionId::Write(_) => chip.write_instructions[*op_index].assign_row(
-                    &mut trace_rows,
-                    &mut row,
-                    row_index,
-                ),
-            };
-        }
-        // Transpose the trace to get the columns and resize to the correct size
-        let mut trace_cols = transpose(&trace_rows);
+    //     while let Ok((row_index, id, mut row)) = self.rx.recv() {
+    //         let op_index = self
+    //             .spec
+    //             .get(&id)
+    //             .ok_or_else(|| anyhow!("Invalid instruction"))?;
+    //         match id {
+    //             InstructionId::CustomInstruction(_) => {
+    //                 chip.instructions[*op_index].assign_row(&mut trace_rows, &mut row, row_index)
+    //             }
+    //             InstructionId::Write(_) => chip.write_instructions[*op_index].assign_row(
+    //                 &mut trace_rows,
+    //                 &mut row,
+    //                 row_index,
+    //             ),
+    //         };
+    //     }
+    //     // Transpose the trace to get the columns and resize to the correct size
+    //     let mut trace_cols = transpose(&trace_rows);
 
-        // Resize the trace columns to include the range checks
-        trace_cols.resize(
-            Chip::<L, F, D>::num_columns(),
-            Vec::with_capacity(row_capacity),
-        );
+    //     // Resize the trace columns to include the range checks
+    //     trace_cols.resize(
+    //         Chip::<L, F, D>::num_columns(),
+    //         Vec::with_capacity(row_capacity),
+    //     );
 
-        // Initialize the table column with the counter 1..=row_capacity
-        trace_cols[chip.table_index()]
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(i, x)| {
-                *x = F::from_canonical_usize(i);
-            });
+    //     // Initialize the table column with the counter 1..=row_capacity
+    //     trace_cols[chip.table_index()]
+    //         .par_iter_mut()
+    //         .enumerate()
+    //         .for_each(|(i, x)| {
+    //             *x = F::from_canonical_usize(i);
+    //         });
 
-        // if there are no range checks, return the trace
-        if chip.num_range_checks() == 0 {
-            return Ok(trace_cols
-                .into_par_iter()
-                .map(PolynomialValues::new)
-                .collect());
-        }
+    //     // if there are no range checks, return the trace
+    //     if chip.num_range_checks() == 0 {
+    //         return Ok(trace_cols
+    //             .into_par_iter()
+    //             .map(PolynomialValues::new)
+    //             .collect());
+    //     }
 
-        // Calculate the permutation and append permuted columbs to trace
-        let (trace_values, perm_values) =
-            trace_cols[chip.permutations_range()].split_at_mut(chip.relative_table_index() + 1);
-        (0..L::NUM_ARITHMETIC_COLUMNS)
-            .into_par_iter()
-            .map(|i| permuted_cols(&trace_values[i], &trace_values[chip.relative_table_index()]))
-            .zip(perm_values.par_iter_mut().chunks(2))
-            .for_each(|((col_perm, table_perm), mut trace)| {
-                trace[0].extend(col_perm);
-                trace[1].extend(table_perm);
-            });
+    //     // Calculate the permutation and append permuted columbs to trace
+    //     let (trace_values, perm_values) =
+    //         trace_cols[chip.permutations_range()].split_at_mut(chip.relative_table_index() + 1);
+    //     (0..L::NUM_ARITHMETIC_COLUMNS)
+    //         .into_par_iter()
+    //         .map(|i| permuted_cols(&trace_values[i], &trace_values[chip.relative_table_index()]))
+    //         .zip(perm_values.par_iter_mut().chunks(2))
+    //         .for_each(|((col_perm, table_perm), mut trace)| {
+    //             trace[0].extend(col_perm);
+    //             trace[1].extend(table_perm);
+    //         });
 
-        Ok(trace_cols
-            .into_par_iter()
-            .map(PolynomialValues::new)
-            .collect())
-    }
+    //     Ok(trace_cols
+    //         .into_par_iter()
+    //         .map(PolynomialValues::new)
+    //         .collect())
+    // }
 }

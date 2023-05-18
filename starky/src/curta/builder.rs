@@ -36,6 +36,7 @@ where
     pub(crate) constraints: Vec<Constraint<L::Instruction, F, D>>,
     pub(crate) range_data: Option<Lookup>,
     pub(crate) range_table: Option<ElementRegister>,
+    pub (crate) num_verifier_challenges : usize,
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Default
@@ -59,6 +60,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             constraints: Vec::new(),
             range_data: None,
             range_table: None,
+            num_verifier_challenges : 0,
         }
     }
 
@@ -341,9 +343,10 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
                 write_instructions: self.write_instructions,
                 constraints: self.constraints,
                 range_checks_idx: (0, L::NUM_ARITHMETIC_COLUMNS),
-                table_index: L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS,
                 range_data: self.range_data,
                 range_table: self.range_table,
+                num_verifier_challenges : self.num_verifier_challenges,
+                betas : Vec::new(),
             },
             self.instruction_indices,
         )
@@ -381,7 +384,7 @@ mod tests {
 
     use super::*;
     use crate::config::StarkConfig;
-    use crate::curta::chip::TestStark;
+    use crate::curta::chip::ChipStark;
     use crate::curta::instruction::EmptyInstructionSet;
     use crate::curta::register::ElementRegister;
     use crate::curta::trace::trace;
@@ -412,7 +415,7 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type L = TestChipParameters<F, D>;
-        type S = TestStark<L, F, D>;
+        type S = ChipStark<L, F, D>;
 
         let mut builder = StarkBuilder::<L, F, D>::new();
         let x_0 = builder.alloc::<ElementRegister>();
@@ -442,7 +445,7 @@ mod tests {
         });
         info!("The 32 fibonacchi numbers is {:?}", x_0_val);
         let config = StarkConfig::standard_fast_config();
-        let stark = TestStark::new(chip);
+        let stark = ChipStark::new(chip);
 
         // Verify proof as a stark
         let proof = timed!(

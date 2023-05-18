@@ -118,7 +118,7 @@ mod tests {
     use super::*;
     use crate::config::StarkConfig;
     use crate::curta::builder::StarkBuilder;
-    use crate::curta::chip::{StarkParameters, TestStark};
+    use crate::curta::chip::{StarkParameters, ChipStark};
     use crate::curta::register::BitRegister;
     use crate::curta::trace::trace;
     use crate::prover::prove;
@@ -142,7 +142,7 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type S = TestStark<BoolTest, F, D>;
+        type S = ChipStark<BoolTest, F, D>;
 
         let mut builder = StarkBuilder::<BoolTest, F, D>::new();
 
@@ -170,7 +170,7 @@ mod tests {
         let trace = generator.generate_trace(&chip, num_rows).unwrap();
 
         let config = StarkConfig::standard_fast_config();
-        let stark = TestStark::new(chip.clone());
+        let stark = ChipStark::new(chip.clone());
 
         // Verify proof as a stark
         let proof = prove::<F, C, S, D>(
@@ -236,7 +236,7 @@ mod tests {
         let trace = generator.generate_trace(&chip, num_rows).unwrap();
 
         let config = StarkConfig::standard_fast_config();
-        let stark = TestStark::new(chip);
+        let stark = ChipStark::new(chip);
 
         // Verify proof as a stark
         let proof = prove::<F, C, S, D>(
@@ -257,7 +257,7 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type S = TestStark<BoolTest, F, D>;
+        type S = ChipStark<BoolTest, F, D>;
 
         let mut builder = StarkBuilder::<BoolTest, F, D>::new();
         let bit = builder.alloc::<BitRegister>();
@@ -295,7 +295,7 @@ mod tests {
         let trace = generator.generate_trace(&chip, num_rows).unwrap();
 
         let config = StarkConfig::standard_fast_config();
-        let stark = TestStark::new(chip);
+        let stark = ChipStark::new(chip);
 
         // Verify proof as a stark
         let proof = prove::<F, C, S, D>(
