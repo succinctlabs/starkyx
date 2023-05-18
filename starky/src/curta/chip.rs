@@ -15,6 +15,7 @@ use super::constraint::Constraint;
 use super::instruction::write::WriteInstruction;
 use super::instruction::Instruction;
 use super::lookup::Lookup;
+use super::register::ElementRegister;
 // use crate::lookup::{eval_lookups, eval_lookups_circuit};
 // use crate::permutation::PermutationPair;
 use crate::stark::Stark;
@@ -49,6 +50,7 @@ where
     pub(crate) range_checks_idx: (usize, usize),
     pub(crate) table_index: usize,
     pub(crate) range_data: Option<Lookup>,
+    pub (crate) range_table : Option<ElementRegister>,
 }
 
 impl<L, F, const D: usize> Chip<L, F, D>

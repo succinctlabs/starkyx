@@ -1,3 +1,5 @@
+use core::slice::Split;
+
 use alloc::collections::VecDeque;
 
 use anyhow::Result;
@@ -37,7 +39,62 @@ pub struct LogLookup {
     log_lookup_accumulator: CubicElementRegister,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SplitData {
+    mid : usize, 
+    switch : bool,
+    values_range : (usize, usize),
+    acc_range : (usize, usize),
+}
+
+impl SplitData {
+    pub fn new(mid : usize, switch: bool, values_range : (usize, usize), acc_range : (usize, usize)) -> Self {
+        Self{
+            mid,
+            switch,
+            values_range,
+            acc_range,
+        }
+    }
+    pub(crate) fn split_row<'a, T>(&self, trace_row : &'a mut [T]) -> (&'a [T], &'a mut [T]) {
+        let (left, right) = trace_row.split_at_mut(self.mid);
+        if self.switch {
+        (&right[self.values_range.0..self.values_range.1], &mut left[self.acc_range.0..self.acc_range.1])
+        }
+        else {
+            (&left[self.values_range.0..self.values_range.1], &mut right[self.acc_range.0..self.acc_range.1])
+        }
+    }
+}
+
 impl LogLookup {
+
+    #[inline]
+    pub(crate) fn values_idx(&self) -> (usize, usize) {
+        self.values.register().get_range()
+    }
+
+    pub(crate) fn split_data(&self) -> SplitData {
+        let values_idx = self.values.register().get_range();
+        let acc_idx = self.row_accumulators.register().get_range(); 
+        if values_idx.0 > acc_idx.0 {
+            SplitData::new(acc_idx.1, true, 
+                (values_idx.0-acc_idx.1, values_idx.1-acc_idx.1),
+                (acc_idx.0, acc_idx.1)
+            )
+        } else {
+            SplitData::new(values_idx.1, false, (values_idx.0, values_idx.1), (acc_idx.0-values_idx.1, acc_idx.1-values_idx.1)) 
+        }
+    }
+
+    pub(crate) fn split_row<'a, T>(&self, trace_row : &'a mut [T]) -> (&'a [T], &'a mut [T]) {
+        assert!(self.values.register().index() > self.log_lookup_accumulator.register().index());
+        let values_idx = self.values_idx();
+        let acc_idx = self.row_accumulators.register().get_range();
+        let (accumulators, values) = trace_row.split_at_mut(acc_idx.1);
+        (&values[values_idx.0-acc_idx.1..values_idx.1-acc_idx.1], &mut accumulators[acc_idx.0..acc_idx.1])
+    }
+     
     pub fn packed_generic_constraints<
         F: RichField + Extendable<D>,
         const D: usize,
@@ -289,12 +346,28 @@ impl LogLookup {
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
-    pub(crate) fn arithmetic_range_checks(&mut self) {
+
+    pub(crate) fn lookup_log_derivative(&mut self, table : &ElementRegister, values : &ArrayRegister<ElementRegister>) {
         // assign registers for table, multiplicity and accumulators
-        let table = self.alloc::<ElementRegister>();
         let multiplicity = self.alloc::<ElementRegister>();
         let multiplicity_table_log = self.alloc::<CubicElementRegister>();
         let log_lookup_accumulator = self.alloc::<CubicElementRegister>();
+        let row_accumulators = self.alloc_array::<CubicElementRegister>(values.len() / 2);
+
+        self.range_data = Some(Lookup::LogDerivative(LogLookup {
+            table: *table,
+            values : *values,
+            multiplicity,
+            multiplicity_table_log,
+            row_accumulators,
+            log_lookup_accumulator,
+        }));
+    }
+
+    pub(crate) fn arithmetic_range_checks(&mut self) {
+        // assign registers for table, multiplicity and accumulators
+        let table = self.alloc::<ElementRegister>();
+        self.range_table = Some(table);
 
         let one = || -> ArithmeticExpression<F, D> { ArithmeticExpression::one() };
         let zero = || -> ArithmeticExpression<F, D> { ArithmeticExpression::zero() };
@@ -308,41 +381,23 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             0,
             "The number of arithmetic columns must be even"
         );
-        // let num_accumulators = L::NUM_ARITHMETIC_COLUMNS / 2;
         let values = ArrayRegister::<ElementRegister>::from_register_unsafe(MemorySlice::Local(
             L::NUM_FREE_COLUMNS,
             L::NUM_ARITHMETIC_COLUMNS,
         ));
-        let row_accumulators = self.alloc_array::<CubicElementRegister>(values.len() / 2);
 
-        self.range_data = Some(Lookup::LogDerivative(LogLookup {
-            table,
-            values,
-            multiplicity,
-            multiplicity_table_log,
-            row_accumulators,
-            log_lookup_accumulator,
-        }));
+        self.lookup_log_derivative(&table, &values)
     }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
-    pub fn write_arithmetic_range_checks<E: CubicParameters<F>>(
+    pub fn write_lookups<E: CubicParameters<F>>(
         &self,
         num_rows: usize,
         trace_rows: &mut Vec<Vec<F>>,
-        range_data: &LogLookup,
-        range_idx: (usize, usize),
+        lookup_data: &LogLookup,
+        // range_idx: (usize, usize),
     ) -> Result<()> {
-        // write table constraints
-        let table = range_data.table;
-        // for i in 0..num_rows {
-        //     let value = F::from_canonical_usize(i);
-        //     table.assign(trace_rows, 0, &mut vec![value], i);
-        // }
-
-        self.write_range_table(num_rows, trace_rows, &table);
-
         // Get the challenge
         let betas = [
             F::from_canonical_u64(BETAS[0]),
@@ -351,11 +406,13 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         ];
         let beta = CubicExtension::<F, E>::from(betas);
 
+        let values_idx = lookup_data.values_idx();
+
         // Calculate multiplicities
         let mut multiplicities = vec![F::ZERO; num_rows];
 
         for row in trace_rows.iter() {
-            for value in row[range_idx.0..range_idx.1].iter() {
+            for value in row[values_idx.0..values_idx.1].iter() {
                 // sum_check += one_ext / (beta - (*value).into());
                 let value = value.to_canonical_u64() as usize;
                 assert!(value < 1 << 16);
@@ -364,7 +421,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         }
 
         // Write multiplicities into the trace
-        let multiplicity = range_data.multiplicity.register();
+        let multiplicity = lookup_data.multiplicity.register();
         for i in 0..num_rows {
             multiplicity.assign(trace_rows, 0, &mut vec![multiplicities[i]], i);
         }
@@ -379,33 +436,31 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
             })
             .collect::<Vec<_>>();
 
-        let mult_table_log = range_data.multiplicity_table_log.register();
+        let mult_table_log = lookup_data.multiplicity_table_log.register();
         for (i, value) in mult_table_log_entries.iter().enumerate() {
             mult_table_log.assign(trace_rows, 0, &value.0, i);
         }
 
         // Log accumulator
         let mut value = CubicExtension::<F, E>::ZERO;
-        let acc_reg = range_data.row_accumulators;
-
+        let split_data = lookup_data.split_data();
         let accumulators = trace_rows
             .par_iter_mut()
             .map(|row| {
-                let (write_row, arith_row) = row.split_at_mut(range_idx.0);
+                let (values, accumulators) = split_data.split_row(row);
                 let mut accumumulator = CubicExtension::<F, E>::from(F::ZERO);
-                for (pair, acc) in arith_row.chunks(2).zip(acc_reg.iter()) {
+                for (k, pair) in values.chunks(2).enumerate() {
                     let beta_minus_a = beta - pair[0].into();
                     let beta_minus_b = beta - pair[1].into();
                     accumumulator += CubicExtension::from(beta_minus_a).inverse()
                         + CubicExtension::from(beta_minus_b).inverse();
-                    let (acc_0, acc_1) = acc.register().get_range();
-                    write_row[acc_0..acc_1].copy_from_slice(&accumumulator.0);
+                    accumulators[3 * k..3 * k + 3].copy_from_slice(&accumumulator.0);
                 }
                 accumumulator
             })
             .collect::<Vec<_>>();
 
-        let log_lookup_next = range_data.log_lookup_accumulator.register().next();
+        let log_lookup_next = lookup_data.log_lookup_accumulator.register().next();
         for (i, (acc, mult_table)) in accumulators
             .into_iter()
             .zip(mult_table_log_entries.into_iter())

@@ -130,6 +130,11 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
                 ),
             };
         }
+
+        if let Some(table) = chip.range_table {
+            self.write_range_table(row_capacity, &mut trace_rows, &table);
+        }
+
         Ok(trace_rows)
     }
 
@@ -169,7 +174,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
 
         if let Some(Lookup::LogDerivative(data)) = &chip.range_data {
             let range_idx = chip.range_checks_idx();
-            self.write_arithmetic_range_checks::<E>(row_capacity, &mut trace_rows, data, range_idx)
+            self.write_lookups::<E>(row_capacity, &mut trace_rows, data)
                 .unwrap();
         }
         // Transpose the trace to get the columns and resize to the correct size

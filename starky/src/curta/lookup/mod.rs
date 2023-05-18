@@ -9,13 +9,13 @@ use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::chip::StarkParameters;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Debug, Clone)]
 pub enum Lookup {
     LogDerivative(LogLookup),
 }
+
 
 impl Lookup {
     pub fn packed_generic_constraints<
