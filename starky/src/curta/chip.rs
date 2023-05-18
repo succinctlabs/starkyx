@@ -65,7 +65,7 @@ where
 
     #[inline]
     pub const fn relative_table_index(&self) -> usize {
-        self.table_index - L::NUM_FREE_COLUMNS
+        self.table_index
     }
 
     #[inline]

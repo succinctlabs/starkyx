@@ -49,10 +49,10 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Def
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
     pub fn new() -> Self {
         Self {
-            local_index: 0,
-            next_index: 0,
-            local_arithmetic_index: L::NUM_FREE_COLUMNS,
-            next_arithmetic_index: L::NUM_FREE_COLUMNS,
+            local_index: L::NUM_ARITHMETIC_COLUMNS, //0,
+            next_index: L::NUM_ARITHMETIC_COLUMNS,  //0,
+            local_arithmetic_index: 0,              //L::NUM_FREE_COLUMNS,
+            next_arithmetic_index: 0,               //L::NUM_FREE_COLUMNS,
             instruction_indices: BTreeMap::new(),
             instructions: Vec::new(),
             write_instructions: Vec::new(),
@@ -309,7 +309,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             self.arithmetic_range_checks();
         }
 
-        let num_free_columns = self.local_index;
+        let num_free_columns = self.local_index - L::NUM_ARITHMETIC_COLUMNS; //self.local_index;
         if num_free_columns > L::NUM_FREE_COLUMNS {
             panic!(
                 "Not enough free columns. Expected {} free columns, got {}.",
@@ -322,7 +322,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
                 L::NUM_FREE_COLUMNS - num_free_columns
             );
         }
-        let num_arithmetic_columns = self.local_arithmetic_index - self.local_index;
+        let num_arithmetic_columns = self.local_arithmetic_index; //- self.local_index;
         if num_arithmetic_columns > L::NUM_ARITHMETIC_COLUMNS {
             panic!(
                 "Not enough arithmetic columns. Expected {} arithmetic columns, got {}.",
@@ -340,10 +340,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
                 instructions: self.instructions,
                 write_instructions: self.write_instructions,
                 constraints: self.constraints,
-                range_checks_idx: (
-                    L::NUM_FREE_COLUMNS,
-                    L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS,
-                ),
+                range_checks_idx: (0, L::NUM_ARITHMETIC_COLUMNS),
                 table_index: L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS,
                 range_data: self.range_data,
                 range_table: self.range_table,

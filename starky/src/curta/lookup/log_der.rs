@@ -38,40 +38,26 @@ pub struct LogLookup {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SplitData {
+pub(crate) struct SplitData {
     mid: usize,
-    switch: bool,
     values_range: (usize, usize),
     acc_range: (usize, usize),
 }
 
 impl SplitData {
-    pub fn new(
-        mid: usize,
-        switch: bool,
-        values_range: (usize, usize),
-        acc_range: (usize, usize),
-    ) -> Self {
+    pub fn new(mid: usize, values_range: (usize, usize), acc_range: (usize, usize)) -> Self {
         Self {
             mid,
-            switch,
             values_range,
             acc_range,
         }
     }
     pub(crate) fn split_row<'a, T>(&self, trace_row: &'a mut [T]) -> (&'a [T], &'a mut [T]) {
         let (left, right) = trace_row.split_at_mut(self.mid);
-        if self.switch {
-            (
-                &right[self.values_range.0..self.values_range.1],
-                &mut left[self.acc_range.0..self.acc_range.1],
-            )
-        } else {
-            (
-                &left[self.values_range.0..self.values_range.1],
-                &mut right[self.acc_range.0..self.acc_range.1],
-            )
-        }
+        (
+            &left[self.values_range.0..self.values_range.1],
+            &mut right[self.acc_range.0..self.acc_range.1],
+        )
     }
 }
 
@@ -84,21 +70,19 @@ impl LogLookup {
     pub(crate) fn split_data(&self) -> SplitData {
         let values_idx = self.values.register().get_range();
         let acc_idx = self.row_accumulators.register().get_range();
-        if values_idx.0 > acc_idx.0 {
-            SplitData::new(
-                acc_idx.1,
-                true,
-                (values_idx.0 - acc_idx.1, values_idx.1 - acc_idx.1),
-                (acc_idx.0, acc_idx.1),
-            )
-        } else {
-            SplitData::new(
-                values_idx.1,
-                false,
-                (values_idx.0, values_idx.1),
-                (acc_idx.0 - values_idx.1, acc_idx.1 - values_idx.1),
-            )
-        }
+        assert!(
+            values_idx.0 < acc_idx.0,
+            "Illegal memory pattern, expected values indices \
+        to be to the right of accumulator indices, \
+        instead got: values_idx: {:?}, acc_idx: {:?}",
+            values_idx,
+            acc_idx
+        );
+        SplitData::new(
+            values_idx.1,
+            (values_idx.0, values_idx.1),
+            (acc_idx.0 - values_idx.1, acc_idx.1 - values_idx.1),
+        )
     }
 
     pub fn packed_generic_constraints<
@@ -391,8 +375,10 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             "The number of arithmetic columns must be even"
         );
         let values = ArrayRegister::<ElementRegister>::from_register_unsafe(MemorySlice::Local(
-            L::NUM_FREE_COLUMNS,
+            0,
             L::NUM_ARITHMETIC_COLUMNS,
+            // L::NUM_FREE_COLUMNS,
+            // L::NUM_ARITHMETIC_COLUMNS,
         ));
 
         self.lookup_log_derivative(&table, &values)
