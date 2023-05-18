@@ -85,14 +85,6 @@ impl LogLookup {
         }
     }
 
-    pub(crate) fn split_row<'a, T>(&self, trace_row : &'a mut [T]) -> (&'a [T], &'a mut [T]) {
-        assert!(self.values.register().index() > self.log_lookup_accumulator.register().index());
-        let values_idx = self.values_idx();
-        let acc_idx = self.row_accumulators.register().get_range();
-        let (accumulators, values) = trace_row.split_at_mut(acc_idx.1);
-        (&values[values_idx.0-acc_idx.1..values_idx.1-acc_idx.1], &mut accumulators[acc_idx.0..acc_idx.1])
-    }
-     
     pub fn packed_generic_constraints<
         F: RichField + Extendable<D>,
         const D: usize,
