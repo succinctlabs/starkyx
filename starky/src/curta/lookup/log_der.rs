@@ -1,4 +1,4 @@
-use alloc::collections::VecDeque;
+use alloc::collections::{VecDeque, BTreeMap};
 
 use anyhow::Result;
 use plonky2::field::extension::{Extendable, FieldExtension};
@@ -386,7 +386,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         num_rows: usize,
         trace_rows: &mut Vec<Vec<F>>,
         lookup_data: &LogLookup,
-        // range_idx: (usize, usize),
+        table_index : fn(F)->usize,
     ) -> Result<()> {
         // Get the challenge
         let betas = [
@@ -403,10 +403,9 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
 
         for row in trace_rows.iter() {
             for value in row[values_idx.0..values_idx.1].iter() {
-                // sum_check += one_ext / (beta - (*value).into());
-                let value = value.to_canonical_u64() as usize;
-                assert!(value < 1 << 16);
-                multiplicities[value] += F::ONE;
+                let index = table_index(*value); 
+                assert!(index < 1 << 16);
+                multiplicities[index] += F::ONE;
             }
         }
 

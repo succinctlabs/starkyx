@@ -152,6 +152,11 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         }
     }
 
+    #[inline]
+    pub fn range_fn(element : F) -> usize {
+        element.to_canonical_u64() as usize
+    }
+
     pub fn generate_trace_new<L: StarkParameters<F, D>, E: CubicParameters<F>>(
         &self,
         chip: &Chip<L, F, D>,
@@ -173,8 +178,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         let mut trace_rows = self.generate_trace_rows(chip, row_capacity)?;
 
         if let Some(Lookup::LogDerivative(data)) = &chip.range_data {
-            let range_idx = chip.range_checks_idx();
-            self.write_lookups::<E>(row_capacity, &mut trace_rows, data)
+            self.write_lookups::<E, >(row_capacity, &mut trace_rows, data, Self::range_fn)
                 .unwrap();
         }
         // Transpose the trace to get the columns and resize to the correct size
