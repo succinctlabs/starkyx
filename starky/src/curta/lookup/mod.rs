@@ -16,7 +16,6 @@ pub enum Lookup {
     LogDerivative(LogLookup),
 }
 
-
 impl Lookup {
     pub fn packed_generic_constraints<
         F: RichField + Extendable<D>,

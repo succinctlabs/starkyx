@@ -50,7 +50,7 @@ where
     pub(crate) range_checks_idx: (usize, usize),
     pub(crate) table_index: usize,
     pub(crate) range_data: Option<Lookup>,
-    pub (crate) range_table : Option<ElementRegister>,
+    pub(crate) range_table: Option<ElementRegister>,
 }
 
 impl<L, F, const D: usize> Chip<L, F, D>

@@ -1,4 +1,4 @@
-use alloc::collections::{VecDeque, BTreeMap};
+use alloc::collections::VecDeque;
 
 use anyhow::Result;
 use plonky2::field::extension::{Extendable, FieldExtension};
@@ -39,34 +39,43 @@ pub struct LogLookup {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SplitData {
-    mid : usize, 
-    switch : bool,
-    values_range : (usize, usize),
-    acc_range : (usize, usize),
+    mid: usize,
+    switch: bool,
+    values_range: (usize, usize),
+    acc_range: (usize, usize),
 }
 
 impl SplitData {
-    pub fn new(mid : usize, switch: bool, values_range : (usize, usize), acc_range : (usize, usize)) -> Self {
-        Self{
+    pub fn new(
+        mid: usize,
+        switch: bool,
+        values_range: (usize, usize),
+        acc_range: (usize, usize),
+    ) -> Self {
+        Self {
             mid,
             switch,
             values_range,
             acc_range,
         }
     }
-    pub(crate) fn split_row<'a, T>(&self, trace_row : &'a mut [T]) -> (&'a [T], &'a mut [T]) {
+    pub(crate) fn split_row<'a, T>(&self, trace_row: &'a mut [T]) -> (&'a [T], &'a mut [T]) {
         let (left, right) = trace_row.split_at_mut(self.mid);
         if self.switch {
-        (&right[self.values_range.0..self.values_range.1], &mut left[self.acc_range.0..self.acc_range.1])
-        }
-        else {
-            (&left[self.values_range.0..self.values_range.1], &mut right[self.acc_range.0..self.acc_range.1])
+            (
+                &right[self.values_range.0..self.values_range.1],
+                &mut left[self.acc_range.0..self.acc_range.1],
+            )
+        } else {
+            (
+                &left[self.values_range.0..self.values_range.1],
+                &mut right[self.acc_range.0..self.acc_range.1],
+            )
         }
     }
 }
 
 impl LogLookup {
-
     #[inline]
     pub(crate) fn values_idx(&self) -> (usize, usize) {
         self.values.register().get_range()
@@ -74,14 +83,21 @@ impl LogLookup {
 
     pub(crate) fn split_data(&self) -> SplitData {
         let values_idx = self.values.register().get_range();
-        let acc_idx = self.row_accumulators.register().get_range(); 
+        let acc_idx = self.row_accumulators.register().get_range();
         if values_idx.0 > acc_idx.0 {
-            SplitData::new(acc_idx.1, true, 
-                (values_idx.0-acc_idx.1, values_idx.1-acc_idx.1),
-                (acc_idx.0, acc_idx.1)
+            SplitData::new(
+                acc_idx.1,
+                true,
+                (values_idx.0 - acc_idx.1, values_idx.1 - acc_idx.1),
+                (acc_idx.0, acc_idx.1),
             )
         } else {
-            SplitData::new(values_idx.1, false, (values_idx.0, values_idx.1), (acc_idx.0-values_idx.1, acc_idx.1-values_idx.1)) 
+            SplitData::new(
+                values_idx.1,
+                false,
+                (values_idx.0, values_idx.1),
+                (acc_idx.0 - values_idx.1, acc_idx.1 - values_idx.1),
+            )
         }
     }
 
@@ -336,8 +352,11 @@ impl LogLookup {
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
-
-    pub(crate) fn lookup_log_derivative(&mut self, table : &ElementRegister, values : &ArrayRegister<ElementRegister>) {
+    pub(crate) fn lookup_log_derivative(
+        &mut self,
+        table: &ElementRegister,
+        values: &ArrayRegister<ElementRegister>,
+    ) {
         // assign registers for table, multiplicity and accumulators
         let multiplicity = self.alloc::<ElementRegister>();
         let multiplicity_table_log = self.alloc::<CubicElementRegister>();
@@ -346,7 +365,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
 
         self.range_data = Some(Lookup::LogDerivative(LogLookup {
             table: *table,
-            values : *values,
+            values: *values,
             multiplicity,
             multiplicity_table_log,
             row_accumulators,
@@ -386,7 +405,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         num_rows: usize,
         trace_rows: &mut Vec<Vec<F>>,
         lookup_data: &LogLookup,
-        table_index : fn(F)->usize,
+        table_index: fn(F) -> usize,
     ) -> Result<()> {
         // Get the challenge
         let betas = [
@@ -403,7 +422,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
 
         for row in trace_rows.iter() {
             for value in row[values_idx.0..values_idx.1].iter() {
-                let index = table_index(*value); 
+                let index = table_index(*value);
                 assert!(index < 1 << 16);
                 multiplicities[index] += F::ONE;
             }

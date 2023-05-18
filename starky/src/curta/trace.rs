@@ -153,7 +153,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
     }
 
     #[inline]
-    pub fn range_fn(element : F) -> usize {
+    pub fn range_fn(element: F) -> usize {
         element.to_canonical_u64() as usize
     }
 
@@ -178,7 +178,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         let mut trace_rows = self.generate_trace_rows(chip, row_capacity)?;
 
         if let Some(Lookup::LogDerivative(data)) = &chip.range_data {
-            self.write_lookups::<E, >(row_capacity, &mut trace_rows, data, Self::range_fn)
+            self.write_lookups::<E>(row_capacity, &mut trace_rows, data, Self::range_fn)
                 .unwrap();
         }
         // Transpose the trace to get the columns and resize to the correct size

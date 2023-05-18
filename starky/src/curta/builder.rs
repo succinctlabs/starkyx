@@ -11,7 +11,9 @@ use super::constraint::Constraint;
 use super::instruction::write::WriteInstruction;
 use super::instruction::Instruction;
 use super::lookup::Lookup;
-use super::register::{ArrayRegister, CellType, MemorySlice, Register, RegisterSerializable, ElementRegister};
+use super::register::{
+    ArrayRegister, CellType, ElementRegister, MemorySlice, Register, RegisterSerializable,
+};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub enum InstructionId {
@@ -33,7 +35,7 @@ where
     write_instructions: Vec<WriteInstruction>,
     pub(crate) constraints: Vec<Constraint<L::Instruction, F, D>>,
     pub(crate) range_data: Option<Lookup>,
-    pub (crate) range_table : Option<ElementRegister>,
+    pub(crate) range_table: Option<ElementRegister>,
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Default
@@ -56,7 +58,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             write_instructions: Vec::new(),
             constraints: Vec::new(),
             range_data: None,
-            range_table : None,
+            range_table: None,
         }
     }
 
@@ -344,7 +346,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
                 ),
                 table_index: L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS,
                 range_data: self.range_data,
-                range_table : self.range_table,
+                range_table: self.range_table,
             },
             self.instruction_indices,
         )
