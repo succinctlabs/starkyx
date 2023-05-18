@@ -1,7 +1,8 @@
-//! Range checks based on logarithmic derivatives.
-//!
+
 
 use alloc::collections::VecDeque;
+
+use super::Lookup;
 
 use anyhow::Result;
 use plonky2::field::extension::{Extendable, FieldExtension};
@@ -10,15 +11,15 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_maybe_rayon::*;
 
-use super::builder::StarkBuilder;
-use super::chip::StarkParameters;
-use super::constraint::arithmetic::ArithmeticExpression;
-use super::extension::cubic::array::CubicArray;
-use super::extension::cubic::gadget::CubicGadget;
-use super::extension::cubic::register::CubicElementRegister;
-use super::extension::cubic::{CubicExtension, CubicParameters};
-use super::register::{ArrayRegister, ElementRegister, Register, RegisterSerializable};
-use super::trace::TraceGenerator;
+use crate::curta::builder::StarkBuilder;
+use crate::curta::chip::StarkParameters;
+use crate::curta::constraint::arithmetic::ArithmeticExpression;
+use crate::curta::extension::cubic::array::CubicArray;
+use crate::curta::extension::cubic::gadget::CubicGadget;
+use crate::curta::extension::cubic::register::CubicElementRegister;
+use crate::curta::extension::cubic::{CubicExtension, CubicParameters};
+use crate::curta::register::{ArrayRegister, ElementRegister, Register, RegisterSerializable, MemorySlice};
+use crate::curta::trace::TraceGenerator;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 const BETAS: [u64; 3] = [
@@ -28,15 +29,16 @@ const BETAS: [u64; 3] = [
 ];
 
 #[derive(Debug, Clone)]
-pub struct RangeCheckData {
+pub struct LogLookup {
     table: ElementRegister,
+    values : ArrayRegister<ElementRegister>,
     multiplicity: ElementRegister,
     multiplicity_table_log: CubicElementRegister,
     row_accumulators: ArrayRegister<CubicElementRegister>,
     log_lookup_accumulator: CubicElementRegister,
 }
 
-impl RangeCheckData {
+impl LogLookup {
     pub fn packed_generic_constraints<
         L: StarkParameters<F, D>,
         F: RichField + Extendable<D>,
@@ -82,8 +84,8 @@ impl RangeCheckData {
             .iter()
             .map(|r| CubicArray::from_slice(r.register().packed_generic_vars(vars)));
 
-        let range_idx = L::NUM_FREE_COLUMNS..(L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS);
-        let mut range_pairs = range_idx
+        let values_idx = L::NUM_FREE_COLUMNS..(L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS);
+        let mut values_pairs = values_idx
             .step_by(2)
             .map(|k| (vars.local_values[k], vars.local_values[k + 1]))
             .map(|(a, b)| {
@@ -95,7 +97,7 @@ impl RangeCheckData {
             .map(|(a, b)| (beta - a, beta - b));
 
         let ((beta_minus_a_0, beta_minus_b_0), acc_0) =
-            (range_pairs.next().unwrap(), row_acc_iter.next().unwrap());
+            (values_pairs.next().unwrap(), row_acc_iter.next().unwrap());
 
         let constr_0 = beta_minus_a_0 + beta_minus_b_0 - acc_0 * beta_minus_a_0 * beta_minus_b_0;
         for consr in constr_0.0 {
@@ -103,7 +105,7 @@ impl RangeCheckData {
         }
 
         let mut prev = acc_0;
-        for ((beta_minus_a, beta_minus_b), acc) in range_pairs.zip(row_acc_iter) {
+        for ((beta_minus_a, beta_minus_b), acc) in values_pairs.zip(row_acc_iter) {
             let constraint =
                 (beta_minus_a + beta_minus_b) - (acc - prev) * beta_minus_a * beta_minus_b;
             for consr in constraint.0 {
@@ -301,16 +303,20 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             0,
             "The number of arithmetic columns must be even"
         );
-        let num_accumulators = L::NUM_ARITHMETIC_COLUMNS / 2;
-        let row_accumulators = self.alloc_array::<CubicElementRegister>(num_accumulators);
+        // let num_accumulators = L::NUM_ARITHMETIC_COLUMNS / 2;
+        let values = ArrayRegister::<ElementRegister>::from_register_unsafe(
+            MemorySlice::Local(L::NUM_FREE_COLUMNS, L::NUM_ARITHMETIC_COLUMNS)
+        );
+        let row_accumulators = self.alloc_array::<CubicElementRegister>(values.len()/2);
 
-        self.range_data = Some(RangeCheckData {
+        self.range_data = Some(Lookup::LogDerivative(LogLookup {
             table,
+            values,
             multiplicity,
             multiplicity_table_log,
             row_accumulators,
             log_lookup_accumulator,
-        });
+        }));
     }
 }
 
@@ -319,15 +325,17 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         &self,
         num_rows: usize,
         trace_rows: &mut Vec<Vec<F>>,
-        range_data: &RangeCheckData,
+        range_data: &LogLookup,
         range_idx: (usize, usize),
     ) -> Result<()> {
         // write table constraints
-        let table = range_data.table.register();
-        for i in 0..num_rows {
-            let value = F::from_canonical_usize(i);
-            table.assign(trace_rows, 0, &mut vec![value], i);
-        }
+        let table = range_data.table;
+        // for i in 0..num_rows {
+        //     let value = F::from_canonical_usize(i);
+        //     table.assign(trace_rows, 0, &mut vec![value], i);
+        // }
+
+        self.write_range_table(num_rows, trace_rows, &table);
 
         // Get the challenge
         let betas = [

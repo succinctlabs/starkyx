@@ -10,7 +10,7 @@ use super::constraint::expression::ConstraintExpression;
 use super::constraint::Constraint;
 use super::instruction::write::WriteInstruction;
 use super::instruction::Instruction;
-use super::range::RangeCheckData;
+use super::lookup::Lookup;
 use super::register::{ArrayRegister, CellType, MemorySlice, Register, RegisterSerializable};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
@@ -32,7 +32,7 @@ where
     instructions: Vec<L::Instruction>,
     write_instructions: Vec<WriteInstruction>,
     pub(crate) constraints: Vec<Constraint<L::Instruction, F, D>>,
-    pub(crate) range_data: Option<RangeCheckData>,
+    pub(crate) range_data: Option<Lookup>,
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Default

@@ -1,6 +1,5 @@
 use alloc::collections::BTreeMap;
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, RwLock};
 
 use anyhow::{anyhow, Result};
 use plonky2::field::extension::Extendable;
@@ -13,7 +12,8 @@ use super::builder::InstructionId;
 use super::chip::StarkParameters;
 use super::extension::cubic::CubicParameters;
 use super::instruction::Instruction;
-use super::register::{MemorySlice, Register};
+use super::lookup::Lookup;
+use super::register::{MemorySlice, Register, ElementRegister, RegisterSerializable};
 use crate::curta::chip::Chip;
 use crate::lookup::permuted_cols;
 
@@ -139,33 +139,18 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         Ok(trace_rows)
     }
 
-    pub fn generate_trace_cols<L: StarkParameters<F, D>>(
+    pub fn write_range_table(
         &self,
-        chip: &Chip<L, F, D>,
-        row_capacity: usize,
-    ) -> Result<Vec<Vec<F>>> {
-        // Initiaze the trace with capacity given by the user
-        let num_cols = chip.num_columns_no_range_checks();
-        let mut trace_rows = vec![vec![F::ZERO; num_cols]; row_capacity];
-
-        while let Ok((row_index, id, mut row)) = self.rx.recv() {
-            let op_index = self
-                .spec
-                .get(&id)
-                .ok_or_else(|| anyhow!("Invalid instruction"))?;
-            match id {
-                InstructionId::CustomInstruction(_) => {
-                    chip.instructions[*op_index].assign_row(&mut trace_rows, &mut row, row_index)
-                }
-                InstructionId::Write(_) => chip.write_instructions[*op_index].assign_row(
-                    &mut trace_rows,
-                    &mut row,
-                    row_index,
-                ),
-            };
+        num_rows: usize,
+        trace_rows: &mut Vec<Vec<F>>,
+        range_table: &ElementRegister,
+    )  {
+        // write table constraints
+        let table = range_table.register();
+        for i in 0..num_rows {
+            let value = F::from_canonical_usize(i);
+            table.assign(trace_rows, 0, &mut vec![value], i);
         }
-
-        Ok(transpose(&trace_rows))
     }
 
     pub fn generate_trace_new<L: StarkParameters<F, D>, E: CubicParameters<F>>(
@@ -188,7 +173,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         // Initiaze the trace with capacity given by the user
         let mut trace_rows = self.generate_trace_rows(chip, row_capacity)?;
 
-        if let Some(data) = &chip.range_data {
+        if let Some(Lookup::LogDerivative(data)) = &chip.range_data {
             let range_idx = chip.range_checks_idx();
             self.write_arithmetic_range_checks::<E>(row_capacity, &mut trace_rows, data, range_idx)
                 .unwrap();
