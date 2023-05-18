@@ -13,7 +13,7 @@ use super::chip::StarkParameters;
 use super::extension::cubic::CubicParameters;
 use super::instruction::Instruction;
 use super::lookup::Lookup;
-use super::register::{MemorySlice, Register, ElementRegister, RegisterSerializable};
+use super::register::{ElementRegister, MemorySlice, Register, RegisterSerializable};
 use crate::curta::chip::Chip;
 use crate::lookup::permuted_cols;
 
@@ -35,14 +35,8 @@ pub fn trace<F: RichField + Extendable<D>, const D: usize>(
     spec: BTreeMap<InstructionId, usize>,
 ) -> (TraceWriter<F, D>, TraceGenerator<F, D>) {
     let (tx, rx) = std::sync::mpsc::channel();
-    (
-        TraceWriter {
-            tx,
-        },
-        TraceGenerator { spec, rx },
-    )
+    (TraceWriter { tx }, TraceGenerator { spec, rx })
 }
-
 
 impl<F: RichField + Extendable<D>, const D: usize> Clone for TraceWriter<F, D> {
     fn clone(&self) -> Self {
@@ -144,7 +138,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         num_rows: usize,
         trace_rows: &mut Vec<Vec<F>>,
         range_table: &ElementRegister,
-    )  {
+    ) {
         // write table constraints
         let table = range_table.register();
         for i in 0..num_rows {

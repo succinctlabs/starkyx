@@ -124,7 +124,7 @@ where
             consr.packed_generic_constraints(vars, yield_constr);
         }
         if let Some(range_data) = &self.range_data {
-            range_data.packed_generic_constraints::<L, F, D, FE, P, D2, COLUMNS, PUBLIC_INPUTS>(
+            range_data.packed_generic_constraints::<F, D, FE, P, D2, COLUMNS, PUBLIC_INPUTS>(
                 vars,
                 yield_constr,
             );
@@ -155,7 +155,7 @@ where
             consr.ext_circuit_constraints(builder, vars, yield_constr);
         }
         if let Some(range_data) = &self.range_data {
-            range_data.ext_circuit_constraints::<L, F, D, COLUMNS, PUBLIC_INPUTS>(
+            range_data.ext_circuit_constraints::<F, D, COLUMNS, PUBLIC_INPUTS>(
                 builder,
                 vars,
                 yield_constr,

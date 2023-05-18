@@ -1,8 +1,4 @@
-
-
 use alloc::collections::VecDeque;
-
-use super::Lookup;
 
 use anyhow::Result;
 use plonky2::field::extension::{Extendable, FieldExtension};
@@ -11,6 +7,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_maybe_rayon::*;
 
+use super::Lookup;
 use crate::curta::builder::StarkBuilder;
 use crate::curta::chip::StarkParameters;
 use crate::curta::constraint::arithmetic::ArithmeticExpression;
@@ -18,7 +15,9 @@ use crate::curta::extension::cubic::array::CubicArray;
 use crate::curta::extension::cubic::gadget::CubicGadget;
 use crate::curta::extension::cubic::register::CubicElementRegister;
 use crate::curta::extension::cubic::{CubicExtension, CubicParameters};
-use crate::curta::register::{ArrayRegister, ElementRegister, Register, RegisterSerializable, MemorySlice};
+use crate::curta::register::{
+    ArrayRegister, ElementRegister, MemorySlice, Register, RegisterSerializable,
+};
 use crate::curta::trace::TraceGenerator;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -31,7 +30,7 @@ const BETAS: [u64; 3] = [
 #[derive(Debug, Clone)]
 pub struct LogLookup {
     table: ElementRegister,
-    values : ArrayRegister<ElementRegister>,
+    values: ArrayRegister<ElementRegister>,
     multiplicity: ElementRegister,
     multiplicity_table_log: CubicElementRegister,
     row_accumulators: ArrayRegister<CubicElementRegister>,
@@ -40,7 +39,6 @@ pub struct LogLookup {
 
 impl LogLookup {
     pub fn packed_generic_constraints<
-        L: StarkParameters<F, D>,
         F: RichField + Extendable<D>,
         const D: usize,
         FE,
@@ -84,10 +82,14 @@ impl LogLookup {
             .iter()
             .map(|r| CubicArray::from_slice(r.register().packed_generic_vars(vars)));
 
-        let values_idx = L::NUM_FREE_COLUMNS..(L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS);
-        let mut values_pairs = values_idx
+        let mut values_pairs = (0..self.values.len())
             .step_by(2)
-            .map(|k| (vars.local_values[k], vars.local_values[k + 1]))
+            .map(|k| {
+                (
+                    self.values.get(k).register().packed_generic_vars(vars)[0],
+                    self.values.get(k + 1).register().packed_generic_vars(vars)[0],
+                )
+            })
             .map(|(a, b)| {
                 (
                     CubicArray::from_base(a, P::ZEROS),
@@ -144,7 +146,6 @@ impl LogLookup {
     }
 
     pub fn ext_circuit_constraints<
-        L: StarkParameters<F, D>,
         F: RichField + Extendable<D>,
         const D: usize,
         const COLUMNS: usize,
@@ -194,10 +195,14 @@ impl LogLookup {
             .map(|r| CubicArray::from_slice(r.register().ext_circuit_vars(vars)))
             .collect::<VecDeque<_>>();
 
-        let range_idx = L::NUM_FREE_COLUMNS..(L::NUM_FREE_COLUMNS + L::NUM_ARITHMETIC_COLUMNS);
-        let mut range_pairs = range_idx
+        let mut range_pairs = (0..self.values.len())
             .step_by(2)
-            .map(|k| (vars.local_values[k], vars.local_values[k + 1]))
+            .map(|k| {
+                (
+                    self.values.get(k).register().ext_circuit_vars(vars)[0],
+                    self.values.get(k + 1).register().ext_circuit_vars(vars)[0],
+                )
+            })
             .map(|(a, b)| {
                 (
                     CubicGadget::from_base_extension(builder, a),
@@ -304,10 +309,11 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             "The number of arithmetic columns must be even"
         );
         // let num_accumulators = L::NUM_ARITHMETIC_COLUMNS / 2;
-        let values = ArrayRegister::<ElementRegister>::from_register_unsafe(
-            MemorySlice::Local(L::NUM_FREE_COLUMNS, L::NUM_ARITHMETIC_COLUMNS)
-        );
-        let row_accumulators = self.alloc_array::<CubicElementRegister>(values.len()/2);
+        let values = ArrayRegister::<ElementRegister>::from_register_unsafe(MemorySlice::Local(
+            L::NUM_FREE_COLUMNS,
+            L::NUM_ARITHMETIC_COLUMNS,
+        ));
+        let row_accumulators = self.alloc_array::<CubicElementRegister>(values.len() / 2);
 
         self.range_data = Some(Lookup::LogDerivative(LogLookup {
             table,

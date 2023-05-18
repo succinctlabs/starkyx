@@ -218,7 +218,7 @@ mod tests {
 
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for Ed25519ScalarMulTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 1504;
-        const NUM_FREE_COLUMNS: usize = 2330;//2 + 2 * 2 * 16;
+        const NUM_FREE_COLUMNS: usize = 2330; //2 + 2 * 2 * 16;
         type Instruction = InstructionSet<Ed25519BaseField>;
     }
 
@@ -279,7 +279,9 @@ mod tests {
                 });
             }
             drop(handle);
-            generator.generate_trace_new::<Ed25519ScalarMulTest, CUB>(&chip, num_rows as usize).unwrap()
+            generator
+                .generate_trace_new::<Ed25519ScalarMulTest, CUB>(&chip, num_rows as usize)
+                .unwrap()
         });
 
         // Generate the proof.

@@ -4,21 +4,21 @@
 pub mod log_der;
 
 use log_der::LogLookup;
-use plonky2::{field::{extension::{Extendable, FieldExtension}, packed::PackedField}, hash::hash_types::RichField, plonk::circuit_builder::CircuitBuilder};
-
-use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
+use plonky2::field::extension::{Extendable, FieldExtension};
+use plonky2::field::packed::PackedField;
+use plonky2::hash::hash_types::RichField;
+use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::chip::StarkParameters;
+use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Debug, Clone)]
 pub enum Lookup {
     LogDerivative(LogLookup),
 }
 
-
 impl Lookup {
     pub fn packed_generic_constraints<
-        L: StarkParameters<F, D>,
         F: RichField + Extendable<D>,
         const D: usize,
         FE,
@@ -32,17 +32,18 @@ impl Lookup {
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
         FE: FieldExtension<D2, BaseField = F>,
-        P: PackedField<Scalar = FE>, 
-        {
-            match self {
-                Lookup::LogDerivative(log_lookup) => {
-                    log_lookup.packed_generic_constraints::<L, F, D, FE, P, D2, COLUMNS, PUBLIC_INPUTS>(vars, yield_constr)
-                }
-            }
+        P: PackedField<Scalar = FE>,
+    {
+        match self {
+            Lookup::LogDerivative(log_lookup) => log_lookup
+                .packed_generic_constraints::<F, D, FE, P, D2, COLUMNS, PUBLIC_INPUTS>(
+                    vars,
+                    yield_constr,
+                ),
         }
+    }
 
-        pub fn ext_circuit_constraints<
-        L: StarkParameters<F, D>,
+    pub fn ext_circuit_constraints<
         F: RichField + Extendable<D>,
         const D: usize,
         const COLUMNS: usize,
@@ -54,9 +55,12 @@ impl Lookup {
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
         match self {
-            Lookup::LogDerivative(log_lookup) => {
-                log_lookup.ext_circuit_constraints::<L, F, D, COLUMNS, PUBLIC_INPUTS>(builder, vars, yield_constr)
-            }
+            Lookup::LogDerivative(log_lookup) => log_lookup
+                .ext_circuit_constraints::<F, D, COLUMNS, PUBLIC_INPUTS>(
+                    builder,
+                    vars,
+                    yield_constr,
+                ),
         }
     }
 }
