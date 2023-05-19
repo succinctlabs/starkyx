@@ -324,7 +324,7 @@ mod tests {
         recursive_builder.print_gate_counts(0);
         let mut rec_pw = PartialWitness::new();
         set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-        verify_stark_proof_circuit::<F, C, S, D>(
+        verify_stark_proof_circuit::<F, C, L, D>(
             &mut recursive_builder,
             stark,
             virtual_proof,

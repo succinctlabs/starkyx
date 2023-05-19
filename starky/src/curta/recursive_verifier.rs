@@ -22,33 +22,35 @@ use crate::curta::proof::{
     StarkProofWithPublicInputs, StarkProofWithPublicInputsTarget,
 };
 use crate::stark::Stark;
-use crate::vanishing_poly::eval_vanishing_poly_circuit;
+use crate::curta::vanishing_poly::eval_vanishing_poly_circuit;
 use crate::vars::StarkEvaluationTargets;
+
+use super::chip::{StarkParameters, ChipStark};
 
 pub fn verify_stark_proof_circuit<
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
-    S: Stark<F, D>,
+    L: StarkParameters<F, D>,
     const D: usize,
 >(
     builder: &mut CircuitBuilder<F, D>,
-    stark: S,
+    stark: ChipStark<L, F, D>,
     proof_with_pis: StarkProofWithPublicInputsTarget<D>,
     inner_config: &StarkConfig,
 ) where
     C::Hasher: AlgebraicHasher<F>,
-    [(); S::COLUMNS]:,
-    [(); S::PUBLIC_INPUTS]:,
+    [(); ChipStark::<L, F, D>::COLUMNS]:,
+    [(); ChipStark::<L, F, D>::PUBLIC_INPUTS]:,
 {
-    assert_eq!(proof_with_pis.public_inputs.len(), S::PUBLIC_INPUTS);
+    assert_eq!(proof_with_pis.public_inputs.len(), ChipStark::<L, F, D>::PUBLIC_INPUTS);
     let degree_bits = proof_with_pis.proof.recover_degree_bits(inner_config);
     let challenges = with_context!(
         builder,
         "compute challenges",
-        proof_with_pis.get_challenges::<F, C, S>(builder, &stark, inner_config)
+        proof_with_pis.get_challenges::<F, C, ChipStark<L, F, D>>(builder, &stark, inner_config)
     );
 
-    verify_stark_proof_with_challenges_circuit::<F, C, S, D>(
+    verify_stark_proof_with_challenges_circuit::<F, C, ChipStark<L, F, D>, D>(
         builder,
         stark,
         proof_with_pis,

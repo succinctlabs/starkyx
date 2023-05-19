@@ -18,8 +18,10 @@ use crate::permutation::{
 };
 use crate::stark::Stark;
 
-fn get_challenges<F, C, S, const D: usize>(
-    stark: &S,
+use super::chip::{ChipStark, StarkParameters};
+
+fn get_challenges<F, C, L, const D: usize>(
+    stark: &ChipStark<L, F, D>,
     prartial_trace_cap: &MerkleCap<F, C::Hasher>,
     trace_cap: &MerkleCap<F, C::Hasher>,
     permutation_zs_cap: Option<&MerkleCap<F, C::Hasher>>,
@@ -34,14 +36,18 @@ fn get_challenges<F, C, S, const D: usize>(
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
-    S: Stark<F, D>,
+    L: StarkParameters<F, D>,
 {
     let num_challenges = config.num_challenges;
 
     let mut challenger = Challenger::<F, C::Hasher>::new();
 
     challenger.observe_cap(prartial_trace_cap);
-    let stark_betas = vec![];
+    let stark_betas = challenger.get_n_challenges(3 * stark.num_verifier_challenges())
+    .chunks(3).map(|chunk| {
+        assert_eq!(chunk.len(), 3);
+        [chunk[0], chunk[1], chunk[2]]
+    }).collect::<Vec<_>>();
 
     challenger.observe_cap(trace_cap);
 
@@ -84,9 +90,9 @@ where
 {
     // TODO: Should be used later in compression?
     #![allow(dead_code)]
-    pub(crate) fn fri_query_indices<S: Stark<F, D>>(
+    pub(crate) fn fri_query_indices<L: StarkParameters<F, D>>(
         &self,
-        stark: &S,
+        stark: &ChipStark<L, F, D>,
         config: &StarkConfig,
         degree_bits: usize,
     ) -> Vec<usize> {
@@ -96,9 +102,9 @@ where
     }
 
     /// Computes all Fiat-Shamir challenges used in the STARK proof.
-    pub(crate) fn get_challenges<S: Stark<F, D>>(
+    pub(crate) fn get_challenges<L: StarkParameters<F, D>>(
         &self,
-        stark: &S,
+        stark: &ChipStark<L, F, D>,
         config: &StarkConfig,
         degree_bits: usize,
     ) -> StarkProofChallenges<F, D> {
@@ -117,7 +123,7 @@ where
                 },
         } = &self.proof;
 
-        get_challenges::<F, C, S, D>(
+        get_challenges::<F, C, L, D>(
             stark,
             partial_trace_cap,
             trace_cap,

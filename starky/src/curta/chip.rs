@@ -229,8 +229,17 @@ where
     }
 
     #[inline]
+    pub fn num_verifier_challenges(&self) -> usize {
+        self.chip.num_verifier_challenges
+    }
+
+    #[inline]
     pub fn chip(&self) -> &Chip<L, F, D> {
         &self.chip
+    }
+
+    pub fn insert_challenges(&mut self, challenges: &[[F; 3]]) {
+        self.chip.betas = challenges.iter().map(|c|* c).collect();
     }
 }
 

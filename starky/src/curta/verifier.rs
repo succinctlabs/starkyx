@@ -16,7 +16,7 @@ use crate::constraint_consumer::ConstraintConsumer;
 use crate::permutation::PermutationCheckVars;
 use crate::curta::proof::{StarkOpeningSet, StarkProof, StarkProofChallenges, StarkProofWithPublicInputs};
 use crate::stark::Stark;
-use crate::vanishing_poly::eval_vanishing_poly;
+use crate::curta::vanishing_poly::eval_vanishing_poly;
 use crate::vars::StarkEvaluationVars;
 
 pub fn verify_stark_proof<
@@ -25,7 +25,7 @@ pub fn verify_stark_proof<
     L: StarkParameters<F, D>,
     const D: usize,
 >(
-    stark: ChipStark<L, F, D>,
+    mut stark: ChipStark<L, F, D>,
     proof_with_pis: StarkProofWithPublicInputs<F, C, D>,
     config: &StarkConfig,
 ) -> Result<()>
@@ -37,6 +37,7 @@ where
     ensure!(proof_with_pis.public_inputs.len() == ChipStark::<L, F, D>::PUBLIC_INPUTS);
     let degree_bits = proof_with_pis.proof.recover_degree_bits(config);
     let challenges = proof_with_pis.get_challenges(&stark, config, degree_bits);
+    stark.insert_challenges(&challenges.stark_betas);
     verify_stark_proof_with_challenges(stark, proof_with_pis, challenges, degree_bits, config)
 }
 

@@ -360,7 +360,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
                 range_table: self.range_table,
                 num_verifier_challenges: self.num_verifier_challenges,
                 partial_trace_index,
-                betas: vec![betas_0],
+                betas: vec![],
             },
             self.instruction_indices,
         )

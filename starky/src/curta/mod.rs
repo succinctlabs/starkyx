@@ -18,3 +18,4 @@ pub mod register;
 pub mod trace;
 pub mod utils;
 pub mod verifier;
+pub mod vanishing_poly;
