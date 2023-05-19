@@ -201,16 +201,16 @@ mod tests {
     use super::*;
     use crate::config::StarkConfig;
     use crate::curta::builder::StarkBuilder;
-    use crate::curta::chip::{StarkParameters, ChipStark};
+    use crate::curta::chip::{ChipStark, StarkParameters};
     use crate::curta::extension::cubic::goldilocks_cubic::GoldilocksCubicParameters;
     use crate::curta::instruction::InstructionSet;
     use crate::curta::parameters::ed25519::{Ed25519, Ed25519BaseField};
-    use crate::curta::trace::trace;
     use crate::curta::prover::prove;
     use crate::curta::recursive_verifier::{
         add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
         verify_stark_proof_circuit,
     };
+    use crate::curta::trace::trace;
     use crate::curta::verifier::verify_stark_proof;
 
     #[derive(Clone, Debug, Copy)]
@@ -397,7 +397,7 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type E = Ed25519;
-        type L = Ed25519ScalarMulTest; 
+        type L = Ed25519ScalarMulTest;
         type CUB = GoldilocksCubicParameters;
         let _ = env_logger::builder().is_test(true).try_init();
 
@@ -448,7 +448,9 @@ mod tests {
                 });
             }
             drop(handle);
-            generator.generate_trace_rows(&chip, num_rows as usize).unwrap()
+            generator
+                .generate_trace_rows(&chip, num_rows as usize)
+                .unwrap()
         });
         let config = StarkConfig::standard_fast_config();
         let stark = ChipStark::new(chip);

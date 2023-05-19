@@ -1,5 +1,4 @@
 use alloc::vec::Vec;
-use plonky2::iop::generator;
 use core::iter::once;
 
 use anyhow::{ensure, Result};
@@ -13,12 +12,15 @@ use plonky2::field::zero_poly_coset::ZeroPolyOnCoset;
 use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::challenger::Challenger;
+use plonky2::iop::generator;
 use plonky2::plonk::config::{GenericConfig, Hasher};
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use plonky2::util::{log2_ceil, log2_strict, transpose};
 use plonky2_maybe_rayon::*;
 
+use super::chip::{ChipStark, StarkParameters};
+use super::extension::cubic::CubicParameters;
 use crate::config::StarkConfig;
 use crate::constraint_consumer::ConstraintConsumer;
 use crate::curta::trace::ExtendedTrace;
@@ -31,13 +33,10 @@ use crate::stark::Stark;
 use crate::vanishing_poly::eval_vanishing_poly;
 use crate::vars::StarkEvaluationVars;
 
-use super::chip::{ChipStark, StarkParameters};
-use super::extension::cubic::CubicParameters;
-
 pub fn prove<F, C, L, E: CubicParameters<F>, const D: usize>(
     stark: ChipStark<L, F, D>,
     config: &StarkConfig,
-    mut trace_rows : Vec<Vec<F>>,
+    mut trace_rows: Vec<Vec<F>>,
     public_inputs: [F; ChipStark::<L, F, D>::PUBLIC_INPUTS],
     timing: &mut TimingTree,
 ) -> Result<StarkProofWithPublicInputs<F, C, D>>
@@ -49,12 +48,43 @@ where
     [(); ChipStark::<L, F, D>::PUBLIC_INPUTS]:,
     [(); C::Hasher::HASH_SIZE]:,
 {
+    let partial_trace_values = transpose(&trace_rows)
+        .into_par_iter()
+        .map(PolynomialValues::new)
+        .collect::<Vec<_>>();
+
+    let patial_degree = partial_trace_values[0].len();
+
+    let mut first_challenger: Challenger<F, <C as GenericConfig<D>>::Hasher> = Challenger::new();
+    let degree_bits = log2_strict(patial_degree);
+    let fri_params = config.fri_params(degree_bits);
+    let rate_bits = config.fri_config.rate_bits;
+    let cap_height = config.fri_config.cap_height;
+
+    let partial_trace_commitment = timed!(
+        timing,
+        "compute trace commitment",
+        PolynomialBatch::<F, C, D>::from_values(
+            // TODO: Cloning this isn't great; consider having `from_values` accept a reference,
+            // or having `compute_permutation_z_polys` read trace values from the `PolynomialBatch`.
+            partial_trace_values[0..stark.chip.partial_trace_index].to_vec(),
+            rate_bits,
+            false,
+            cap_height,
+            timing,
+            None,
+        )
+    );
+
+    let trace_cap = partial_trace_commitment.merkle_tree.cap.clone();
+    first_challenger.observe_cap(&trace_cap);
+
     let num_rows = trace_rows.len();
     let trace_poly_values = ExtendedTrace::generate_trace_with_challenges::<L, E>(
         &stark.chip,
         &mut trace_rows,
-        num_rows
-    )?; 
+        num_rows,
+    )?;
     let degree = trace_poly_values[0].len();
     let degree_bits = log2_strict(degree);
     let fri_params = config.fri_params(degree_bits);
@@ -65,34 +95,13 @@ where
         "FRI total reduction arity is too large.",
     );
 
-    let trace_coeffs = timed!(
-        timing,
-        "IFFT",
-        trace_poly_values.clone().into_par_iter().map(|v| v.ifft()).collect::<Vec<_>>()
-    );
-
-    let partial_trace_commitment = timed!(
-        timing,
-        "compute trace commitment",
-        PolynomialBatch::<F, C, D>::from_coeffs(
-            // TODO: Cloning this isn't great; consider having `from_values` accept a reference,
-            // or having `compute_permutation_z_polys` read trace values from the `PolynomialBatch`.
-            trace_coeffs[0..stark.chip.partial_trace_index].to_vec(),
-            rate_bits,
-            false,
-            cap_height,
-            timing,
-            None,
-        )
-    );
-
     let trace_commitment = timed!(
         timing,
         "compute trace commitment",
-        PolynomialBatch::<F, C, D>::from_coeffs(
+        PolynomialBatch::<F, C, D>::from_values(
             // TODO: Cloning this isn't great; consider having `from_values` accept a reference,
             // or having `compute_permutation_z_polys` read trace values from the `PolynomialBatch`.
-            trace_coeffs.clone(),
+            trace_poly_values.clone(),
             rate_bits,
             false,
             cap_height,
@@ -112,7 +121,7 @@ where
             config.num_challenges,
             stark.permutation_batch_size(),
         );
-        let permutation_z_polys = compute_permutation_z_polys::<F, ChipStark::<L, F, D>, D>(
+        let permutation_z_polys = compute_permutation_z_polys::<F, ChipStark<L, F, D>, D>(
             &stark,
             config,
             &trace_poly_values,
@@ -144,15 +153,16 @@ where
     }
 
     let alphas = challenger.get_n_challenges(config.num_challenges);
-    let quotient_polys = compute_quotient_polys::<F, <F as Packable>::Packing, C, ChipStark::<L, F, D>, D>(
-        &stark,
-        &trace_commitment,
-        &permutation_zs_commitment_challenges,
-        public_inputs,
-        alphas,
-        degree_bits,
-        config,
-    );
+    let quotient_polys =
+        compute_quotient_polys::<F, <F as Packable>::Packing, C, ChipStark<L, F, D>, D>(
+            &stark,
+            &trace_commitment,
+            &permutation_zs_commitment_challenges,
+            public_inputs,
+            alphas,
+            degree_bits,
+            config,
+        );
     let all_quotient_chunks = quotient_polys
         .into_par_iter()
         .flat_map(|mut quotient_poly| {

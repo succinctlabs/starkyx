@@ -1,5 +1,3 @@
-use std::sync::mpsc;
-
 use alloc::collections::VecDeque;
 
 use anyhow::Result;
@@ -7,7 +5,6 @@ use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2::util::transpose;
 use plonky2_maybe_rayon::*;
 
 use super::Lookup;
@@ -21,12 +18,12 @@ use crate::curta::extension::cubic::{CubicExtension, CubicParameters};
 use crate::curta::register::{
     ArrayRegister, ElementRegister, MemorySlice, Register, RegisterSerializable,
 };
-use crate::curta::trace::{TraceGenerator, trace, ExtendedTrace};
+use crate::curta::trace::{ExtendedTrace, TraceGenerator};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Debug, Clone)]
 pub struct LogLookup {
-    pub(crate) challenge_idx : usize,
+    pub(crate) challenge_idx: usize,
     table: ElementRegister,
     values: ArrayRegister<ElementRegister>,
     multiplicity: ElementRegister,
@@ -93,21 +90,19 @@ impl LogLookup {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        betas : &[[F ; 3]],
+        betas: &[[F; 3]],
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
-
         let beta_array = betas[self.challenge_idx];
         let beta = CubicArray([
             P::from(FE::from_basefield(beta_array[0])),
             P::from(FE::from_basefield(beta_array[1])),
             P::from(FE::from_basefield(beta_array[2])),
         ]);
-
 
         let multiplicity = CubicArray::from_base(
             self.multiplicity.register().packed_generic_vars(vars)[0],
@@ -201,7 +196,7 @@ impl LogLookup {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        betas : &[[F ; 3]],
+        betas: &[[F; 3]],
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
@@ -398,7 +393,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         &self,
         num_rows: usize,
         trace_rows: &mut Vec<Vec<F>>,
-        beta_array : [F; 3],
+        beta_array: [F; 3],
         lookup_data: &LogLookup,
         table_index: fn(F) -> usize,
     ) -> Result<()> {
@@ -495,9 +490,9 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
 
     //     // Calculate multiplicities
     //     let mut multiplicities = vec![F::ZERO; num_rows];
-  
+
     //     trace_cols[values_idx.0..values_idx.1].iter()
-    //         .for_each(|col| 
+    //         .for_each(|col|
     //             col.iter()
     //                 .for_each(|value| {
     //                     let index = table_index(*value);
@@ -508,9 +503,6 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
 
     //     let multiplicity_idx = lookup_data.multiplicity.register().index();
     //     trace_cols[multiplicity_idx].copy_from_slice(&multiplicities);
-
-
-
 
     //     // Write multiplicity inverse constraint
     //     let mult_table_log_entries = multiplicities
@@ -524,7 +516,6 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
 
     //     let (mult_log_0, mult_log_1) = lookup_data.multiplicity_table_log.register().get_range();
 
-    
     //     trace_cols[mult_log_0..mult_log_1].par_iter_mut().enumerate()
     //         .for_each(|(k, col)| {
     //             col.par_iter_mut().enumerate()
@@ -540,7 +531,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
     //     let (tx, rx) = mpsc::channel();
     //     let accumulators = (0..num_rows).into_par_iter()
     //         .map_with(tx, |tx, i| {
-    //             let mut accumumulator = CubicExtension::<F, E>::from(F::ZERO); 
+    //             let mut accumumulator = CubicExtension::<F, E>::from(F::ZERO);
     //             for (k, pair) in (values_cols.chunks(2)).enumerate() {
     //                 let beta_minus_a = beta - pair[0][i].into();
     //                 let beta_minus_b = beta - pair[1][i].into();
@@ -575,13 +566,11 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
     // }
 }
 
-
-
 impl<F: RichField + Extendable<D>, const D: usize> ExtendedTrace<F, D> {
     pub fn write_lookups<E: CubicParameters<F>>(
         num_rows: usize,
         trace_rows: &mut Vec<Vec<F>>,
-        beta_array : [F; 3],
+        beta_array: [F; 3],
         lookup_data: &LogLookup,
         table_index: fn(F) -> usize,
     ) -> Result<()> {
@@ -653,5 +642,4 @@ impl<F: RichField + Extendable<D>, const D: usize> ExtendedTrace<F, D> {
         }
         Ok(())
     }
-
 }

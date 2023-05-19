@@ -15,7 +15,6 @@ use super::register::{
     ArrayRegister, CellType, ElementRegister, MemorySlice, Register, RegisterSerializable,
 };
 
-
 const BETAS: [u64; 3] = [
     17800306513594245228,
     422882772345461752,
@@ -43,7 +42,7 @@ where
     pub(crate) constraints: Vec<Constraint<L::Instruction, F, D>>,
     pub(crate) range_data: Option<Lookup>,
     pub(crate) range_table: Option<ElementRegister>,
-    pub (crate) num_verifier_challenges : usize,
+    pub(crate) num_verifier_challenges: usize,
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Default
@@ -67,7 +66,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             constraints: Vec::new(),
             range_data: None,
             range_table: None,
-            num_verifier_challenges : 0,
+            num_verifier_challenges: 0,
         }
     }
 
@@ -359,9 +358,9 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
                 range_checks_idx: (0, L::NUM_ARITHMETIC_COLUMNS),
                 range_data: self.range_data,
                 range_table: self.range_table,
-                num_verifier_challenges : self.num_verifier_challenges,
+                num_verifier_challenges: self.num_verifier_challenges,
                 partial_trace_index,
-                betas : vec![betas_0]
+                betas: vec![betas_0],
             },
             self.instruction_indices,
         )

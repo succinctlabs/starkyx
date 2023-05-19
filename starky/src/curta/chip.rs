@@ -21,7 +21,6 @@ use super::register::ElementRegister;
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-
 /// A layout for a circuit that emulates field operations
 pub trait StarkParameters<F: RichField + Extendable<D>, const D: usize>:
     Sized + Send + Sync + Clone
@@ -51,9 +50,9 @@ where
     pub(crate) range_checks_idx: (usize, usize),
     pub(crate) range_data: Option<Lookup>,
     pub(crate) range_table: Option<ElementRegister>,
-    pub(crate) partial_trace_index : usize,
-    pub(crate) num_verifier_challenges : usize,
-    pub(crate) betas : Vec<[F;3]>
+    pub(crate) partial_trace_index: usize,
+    pub(crate) num_verifier_challenges: usize,
+    pub(crate) betas: Vec<[F; 3]>,
 }
 
 impl<L, F, const D: usize> Chip<L, F, D>

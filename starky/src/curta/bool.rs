@@ -118,7 +118,7 @@ mod tests {
     use super::*;
     use crate::config::StarkConfig;
     use crate::curta::builder::StarkBuilder;
-    use crate::curta::chip::{StarkParameters, ChipStark};
+    use crate::curta::chip::{ChipStark, StarkParameters};
     use crate::curta::register::BitRegister;
     use crate::curta::trace::trace;
     use crate::prover::prove;

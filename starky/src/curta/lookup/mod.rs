@@ -27,7 +27,7 @@ impl Lookup {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        betas : &[[F; 3]],
+        betas: &[[F; 3]],
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
@@ -51,7 +51,7 @@ impl Lookup {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        betas : &[[F ; 3]],
+        betas: &[[F; 3]],
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
