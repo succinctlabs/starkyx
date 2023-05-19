@@ -229,7 +229,6 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type E = Ed25519;
         type L = Ed25519ScalarMulTest;
-        type S = ChipStark<L, F, D>;
         type CUB = GoldilocksCubicParameters;
         let _ = env_logger::builder().is_test(true).try_init();
 

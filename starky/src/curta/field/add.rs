@@ -254,7 +254,6 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type S = ChipStark<FpAddTest, F, D>;
         type P = Ed25519BaseField;
         type E = GoldilocksCubicParameters;
         type L = FpAddTest;
