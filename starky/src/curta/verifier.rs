@@ -14,7 +14,7 @@ use super::chip::{ChipStark, StarkParameters};
 use crate::config::StarkConfig;
 use crate::constraint_consumer::ConstraintConsumer;
 use crate::permutation::PermutationCheckVars;
-use crate::proof::{StarkOpeningSet, StarkProof, StarkProofChallenges, StarkProofWithPublicInputs};
+use crate::curta::proof::{StarkOpeningSet, StarkProof, StarkProofChallenges, StarkProofWithPublicInputs};
 use crate::stark::Stark;
 use crate::vanishing_poly::eval_vanishing_poly;
 use crate::vars::StarkEvaluationVars;
@@ -166,6 +166,7 @@ where
     let degree_bits = proof.recover_degree_bits(config);
 
     let StarkProof {
+        partial_trace_cap,
         trace_cap,
         permutation_zs_cap,
         quotient_polys_cap,

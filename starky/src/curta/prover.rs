@@ -27,7 +27,7 @@ use crate::permutation::{
     compute_permutation_z_polys, get_n_permutation_challenge_sets, PermutationChallengeSet,
     PermutationCheckVars,
 };
-use crate::proof::{StarkOpeningSet, StarkProof, StarkProofWithPublicInputs};
+use crate::curta::proof::{StarkOpeningSet, StarkProof, StarkProofWithPublicInputs};
 use crate::stark::Stark;
 use crate::vanishing_poly::eval_vanishing_poly;
 use crate::vars::StarkEvaluationVars;
@@ -71,8 +71,8 @@ where
         )
     );
 
-    let partia_trace_cap = partial_trace_commitment.merkle_tree.cap.clone();
-    challenger.observe_cap(&partia_trace_cap);
+    let partial_trace_cap = partial_trace_commitment.merkle_tree.cap.clone();
+    challenger.observe_cap(&partial_trace_cap);
 
     let num_rows = trace_rows.len();
     let trace_poly_values = ExtendedTrace::generate_trace_with_challenges::<L, E>(
@@ -104,7 +104,7 @@ where
     );
 
     let trace_cap = trace_commitment.merkle_tree.cap.clone();
-    let mut challenger = Challenger::new();
+    // let mut challenger = Challenger::new();
     challenger.observe_cap(&trace_cap);
 
     // Permutation arguments.
@@ -216,6 +216,7 @@ where
         )
     );
     let proof = StarkProof {
+        partial_trace_cap,
         trace_cap,
         permutation_zs_cap,
         quotient_polys_cap,

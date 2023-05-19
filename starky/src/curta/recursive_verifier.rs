@@ -17,7 +17,7 @@ use plonky2::with_context;
 use crate::config::StarkConfig;
 use crate::constraint_consumer::RecursiveConstraintConsumer;
 use crate::permutation::PermutationCheckDataTarget;
-use crate::proof::{
+use crate::curta::proof::{
     StarkOpeningSetTarget, StarkProof, StarkProofChallengesTarget, StarkProofTarget,
     StarkProofWithPublicInputs, StarkProofWithPublicInputsTarget,
 };
@@ -231,6 +231,7 @@ pub fn add_virtual_stark_proof<F: RichField + Extendable<D>, S: Stark<F, D>, con
         .then(|| builder.add_virtual_cap(cap_height));
 
     StarkProofTarget {
+        partial_trace_cap: builder.add_virtual_cap(cap_height),
         trace_cap: builder.add_virtual_cap(cap_height),
         permutation_zs_cap,
         quotient_polys_cap: builder.add_virtual_cap(cap_height),
@@ -294,6 +295,7 @@ pub fn set_stark_proof_target<F, C: GenericConfig<D, F = F>, W, const D: usize>(
     C::Hasher: AlgebraicHasher<F>,
     W: Witness<F>,
 {
+    witness.set_cap_target(&proof_target.partial_trace_cap, &proof.partial_trace_cap);
     witness.set_cap_target(&proof_target.trace_cap, &proof.trace_cap);
     witness.set_cap_target(&proof_target.quotient_polys_cap, &proof.quotient_polys_cap);
 
