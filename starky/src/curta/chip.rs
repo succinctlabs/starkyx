@@ -9,6 +9,7 @@ use core::ops::Range;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
+use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::constraint::Constraint;
@@ -52,7 +53,6 @@ where
     pub(crate) range_table: Option<ElementRegister>,
     pub(crate) partial_trace_index: usize,
     pub(crate) num_verifier_challenges: usize,
-    pub(crate) betas: Vec<[F; 3]>,
 }
 
 impl<L, F, const D: usize> Chip<L, F, D>
@@ -110,7 +110,7 @@ where
         L::NUM_FREE_COLUMNS..Self::num_columns()
     }
 
-    fn eval_packed_generic<
+    pub fn eval_packed_generic<
         FE,
         P,
         const D2: usize,
@@ -118,6 +118,7 @@ where
         const PUBLIC_INPUTS: usize,
     >(
         &self,
+        betas : &[[F; 3]],
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
@@ -129,7 +130,7 @@ where
         }
         if let Some(range_data) = &self.range_data {
             range_data.packed_generic_constraints::<F, D, FE, P, D2, COLUMNS, PUBLIC_INPUTS>(
-                &self.betas,
+                betas,
                 vars,
                 yield_constr,
             );
@@ -150,8 +151,9 @@ where
         // }
     }
 
-    fn eval_ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
+    pub fn eval_ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
+        betas : &[[Target; 3]],
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
@@ -161,7 +163,7 @@ where
         }
         if let Some(range_data) = &self.range_data {
             range_data.ext_circuit_constraints::<F, D, COLUMNS, PUBLIC_INPUTS>(
-                &self.betas,
+                betas,
                 builder,
                 vars,
                 yield_constr,
@@ -211,7 +213,7 @@ where
     L: StarkParameters<F, D>,
     F: RichField + Extendable<D>,
 {
-    chip: Chip<L, F, D>,
+    pub chip: Chip<L, F, D>,
 }
 
 impl<L, F, const D: usize> ChipStark<L, F, D>
@@ -237,10 +239,6 @@ where
     pub fn chip(&self) -> &Chip<L, F, D> {
         &self.chip
     }
-
-    pub fn insert_challenges(&mut self, challenges: &[[F; 3]]) {
-        self.chip.betas = challenges.iter().map(|c|* c).collect();
-    }
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Stark<F, D>
@@ -257,7 +255,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
-        self.chip.eval_packed_generic(vars, yield_constr)
+        self.chip.eval_packed_generic(&vec![], vars, yield_constr)
     }
 
     fn eval_ext_circuit(
@@ -266,7 +264,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
         vars: StarkEvaluationTargets<D, { Self::COLUMNS }, { Self::PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        self.chip.eval_ext_circuit(builder, vars, yield_constr)
+        self.chip.eval_ext_circuit(&vec![], builder, vars, yield_constr)
     }
 
     fn constraint_degree(&self) -> usize {

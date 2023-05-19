@@ -10,13 +10,13 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::config::{GenericConfig, Hasher};
 use plonky2::plonk::plonk_common::reduce_with_powers;
 
-use super::chip::{ChipStark, StarkParameters};
+use crate::curta::chip::{ChipStark, StarkParameters};
 use crate::config::StarkConfig;
 use crate::constraint_consumer::ConstraintConsumer;
 use crate::permutation::PermutationCheckVars;
-use crate::curta::proof::{StarkOpeningSet, StarkProof, StarkProofChallenges, StarkProofWithPublicInputs};
+use super::proof::{StarkOpeningSet, StarkProof, StarkProofChallenges, StarkProofWithPublicInputs};
 use crate::stark::Stark;
-use crate::curta::vanishing_poly::eval_vanishing_poly;
+use super::vanishing_poly::eval_vanishing_poly;
 use crate::vars::StarkEvaluationVars;
 
 pub fn verify_stark_proof<
@@ -25,7 +25,7 @@ pub fn verify_stark_proof<
     L: StarkParameters<F, D>,
     const D: usize,
 >(
-    mut stark: ChipStark<L, F, D>,
+    stark: ChipStark<L, F, D>,
     proof_with_pis: StarkProofWithPublicInputs<F, C, D>,
     config: &StarkConfig,
 ) -> Result<()>
@@ -37,7 +37,6 @@ where
     ensure!(proof_with_pis.public_inputs.len() == ChipStark::<L, F, D>::PUBLIC_INPUTS);
     let degree_bits = proof_with_pis.proof.recover_degree_bits(config);
     let challenges = proof_with_pis.get_challenges(&stark, config, degree_bits);
-    stark.insert_challenges(&challenges.stark_betas);
     verify_stark_proof_with_challenges(stark, proof_with_pis, challenges, degree_bits, config)
 }
 
@@ -100,12 +99,13 @@ where
         next_zs: permutation_zs_next.as_ref().unwrap().clone(),
         permutation_challenge_sets: challenges.permutation_challenge_sets.unwrap(),
     });
-    eval_vanishing_poly::<F, F::Extension, F::Extension, ChipStark<L, F, D>, D, D>(
+    eval_vanishing_poly::<F, F::Extension, F::Extension, L, D, D>(
         &stark,
         config,
         vars,
         permutation_data,
         &mut consumer,
+        &challenges.stark_betas,
     );
     let vanishing_polys_zeta = consumer.accumulators();
 
@@ -148,16 +148,16 @@ where
     Ok(())
 }
 
-fn validate_proof_shape<F, C, S, const D: usize>(
-    stark: &S,
+fn validate_proof_shape<F, C, L, const D: usize>(
+    stark: &ChipStark<L, F, D>,
     proof_with_pis: &StarkProofWithPublicInputs<F, C, D>,
     config: &StarkConfig,
 ) -> anyhow::Result<()>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
-    S: Stark<F, D>,
-    [(); S::COLUMNS]:,
+    L: StarkParameters<F, D>,
+    [(); ChipStark::<L,F,D>::COLUMNS]:,
     [(); C::Hasher::HASH_SIZE]:,
 {
     let StarkProofWithPublicInputs {
@@ -167,7 +167,7 @@ where
     let degree_bits = proof.recover_degree_bits(config);
 
     let StarkProof {
-        partial_trace_cap,
+        partial_trace_cap : _,
         trace_cap,
         permutation_zs_cap,
         quotient_polys_cap,
@@ -185,7 +185,7 @@ where
         quotient_polys,
     } = openings;
 
-    ensure!(public_inputs.len() == S::PUBLIC_INPUTS);
+    ensure!(public_inputs.len() == ChipStark::<L,F,D>::PUBLIC_INPUTS);
 
     let fri_params = config.fri_params(degree_bits);
     let cap_height = fri_params.config.cap_height;
@@ -194,8 +194,8 @@ where
     ensure!(trace_cap.height() == cap_height);
     ensure!(quotient_polys_cap.height() == cap_height);
 
-    ensure!(local_values.len() == S::COLUMNS);
-    ensure!(next_values.len() == S::COLUMNS);
+    ensure!(local_values.len() == ChipStark::<L,F,D>::COLUMNS);
+    ensure!(next_values.len() == ChipStark::<L,F,D>::COLUMNS);
     ensure!(quotient_polys.len() == stark.num_quotient_polys(config));
 
     if stark.uses_permutation_args() {

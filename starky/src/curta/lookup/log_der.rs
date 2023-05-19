@@ -4,6 +4,7 @@ use anyhow::Result;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
+use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_maybe_rayon::*;
 
@@ -90,7 +91,7 @@ impl LogLookup {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        betas: &[[F; 3]],
+        betas : &[[F; 3]],
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
@@ -196,18 +197,17 @@ impl LogLookup {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        betas: &[[F; 3]],
+        betas: &[[Target; 3]],
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
         let beta_array = betas[self.challenge_idx];
-        let beta = CubicGadget::const_extension(
-            builder,
+        let beta = CubicArray(
             [
-                F::Extension::from(beta_array[0]),
-                F::Extension::from(beta_array[1]),
-                F::Extension::from(beta_array[2]),
+                builder.convert_to_ext(beta_array[0]),
+                builder.convert_to_ext(beta_array[1]),
+                builder.convert_to_ext(beta_array[2]),
             ],
         );
 

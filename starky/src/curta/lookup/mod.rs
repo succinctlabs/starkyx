@@ -7,6 +7,7 @@ use log_der::LogLookup;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
+use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
@@ -27,7 +28,7 @@ impl Lookup {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        betas: &[[F; 3]],
+        betas : &[[F; 3]],
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
@@ -51,7 +52,7 @@ impl Lookup {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        betas: &[[F; 3]],
+        stark_betas: &[[Target; 3]],
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
@@ -59,7 +60,7 @@ impl Lookup {
         match self {
             Lookup::LogDerivative(log_lookup) => log_lookup
                 .ext_circuit_constraints::<F, D, COLUMNS, PUBLIC_INPUTS>(
-                    betas,
+                    stark_betas,
                     builder,
                     vars,
                     yield_constr,

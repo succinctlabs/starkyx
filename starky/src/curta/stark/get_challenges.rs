@@ -12,13 +12,13 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 
 use crate::config::StarkConfig;
-use crate::curta::proof::*;
+use super::proof::*;
 use crate::permutation::{
     get_n_permutation_challenge_sets, get_n_permutation_challenge_sets_target,
 };
 use crate::stark::Stark;
 
-use super::chip::{ChipStark, StarkParameters};
+use crate::curta::chip::{ChipStark, StarkParameters};
 
 fn get_challenges<F, C, L, const D: usize>(
     stark: &ChipStark<L, F, D>,
@@ -143,11 +143,11 @@ where
 pub(crate) fn get_challenges_target<
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
-    S: Stark<F, D>,
+    L: StarkParameters<F, D>,
     const D: usize,
 >(
     builder: &mut CircuitBuilder<F, D>,
-    stark: &S,
+    stark: &ChipStark<L, F, D>,
     partial_trace_cap : &MerkleCapTarget,
     trace_cap: &MerkleCapTarget,
     permutation_zs_cap: Option<&MerkleCapTarget>,
@@ -166,7 +166,11 @@ where
     let mut challenger = RecursiveChallenger::<F, C::Hasher, D>::new(builder);
 
     challenger.observe_cap(partial_trace_cap);
-    let stark_betas = vec![];
+    let stark_betas = challenger.get_n_challenges(builder, 3 * stark.num_verifier_challenges())
+    .chunks(3).map(|chunk| {
+        assert_eq!(chunk.len(), 3);
+        [chunk[0], chunk[1], chunk[2]]
+    }).collect::<Vec<_>>();
 
     challenger.observe_cap(trace_cap);
 
@@ -207,11 +211,11 @@ impl<const D: usize> StarkProofWithPublicInputsTarget<D> {
     pub(crate) fn get_challenges<
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F>,
-        S: Stark<F, D>,
+        L: StarkParameters<F, D>,
     >(
         &self,
         builder: &mut CircuitBuilder<F, D>,
-        stark: &S,
+        stark: &ChipStark<L, F, D>,
         config: &StarkConfig,
     ) -> StarkProofChallengesTarget<D>
     where
@@ -232,7 +236,7 @@ impl<const D: usize> StarkProofWithPublicInputsTarget<D> {
                 },
         } = &self.proof;
 
-        get_challenges_target::<F, C, S, D>(
+        get_challenges_target::<F, C, L, D>(
             builder,
             stark,
             partial_trace_cap,

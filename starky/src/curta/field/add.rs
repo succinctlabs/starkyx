@@ -232,13 +232,13 @@ mod tests {
     use crate::curta::instruction::InstructionSet;
     use crate::curta::parameters::ed25519::{Ed25519, Ed25519BaseField};
     use crate::curta::parameters::EllipticCurveParameters;
-    use crate::curta::prover::prove;
-    use crate::curta::recursive_verifier::{
+    use crate::curta::stark::prover::prove;
+    use crate::curta::stark::recursive_verifier::{
         add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
         verify_stark_proof_circuit,
     };
     use crate::curta::trace::trace;
-    use crate::curta::verifier::verify_stark_proof;
+    use crate::curta::stark::verifier::verify_stark_proof;
 
     #[derive(Clone, Debug, Copy)]
     struct FpAddTest;

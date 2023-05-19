@@ -18,8 +18,8 @@ use plonky2::util::timing::TimingTree;
 use plonky2::util::{log2_ceil, log2_strict, transpose};
 use plonky2_maybe_rayon::*;
 
-use super::chip::{ChipStark, StarkParameters};
-use super::extension::cubic::CubicParameters;
+use crate::curta::chip::{ChipStark, StarkParameters};
+use crate::curta::extension::cubic::CubicParameters;
 use crate::config::StarkConfig;
 use crate::constraint_consumer::ConstraintConsumer;
 use crate::curta::trace::ExtendedTrace;
@@ -27,13 +27,13 @@ use crate::permutation::{
     compute_permutation_z_polys, get_n_permutation_challenge_sets, PermutationChallengeSet,
     PermutationCheckVars,
 };
-use crate::curta::proof::{StarkOpeningSet, StarkProof, StarkProofWithPublicInputs};
+use super::proof::{StarkOpeningSet, StarkProof, StarkProofWithPublicInputs};
 use crate::stark::Stark;
-use crate::curta::vanishing_poly::eval_vanishing_poly;
+use super::vanishing_poly::eval_vanishing_poly;
 use crate::vars::StarkEvaluationVars;
 
 pub fn prove<F, C, L, E: CubicParameters<F>, const D: usize>(
-    mut stark: ChipStark<L, F, D>,
+    stark: ChipStark<L, F, D>,
     config: &StarkConfig,
     mut trace_rows: Vec<Vec<F>>,
     public_inputs: [F; ChipStark::<L, F, D>::PUBLIC_INPUTS],
@@ -79,13 +79,13 @@ where
             assert_eq!(chunk.len(), 3);
             [chunk[0], chunk[1], chunk[2]]
         }).collect::<Vec<_>>();
-    stark.insert_challenges(&stark_betas);
 
     let num_rows = trace_rows.len();
     let trace_poly_values = ExtendedTrace::generate_trace_with_challenges::<L, E>(
         &stark.chip(),
         &mut trace_rows,
         num_rows,
+        &stark_betas,
     )?;
     let degree = trace_poly_values[0].len();
     let degree_bits = log2_strict(degree);
@@ -154,12 +154,13 @@ where
 
     let alphas = challenger.get_n_challenges(config.num_challenges);
     let quotient_polys =
-        compute_quotient_polys::<F, <F as Packable>::Packing, C, ChipStark<L, F, D>, D>(
+        compute_quotient_polys::<F, <F as Packable>::Packing, C, L, D>(
             &stark,
             &trace_commitment,
             &permutation_zs_commitment_challenges,
             public_inputs,
             alphas,
+            stark_betas,
             degree_bits,
             config,
         );
@@ -239,15 +240,16 @@ where
 
 /// Computes the quotient polynomials `(sum alpha^i C_i(x)) / Z_H(x)` for `alpha` in `alphas`,
 /// where the `C_i`s are the Stark constraints.
-fn compute_quotient_polys<'a, F, P, C, S, const D: usize>(
-    stark: &S,
+fn compute_quotient_polys<'a, F, P, C, L, const D: usize>(
+    stark: &ChipStark<L, F, D>,
     trace_commitment: &'a PolynomialBatch<F, C, D>,
     permutation_zs_commitment_challenges: &'a Option<(
         PolynomialBatch<F, C, D>,
         Vec<PermutationChallengeSet<F>>,
     )>,
-    public_inputs: [F; S::PUBLIC_INPUTS],
+    public_inputs: [F; ChipStark::<L,F,D>::PUBLIC_INPUTS],
     alphas: Vec<F>,
+    betas : Vec<[F;3]>,
     degree_bits: usize,
     config: &StarkConfig,
 ) -> Vec<PolynomialCoeffs<F>>
@@ -255,9 +257,9 @@ where
     F: RichField + Extendable<D>,
     P: PackedField<Scalar = F>,
     C: GenericConfig<D, F = F>,
-    S: Stark<F, D>,
-    [(); S::COLUMNS]:,
-    [(); S::PUBLIC_INPUTS]:,
+    L: StarkParameters<F, D>,
+    [(); ChipStark::<L,F,D>::COLUMNS]:,
+    [(); ChipStark::<L,F,D>::PUBLIC_INPUTS]:,
 {
     let degree = 1 << degree_bits;
     let rate_bits = config.fri_config.rate_bits;
@@ -280,7 +282,7 @@ where
     let z_h_on_coset = ZeroPolyOnCoset::<F>::new(degree_bits, quotient_degree_bits);
 
     // Retrieve the LDE values at index `i`.
-    let get_trace_values_packed = |i_start| -> [P; S::COLUMNS] {
+    let get_trace_values_packed = |i_start| -> [P; ChipStark::<L,F,D>::COLUMNS] {
         trace_commitment
             .get_lde_values_packed(i_start, step)
             .try_into()
@@ -328,12 +330,13 @@ where
                     permutation_challenge_sets: permutation_challenge_sets.to_vec(),
                 },
             );
-            eval_vanishing_poly::<F, F, P, S, D, 1>(
-                stark,
+            eval_vanishing_poly::<F, F, P, L, D, 1>(
+                &stark,
                 config,
                 vars,
                 permutation_check_data,
                 &mut consumer,
+                &betas,
             );
 
             let mut constraints_evals = consumer.accumulators();

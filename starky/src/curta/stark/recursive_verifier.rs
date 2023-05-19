@@ -17,15 +17,15 @@ use plonky2::with_context;
 use crate::config::StarkConfig;
 use crate::constraint_consumer::RecursiveConstraintConsumer;
 use crate::permutation::PermutationCheckDataTarget;
-use crate::curta::proof::{
+use super::proof::{
     StarkOpeningSetTarget, StarkProof, StarkProofChallengesTarget, StarkProofTarget,
     StarkProofWithPublicInputs, StarkProofWithPublicInputsTarget,
 };
 use crate::stark::Stark;
-use crate::curta::vanishing_poly::eval_vanishing_poly_circuit;
+use super::vanishing_poly::eval_vanishing_poly_circuit;
 use crate::vars::StarkEvaluationTargets;
 
-use super::chip::{StarkParameters, ChipStark};
+use crate::curta::chip::{StarkParameters, ChipStark};
 
 pub fn verify_stark_proof_circuit<
     F: RichField + Extendable<D>,
@@ -47,10 +47,10 @@ pub fn verify_stark_proof_circuit<
     let challenges = with_context!(
         builder,
         "compute challenges",
-        proof_with_pis.get_challenges::<F, C, ChipStark<L, F, D>>(builder, &stark, inner_config)
+        proof_with_pis.get_challenges::<F, C, L>(builder, &stark, inner_config)
     );
 
-    verify_stark_proof_with_challenges_circuit::<F, C, ChipStark<L, F, D>, D>(
+    verify_stark_proof_with_challenges_circuit::<F, C, L, D>(
         builder,
         stark,
         proof_with_pis,
@@ -64,19 +64,19 @@ pub fn verify_stark_proof_circuit<
 fn verify_stark_proof_with_challenges_circuit<
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
-    S: Stark<F, D>,
+    L: StarkParameters<F, D>,
     const D: usize,
 >(
     builder: &mut CircuitBuilder<F, D>,
-    stark: S,
+    stark: ChipStark<L, F, D>,
     proof_with_pis: StarkProofWithPublicInputsTarget<D>,
     challenges: StarkProofChallengesTarget<D>,
     inner_config: &StarkConfig,
     degree_bits: usize,
 ) where
     C::Hasher: AlgebraicHasher<F>,
-    [(); S::COLUMNS]:,
-    [(); S::PUBLIC_INPUTS]:,
+    [(); ChipStark::<L,F,D>::COLUMNS]:,
+    [(); ChipStark::<L,F,D>::PUBLIC_INPUTS]:,
 {
     check_permutation_options(&stark, &proof_with_pis, &challenges).unwrap();
     let one = builder.one_extension();
@@ -130,13 +130,14 @@ fn verify_stark_proof_with_challenges_circuit<
     with_context!(
         builder,
         "evaluate vanishing polynomial",
-        eval_vanishing_poly_circuit::<F, S, D>(
+        eval_vanishing_poly_circuit::<F, L, D>(
             builder,
             &stark,
             inner_config,
             vars,
             permutation_data,
             &mut consumer,
+            &challenges.stark_betas,
         )
     );
     let vanishing_polys_zeta = consumer.accumulators();

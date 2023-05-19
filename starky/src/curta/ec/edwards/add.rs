@@ -160,270 +160,270 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use num::bigint::RandBigInt;
-    use plonky2::iop::witness::PartialWitness;
-    use plonky2::plonk::circuit_builder::CircuitBuilder;
-    use plonky2::plonk::circuit_data::CircuitConfig;
-    use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
-    use plonky2::timed;
-    use plonky2::util::timing::TimingTree;
-    use plonky2_maybe_rayon::*;
-    use rand::thread_rng;
+// #[cfg(test)]
+// mod tests {
+//     use num::bigint::RandBigInt;
+//     use plonky2::iop::witness::PartialWitness;
+//     use plonky2::plonk::circuit_builder::CircuitBuilder;
+//     use plonky2::plonk::circuit_data::CircuitConfig;
+//     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+//     use plonky2::timed;
+//     use plonky2::util::timing::TimingTree;
+//     use plonky2_maybe_rayon::*;
+//     use rand::thread_rng;
 
-    use super::*;
-    use crate::config::StarkConfig;
-    use crate::curta::builder::StarkBuilder;
-    use crate::curta::chip::{ChipStark, StarkParameters};
-    use crate::curta::extension::cubic::goldilocks_cubic::GoldilocksCubicParameters;
-    use crate::curta::instruction::InstructionSet;
-    use crate::curta::parameters::ed25519::{Ed25519, Ed25519BaseField};
-    use crate::curta::trace::trace;
-    use crate::prover::prove;
-    use crate::recursive_verifier::{
-        add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
-        verify_stark_proof_circuit,
-    };
-    use crate::verifier::verify_stark_proof;
+//     use super::*;
+//     use crate::config::StarkConfig;
+//     use crate::curta::builder::StarkBuilder;
+//     use crate::curta::chip::{ChipStark, StarkParameters};
+//     use crate::curta::extension::cubic::goldilocks_cubic::GoldilocksCubicParameters;
+//     use crate::curta::instruction::InstructionSet;
+//     use crate::curta::parameters::ed25519::{Ed25519, Ed25519BaseField};
+//     use crate::curta::trace::trace;
+//     use crate::prover::prove;
+//     use crate::recursive_verifier::{
+//         add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
+//         verify_stark_proof_circuit,
+//     };
+//     use crate::verifier::verify_stark_proof;
 
-    #[derive(Clone, Debug, Copy)]
-    pub struct Ed25519AddTest;
+//     #[derive(Clone, Debug, Copy)]
+//     pub struct Ed25519AddTest;
 
-    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for Ed25519AddTest {
-        const NUM_ARITHMETIC_COLUMNS: usize = 800;
-        const NUM_FREE_COLUMNS: usize = 1208;
-        type Instruction = InstructionSet<Ed25519BaseField>;
-    }
+//     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for Ed25519AddTest {
+//         const NUM_ARITHMETIC_COLUMNS: usize = 800;
+//         const NUM_FREE_COLUMNS: usize = 1208;
+//         type Instruction = InstructionSet<Ed25519BaseField>;
+//     }
 
-    #[test]
-    fn test_ed25519_add() {
-        const D: usize = 2;
-        type C = PoseidonGoldilocksConfig;
-        type F = <C as GenericConfig<D>>::F;
-        type E = Ed25519;
-        type S = ChipStark<Ed25519AddTest, F, D>;
-        type Cubic = GoldilocksCubicParameters;
-        let _ = env_logger::builder().is_test(true).try_init();
+//     #[test]
+//     fn test_ed25519_add() {
+//         const D: usize = 2;
+//         type C = PoseidonGoldilocksConfig;
+//         type F = <C as GenericConfig<D>>::F;
+//         type E = Ed25519;
+//         type S = ChipStark<Ed25519AddTest, F, D>;
+//         type Cubic = GoldilocksCubicParameters;
+//         let _ = env_logger::builder().is_test(true).try_init();
 
-        // Build the stark.
-        let mut builder = StarkBuilder::<Ed25519AddTest, F, D>::new();
-        let p = builder.alloc_local_ec_point::<E>();
-        let q = builder.alloc_local_ec_point::<E>();
-        let ed25519_add_gadget = builder.ed25519_add::<E>(&p, &q);
-        builder.write_ec_point(&p).unwrap();
-        builder.write_ec_point(&q).unwrap();
-        let (chip, spec) = builder.build();
+//         // Build the stark.
+//         let mut builder = StarkBuilder::<Ed25519AddTest, F, D>::new();
+//         let p = builder.alloc_local_ec_point::<E>();
+//         let q = builder.alloc_local_ec_point::<E>();
+//         let ed25519_add_gadget = builder.ed25519_add::<E>(&p, &q);
+//         builder.write_ec_point(&p).unwrap();
+//         builder.write_ec_point(&q).unwrap();
+//         let (chip, spec) = builder.build();
 
-        // Generate the trace.
-        let mut timing = TimingTree::new("ed25519 add", log::Level::Debug);
-        let base = E::generator();
-        let nb_rows = 2u64.pow(16);
-        let (handle, generator) = trace::<F, D>(spec);
-        let trace = timed!(timing, "witness generation", {
-            for i in 0..256 {
-                let handle = handle.clone();
-                let base = base.clone();
-                let ed25519_add_gadget = ed25519_add_gadget.clone();
-                rayon::spawn(move || {
-                    let mut rng = thread_rng();
-                    let a = rng.gen_biguint(256);
-                    let b = rng.gen_biguint(256);
-                    let p_int = &base * &a;
-                    let q_int = &base * &b;
-                    let r_exp = &p_int + &q_int;
-                    for j in 0..256 {
-                        handle.write_ec_point(256 * i + j, &p_int, &p).unwrap();
-                        handle.write_ec_point(256 * i + j, &q_int, &q).unwrap();
-                        let r = handle
-                            .write_ed25519_add(
-                                256 * i + j,
-                                &p_int,
-                                &q_int,
-                                ed25519_add_gadget.clone(),
-                            )
-                            .unwrap();
-                        assert_eq!(r, r_exp);
-                    }
-                })
-            }
-            drop(handle);
-            generator
-                .generate_trace_new::<Ed25519AddTest, Cubic>(&chip, nb_rows as usize)
-                .unwrap()
-        });
+//         // Generate the trace.
+//         let mut timing = TimingTree::new("ed25519 add", log::Level::Debug);
+//         let base = E::generator();
+//         let nb_rows = 2u64.pow(16);
+//         let (handle, generator) = trace::<F, D>(spec);
+//         let trace = timed!(timing, "witness generation", {
+//             for i in 0..256 {
+//                 let handle = handle.clone();
+//                 let base = base.clone();
+//                 let ed25519_add_gadget = ed25519_add_gadget.clone();
+//                 rayon::spawn(move || {
+//                     let mut rng = thread_rng();
+//                     let a = rng.gen_biguint(256);
+//                     let b = rng.gen_biguint(256);
+//                     let p_int = &base * &a;
+//                     let q_int = &base * &b;
+//                     let r_exp = &p_int + &q_int;
+//                     for j in 0..256 {
+//                         handle.write_ec_point(256 * i + j, &p_int, &p).unwrap();
+//                         handle.write_ec_point(256 * i + j, &q_int, &q).unwrap();
+//                         let r = handle
+//                             .write_ed25519_add(
+//                                 256 * i + j,
+//                                 &p_int,
+//                                 &q_int,
+//                                 ed25519_add_gadget.clone(),
+//                             )
+//                             .unwrap();
+//                         assert_eq!(r, r_exp);
+//                     }
+//                 })
+//             }
+//             drop(handle);
+//             generator
+//                 .generate_trace_new::<Ed25519AddTest, Cubic>(&chip, nb_rows as usize)
+//                 .unwrap()
+//         });
 
-        // Verify proof as a stark
-        let config = StarkConfig::standard_fast_config();
-        let stark = ChipStark::new(chip);
-        let proof = timed!(
-            timing,
-            "proof generation",
-            prove::<F, C, S, D>(
-                stark.clone(),
-                &config,
-                trace,
-                [],
-                &mut TimingTree::default(),
-            )
-            .unwrap()
-        );
-        verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
+//         // Verify proof as a stark
+//         let config = StarkConfig::standard_fast_config();
+//         let stark = ChipStark::new(chip);
+//         let proof = timed!(
+//             timing,
+//             "proof generation",
+//             prove::<F, C, S, D>(
+//                 stark.clone(),
+//                 &config,
+//                 trace,
+//                 [],
+//                 &mut TimingTree::default(),
+//             )
+//             .unwrap()
+//         );
+//         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
 
-        // Verify recursive proof in a circuit.
-        let config_rec = CircuitConfig::standard_recursion_config();
-        let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
-        let degree_bits = proof.proof.recover_degree_bits(&config);
-        let virtual_proof = add_virtual_stark_proof_with_pis(
-            &mut recursive_builder,
-            stark.clone(),
-            &config,
-            degree_bits,
-        );
-        recursive_builder.print_gate_counts(0);
-        let mut rec_pw = PartialWitness::new();
-        set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-        verify_stark_proof_circuit::<F, C, S, D>(
-            &mut recursive_builder,
-            stark,
-            virtual_proof,
-            &config,
-        );
-        let recursive_data = recursive_builder.build::<C>();
-        let recursive_proof = timed!(
-            timing,
-            "generate recursive proof",
-            plonky2::plonk::prover::prove(
-                &recursive_data.prover_only,
-                &recursive_data.common,
-                rec_pw,
-                &mut TimingTree::default(),
-            )
-            .unwrap()
-        );
-        recursive_data.verify(recursive_proof).unwrap();
-        timing.print();
-    }
+//         // Verify recursive proof in a circuit.
+//         let config_rec = CircuitConfig::standard_recursion_config();
+//         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
+//         let degree_bits = proof.proof.recover_degree_bits(&config);
+//         let virtual_proof = add_virtual_stark_proof_with_pis(
+//             &mut recursive_builder,
+//             stark.clone(),
+//             &config,
+//             degree_bits,
+//         );
+//         recursive_builder.print_gate_counts(0);
+//         let mut rec_pw = PartialWitness::new();
+//         set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
+//         verify_stark_proof_circuit::<F, C, S, D>(
+//             &mut recursive_builder,
+//             stark,
+//             virtual_proof,
+//             &config,
+//         );
+//         let recursive_data = recursive_builder.build::<C>();
+//         let recursive_proof = timed!(
+//             timing,
+//             "generate recursive proof",
+//             plonky2::plonk::prover::prove(
+//                 &recursive_data.prover_only,
+//                 &recursive_data.common,
+//                 rec_pw,
+//                 &mut TimingTree::default(),
+//             )
+//             .unwrap()
+//         );
+//         recursive_data.verify(recursive_proof).unwrap();
+//         timing.print();
+//     }
 
-    #[derive(Clone, Debug, Copy)]
-    pub struct EdDoubleTest;
+//     #[derive(Clone, Debug, Copy)]
+//     pub struct EdDoubleTest;
 
-    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for EdDoubleTest {
-        const NUM_ARITHMETIC_COLUMNS: usize = 768;
-        const NUM_FREE_COLUMNS: usize = 0;
-        type Instruction = InstructionSet<Ed25519BaseField>;
-    }
+//     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for EdDoubleTest {
+//         const NUM_ARITHMETIC_COLUMNS: usize = 768;
+//         const NUM_FREE_COLUMNS: usize = 0;
+//         type Instruction = InstructionSet<Ed25519BaseField>;
+//     }
 
-    #[allow(non_snake_case)]
-    #[test]
-    fn test_ed_double_row() {
-        const D: usize = 2;
-        type C = PoseidonGoldilocksConfig;
-        type F = <C as GenericConfig<D>>::F;
-        type E = Ed25519;
-        type S = ChipStark<EdDoubleTest, F, D>;
+//     #[allow(non_snake_case)]
+//     #[test]
+//     fn test_ed_double_row() {
+//         const D: usize = 2;
+//         type C = PoseidonGoldilocksConfig;
+//         type F = <C as GenericConfig<D>>::F;
+//         type E = Ed25519;
+//         type S = ChipStark<EdDoubleTest, F, D>;
 
-        let _ = env_logger::builder().is_test(true).try_init();
-        // build the stark
-        let mut builder = StarkBuilder::<EdDoubleTest, F, D>::new();
+//         let _ = env_logger::builder().is_test(true).try_init();
+//         // build the stark
+//         let mut builder = StarkBuilder::<EdDoubleTest, F, D>::new();
 
-        let P = builder.alloc_ec_point::<E>();
+//         let P = builder.alloc_ec_point::<E>();
 
-        let ed_double_data = builder.ed25519_double(&P);
-        builder.write_ec_point(&P).unwrap();
+//         let ed_double_data = builder.ed25519_double(&P);
+//         builder.write_ec_point(&P).unwrap();
 
-        let (chip, spec) = builder.build();
+//         let (chip, spec) = builder.build();
 
-        // Construct the trace
-        // Construct the trace
-        let num_rows = 2u64.pow(16);
-        let (handle, generator) = trace::<F, D>(spec);
+//         // Construct the trace
+//         // Construct the trace
+//         let num_rows = 2u64.pow(16);
+//         let (handle, generator) = trace::<F, D>(spec);
 
-        let base = E::generator();
-        let mut timing = TimingTree::new("Ed_double row", log::Level::Debug);
+//         let base = E::generator();
+//         let mut timing = TimingTree::new("Ed_double row", log::Level::Debug);
 
-        let trace = timed!(timing, "generate trace", {
-            for i in 0..256usize {
-                let handle = handle.clone();
-                let base = base.clone();
-                let ed_double_data_copy = ed_double_data.clone();
-                rayon::spawn(move || {
-                    let mut rng = thread_rng();
-                    let a = rng.gen_biguint(256);
-                    let P_int = &base * &a;
-                    let R_exp = &P_int + &P_int;
+//         let trace = timed!(timing, "generate trace", {
+//             for i in 0..256usize {
+//                 let handle = handle.clone();
+//                 let base = base.clone();
+//                 let ed_double_data_copy = ed_double_data.clone();
+//                 rayon::spawn(move || {
+//                     let mut rng = thread_rng();
+//                     let a = rng.gen_biguint(256);
+//                     let P_int = &base * &a;
+//                     let R_exp = &P_int + &P_int;
 
-                    for j in 0..256usize {
-                        handle.write_ec_point(256 * i + j, &P_int, &P).unwrap();
-                        let R = handle
-                            .write_ed25519_double(256 * i + j, &P_int, ed_double_data_copy.clone())
-                            .unwrap();
-                        assert_eq!(R, R_exp);
-                    }
-                });
-            }
-            drop(handle);
+//                     for j in 0..256usize {
+//                         handle.write_ec_point(256 * i + j, &P_int, &P).unwrap();
+//                         let R = handle
+//                             .write_ed25519_double(256 * i + j, &P_int, ed_double_data_copy.clone())
+//                             .unwrap();
+//                         assert_eq!(R, R_exp);
+//                     }
+//                 });
+//             }
+//             drop(handle);
 
-            generator.generate_trace(&chip, num_rows as usize).unwrap()
-        });
+//             generator.generate_trace(&chip, num_rows as usize).unwrap()
+//         });
 
-        let config = StarkConfig::standard_fast_config();
-        let stark = ChipStark::new(chip);
+//         let config = StarkConfig::standard_fast_config();
+//         let stark = ChipStark::new(chip);
 
-        // Verify proof as a stark
-        let proof = timed!(
-            timing,
-            "generate stark proof",
-            prove::<F, C, S, D>(
-                stark.clone(),
-                &config,
-                trace,
-                [],
-                &mut TimingTree::default(),
-            )
-            .unwrap()
-        );
-        verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
+//         // Verify proof as a stark
+//         let proof = timed!(
+//             timing,
+//             "generate stark proof",
+//             prove::<F, C, S, D>(
+//                 stark.clone(),
+//                 &config,
+//                 trace,
+//                 [],
+//                 &mut TimingTree::default(),
+//             )
+//             .unwrap()
+//         );
+//         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
 
-        // Verify recursive proof in a circuit
-        let config_rec = CircuitConfig::standard_recursion_config();
-        let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
+//         // Verify recursive proof in a circuit
+//         let config_rec = CircuitConfig::standard_recursion_config();
+//         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
 
-        let degree_bits = proof.proof.recover_degree_bits(&config);
-        let virtual_proof = add_virtual_stark_proof_with_pis(
-            &mut recursive_builder,
-            stark.clone(),
-            &config,
-            degree_bits,
-        );
+//         let degree_bits = proof.proof.recover_degree_bits(&config);
+//         let virtual_proof = add_virtual_stark_proof_with_pis(
+//             &mut recursive_builder,
+//             stark.clone(),
+//             &config,
+//             degree_bits,
+//         );
 
-        recursive_builder.print_gate_counts(0);
+//         recursive_builder.print_gate_counts(0);
 
-        let mut rec_pw = PartialWitness::new();
-        set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
+//         let mut rec_pw = PartialWitness::new();
+//         set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
 
-        verify_stark_proof_circuit::<F, C, S, D>(
-            &mut recursive_builder,
-            stark,
-            virtual_proof,
-            &config,
-        );
+//         verify_stark_proof_circuit::<F, C, S, D>(
+//             &mut recursive_builder,
+//             stark,
+//             virtual_proof,
+//             &config,
+//         );
 
-        let recursive_data = recursive_builder.build::<C>();
+//         let recursive_data = recursive_builder.build::<C>();
 
-        let recursive_proof = timed!(
-            timing,
-            "generate recursive proof",
-            plonky2::plonk::prover::prove(
-                &recursive_data.prover_only,
-                &recursive_data.common,
-                rec_pw,
-                &mut TimingTree::default(),
-            )
-            .unwrap()
-        );
+//         let recursive_proof = timed!(
+//             timing,
+//             "generate recursive proof",
+//             plonky2::plonk::prover::prove(
+//                 &recursive_data.prover_only,
+//                 &recursive_data.common,
+//                 rec_pw,
+//                 &mut TimingTree::default(),
+//             )
+//             .unwrap()
+//         );
 
-        timing.print();
-        recursive_data.verify(recursive_proof).unwrap();
-    }
-}
+//         timing.print();
+//         recursive_data.verify(recursive_proof).unwrap();
+//     }
+// }

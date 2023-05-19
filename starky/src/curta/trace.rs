@@ -166,12 +166,13 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         &self,
         chip: &Chip<L, F, D>,
         row_capacity: usize,
+        betas : &[[F;3]],
     ) -> Result<Vec<PolynomialValues<F>>> {
         // Get trace rows
         let mut trace_rows = self.generate_trace_rows(chip, row_capacity)?;
 
         if let Some(Lookup::LogDerivative(data)) = &chip.range_data {
-            let beta_array = chip.betas[data.challenge_idx];
+            let beta_array = betas[data.challenge_idx];
             self.write_log_lookups::<E>(
                 row_capacity,
                 &mut trace_rows,
@@ -295,15 +296,9 @@ impl<F: RichField + Extendable<D>, const D: usize> ExtendedTrace<F, D> {
         chip: &Chip<L, F, D>,
         trace_rows: &mut Vec<Vec<F>>,
         row_capacity: usize,
+        betas : &[[F;3]]
     ) -> Result<Vec<PolynomialValues<F>>> {
-        assert_eq!(
-            chip.num_verifier_challenges,
-            chip.betas.len(),
-            "Number of verifier \
-         challenges and challenge values must be equal"
-        );
         // Initiaze the trace with capacity given by the use
-
         assert_eq!(
             trace_rows.len(),
             row_capacity,
@@ -312,7 +307,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ExtendedTrace<F, D> {
         );
 
         if let Some(Lookup::LogDerivative(data)) = &chip.range_data {
-            let beta_array = chip.betas[data.challenge_idx];
+            let beta_array = betas[data.challenge_idx];
             Self::write_lookups::<E>(row_capacity, trace_rows, beta_array, data, Self::range_fn)
                 .unwrap();
         }
