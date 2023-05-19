@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use plonky2::hash::merkle_tree::MerkleTree;
+use plonky2::iop::generator;
 use core::iter::once;
 
 use anyhow::{ensure, Result};
@@ -16,11 +16,12 @@ use plonky2::iop::challenger::Challenger;
 use plonky2::plonk::config::{GenericConfig, Hasher};
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
-use plonky2::util::{log2_ceil, log2_strict, transpose, reverse_index_bits_in_place};
+use plonky2::util::{log2_ceil, log2_strict, transpose};
 use plonky2_maybe_rayon::*;
 
 use crate::config::StarkConfig;
 use crate::constraint_consumer::ConstraintConsumer;
+use crate::curta::trace::ExtendedTrace;
 use crate::permutation::{
     compute_permutation_z_polys, get_n_permutation_challenge_sets, PermutationChallengeSet,
     PermutationCheckVars,
@@ -30,21 +31,30 @@ use crate::stark::Stark;
 use crate::vanishing_poly::eval_vanishing_poly;
 use crate::vars::StarkEvaluationVars;
 
-pub fn prove<F, C, S, const D: usize>(
-    stark: S,
+use super::chip::{ChipStark, StarkParameters};
+use super::extension::cubic::CubicParameters;
+
+pub fn prove<F, C, L, E: CubicParameters<F>, const D: usize>(
+    stark: ChipStark<L, F, D>,
     config: &StarkConfig,
-    trace_poly_values: Vec<PolynomialValues<F>>,
-    public_inputs: [F; S::PUBLIC_INPUTS],
+    mut trace_rows : Vec<Vec<F>>,
+    public_inputs: [F; ChipStark::<L, F, D>::PUBLIC_INPUTS],
     timing: &mut TimingTree,
 ) -> Result<StarkProofWithPublicInputs<F, C, D>>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
-    S: Stark<F, D>,
-    [(); S::COLUMNS]:,
-    [(); S::PUBLIC_INPUTS]:,
+    L: StarkParameters<F, D>,
+    [(); ChipStark::<L, F, D>::COLUMNS]:,
+    [(); ChipStark::<L, F, D>::PUBLIC_INPUTS]:,
     [(); C::Hasher::HASH_SIZE]:,
 {
+    let num_rows = trace_rows.len();
+    let trace_poly_values = ExtendedTrace::generate_trace_with_challenges::<L, E>(
+        &stark.chip,
+        &mut trace_rows,
+        num_rows
+    )?; 
     let degree = trace_poly_values[0].len();
     let degree_bits = log2_strict(degree);
     let fri_params = config.fri_params(degree_bits);
@@ -61,74 +71,35 @@ where
         trace_poly_values.clone().into_par_iter().map(|v| v.ifft()).collect::<Vec<_>>()
     );
 
-    let degree = trace_coeffs[0].len();
-    let lde_values = timed!(
+    let partial_trace_commitment = timed!(
         timing,
-        "FFT + blinding",
-        {
-        // If blinding, salt with two random elements to each leaf vector.
-        let salt_size =  0;
-
-        trace_coeffs
-            .par_iter()
-            .map(|p| {
-                assert_eq!(p.len(), degree, "Polynomial degrees inconsistent");
-                p.lde(rate_bits)
-                    .coset_fft_with_options(F::coset_shift(), Some(rate_bits), None)
-                    .values
-            })
-            .chain(
-                (0..salt_size)
-                    .into_par_iter()
-                    .map(|_| F::rand_vec(degree << rate_bits)),
-            )
-            .collect::<Vec<Vec<F>>>()
-        }
+        "compute trace commitment",
+        PolynomialBatch::<F, C, D>::from_coeffs(
+            // TODO: Cloning this isn't great; consider having `from_values` accept a reference,
+            // or having `compute_permutation_z_polys` read trace values from the `PolynomialBatch`.
+            trace_coeffs[0..stark.chip.partial_trace_index].to_vec(),
+            rate_bits,
+            false,
+            cap_height,
+            timing,
+            None,
+        )
     );
 
-    let mut leaves = timed!(timing, "transpose LDEs", transpose(&lde_values));
-    reverse_index_bits_in_place(&mut leaves);
-    let merkle_tree = timed!(
+    let trace_commitment = timed!(
         timing,
-        "build Merkle tree",
-        MerkleTree::new((&leaves[0..leaves.len()/2]).to_vec(), cap_height)
+        "compute trace commitment",
+        PolynomialBatch::<F, C, D>::from_coeffs(
+            // TODO: Cloning this isn't great; consider having `from_values` accept a reference,
+            // or having `compute_permutation_z_polys` read trace values from the `PolynomialBatch`.
+            trace_coeffs.clone(),
+            rate_bits,
+            false,
+            cap_height,
+            timing,
+            None,
+        )
     );
-
-    let partial_trace_commitment = PolynomialBatch::<F, C, D> {
-        polynomials: trace_coeffs.clone(),
-        merkle_tree: merkle_tree,
-        degree_log: log2_strict(degree),
-        rate_bits,
-        blinding : false,
-    };
-
-    let merkle_tree = timed!(
-        timing,
-        "build Merkle tree",
-        MerkleTree::new(leaves, cap_height)
-    );
-
-    let trace_commitment = PolynomialBatch::<F, C, D> {
-        polynomials: trace_coeffs.clone(),
-        merkle_tree,
-        degree_log: log2_strict(degree),
-        rate_bits,
-        blinding : false,
-    };
-    // timed!(
-    //     timing,
-    //     "compute trace commitment",
-    //     PolynomialBatch::<F, C, D>::from_coeffs(
-    //         // TODO: Cloning this isn't great; consider having `from_values` accept a reference,
-    //         // or having `compute_permutation_z_polys` read trace values from the `PolynomialBatch`.
-    //         trace_coeffs.clone(),
-    //         rate_bits,
-    //         false,
-    //         cap_height,
-    //         timing,
-    //         None,
-    //     )
-    // );
 
     let trace_cap = trace_commitment.merkle_tree.cap.clone();
     let mut challenger = Challenger::new();
@@ -141,7 +112,7 @@ where
             config.num_challenges,
             stark.permutation_batch_size(),
         );
-        let permutation_z_polys = compute_permutation_z_polys::<F, S, D>(
+        let permutation_z_polys = compute_permutation_z_polys::<F, ChipStark::<L, F, D>, D>(
             &stark,
             config,
             &trace_poly_values,
@@ -173,7 +144,7 @@ where
     }
 
     let alphas = challenger.get_n_challenges(config.num_challenges);
-    let quotient_polys = compute_quotient_polys::<F, <F as Packable>::Packing, C, S, D>(
+    let quotient_polys = compute_quotient_polys::<F, <F as Packable>::Packing, C, ChipStark::<L, F, D>, D>(
         &stark,
         &trace_commitment,
         &permutation_zs_commitment_challenges,

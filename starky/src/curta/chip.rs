@@ -21,12 +21,6 @@ use super::register::ElementRegister;
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-const BETAS: [u64; 3] = [
-    17800306513594245228,
-    422882772345461752,
-    14491510587541603695,
-];
-
 
 /// A layout for a circuit that emulates field operations
 pub trait StarkParameters<F: RichField + Extendable<D>, const D: usize>:
@@ -57,6 +51,7 @@ where
     pub(crate) range_checks_idx: (usize, usize),
     pub(crate) range_data: Option<Lookup>,
     pub(crate) range_table: Option<ElementRegister>,
+    pub(crate) partial_trace_index : usize,
     pub(crate) num_verifier_challenges : usize,
     pub(crate) betas : Vec<[F;3]>
 }
@@ -167,6 +162,7 @@ where
         }
         if let Some(range_data) = &self.range_data {
             range_data.ext_circuit_constraints::<F, D, COLUMNS, PUBLIC_INPUTS>(
+                &self.betas,
                 builder,
                 vars,
                 yield_constr,

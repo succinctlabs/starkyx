@@ -278,7 +278,7 @@ mod tests {
         let num_rows = 2u64.pow(16) as usize;
         let (handle, generator) = trace::<F, D>(spec);
         let mut timing = TimingTree::new("stark_proof", log::Level::Debug);
-        let trace = timed!(timing, "generate trace", {
+        let trace_rows = timed!(timing, "generate trace", {
             let p = <Ed25519 as EllipticCurveParameters>::BaseField::modulus();
             let mut rng = thread_rng();
             for i in 0..num_rows {
@@ -290,7 +290,7 @@ mod tests {
             }
             drop(handle);
             generator
-                .generate_trace_new::<L, E>(&chip, num_rows as usize)
+                .generate_trace_rows(&chip, num_rows as usize)
                 .unwrap()
         });
 
@@ -300,10 +300,10 @@ mod tests {
         let proof = timed!(
             timing,
             "generate proof",
-            prove::<F, C, S, D>(
+            prove::<F, C, L, E, D>(
                 stark.clone(),
                 &config,
-                trace,
+                trace_rows,
                 [],
                 &mut TimingTree::default(),
             )

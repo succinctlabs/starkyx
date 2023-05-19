@@ -206,12 +206,12 @@ mod tests {
     use crate::curta::instruction::InstructionSet;
     use crate::curta::parameters::ed25519::{Ed25519, Ed25519BaseField};
     use crate::curta::trace::trace;
-    use crate::prover::prove;
-    use crate::recursive_verifier::{
+    use crate::curta::prover::prove;
+    use crate::curta::recursive_verifier::{
         add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
         verify_stark_proof_circuit,
     };
-    use crate::verifier::verify_stark_proof;
+    use crate::curta::verifier::verify_stark_proof;
 
     #[derive(Clone, Debug, Copy)]
     pub struct Ed25519ScalarMulTest;
@@ -228,12 +228,13 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type E = Ed25519;
-        type S = ChipStark<Ed25519ScalarMulTest, F, D>;
+        type L = Ed25519ScalarMulTest;
+        type S = ChipStark<L, F, D>;
         type CUB = GoldilocksCubicParameters;
         let _ = env_logger::builder().is_test(true).try_init();
 
         // Build the stark.
-        let mut builder = StarkBuilder::<Ed25519ScalarMulTest, F, D>::new();
+        let mut builder = StarkBuilder::<L, F, D>::new();
         let res = builder.alloc_unchecked_ec_point::<E>();
         let temp = builder.alloc_unchecked_ec_point::<E>();
         let scalar_bit = builder.alloc::<BitRegister>();
@@ -280,7 +281,7 @@ mod tests {
             }
             drop(handle);
             generator
-                .generate_trace_new::<Ed25519ScalarMulTest, CUB>(&chip, num_rows as usize)
+                .generate_trace_rows(&chip, num_rows as usize)
                 .unwrap()
         });
 
@@ -290,7 +291,7 @@ mod tests {
         let proof = timed!(
             timing,
             "generate stark proof",
-            prove::<F, C, S, D>(
+            prove::<F, C, L, CUB, D>(
                 stark.clone(),
                 &config,
                 trace,
@@ -396,11 +397,12 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type E = Ed25519;
-        type S = ChipStark<Ed25519ScalarMulTest, F, D>;
+        type L = Ed25519ScalarMulTest; 
+        type CUB = GoldilocksCubicParameters;
         let _ = env_logger::builder().is_test(true).try_init();
 
         // Build the stark.
-        let mut builder = StarkBuilder::<Ed25519ScalarMulTest, F, D>::new();
+        let mut builder = StarkBuilder::<L, F, D>::new();
         let res = builder.alloc_unchecked_ec_point::<E>();
         let temp = builder.alloc_unchecked_ec_point::<E>();
         let bit = builder.alloc::<BitRegister>();
@@ -446,7 +448,7 @@ mod tests {
                 });
             }
             drop(handle);
-            generator.generate_trace(&chip, num_rows as usize).unwrap()
+            generator.generate_trace_rows(&chip, num_rows as usize).unwrap()
         });
         let config = StarkConfig::standard_fast_config();
         let stark = ChipStark::new(chip);
@@ -455,7 +457,7 @@ mod tests {
         let proof = timed!(
             timing,
             "generate stark proof",
-            prove::<F, C, S, D>(
+            prove::<F, C, L, CUB, D>(
                 stark.clone(),
                 &config,
                 trace,

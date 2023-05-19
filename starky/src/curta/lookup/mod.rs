@@ -51,6 +51,7 @@ impl Lookup {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
+        betas : &[[F ; 3]],
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
@@ -58,6 +59,7 @@ impl Lookup {
         match self {
             Lookup::LogDerivative(log_lookup) => log_lookup
                 .ext_circuit_constraints::<F, D, COLUMNS, PUBLIC_INPUTS>(
+                    betas,
                     builder,
                     vars,
                     yield_constr,

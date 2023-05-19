@@ -31,6 +31,11 @@ pub struct TraceGenerator<F: RichField + Extendable<D>, const D: usize> {
     rx: Receiver<(usize, InstructionId, Vec<F>)>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ExtendedTrace<F: RichField + Extendable<D>, const D: usize> {
+    _marker : core::marker::PhantomData<F>,
+} 
+
 pub fn trace<F: RichField + Extendable<D>, const D: usize>(
     spec: BTreeMap<InstructionId, usize>,
 ) -> (TraceWriter<F, D>, TraceGenerator<F, D>) {
@@ -157,6 +162,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         element.to_canonical_u64() as usize
     }
 
+
     pub fn generate_trace_new<L: StarkParameters<F, D>, E: CubicParameters<F>>(
         &self,
         chip: &Chip<L, F, D>,
@@ -178,7 +184,8 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         let mut trace_rows = self.generate_trace_rows(chip, row_capacity)?;
 
         if let Some(Lookup::LogDerivative(data)) = &chip.range_data {
-            self.write_lookups::<E>(row_capacity, &mut trace_rows, data, Self::range_fn)
+            let beta_array = chip.betas[data.challenge_idx];
+            self.write_log_lookups::<E>(row_capacity, &mut trace_rows, beta_array, data, Self::range_fn)
                 .unwrap();
         }
         // Transpose the trace to get the columns and resize to the correct size
@@ -288,4 +295,45 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
     //         .map(PolynomialValues::new)
     //         .collect())
     // }
+}
+
+
+
+impl<F: RichField + Extendable<D>, const D: usize> ExtendedTrace<F, D> {
+    pub fn generate_trace_with_challenges<L: StarkParameters<F, D>, E: CubicParameters<F>>(
+        chip: &Chip<L, F, D>,
+        trace_rows : &mut Vec<Vec<F>>,
+        row_capacity: usize,
+    ) -> Result<Vec<PolynomialValues<F>>> {
+        assert_eq!(chip.num_verifier_challenges, chip.betas.len(), "Number of verifier \
+         challenges and challenge values must be equal");
+        // Initiaze the trace with capacity given by the use
+
+        assert_eq!(trace_rows.len(), row_capacity, "Length of trace rows \
+         must be equal to the number of columns in the chip");
+
+        if let Some(Lookup::LogDerivative(data)) = &chip.range_data {
+            let beta_array = chip.betas[data.challenge_idx];
+            Self::write_lookups::<E>(row_capacity, trace_rows, beta_array, data, Self::range_fn)
+                .unwrap();
+        }
+        // Transpose the trace to get the columns and resize to the correct size
+        let mut trace_cols = transpose(&trace_rows);
+
+        // Resize the trace columns to include the range checks
+        trace_cols.resize(
+            Chip::<L, F, D>::num_columns(),
+            Vec::with_capacity(row_capacity),
+        );
+
+        Ok(trace_cols
+            .into_par_iter()
+            .map(PolynomialValues::new)
+            .collect())
+    } 
+
+    #[inline]
+    pub fn range_fn(element: F) -> usize {
+        element.to_canonical_u64() as usize
+    }
 }

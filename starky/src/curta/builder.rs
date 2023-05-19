@@ -15,6 +15,13 @@ use super::register::{
     ArrayRegister, CellType, ElementRegister, MemorySlice, Register, RegisterSerializable,
 };
 
+
+const BETAS: [u64; 3] = [
+    17800306513594245228,
+    422882772345461752,
+    14491510587541603695,
+];
+
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub enum InstructionId {
     CustomInstruction(Vec<MemorySlice>),
@@ -307,6 +314,8 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
 
     /// Build the chip
     pub fn build(mut self) -> (Chip<L, F, D>, BTreeMap<InstructionId, usize>) {
+        let partial_trace_index = self.local_index;
+
         if L::NUM_ARITHMETIC_COLUMNS > 0 {
             self.arithmetic_range_checks();
         }
@@ -337,6 +346,11 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
                 L::NUM_ARITHMETIC_COLUMNS - num_arithmetic_columns
             );
         }
+        let betas_0 = [
+            F::from_canonical_u64(BETAS[0]),
+            F::from_canonical_u64(BETAS[1]),
+            F::from_canonical_u64(BETAS[2]),
+        ];
         (
             Chip {
                 instructions: self.instructions,
@@ -346,7 +360,8 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
                 range_data: self.range_data,
                 range_table: self.range_table,
                 num_verifier_challenges : self.num_verifier_challenges,
-                betas : Vec::new(),
+                partial_trace_index,
+                betas : vec![betas_0]
             },
             self.instruction_indices,
         )

@@ -1,3 +1,5 @@
+use std::sync::mpsc;
+
 use alloc::collections::VecDeque;
 
 use anyhow::Result;
@@ -5,6 +7,7 @@ use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
+use plonky2::util::transpose;
 use plonky2_maybe_rayon::*;
 
 use super::Lookup;
@@ -18,18 +21,12 @@ use crate::curta::extension::cubic::{CubicExtension, CubicParameters};
 use crate::curta::register::{
     ArrayRegister, ElementRegister, MemorySlice, Register, RegisterSerializable,
 };
-use crate::curta::trace::TraceGenerator;
+use crate::curta::trace::{TraceGenerator, trace, ExtendedTrace};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
-
-const BETAS: [u64; 3] = [
-    17800306513594245228,
-    422882772345461752,
-    14491510587541603695,
-];
 
 #[derive(Debug, Clone)]
 pub struct LogLookup {
-    challenge_idx : usize,
+    pub(crate) challenge_idx : usize,
     table: ElementRegister,
     values: ArrayRegister<ElementRegister>,
     multiplicity: ElementRegister,
@@ -53,7 +50,7 @@ impl SplitData {
             acc_range,
         }
     }
-    pub(crate) fn split_row<'a, T>(&self, trace_row: &'a mut [T]) -> (&'a [T], &'a mut [T]) {
+    pub(crate) fn split<'a, T>(&self, trace_row: &'a mut [T]) -> (&'a [T], &'a mut [T]) {
         let (left, right) = trace_row.split_at_mut(self.mid);
         (
             &left[self.values_range.0..self.values_range.1],
@@ -103,11 +100,14 @@ impl LogLookup {
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
+
+        let beta_array = betas[self.challenge_idx];
         let beta = CubicArray([
-            P::from(FE::from_canonical_u64(BETAS[0])),
-            P::from(FE::from_canonical_u64(BETAS[1])),
-            P::from(FE::from_canonical_u64(BETAS[2])),
+            P::from(FE::from_basefield(beta_array[0])),
+            P::from(FE::from_basefield(beta_array[1])),
+            P::from(FE::from_basefield(beta_array[2])),
         ]);
+
 
         let multiplicity = CubicArray::from_base(
             self.multiplicity.register().packed_generic_vars(vars)[0],
@@ -201,16 +201,18 @@ impl LogLookup {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
+        betas : &[[F ; 3]],
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
+        let beta_array = betas[self.challenge_idx];
         let beta = CubicGadget::const_extension(
             builder,
             [
-                F::Extension::from(F::from_canonical_u64(BETAS[0])),
-                F::Extension::from(F::from_canonical_u64(BETAS[1])),
-                F::Extension::from(F::from_canonical_u64(BETAS[2])),
+                F::Extension::from(beta_array[0]),
+                F::Extension::from(beta_array[1]),
+                F::Extension::from(beta_array[2]),
             ],
         );
 
@@ -392,20 +394,21 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
-    pub fn write_lookups<E: CubicParameters<F>>(
+    pub fn write_log_lookups<E: CubicParameters<F>>(
         &self,
         num_rows: usize,
         trace_rows: &mut Vec<Vec<F>>,
+        beta_array : [F; 3],
         lookup_data: &LogLookup,
         table_index: fn(F) -> usize,
     ) -> Result<()> {
         // Get the challenge
-        let betas = [
-            F::from_canonical_u64(BETAS[0]),
-            F::from_canonical_u64(BETAS[1]),
-            F::from_canonical_u64(BETAS[2]),
-        ];
-        let beta = CubicExtension::<F, E>::from(betas);
+        // let betas = [
+        //     F::from_canonical_u64(BETAS[0]),
+        //     F::from_canonical_u64(BETAS[1]),
+        //     F::from_canonical_u64(BETAS[2]),
+        // ];
+        let beta = CubicExtension::<F, E>::from(beta_array);
 
         let values_idx = lookup_data.values_idx();
 
@@ -447,7 +450,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         let accumulators = trace_rows
             .par_iter_mut()
             .map(|row| {
-                let (values, accumulators) = split_data.split_row(row);
+                let (values, accumulators) = split_data.split(row);
                 let mut accumumulator = CubicExtension::<F, E>::from(F::ZERO);
                 for (k, pair) in values.chunks(2).enumerate() {
                     let beta_minus_a = beta - pair[0].into();
@@ -472,4 +475,183 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         }
         Ok(())
     }
+
+    // pub fn write_lookups_cols<E: CubicParameters<F>>(
+    //     &self,
+    //     num_rows: usize,
+    //     trace_cols: &mut Vec<Vec<F>>,
+    //     lookup_data: &LogLookup,
+    //     table_index: fn(F) -> usize,
+    // ) -> Result<()> {
+    //     // Get the challenge
+    //     let betas = [
+    //         F::from_canonical_u64(BETAS[0]),
+    //         F::from_canonical_u64(BETAS[1]),
+    //         F::from_canonical_u64(BETAS[2]),
+    //     ];
+    //     let beta = CubicExtension::<F, E>::from(betas);
+
+    //     let values_idx = lookup_data.values_idx();
+
+    //     // Calculate multiplicities
+    //     let mut multiplicities = vec![F::ZERO; num_rows];
+  
+    //     trace_cols[values_idx.0..values_idx.1].iter()
+    //         .for_each(|col| 
+    //             col.iter()
+    //                 .for_each(|value| {
+    //                     let index = table_index(*value);
+    //                     assert!(index < num_rows, "index out of bounds");
+    //                     multiplicities[index] += F::ONE;
+    //                 })
+    //         );
+
+    //     let multiplicity_idx = lookup_data.multiplicity.register().index();
+    //     trace_cols[multiplicity_idx].copy_from_slice(&multiplicities);
+
+
+
+
+    //     // Write multiplicity inverse constraint
+    //     let mult_table_log_entries = multiplicities
+    //         .par_iter()
+    //         .enumerate()
+    //         .map(|(i, x)| {
+    //             let table = CubicExtension::from(F::from_canonical_usize(i));
+    //             CubicExtension::from(*x) / (beta - table)
+    //         })
+    //         .collect::<Vec<_>>();
+
+    //     let (mult_log_0, mult_log_1) = lookup_data.multiplicity_table_log.register().get_range();
+
+    
+    //     trace_cols[mult_log_0..mult_log_1].par_iter_mut().enumerate()
+    //         .for_each(|(k, col)| {
+    //             col.par_iter_mut().enumerate()
+    //                 .for_each(|(i, value)| {
+    //                     *value = mult_table_log_entries[i].0[k];
+    //                 })
+    //         });
+
+    //     // Log accumulator
+    //     let split_data = lookup_data.split_data();
+    //     let (values_cols, acc_cols) = split_data.split(trace_cols);
+
+    //     let (tx, rx) = mpsc::channel();
+    //     let accumulators = (0..num_rows).into_par_iter()
+    //         .map_with(tx, |tx, i| {
+    //             let mut accumumulator = CubicExtension::<F, E>::from(F::ZERO); 
+    //             for (k, pair) in (values_cols.chunks(2)).enumerate() {
+    //                 let beta_minus_a = beta - pair[0][i].into();
+    //                 let beta_minus_b = beta - pair[1][i].into();
+    //                 accumumulator += CubicExtension::from(beta_minus_a).inverse()
+    //                     + CubicExtension::from(beta_minus_b).inverse();
+    //                 tx.send((i, k, accumumulator.0)).unwrap();
+    //             }
+    //             accumumulator
+    //         }).collect::<Vec<_>>();
+
+    //     for (i, k, acc) in rx.iter() {
+    //         acc_cols[3 * k][i]= acc[0];
+    //         acc_cols[3 * k + 1][i]= acc[1];
+    //         acc_cols[3 * k + 2][i]= acc[2];
+    //     }
+
+    //     let mut value = CubicExtension::<F, E>::ZERO;
+    //     let log_lookup_next_index = lookup_data.log_lookup_accumulator.register().next().index();
+    //     for (i, (acc, mult_table)) in accumulators
+    //         .into_iter()
+    //         .zip(mult_table_log_entries.into_iter())
+    //         .enumerate()
+    //         .filter(|(i, _)| *i != num_rows - 1)
+    //     {
+    //         value += acc - mult_table;
+    //         trace_cols[log_lookup_next_index][i+1] = value.0[0];
+    //         trace_cols[log_lookup_next_index + 1][i+1] = value.0[1];
+    //         trace_cols[log_lookup_next_index + 2][i+1] = value.0[2];
+    //     }
+
+    //     Ok(())
+    // }
+}
+
+
+
+impl<F: RichField + Extendable<D>, const D: usize> ExtendedTrace<F, D> {
+    pub fn write_lookups<E: CubicParameters<F>>(
+        num_rows: usize,
+        trace_rows: &mut Vec<Vec<F>>,
+        beta_array : [F; 3],
+        lookup_data: &LogLookup,
+        table_index: fn(F) -> usize,
+    ) -> Result<()> {
+        // Get the challenge
+        let beta = CubicExtension::<F, E>::from(beta_array);
+
+        let values_idx = lookup_data.values_idx();
+
+        // Calculate multiplicities
+        let mut multiplicities = vec![F::ZERO; num_rows];
+
+        for row in trace_rows.iter() {
+            for value in row[values_idx.0..values_idx.1].iter() {
+                let index = table_index(*value);
+                assert!(index < 1 << 16);
+                multiplicities[index] += F::ONE;
+            }
+        }
+
+        // Write multiplicities into the trace
+        let multiplicity = lookup_data.multiplicity.register();
+        for i in 0..num_rows {
+            multiplicity.assign(trace_rows, 0, &mut vec![multiplicities[i]], i);
+        }
+
+        // Write multiplicity inverse constraint
+        let mult_table_log_entries = multiplicities
+            .par_iter()
+            .enumerate()
+            .map(|(i, x)| {
+                let table = CubicExtension::from(F::from_canonical_usize(i));
+                CubicExtension::from(*x) / (beta - table)
+            })
+            .collect::<Vec<_>>();
+
+        let mult_table_log = lookup_data.multiplicity_table_log.register();
+        for (i, value) in mult_table_log_entries.iter().enumerate() {
+            mult_table_log.assign(trace_rows, 0, &value.0, i);
+        }
+
+        // Log accumulator
+        let mut value = CubicExtension::<F, E>::ZERO;
+        let split_data = lookup_data.split_data();
+        let accumulators = trace_rows
+            .par_iter_mut()
+            .map(|row| {
+                let (values, accumulators) = split_data.split(row);
+                let mut accumumulator = CubicExtension::<F, E>::from(F::ZERO);
+                for (k, pair) in values.chunks(2).enumerate() {
+                    let beta_minus_a = beta - pair[0].into();
+                    let beta_minus_b = beta - pair[1].into();
+                    accumumulator += CubicExtension::from(beta_minus_a).inverse()
+                        + CubicExtension::from(beta_minus_b).inverse();
+                    accumulators[3 * k..3 * k + 3].copy_from_slice(&accumumulator.0);
+                }
+                accumumulator
+            })
+            .collect::<Vec<_>>();
+
+        let log_lookup_next = lookup_data.log_lookup_accumulator.register().next();
+        for (i, (acc, mult_table)) in accumulators
+            .into_iter()
+            .zip(mult_table_log_entries.into_iter())
+            .enumerate()
+            .filter(|(i, _)| *i != num_rows - 1)
+        {
+            value += acc - mult_table;
+            log_lookup_next.assign(trace_rows, 0, &value.0, i);
+        }
+        Ok(())
+    }
+
 }
