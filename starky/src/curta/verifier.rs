@@ -10,6 +10,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::config::{GenericConfig, Hasher};
 use plonky2::plonk::plonk_common::reduce_with_powers;
 
+use super::chip::{ChipStark, StarkParameters};
 use crate::config::StarkConfig;
 use crate::constraint_consumer::ConstraintConsumer;
 use crate::permutation::PermutationCheckVars;
@@ -21,19 +22,19 @@ use crate::vars::StarkEvaluationVars;
 pub fn verify_stark_proof<
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
-    S: Stark<F, D>,
+    L: StarkParameters<F, D>,
     const D: usize,
 >(
-    stark: S,
+    stark: ChipStark<L, F, D>,
     proof_with_pis: StarkProofWithPublicInputs<F, C, D>,
     config: &StarkConfig,
 ) -> Result<()>
 where
-    [(); S::COLUMNS]:,
-    [(); S::PUBLIC_INPUTS]:,
+    [(); ChipStark::<L, F, D>::COLUMNS]:,
+    [(); ChipStark::<L, F, D>::PUBLIC_INPUTS]:,
     [(); C::Hasher::HASH_SIZE]:,
 {
-    ensure!(proof_with_pis.public_inputs.len() == S::PUBLIC_INPUTS);
+    ensure!(proof_with_pis.public_inputs.len() == ChipStark::<L, F, D>::PUBLIC_INPUTS);
     let degree_bits = proof_with_pis.proof.recover_degree_bits(config);
     let challenges = proof_with_pis.get_challenges(&stark, config, degree_bits);
     verify_stark_proof_with_challenges(stark, proof_with_pis, challenges, degree_bits, config)
@@ -42,18 +43,18 @@ where
 pub(crate) fn verify_stark_proof_with_challenges<
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
-    S: Stark<F, D>,
+    L: StarkParameters<F, D>,
     const D: usize,
 >(
-    stark: S,
+    stark: ChipStark<L, F, D>,
     proof_with_pis: StarkProofWithPublicInputs<F, C, D>,
     challenges: StarkProofChallenges<F, D>,
     degree_bits: usize,
     config: &StarkConfig,
 ) -> Result<()>
 where
-    [(); S::COLUMNS]:,
-    [(); S::PUBLIC_INPUTS]:,
+    [(); ChipStark::<L, F, D>::COLUMNS]:,
+    [(); ChipStark::<L, F, D>::PUBLIC_INPUTS]:,
     [(); C::Hasher::HASH_SIZE]:,
 {
     validate_proof_shape(&stark, &proof_with_pis, config)?;
@@ -98,7 +99,7 @@ where
         next_zs: permutation_zs_next.as_ref().unwrap().clone(),
         permutation_challenge_sets: challenges.permutation_challenge_sets.unwrap(),
     });
-    eval_vanishing_poly::<F, F::Extension, F::Extension, S, D, D>(
+    eval_vanishing_poly::<F, F::Extension, F::Extension, ChipStark<L, F, D>, D, D>(
         &stark,
         config,
         vars,

@@ -12,7 +12,6 @@ use plonky2::field::zero_poly_coset::ZeroPolyOnCoset;
 use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::challenger::Challenger;
-use plonky2::iop::generator;
 use plonky2::plonk::config::{GenericConfig, Hasher};
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
@@ -53,11 +52,7 @@ where
         .map(PolynomialValues::new)
         .collect::<Vec<_>>();
 
-    let patial_degree = partial_trace_values[0].len();
-
-    let mut first_challenger: Challenger<F, <C as GenericConfig<D>>::Hasher> = Challenger::new();
-    let degree_bits = log2_strict(patial_degree);
-    let fri_params = config.fri_params(degree_bits);
+    let mut challenger: Challenger<F, <C as GenericConfig<D>>::Hasher> = Challenger::new();
     let rate_bits = config.fri_config.rate_bits;
     let cap_height = config.fri_config.cap_height;
 
@@ -67,7 +62,7 @@ where
         PolynomialBatch::<F, C, D>::from_values(
             // TODO: Cloning this isn't great; consider having `from_values` accept a reference,
             // or having `compute_permutation_z_polys` read trace values from the `PolynomialBatch`.
-            partial_trace_values[0..stark.chip.partial_trace_index].to_vec(),
+            partial_trace_values[0..stark.partial_trace_index()].to_vec(),
             rate_bits,
             false,
             cap_height,
@@ -76,20 +71,18 @@ where
         )
     );
 
-    let trace_cap = partial_trace_commitment.merkle_tree.cap.clone();
-    first_challenger.observe_cap(&trace_cap);
+    let partia_trace_cap = partial_trace_commitment.merkle_tree.cap.clone();
+    challenger.observe_cap(&partia_trace_cap);
 
     let num_rows = trace_rows.len();
     let trace_poly_values = ExtendedTrace::generate_trace_with_challenges::<L, E>(
-        &stark.chip,
+        &stark.chip(),
         &mut trace_rows,
         num_rows,
     )?;
     let degree = trace_poly_values[0].len();
     let degree_bits = log2_strict(degree);
     let fri_params = config.fri_params(degree_bits);
-    let rate_bits = config.fri_config.rate_bits;
-    let cap_height = config.fri_config.cap_height;
     assert!(
         fri_params.total_arities() <= degree_bits + rate_bits - cap_height,
         "FRI total reduction arity is too large.",

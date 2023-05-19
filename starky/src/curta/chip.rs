@@ -211,7 +211,7 @@ where
     L: StarkParameters<F, D>,
     F: RichField + Extendable<D>,
 {
-    pub(crate) chip: Chip<L, F, D>,
+    chip: Chip<L, F, D>,
 }
 
 impl<L, F, const D: usize> ChipStark<L, F, D>
@@ -221,6 +221,16 @@ where
 {
     pub fn new(chip: Chip<L, F, D>) -> Self {
         Self { chip }
+    }
+
+    #[inline]
+    pub fn partial_trace_index(&self) -> usize {
+        self.chip.partial_trace_index
+    }
+
+    #[inline]
+    pub fn chip(&self) -> &Chip<L, F, D> {
+        &self.chip
     }
 }
 
