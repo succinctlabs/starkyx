@@ -10,13 +10,13 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::config::{GenericConfig, Hasher};
 use plonky2::plonk::plonk_common::reduce_with_powers;
 
-use crate::curta::chip::{ChipStark, StarkParameters};
+use super::proof::{StarkOpeningSet, StarkProof, StarkProofChallenges, StarkProofWithPublicInputs};
+use super::vanishing_poly::eval_vanishing_poly;
 use crate::config::StarkConfig;
 use crate::constraint_consumer::ConstraintConsumer;
+use crate::curta::chip::{ChipStark, StarkParameters};
 use crate::permutation::PermutationCheckVars;
-use super::proof::{StarkOpeningSet, StarkProof, StarkProofChallenges, StarkProofWithPublicInputs};
 use crate::stark::Stark;
-use super::vanishing_poly::eval_vanishing_poly;
 use crate::vars::StarkEvaluationVars;
 
 pub fn verify_stark_proof<
@@ -157,7 +157,7 @@ where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
     L: StarkParameters<F, D>,
-    [(); ChipStark::<L,F,D>::COLUMNS]:,
+    [(); ChipStark::<L, F, D>::COLUMNS]:,
     [(); C::Hasher::HASH_SIZE]:,
 {
     let StarkProofWithPublicInputs {
@@ -167,7 +167,7 @@ where
     let degree_bits = proof.recover_degree_bits(config);
 
     let StarkProof {
-        partial_trace_cap : _,
+        partial_trace_cap: _,
         trace_cap,
         permutation_zs_cap,
         quotient_polys_cap,
@@ -185,7 +185,7 @@ where
         quotient_polys,
     } = openings;
 
-    ensure!(public_inputs.len() == ChipStark::<L,F,D>::PUBLIC_INPUTS);
+    ensure!(public_inputs.len() == ChipStark::<L, F, D>::PUBLIC_INPUTS);
 
     let fri_params = config.fri_params(degree_bits);
     let cap_height = fri_params.config.cap_height;
@@ -194,8 +194,8 @@ where
     ensure!(trace_cap.height() == cap_height);
     ensure!(quotient_polys_cap.height() == cap_height);
 
-    ensure!(local_values.len() == ChipStark::<L,F,D>::COLUMNS);
-    ensure!(next_values.len() == ChipStark::<L,F,D>::COLUMNS);
+    ensure!(local_values.len() == ChipStark::<L, F, D>::COLUMNS);
+    ensure!(next_values.len() == ChipStark::<L, F, D>::COLUMNS);
     ensure!(quotient_polys.len() == stark.num_quotient_polys(config));
 
     if stark.uses_permutation_args() {

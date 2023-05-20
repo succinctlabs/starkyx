@@ -18,18 +18,18 @@ use plonky2::util::timing::TimingTree;
 use plonky2::util::{log2_ceil, log2_strict, transpose};
 use plonky2_maybe_rayon::*;
 
-use crate::curta::chip::{ChipStark, StarkParameters};
-use crate::curta::extension::cubic::CubicParameters;
+use super::proof::{StarkOpeningSet, StarkProof, StarkProofWithPublicInputs};
+use super::vanishing_poly::eval_vanishing_poly;
 use crate::config::StarkConfig;
 use crate::constraint_consumer::ConstraintConsumer;
+use crate::curta::chip::{ChipStark, StarkParameters};
+use crate::curta::extension::cubic::CubicParameters;
 use crate::curta::trace::ExtendedTrace;
 use crate::permutation::{
     compute_permutation_z_polys, get_n_permutation_challenge_sets, PermutationChallengeSet,
     PermutationCheckVars,
 };
-use super::proof::{StarkOpeningSet, StarkProof, StarkProofWithPublicInputs};
 use crate::stark::Stark;
-use super::vanishing_poly::eval_vanishing_poly;
 use crate::vars::StarkEvaluationVars;
 
 pub fn prove<F, C, L, E: CubicParameters<F>, const D: usize>(
@@ -74,11 +74,14 @@ where
     let partial_trace_cap = partial_trace_commitment.merkle_tree.cap.clone();
     challenger.observe_cap(&partial_trace_cap);
 
-    let stark_betas = challenger.get_n_challenges(3 * stark.num_verifier_challenges())
-        .chunks(3).map(|chunk| {
+    let stark_betas = challenger
+        .get_n_challenges(3 * stark.num_verifier_challenges())
+        .chunks(3)
+        .map(|chunk| {
             assert_eq!(chunk.len(), 3);
             [chunk[0], chunk[1], chunk[2]]
-        }).collect::<Vec<_>>();
+        })
+        .collect::<Vec<_>>();
 
     let num_rows = trace_rows.len();
     let trace_poly_values = ExtendedTrace::generate_trace_with_challenges::<L, E>(
@@ -153,17 +156,16 @@ where
     }
 
     let alphas = challenger.get_n_challenges(config.num_challenges);
-    let quotient_polys =
-        compute_quotient_polys::<F, <F as Packable>::Packing, C, L, D>(
-            &stark,
-            &trace_commitment,
-            &permutation_zs_commitment_challenges,
-            public_inputs,
-            alphas,
-            stark_betas,
-            degree_bits,
-            config,
-        );
+    let quotient_polys = compute_quotient_polys::<F, <F as Packable>::Packing, C, L, D>(
+        &stark,
+        &trace_commitment,
+        &permutation_zs_commitment_challenges,
+        public_inputs,
+        alphas,
+        stark_betas,
+        degree_bits,
+        config,
+    );
     let all_quotient_chunks = quotient_polys
         .into_par_iter()
         .flat_map(|mut quotient_poly| {
@@ -247,9 +249,9 @@ fn compute_quotient_polys<'a, F, P, C, L, const D: usize>(
         PolynomialBatch<F, C, D>,
         Vec<PermutationChallengeSet<F>>,
     )>,
-    public_inputs: [F; ChipStark::<L,F,D>::PUBLIC_INPUTS],
+    public_inputs: [F; ChipStark::<L, F, D>::PUBLIC_INPUTS],
     alphas: Vec<F>,
-    betas : Vec<[F;3]>,
+    betas: Vec<[F; 3]>,
     degree_bits: usize,
     config: &StarkConfig,
 ) -> Vec<PolynomialCoeffs<F>>
@@ -258,8 +260,8 @@ where
     P: PackedField<Scalar = F>,
     C: GenericConfig<D, F = F>,
     L: StarkParameters<F, D>,
-    [(); ChipStark::<L,F,D>::COLUMNS]:,
-    [(); ChipStark::<L,F,D>::PUBLIC_INPUTS]:,
+    [(); ChipStark::<L, F, D>::COLUMNS]:,
+    [(); ChipStark::<L, F, D>::PUBLIC_INPUTS]:,
 {
     let degree = 1 << degree_bits;
     let rate_bits = config.fri_config.rate_bits;
@@ -282,7 +284,7 @@ where
     let z_h_on_coset = ZeroPolyOnCoset::<F>::new(degree_bits, quotient_degree_bits);
 
     // Retrieve the LDE values at index `i`.
-    let get_trace_values_packed = |i_start| -> [P; ChipStark::<L,F,D>::COLUMNS] {
+    let get_trace_values_packed = |i_start| -> [P; ChipStark::<L, F, D>::COLUMNS] {
         trace_commitment
             .get_lde_values_packed(i_start, step)
             .try_into()

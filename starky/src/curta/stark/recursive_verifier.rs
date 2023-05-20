@@ -14,18 +14,17 @@ use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2::util::reducing::ReducingFactorTarget;
 use plonky2::with_context;
 
-use crate::config::StarkConfig;
-use crate::constraint_consumer::RecursiveConstraintConsumer;
-use crate::permutation::PermutationCheckDataTarget;
 use super::proof::{
     StarkOpeningSetTarget, StarkProof, StarkProofChallengesTarget, StarkProofTarget,
     StarkProofWithPublicInputs, StarkProofWithPublicInputsTarget,
 };
-use crate::stark::Stark;
 use super::vanishing_poly::eval_vanishing_poly_circuit;
+use crate::config::StarkConfig;
+use crate::constraint_consumer::RecursiveConstraintConsumer;
+use crate::curta::chip::{ChipStark, StarkParameters};
+use crate::permutation::PermutationCheckDataTarget;
+use crate::stark::Stark;
 use crate::vars::StarkEvaluationTargets;
-
-use crate::curta::chip::{StarkParameters, ChipStark};
 
 pub fn verify_stark_proof_circuit<
     F: RichField + Extendable<D>,
@@ -42,7 +41,10 @@ pub fn verify_stark_proof_circuit<
     [(); ChipStark::<L, F, D>::COLUMNS]:,
     [(); ChipStark::<L, F, D>::PUBLIC_INPUTS]:,
 {
-    assert_eq!(proof_with_pis.public_inputs.len(), ChipStark::<L, F, D>::PUBLIC_INPUTS);
+    assert_eq!(
+        proof_with_pis.public_inputs.len(),
+        ChipStark::<L, F, D>::PUBLIC_INPUTS
+    );
     let degree_bits = proof_with_pis.proof.recover_degree_bits(inner_config);
     let challenges = with_context!(
         builder,
@@ -75,8 +77,8 @@ fn verify_stark_proof_with_challenges_circuit<
     degree_bits: usize,
 ) where
     C::Hasher: AlgebraicHasher<F>,
-    [(); ChipStark::<L,F,D>::COLUMNS]:,
-    [(); ChipStark::<L,F,D>::PUBLIC_INPUTS]:,
+    [(); ChipStark::<L, F, D>::COLUMNS]:,
+    [(); ChipStark::<L, F, D>::PUBLIC_INPUTS]:,
 {
     check_permutation_options(&stark, &proof_with_pis, &challenges).unwrap();
     let one = builder.one_extension();

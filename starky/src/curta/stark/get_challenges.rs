@@ -11,14 +11,13 @@ use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 
-use crate::config::StarkConfig;
 use super::proof::*;
+use crate::config::StarkConfig;
+use crate::curta::chip::{ChipStark, StarkParameters};
 use crate::permutation::{
     get_n_permutation_challenge_sets, get_n_permutation_challenge_sets_target,
 };
 use crate::stark::Stark;
-
-use crate::curta::chip::{ChipStark, StarkParameters};
 
 fn get_challenges<F, C, L, const D: usize>(
     stark: &ChipStark<L, F, D>,
@@ -43,11 +42,14 @@ where
     let mut challenger = Challenger::<F, C::Hasher>::new();
 
     challenger.observe_cap(prartial_trace_cap);
-    let stark_betas = challenger.get_n_challenges(3 * stark.num_verifier_challenges())
-    .chunks(3).map(|chunk| {
-        assert_eq!(chunk.len(), 3);
-        [chunk[0], chunk[1], chunk[2]]
-    }).collect::<Vec<_>>();
+    let stark_betas = challenger
+        .get_n_challenges(3 * stark.num_verifier_challenges())
+        .chunks(3)
+        .map(|chunk| {
+            assert_eq!(chunk.len(), 3);
+            [chunk[0], chunk[1], chunk[2]]
+        })
+        .collect::<Vec<_>>();
 
     challenger.observe_cap(trace_cap);
 
@@ -148,7 +150,7 @@ pub(crate) fn get_challenges_target<
 >(
     builder: &mut CircuitBuilder<F, D>,
     stark: &ChipStark<L, F, D>,
-    partial_trace_cap : &MerkleCapTarget,
+    partial_trace_cap: &MerkleCapTarget,
     trace_cap: &MerkleCapTarget,
     permutation_zs_cap: Option<&MerkleCapTarget>,
     quotient_polys_cap: &MerkleCapTarget,
@@ -166,11 +168,14 @@ where
     let mut challenger = RecursiveChallenger::<F, C::Hasher, D>::new(builder);
 
     challenger.observe_cap(partial_trace_cap);
-    let stark_betas = challenger.get_n_challenges(builder, 3 * stark.num_verifier_challenges())
-    .chunks(3).map(|chunk| {
-        assert_eq!(chunk.len(), 3);
-        [chunk[0], chunk[1], chunk[2]]
-    }).collect::<Vec<_>>();
+    let stark_betas = challenger
+        .get_n_challenges(builder, 3 * stark.num_verifier_challenges())
+        .chunks(3)
+        .map(|chunk| {
+            assert_eq!(chunk.len(), 3);
+            [chunk[0], chunk[1], chunk[2]]
+        })
+        .collect::<Vec<_>>();
 
     challenger.observe_cap(trace_cap);
 

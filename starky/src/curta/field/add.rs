@@ -237,8 +237,8 @@ mod tests {
         add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
         verify_stark_proof_circuit,
     };
-    use crate::curta::trace::trace;
     use crate::curta::stark::verifier::verify_stark_proof;
+    use crate::curta::trace::trace;
 
     #[derive(Clone, Debug, Copy)]
     struct FpAddTest;

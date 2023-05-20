@@ -12,7 +12,7 @@ use super::Lookup;
 use crate::curta::builder::StarkBuilder;
 use crate::curta::chip::StarkParameters;
 use crate::curta::constraint::arithmetic::ArithmeticExpression;
-use crate::curta::extension::cubic::array::CubicArray;
+use crate::curta::extension::cubic::element::CubicElement;
 use crate::curta::extension::cubic::gadget::CubicGadget;
 use crate::curta::extension::cubic::register::CubicElementRegister;
 use crate::curta::extension::cubic::{CubicExtension, CubicParameters};
@@ -91,7 +91,7 @@ impl LogLookup {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        betas : &[[F; 3]],
+        betas: &[[F; 3]],
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
@@ -99,19 +99,19 @@ impl LogLookup {
         P: PackedField<Scalar = FE>,
     {
         let beta_array = betas[self.challenge_idx];
-        let beta = CubicArray([
+        let beta = CubicElement([
             P::from(FE::from_basefield(beta_array[0])),
             P::from(FE::from_basefield(beta_array[1])),
             P::from(FE::from_basefield(beta_array[2])),
         ]);
 
-        let multiplicity = CubicArray::from_base(
+        let multiplicity = CubicElement::from_base(
             self.multiplicity.register().packed_generic_vars(vars)[0],
             P::ZEROS,
         );
         let table =
-            CubicArray::from_base(self.table.register().packed_generic_vars(vars)[0], P::ZEROS);
-        let multiplicity_table_log = CubicArray::from_slice(
+            CubicElement::from_base(self.table.register().packed_generic_vars(vars)[0], P::ZEROS);
+        let multiplicity_table_log = CubicElement::from_slice(
             self.multiplicity_table_log
                 .register()
                 .packed_generic_vars(vars),
@@ -125,7 +125,7 @@ impl LogLookup {
         let mut row_acc_iter = self
             .row_accumulators
             .iter()
-            .map(|r| CubicArray::from_slice(r.register().packed_generic_vars(vars)));
+            .map(|r| CubicElement::from_slice(r.register().packed_generic_vars(vars)));
 
         let mut values_pairs = (0..self.values.len())
             .step_by(2)
@@ -137,8 +137,8 @@ impl LogLookup {
             })
             .map(|(a, b)| {
                 (
-                    CubicArray::from_base(a, P::ZEROS),
-                    CubicArray::from_base(b, P::ZEROS),
+                    CubicElement::from_base(a, P::ZEROS),
+                    CubicElement::from_base(b, P::ZEROS),
                 )
             })
             .map(|(a, b)| (beta - a, beta - b));
@@ -161,12 +161,12 @@ impl LogLookup {
             prev = acc;
         }
 
-        let log_lookup_accumulator = CubicArray::from_slice(
+        let log_lookup_accumulator = CubicElement::from_slice(
             self.log_lookup_accumulator
                 .register()
                 .packed_generic_vars(vars),
         );
-        let log_lookup_accumulator_next = CubicArray::from_slice(
+        let log_lookup_accumulator_next = CubicElement::from_slice(
             self.log_lookup_accumulator
                 .next()
                 .register()
@@ -203,13 +203,11 @@ impl LogLookup {
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
         let beta_array = betas[self.challenge_idx];
-        let beta = CubicArray(
-            [
-                builder.convert_to_ext(beta_array[0]),
-                builder.convert_to_ext(beta_array[1]),
-                builder.convert_to_ext(beta_array[2]),
-            ],
-        );
+        let beta = CubicElement([
+            builder.convert_to_ext(beta_array[0]),
+            builder.convert_to_ext(beta_array[1]),
+            builder.convert_to_ext(beta_array[2]),
+        ]);
 
         let multiplicity = CubicGadget::from_base_extension(
             builder,
@@ -220,7 +218,7 @@ impl LogLookup {
             builder,
             self.table.register().ext_circuit_vars(vars)[0],
         );
-        let multiplicity_table_log = CubicArray::from_slice(
+        let multiplicity_table_log = CubicElement::from_slice(
             self.multiplicity_table_log
                 .register()
                 .ext_circuit_vars(vars),
@@ -238,7 +236,7 @@ impl LogLookup {
         let mut row_acc_vec = self
             .row_accumulators
             .iter()
-            .map(|r| CubicArray::from_slice(r.register().ext_circuit_vars(vars)))
+            .map(|r| CubicElement::from_slice(r.register().ext_circuit_vars(vars)))
             .collect::<VecDeque<_>>();
 
         let mut range_pairs = (0..self.values.len())
@@ -291,12 +289,12 @@ impl LogLookup {
             prev = *acc;
         }
 
-        let log_lookup_accumulator = CubicArray::from_slice(
+        let log_lookup_accumulator = CubicElement::from_slice(
             self.log_lookup_accumulator
                 .register()
                 .ext_circuit_vars(vars),
         );
-        let log_lookup_accumulator_next = CubicArray::from_slice(
+        let log_lookup_accumulator_next = CubicElement::from_slice(
             self.log_lookup_accumulator
                 .next()
                 .register()
@@ -436,7 +434,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
 
         let mult_table_log = lookup_data.multiplicity_table_log.register();
         for (i, value) in mult_table_log_entries.iter().enumerate() {
-            mult_table_log.assign(trace_rows, 0, &value.0, i);
+            mult_table_log.assign(trace_rows, 0, &value.base_field_array(), i);
         }
 
         // Log accumulator
@@ -452,7 +450,8 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
                     let beta_minus_b = beta - pair[1].into();
                     accumumulator += CubicExtension::from(beta_minus_a).inverse()
                         + CubicExtension::from(beta_minus_b).inverse();
-                    accumulators[3 * k..3 * k + 3].copy_from_slice(&accumumulator.0);
+                    accumulators[3 * k..3 * k + 3]
+                        .copy_from_slice(&accumumulator.base_field_array());
                 }
                 accumumulator
             })
@@ -466,7 +465,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
             .filter(|(i, _)| *i != num_rows - 1)
         {
             value += acc - mult_table;
-            log_lookup_next.assign(trace_rows, 0, &value.0, i);
+            log_lookup_next.assign(trace_rows, 0, &value.base_field_array(), i);
         }
         Ok(())
     }
@@ -608,7 +607,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ExtendedTrace<F, D> {
 
         let mult_table_log = lookup_data.multiplicity_table_log.register();
         for (i, value) in mult_table_log_entries.iter().enumerate() {
-            mult_table_log.assign(trace_rows, 0, &value.0, i);
+            mult_table_log.assign(trace_rows, 0, &value.base_field_array(), i);
         }
 
         // Log accumulator
@@ -624,7 +623,8 @@ impl<F: RichField + Extendable<D>, const D: usize> ExtendedTrace<F, D> {
                     let beta_minus_b = beta - pair[1].into();
                     accumumulator += CubicExtension::from(beta_minus_a).inverse()
                         + CubicExtension::from(beta_minus_b).inverse();
-                    accumulators[3 * k..3 * k + 3].copy_from_slice(&accumumulator.0);
+                    accumulators[3 * k..3 * k + 3]
+                        .copy_from_slice(&accumumulator.base_field_array());
                 }
                 accumumulator
             })
@@ -638,7 +638,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ExtendedTrace<F, D> {
             .filter(|(i, _)| *i != num_rows - 1)
         {
             value += acc - mult_table;
-            log_lookup_next.assign(trace_rows, 0, &value.0, i);
+            log_lookup_next.assign(trace_rows, 0, &value.base_field_array(), i);
         }
         Ok(())
     }

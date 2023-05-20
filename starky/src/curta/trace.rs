@@ -166,7 +166,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         &self,
         chip: &Chip<L, F, D>,
         row_capacity: usize,
-        betas : &[[F;3]],
+        betas: &[[F; 3]],
     ) -> Result<Vec<PolynomialValues<F>>> {
         // Get trace rows
         let mut trace_rows = self.generate_trace_rows(chip, row_capacity)?;
@@ -296,7 +296,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ExtendedTrace<F, D> {
         chip: &Chip<L, F, D>,
         trace_rows: &mut Vec<Vec<F>>,
         row_capacity: usize,
-        betas : &[[F;3]]
+        betas: &[[F; 3]],
     ) -> Result<Vec<PolynomialValues<F>>> {
         // Initiaze the trace with capacity given by the use
         assert_eq!(

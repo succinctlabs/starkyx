@@ -162,10 +162,10 @@ mod tests {
             let c_v = GF3::rand();
 
             let row = a_v
-                .0
+                .base_field_array()
                 .iter()
-                .chain(b_v.0.iter())
-                .chain(c_v.0.iter())
+                .chain(b_v.base_field_array().iter())
+                .chain(c_v.base_field_array().iter())
                 .map(|x| *x)
                 .collect::<Vec<_>>();
             let trace = vec![row];

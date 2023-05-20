@@ -6,6 +6,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use crate::config::StarkConfig;
 use crate::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
+use crate::curta::chip::{ChipStark, StarkParameters};
 use crate::permutation::{
     eval_permutation_checks, eval_permutation_checks_circuit, PermutationCheckDataTarget,
     PermutationCheckVars,
@@ -13,15 +14,18 @@ use crate::permutation::{
 use crate::stark::Stark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-use crate::curta::chip::{StarkParameters, ChipStark};
-
 pub(crate) fn eval_vanishing_poly<F, FE, P, L, const D: usize, const D2: usize>(
     stark: &ChipStark<L, F, D>,
     config: &StarkConfig,
-    vars: StarkEvaluationVars<FE, P, { ChipStark::<L, F, D>::COLUMNS }, { ChipStark::<L, F, D>::PUBLIC_INPUTS }>,
+    vars: StarkEvaluationVars<
+        FE,
+        P,
+        { ChipStark::<L, F, D>::COLUMNS },
+        { ChipStark::<L, F, D>::PUBLIC_INPUTS },
+    >,
     permutation_data: Option<PermutationCheckVars<F, FE, P, D2>>,
     consumer: &mut ConstraintConsumer<P>,
-    betas : &[[F ; 3]],
+    betas: &[[F; 3]],
 ) where
     F: RichField + Extendable<D>,
     FE: FieldExtension<D2, BaseField = F>,
@@ -32,7 +36,7 @@ pub(crate) fn eval_vanishing_poly<F, FE, P, L, const D: usize, const D2: usize>(
 {
     stark.chip.eval_packed_generic(betas, vars, consumer);
     if let Some(permutation_data) = permutation_data {
-        eval_permutation_checks::<F, FE, P, ChipStark::<L, F, D>, D, D2>(
+        eval_permutation_checks::<F, FE, P, ChipStark<L, F, D>, D, D2>(
             stark,
             config,
             vars,
@@ -46,10 +50,14 @@ pub(crate) fn eval_vanishing_poly_circuit<F, L, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
     stark: &ChipStark<L, F, D>,
     config: &StarkConfig,
-    vars: StarkEvaluationTargets<D, { ChipStark::<L, F, D>::COLUMNS }, { ChipStark::<L, F, D>::PUBLIC_INPUTS }>,
+    vars: StarkEvaluationTargets<
+        D,
+        { ChipStark::<L, F, D>::COLUMNS },
+        { ChipStark::<L, F, D>::PUBLIC_INPUTS },
+    >,
     permutation_data: Option<PermutationCheckDataTarget<D>>,
     consumer: &mut RecursiveConstraintConsumer<F, D>,
-    betas : &[[Target ; 3]],
+    betas: &[[Target; 3]],
 ) where
     F: RichField + Extendable<D>,
     L: StarkParameters<F, D>,
@@ -58,7 +66,7 @@ pub(crate) fn eval_vanishing_poly_circuit<F, L, const D: usize>(
 {
     stark.chip.eval_ext_circuit(betas, builder, vars, consumer);
     if let Some(permutation_data) = permutation_data {
-        eval_permutation_checks_circuit::<F, ChipStark::<L, F, D>, D>(
+        eval_permutation_checks_circuit::<F, ChipStark<L, F, D>, D>(
             builder,
             stark,
             config,

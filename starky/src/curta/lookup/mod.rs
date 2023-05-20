@@ -28,7 +28,7 @@ impl Lookup {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        betas : &[[F; 3]],
+        betas: &[[F; 3]],
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
