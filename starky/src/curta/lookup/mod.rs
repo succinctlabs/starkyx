@@ -1,4 +1,4 @@
-//! Range checks based on logarithmic derivatives.
+//! Lookup table
 //!
 
 pub mod log_der;

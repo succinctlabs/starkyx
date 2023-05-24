@@ -4,7 +4,6 @@ use core::ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign};
 pub struct CubicElement<T>(pub [T; 3]);
 
 impl<T: Copy> CubicElement<T> {
-
     #[inline]
     pub const fn new(a: T, b: T, c: T) -> Self {
         Self([a, b, c])
@@ -25,7 +24,7 @@ impl<T: Copy> CubicElement<T> {
     pub const fn as_slice(&self) -> &[T] {
         &self.0
     }
- 
+
     #[inline]
     pub const fn as_array(&self) -> [T; 3] {
         self.0

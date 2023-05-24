@@ -1,3 +1,5 @@
+pub mod types;
+
 use alloc::collections::BTreeMap;
 use std::sync::mpsc::{Receiver, Sender};
 
