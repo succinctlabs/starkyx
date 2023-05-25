@@ -4,6 +4,7 @@
 //! and witness values.
 //!
 
+use core::fmt::Debug;
 use core::ops::Range;
 
 use plonky2::field::extension::{Extendable, FieldExtension};
@@ -20,6 +21,7 @@ use super::register::ElementRegister;
 // use crate::lookup::{eval_lookups, eval_lookups_circuit};
 // use crate::permutation::PermutationPair;
 use crate::stark::Stark;
+use crate::curta::new_stark::Stark as NewStark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 /// A layout for a circuit that emulates field operations
@@ -36,7 +38,7 @@ pub trait StarkParameters<F: RichField + Extendable<D>, const D: usize>:
     const NUM_FREE_COLUMNS: usize;
 
     /// Th
-    type Instruction: Instruction<F, D>;
+    type Instruction: Instruction<F, D> + Debug;
 }
 
 #[derive(Debug, Clone)]
@@ -118,7 +120,7 @@ where
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        betas: &[[F; 3]],
+        betas: &[F],
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
@@ -153,7 +155,7 @@ where
 
     pub fn eval_ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
         &self,
-        betas: &[[Target; 3]],
+        betas: &[Target],
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
@@ -207,7 +209,7 @@ where
 /// A Stark for emulated field operations
 ///
 /// This stark handles the range checks for the limbs
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ChipStark<L, F, const D: usize>
 where
     L: StarkParameters<F, D>,
@@ -276,3 +278,11 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     //     self.chip.permutation_pairs()
     // }
 }
+
+
+
+
+
+// impl<L :StarkParameters<F, D> ,F: RichField + Extendable<D>, const D: usize> NewStark<F, D, 2> for ChipStark<L, F, D> {
+
+// }

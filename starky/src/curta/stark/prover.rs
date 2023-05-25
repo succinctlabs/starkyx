@@ -75,13 +75,13 @@ where
     challenger.observe_cap(&partial_trace_cap);
 
     let stark_betas = challenger
-        .get_n_challenges(3 * stark.num_verifier_challenges())
-        .chunks(3)
-        .map(|chunk| {
-            assert_eq!(chunk.len(), 3);
-            [chunk[0], chunk[1], chunk[2]]
-        })
-        .collect::<Vec<_>>();
+        .get_n_challenges(3 * stark.num_verifier_challenges());
+        // .chunks(3)
+        // .map(|chunk| {
+        //     assert_eq!(chunk.len(), 3);
+        //     [chunk[0], chunk[1], chunk[2]]
+        // })
+        // .collect::<Vec<_>>();
 
     let num_rows = trace_rows.len();
     let trace_poly_values = ExtendedTrace::generate_trace_with_challenges::<L, E>(
@@ -251,7 +251,7 @@ fn compute_quotient_polys<'a, F, P, C, L, const D: usize>(
     )>,
     public_inputs: [F; ChipStark::<L, F, D>::PUBLIC_INPUTS],
     alphas: Vec<F>,
-    betas: Vec<[F; 3]>,
+    betas: Vec<F>, 
     degree_bits: usize,
     config: &StarkConfig,
 ) -> Vec<PolynomialCoeffs<F>>

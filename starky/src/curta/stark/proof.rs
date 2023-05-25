@@ -115,7 +115,7 @@ pub(crate) struct StarkProofChallenges<F: RichField + Extendable<D>, const D: us
     pub stark_alphas: Vec<F>,
 
     /// Random values that can be used by the STARK for any purpuse.
-    pub stark_betas: Vec<[F; 3]>,
+    pub stark_betas: Vec<F>,
 
     /// Point at which the STARK polynomials are opened.
     pub stark_zeta: F::Extension,
@@ -126,7 +126,7 @@ pub(crate) struct StarkProofChallenges<F: RichField + Extendable<D>, const D: us
 pub(crate) struct StarkProofChallengesTarget<const D: usize> {
     pub permutation_challenge_sets: Option<Vec<PermutationChallengeSet<Target>>>,
     pub stark_alphas: Vec<Target>,
-    pub stark_betas: Vec<[Target; 3]>,
+    pub stark_betas: Vec<Target>,
     pub stark_zeta: ExtensionTarget<D>,
     pub fri_challenges: FriChallengesTarget<D>,
 }

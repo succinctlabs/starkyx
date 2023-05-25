@@ -298,7 +298,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ExtendedTrace<F, D> {
         chip: &Chip<L, F, D>,
         trace_rows: &mut Vec<Vec<F>>,
         row_capacity: usize,
-        betas: &[[F; 3]],
+        betas: &[F],
     ) -> Result<Vec<PolynomialValues<F>>> {
         // Initiaze the trace with capacity given by the use
         assert_eq!(
@@ -309,8 +309,9 @@ impl<F: RichField + Extendable<D>, const D: usize> ExtendedTrace<F, D> {
         );
 
         if let Some(Lookup::LogDerivative(data)) = &chip.range_data {
-            let beta_array = betas[data.challenge_idx];
-            Self::write_lookups::<E>(row_capacity, trace_rows, beta_array, data, Self::range_fn)
+            let b_idx = 3 * data.challenge_idx;
+            let beta_slice = &betas[b_idx..b_idx+3];
+            Self::write_lookups::<E>(row_capacity, trace_rows, beta_slice, data, Self::range_fn)
                 .unwrap();
         }
         // Transpose the trace to get the columns and resize to the correct size

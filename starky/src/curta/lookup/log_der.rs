@@ -96,14 +96,15 @@ impl LogLookup {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        betas: &[[F; 3]],
+        betas: &[F],
         vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
     ) where
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
-        let beta_array = betas[self.challenge_idx];
+        let b_idx = 3 * self.challenge_idx;
+        let beta_array = &betas[b_idx..b_idx + 3];
         let beta = CubicElement([
             P::from(FE::from_basefield(beta_array[0])),
             P::from(FE::from_basefield(beta_array[1])),
@@ -202,16 +203,17 @@ impl LogLookup {
         const PUBLIC_INPUTS: usize,
     >(
         &self,
-        betas: &[[Target; 3]],
+        betas: &[Target],
         builder: &mut CircuitBuilder<F, D>,
         vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
-        let beta_array = betas[self.challenge_idx];
+        let b_idx = 3 * self.challenge_idx;
+        let beta_slice = &betas[b_idx..b_idx + 3];
         let beta = CubicElement([
-            builder.convert_to_ext(beta_array[0]),
-            builder.convert_to_ext(beta_array[1]),
-            builder.convert_to_ext(beta_array[2]),
+            builder.convert_to_ext(beta_slice[0]),
+            builder.convert_to_ext(beta_slice[1]),
+            builder.convert_to_ext(beta_slice[2]),
         ]);
 
         let multiplicity = CubicGadget::from_base_extension(
@@ -574,12 +576,12 @@ impl<F: RichField + Extendable<D>, const D: usize> ExtendedTrace<F, D> {
     pub fn write_lookups<E: CubicParameters<F>>(
         num_rows: usize,
         trace_rows: &mut Vec<Vec<F>>,
-        beta_array: [F; 3],
+        beta_slice: &[F],
         lookup_data: &LogLookup,
         table_index: fn(F) -> usize,
     ) -> Result<()> {
         // Get the challenge
-        let beta = CubicExtension::<F, E>::from(beta_array);
+        let beta = CubicExtension::<F, E>::from_slice(beta_slice);
 
         let values_idx = lookup_data.values_idx();
 

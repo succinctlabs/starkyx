@@ -6,16 +6,21 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use crate::curta::constraint::arithmetic::{ArithmeticExpression, ArithmeticExpressionSlice};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
-/// A row-wise contiguous chunk of memory in the trace. Corresponds to a slice in vars.local_values
-/// or vars.next_values.
+use crate::curta::new_stark::vars as new_vars;
+
+/// A contiguous chunk of memory in the trace and Stark data.
+/// Corresponds to a slice in vars.local_values, vars.next_values, vars.public_inputs,
+/// or vars.challenges.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
 pub enum MemorySlice {
+    /// A slice of the current row.
     Local(usize, usize),
+    /// A slice of the next row.
     Next(usize, usize),
-
-    // Not sure if these are needed
-    First(usize, usize),
-    Last(usize, usize),
+    /// A slice of public inputs
+    Public(usize, usize),
+    /// A slice of values coming from verifier challenges
+    Challenge(usize, usize),
 }
 
 impl MemorySlice {
@@ -36,8 +41,8 @@ impl MemorySlice {
         match self {
             MemorySlice::Local(index, length) => (*index, *index + length),
             MemorySlice::Next(index, length) => (*index, *index + length),
-            MemorySlice::First(index, length) => (*index, *index + length),
-            MemorySlice::Last(index, length) => (*index, *index + length),
+            MemorySlice::Public(index, length) => (*index, *index + length),
+            MemorySlice::Challenge(index, length) => (*index, *index + length),
         }
     }
 
@@ -46,8 +51,8 @@ impl MemorySlice {
         match self {
             MemorySlice::Local(index, _) => *index,
             MemorySlice::Next(index, _) => *index,
-            MemorySlice::First(index, _) => *index,
-            MemorySlice::Last(index, _) => *index,
+            MemorySlice::Public(index, _) => *index,
+            MemorySlice::Challenge(index, _) => *index,
         }
     }
 
@@ -56,8 +61,8 @@ impl MemorySlice {
         match self {
             MemorySlice::Local(_, length) => *length,
             MemorySlice::Next(_, length) => *length,
-            MemorySlice::First(_, length) => *length,
-            MemorySlice::Last(_, length) => *length,
+            MemorySlice::Public(_, length) => *length,
+            MemorySlice::Challenge(_, length) => *length,
         }
     }
 
@@ -95,12 +100,8 @@ impl MemorySlice {
             MemorySlice::Next(index, length) => {
                 trace_rows[row_index + 1][*index..*index + length].copy_from_slice(value);
             }
-            MemorySlice::First(index, length) => {
-                trace_rows[0][*index..*index + length].copy_from_slice(value);
-            }
-            MemorySlice::Last(index, length) => {
-                trace_rows[trace_rows.len() - 1][*index..*index + length].copy_from_slice(value);
-            }
+            MemorySlice::Public(_, _) => unimplemented!("Cannot assign to public inputs"),
+            MemorySlice::Challenge(_, _) => unimplemented!("Cannot assign to challenges"),
         }
         return local_index + self.len();
     }
@@ -125,7 +126,7 @@ impl MemorySlice {
         match self {
             MemorySlice::Local(index, length) => &vars.local_values[*index..*index + length],
             MemorySlice::Next(index, length) => &vars.next_values[*index..*index + length],
-            _ => panic!("Cannot read from a non-local register"),
+            _ => unimplemented!("Cannot get generic vars for public inputs or challenges"),
         }
     }
 
@@ -150,14 +151,41 @@ impl MemorySlice {
                 vars.local_values[*index..*index + length].to_vec()
             }
             MemorySlice::Next(index, length) => vars.next_values[*index..*index + length].to_vec(),
-            MemorySlice::First(index, length) => vars.public_inputs[*index..*index + length]
-                .iter()
-                .map(|x| P::from(*x))
-                .collect(),
-            MemorySlice::Last(index, length) => vars.public_inputs[*index..*index + length]
-                .iter()
-                .map(|x| P::from(*x))
-                .collect(),
+            MemorySlice::Public(index, length) => {
+                vars.public_inputs.map(|x| P::from(x))[*index..*index + length].into()
+            }
+            MemorySlice::Challenge(_, _) => unimplemented!("Cannot get entries for challenges"),
+        }
+    }
+
+    #[inline]
+    pub fn packed_entries_new<
+        F,
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+        const CHALLENGES : usize,
+    >(
+        &self,
+        vars: new_vars::StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }, {CHALLENGES}>,
+    ) -> Vec<P>
+    where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>,
+    {
+        match self {
+            MemorySlice::Local(index, length) => {
+                vars.local_values[*index..*index + length].to_vec()
+            }
+            MemorySlice::Next(index, length) => vars.next_values[*index..*index + length].to_vec(),
+            MemorySlice::Public(index, length) => {
+                vars.public_inputs.map(|x| P::from(x))[*index..*index + length].into()
+            }
+            MemorySlice::Challenge(index, length) => {
+                vars.challenges.map(|x| P::from(x))[*index..*index + length].into()
+            }
         }
     }
 
@@ -174,8 +202,27 @@ impl MemorySlice {
         match self {
             MemorySlice::Local(index, length) => &vars.local_values[*index..*index + length],
             MemorySlice::Next(index, length) => &vars.next_values[*index..*index + length],
-            MemorySlice::First(index, length) => &vars.public_inputs[*index..*index + length],
-            MemorySlice::Last(index, length) => &vars.public_inputs[*index..*index + length],
+            MemorySlice::Public(index, length) => &vars.public_inputs[*index..*index + length],
+            MemorySlice::Challenge(_, _) => unimplemented!("Cannot get entries for challenges"),
+        }
+    }
+
+    #[inline]
+    pub fn ext_circuit_vars_new<
+        'a,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+        const CHALLENGES : usize,
+        const D: usize,
+    >(
+        &self,
+        vars: new_vars::StarkEvaluationTargets<'a, D, { COLUMNS }, { PUBLIC_INPUTS }, {CHALLENGES}>,
+    ) -> &'a [ExtensionTarget<D>] {
+        match self {
+            MemorySlice::Local(index, length) => &vars.local_values[*index..*index + length],
+            MemorySlice::Next(index, length) => &vars.next_values[*index..*index + length],
+            MemorySlice::Public(index, length) => &vars.public_inputs[*index..*index + length],
+            MemorySlice::Challenge(index, length) => &vars.challenges[*index..*index + length],
         }
     }
 

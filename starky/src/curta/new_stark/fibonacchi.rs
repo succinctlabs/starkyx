@@ -126,7 +126,10 @@ mod tests {
     use super::*;
     use crate::config::StarkConfig;
     use crate::curta::new_stark::prover::prove;
-    use crate::curta::new_stark::recursive_verifier::{add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target, verify_stark_proof_circuit};
+    use crate::curta::new_stark::recursive_verifier::{
+        add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
+        verify_stark_proof_circuit,
+    };
     use crate::curta::new_stark::verifier::verify_stark_proof;
     use crate::curta::trace::types::ConstantGenerator;
 

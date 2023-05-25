@@ -13,6 +13,7 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 macro_rules! instruction_set {
     ($($var:ident$(<$($t:ident),+>)?),*) => {
 
+        #[derive(Debug)]
         pub enum InstructionSet<P: FieldParameters> { $(
             $var($var$(< $( $t ),+ >)?),
         )*}

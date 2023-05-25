@@ -43,13 +43,13 @@ where
 
     challenger.observe_cap(prartial_trace_cap);
     let stark_betas = challenger
-        .get_n_challenges(3 * stark.num_verifier_challenges())
-        .chunks(3)
-        .map(|chunk| {
-            assert_eq!(chunk.len(), 3);
-            [chunk[0], chunk[1], chunk[2]]
-        })
-        .collect::<Vec<_>>();
+        .get_n_challenges(3 * stark.num_verifier_challenges());
+        // .chunks(3)
+        // .map(|chunk| {
+        //     assert_eq!(chunk.len(), 3);
+        //     [chunk[0], chunk[1], chunk[2]]
+        // })
+        // .collect::<Vec<_>>();
 
     challenger.observe_cap(trace_cap);
 
@@ -169,13 +169,13 @@ where
 
     challenger.observe_cap(partial_trace_cap);
     let stark_betas = challenger
-        .get_n_challenges(builder, 3 * stark.num_verifier_challenges())
-        .chunks(3)
-        .map(|chunk| {
-            assert_eq!(chunk.len(), 3);
-            [chunk[0], chunk[1], chunk[2]]
-        })
-        .collect::<Vec<_>>();
+        .get_n_challenges(builder, 3 * stark.num_verifier_challenges());
+        // .chunks(3)
+        // .map(|chunk| {
+        //     assert_eq!(chunk.len(), 3);
+        //     [chunk[0], chunk[1], chunk[2]]
+        // })
+        // .collect::<Vec<_>>();
 
     challenger.observe_cap(trace_cap);
 

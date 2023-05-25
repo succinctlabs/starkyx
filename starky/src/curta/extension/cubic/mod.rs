@@ -44,6 +44,11 @@ impl<F: Field, P: CubicParameters<F>> CubicExtension<F, P> {
         Self(CubicElement::new(a, b, c), PhantomData)
     }
 
+    pub fn from_slice(slice : &[F]) -> Self {
+        assert_eq!(slice.len(), 3);
+        Self::new(slice[0], slice[1], slice[2])
+    }
+
     #[inline]
     pub fn base_field_array(&self) -> [F; 3] {
         self.0.as_array()

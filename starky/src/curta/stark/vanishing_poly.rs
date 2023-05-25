@@ -25,7 +25,7 @@ pub(crate) fn eval_vanishing_poly<F, FE, P, L, const D: usize, const D2: usize>(
     >,
     permutation_data: Option<PermutationCheckVars<F, FE, P, D2>>,
     consumer: &mut ConstraintConsumer<P>,
-    betas: &[[F; 3]],
+    betas: &[F],
 ) where
     F: RichField + Extendable<D>,
     FE: FieldExtension<D2, BaseField = F>,
@@ -57,7 +57,7 @@ pub(crate) fn eval_vanishing_poly_circuit<F, L, const D: usize>(
     >,
     permutation_data: Option<PermutationCheckDataTarget<D>>,
     consumer: &mut RecursiveConstraintConsumer<F, D>,
-    betas: &[[Target; 3]],
+    betas: &[Target],
 ) where
     F: RichField + Extendable<D>,
     L: StarkParameters<F, D>,
