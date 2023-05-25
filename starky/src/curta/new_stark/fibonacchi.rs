@@ -1,23 +1,21 @@
 use core::marker::PhantomData;
 
 use plonky2::field::extension::Extendable;
-use plonky2::field::polynomial::PolynomialValues;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 
-use crate::curta::trace::types::{StarkTrace, ConstantGenerator};
-
 use super::Stark;
+use crate::curta::trace::types::ConstantGenerator;
 
 #[derive(Debug, Clone)]
 pub struct FibonacciStark<F, const D: usize>(PhantomData<F>);
 
-impl<F : RichField + Extendable<D>, const D: usize> FibonacciStark<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> FibonacciStark<F, D> {
     pub fn new() -> Self {
         Self(PhantomData)
     }
 
-    pub(crate) fn generator(&self, x0: F, x1: F, num_rows: usize) -> ConstantGenerator<F> {
+    pub fn generator(&self, x0: F, x1: F, num_rows: usize) -> ConstantGenerator<F> {
         let mut trace_rows = (0..num_rows)
             .scan([x0, x1, F::ZERO, F::ONE], |acc, _| {
                 let tmp = *acc;
@@ -34,7 +32,7 @@ impl<F : RichField + Extendable<D>, const D: usize> FibonacciStark<F, D> {
     }
 }
 
-fn fibonacci<F: Field>(n: usize, x0: F, x1: F) -> F {
+pub fn fibonacci<F: Field>(n: usize, x0: F, x1: F) -> F {
     (0..n).fold((x0, x1), |x, _| (x.1, x.0 + x.1)).1
 }
 
@@ -68,12 +66,9 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D, 1> for FibonacciS
         P: plonky2::field::packed::PackedField<Scalar = FE>,
     {
         // Check public inputs.
-        yield_constr
-            .constraint_first_row(vars.local_values[0] - vars.public_inputs[0]);
-        yield_constr
-            .constraint_first_row(vars.local_values[1] - vars.public_inputs[1]);
-        yield_constr
-            .constraint_last_row(vars.local_values[1] - vars.public_inputs[2]);
+        yield_constr.constraint_first_row(vars.local_values[0] - vars.public_inputs[0]);
+        yield_constr.constraint_first_row(vars.local_values[1] - vars.public_inputs[1]);
+        yield_constr.constraint_last_row(vars.local_values[1] - vars.public_inputs[2]);
 
         // x0' <- x1
         yield_constr.constraint_transition(vars.next_values[0] - vars.local_values[1]);
@@ -84,35 +79,35 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D, 1> for FibonacciS
     }
 
     fn eval_ext_circuit(
-            &self,
-            builder: &mut plonky2::plonk::circuit_builder::CircuitBuilder<F, D>,
-            vars: super::vars::StarkEvaluationTargets<
-                D,
-                { Self::COLUMNS },
-                { Self::PUBLIC_INPUTS },
-                { Self::CHALLENGES },
-            >,
-            yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
-        ) {
-                // Check public inputs.
-                let pis_constraints = [
-                    builder.sub_extension(vars.local_values[0], vars.public_inputs[0]),
-                    builder.sub_extension(vars.local_values[1], vars.public_inputs[1]),
-                    builder.sub_extension(vars.local_values[1], vars.public_inputs[2]),
-                ];
-                yield_constr.constraint_first_row(builder, pis_constraints[0]);
-                yield_constr.constraint_first_row(builder, pis_constraints[1]);
-                yield_constr.constraint_last_row(builder, pis_constraints[2]);
-        
-                // x0' <- x1
-                let first_col_constraint = builder.sub_extension(vars.next_values[0], vars.local_values[1]);
-                yield_constr.constraint_transition(builder, first_col_constraint);
-                // x1' <- x0 + x1
-                let second_col_constraint = {
-                    let tmp = builder.sub_extension(vars.next_values[1], vars.local_values[0]);
-                    builder.sub_extension(tmp, vars.local_values[1])
-                };
-                yield_constr.constraint_transition(builder, second_col_constraint);
+        &self,
+        builder: &mut plonky2::plonk::circuit_builder::CircuitBuilder<F, D>,
+        vars: super::vars::StarkEvaluationTargets<
+            D,
+            { Self::COLUMNS },
+            { Self::PUBLIC_INPUTS },
+            { Self::CHALLENGES },
+        >,
+        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
+    ) {
+        // Check public inputs.
+        let pis_constraints = [
+            builder.sub_extension(vars.local_values[0], vars.public_inputs[0]),
+            builder.sub_extension(vars.local_values[1], vars.public_inputs[1]),
+            builder.sub_extension(vars.local_values[1], vars.public_inputs[2]),
+        ];
+        yield_constr.constraint_first_row(builder, pis_constraints[0]);
+        yield_constr.constraint_first_row(builder, pis_constraints[1]);
+        yield_constr.constraint_last_row(builder, pis_constraints[2]);
+
+        // x0' <- x1
+        let first_col_constraint = builder.sub_extension(vars.next_values[0], vars.local_values[1]);
+        yield_constr.constraint_transition(builder, first_col_constraint);
+        // x1' <- x0 + x1
+        let second_col_constraint = {
+            let tmp = builder.sub_extension(vars.next_values[1], vars.local_values[0]);
+            builder.sub_extension(tmp, vars.local_values[1])
+        };
+        yield_constr.constraint_transition(builder, second_col_constraint);
     }
 
     fn constraint_degree(&self) -> usize {
@@ -122,11 +117,14 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D, 1> for FibonacciS
 
 #[cfg(test)]
 mod tests {
-    use plonky2::{plonk::config::{GenericConfig, PoseidonGoldilocksConfig}, util::timing::TimingTree};
-
-    use crate::{config::StarkConfig, curta::{new_stark::{prover::prove, verifier::verify_stark_proof}, trace::types::ConstantGenerator}};
+    use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+    use plonky2::util::timing::TimingTree;
 
     use super::*;
+    use crate::config::StarkConfig;
+    use crate::curta::new_stark::prover::prove;
+    use crate::curta::new_stark::verifier::verify_stark_proof;
+    use crate::curta::trace::types::ConstantGenerator;
 
     #[test]
     fn test_new_fibonacci_stark() {
@@ -149,7 +147,8 @@ mod tests {
             num_rows,
             public_inputs,
             &mut TimingTree::default(),
-        ).unwrap();
+        )
+        .unwrap();
 
         verify_stark_proof(stark, proof, &config).unwrap();
     }
