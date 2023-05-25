@@ -1,3 +1,4 @@
+pub mod fibonacchi;
 pub mod get_challenges;
 pub mod proof;
 pub mod prover;
@@ -29,10 +30,15 @@ pub trait Stark<F: RichField + Extendable<D>, const D: usize, const R: usize>: S
     const COLUMNS: usize;
     /// The number of public inputs.
     const PUBLIC_INPUTS: usize;
-    /// The total number of verifier challenges.
+    // The total number of challenge elements
     const CHALLENGES: usize;
 
+    /// Columns for each round
     fn round_data(&self) -> [(usize, usize); R];
+
+    /// The number of challenges per round
+    fn num_challenges(&self, round: usize) -> usize;
+
     /// Evaluate constraints at a vector of points.
     ///
     /// The points are elements of a field `FE`, a degree `D2` extension of `F`. This lets us
