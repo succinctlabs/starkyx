@@ -117,12 +117,16 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D, 1> for FibonacciS
 
 #[cfg(test)]
 mod tests {
+    use plonky2::iop::witness::PartialWitness;
+    use plonky2::plonk::circuit_builder::CircuitBuilder;
+    use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::util::timing::TimingTree;
 
     use super::*;
     use crate::config::StarkConfig;
     use crate::curta::new_stark::prover::prove;
+    use crate::curta::new_stark::recursive_verifier::{add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target, verify_stark_proof_circuit};
     use crate::curta::new_stark::verifier::verify_stark_proof;
     use crate::curta::trace::types::ConstantGenerator;
 
@@ -150,6 +154,37 @@ mod tests {
         )
         .unwrap();
 
-        verify_stark_proof(stark, proof, &config).unwrap();
+        verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
+
+        // Generate the recursive proof.
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
+        let degree_bits = proof.proof.recover_degree_bits(&config);
+        let virtual_proof = add_virtual_stark_proof_with_pis(
+            &mut recursive_builder,
+            stark.clone(),
+            &config,
+            degree_bits,
+        );
+        recursive_builder.print_gate_counts(0);
+        let mut rec_pw = PartialWitness::new();
+        set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
+        verify_stark_proof_circuit::<F, C, S, D, 1>(
+            &mut recursive_builder,
+            stark,
+            virtual_proof,
+            &config,
+        );
+        let recursive_data = recursive_builder.build::<C>();
+        let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
+        let recursive_proof = plonky2::plonk::prover::prove(
+            &recursive_data.prover_only,
+            &recursive_data.common,
+            rec_pw,
+            &mut timing,
+        )
+        .unwrap();
+        timing.print();
+        recursive_data.verify(recursive_proof).unwrap();
     }
 }
