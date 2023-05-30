@@ -7,6 +7,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
+use crate::curta::new_stark::vars as new_vars;
 use crate::curta::register::{MemorySlice, Register};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -220,6 +221,108 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
             ArithmeticExpressionSlice::Mul(left, right) => {
                 let left_vals = left.ext_circuit(builder, vars);
                 let right_vals = right.ext_circuit(builder, vars);
+                left_vals
+                    .iter()
+                    .zip(right_vals.iter())
+                    .map(|(l, r)| builder.mul_extension(*l, *r))
+                    .collect()
+            }
+        }
+    }
+
+    pub fn packed_generic_new<
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+        const CHALLENGES: usize,
+    >(
+        &self,
+        vars: new_vars::StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }, { CHALLENGES }>,
+    ) -> Vec<P>
+    where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>,
+    {
+        match self {
+            ArithmeticExpressionSlice::Input(input) => input.packed_entries_new(vars),
+            ArithmeticExpressionSlice::Const(constants) => {
+                let s = |x: &F| P::from(FE::from_basefield(*x));
+                constants.iter().map(s).collect()
+            }
+            ArithmeticExpressionSlice::Add(left, right) => {
+                let left = left.packed_generic_new(vars);
+                let right = right.packed_generic_new(vars);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| *r + *l)
+                    .collect()
+            }
+            ArithmeticExpressionSlice::Sub(left, right) => {
+                let left = left.packed_generic_new(vars);
+                let right = right.packed_generic_new(vars);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| *l - *r)
+                    .collect()
+            }
+            ArithmeticExpressionSlice::ScalarMul(scalar, expr) => {
+                let expr = expr.packed_generic_new(vars);
+                let s = FE::from_basefield(*scalar);
+                expr.iter().map(|e| *e * s).collect()
+            }
+            ArithmeticExpressionSlice::Mul(left, right) => {
+                let left = left.packed_generic_new(vars);
+                let right = right.packed_generic_new(vars);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| *l * *r)
+                    .collect()
+            }
+        }
+    }
+
+    pub fn ext_circuit_new<
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+        const CHALLENGES: usize,
+    >(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        vars: new_vars::StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }, { CHALLENGES }>,
+    ) -> Vec<ExtensionTarget<D>> {
+        match self {
+            ArithmeticExpressionSlice::Input(input) => input.ext_circuit_vars_new(vars).to_vec(),
+            ArithmeticExpressionSlice::Const(constants) => constants
+                .iter()
+                .map(|x| builder.constant_extension(F::Extension::from_basefield(*x)))
+                .collect(),
+            ArithmeticExpressionSlice::Add(left, right) => {
+                let left = left.ext_circuit_new(builder, vars);
+                let right = right.ext_circuit_new(builder, vars);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| builder.add_extension(*l, *r))
+                    .collect()
+            }
+            ArithmeticExpressionSlice::Sub(left, right) => {
+                let left = left.ext_circuit_new(builder, vars);
+                let right = right.ext_circuit_new(builder, vars);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| builder.sub_extension(*l, *r))
+                    .collect()
+            }
+            ArithmeticExpressionSlice::ScalarMul(scalar, expr) => {
+                let expr = expr.ext_circuit_new(builder, vars);
+                expr.iter()
+                    .map(|x| builder.mul_const_extension(*scalar, *x))
+                    .collect()
+            }
+            ArithmeticExpressionSlice::Mul(left, right) => {
+                let left_vals = left.ext_circuit_new(builder, vars);
+                let right_vals = right.ext_circuit_new(builder, vars);
                 left_vals
                     .iter()
                     .zip(right_vals.iter())

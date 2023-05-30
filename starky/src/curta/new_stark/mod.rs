@@ -34,7 +34,7 @@ pub trait Stark<F: RichField + Extendable<D>, const D: usize, const R: usize>: S
     const CHALLENGES: usize;
 
     /// Columns for each round
-    fn round_data(&self) -> [(usize, usize); R];
+    fn round_lengths(&self) -> [usize; R];
 
     /// The number of challenges per round
     fn num_challenges(&self, round: usize) -> usize;
@@ -97,8 +97,8 @@ pub trait Stark<F: RichField + Extendable<D>, const D: usize, const R: usize>: S
         let mut oracles = vec![];
         let mut trace_info: Vec<FriPolynomialInfo> = vec![];
 
-        for (index, length) in self.round_data() {
-            let round_info = FriPolynomialInfo::from_range(oracles.len(), index..(index + length));
+        for length in self.round_lengths() {
+            let round_info = FriPolynomialInfo::from_range(oracles.len(), 0..length);
             trace_info.extend(round_info);
             oracles.push(FriOracleInfo {
                 num_polys: length,
@@ -137,8 +137,8 @@ pub trait Stark<F: RichField + Extendable<D>, const D: usize, const R: usize>: S
         let mut oracles = vec![];
         let mut trace_info: Vec<FriPolynomialInfo> = vec![];
 
-        for (index, length) in self.round_data() {
-            let round_info = FriPolynomialInfo::from_range(oracles.len(), index..(index + length));
+        for length in self.round_lengths() {
+            let round_info = FriPolynomialInfo::from_range(oracles.len(), 0..length);
             trace_info.extend(round_info);
             oracles.push(FriOracleInfo {
                 num_polys: length,

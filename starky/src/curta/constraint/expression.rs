@@ -14,6 +14,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::arithmetic::ArithmeticExpression;
 use crate::curta::instruction::Instruction;
+use crate::curta::new_stark::vars as new_vars;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 /// An abstract representation of a general AIR vanishing polynomial
@@ -137,6 +138,104 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
             ConstraintExpression::Union(left, right) => {
                 let mut constraints = left.ext_circuit(builder, vars);
                 constraints.extend(right.ext_circuit(builder, vars));
+                constraints
+            }
+        }
+    }
+
+    pub fn packed_generic_new<
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+        const CHALLENGES: usize,
+    >(
+        &self,
+        vars: new_vars::StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }, { CHALLENGES }>,
+    ) -> Vec<P>
+    where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>,
+    {
+        match self {
+            ConstraintExpression::Empty => vec![],
+            ConstraintExpression::Instruction(instruction) => instruction.packed_generic_new(vars),
+            ConstraintExpression::Arithmetic(expr) => expr.expression.packed_generic_new(vars),
+            ConstraintExpression::Mul(instruction, multiplier) => {
+                let vals = instruction.packed_generic_new(vars);
+                assert_eq!(multiplier.size, 1, "Multiplier must be a single element");
+                let mult = multiplier.expression.packed_generic_new(vars)[0];
+                vals.iter().map(|&val| val * mult).collect()
+            }
+            ConstraintExpression::Add(left, right) => {
+                let left = left.packed_generic_new(vars);
+                let right = right.packed_generic_new(vars);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| *r + *l)
+                    .collect()
+            }
+            ConstraintExpression::Sub(left, right) => {
+                let left = left.packed_generic_new(vars);
+                let right = right.packed_generic_new(vars);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| *r - *l)
+                    .collect()
+            }
+            ConstraintExpression::Union(left, right) => {
+                let mut constraints = left.packed_generic_new(vars);
+                constraints.extend(right.packed_generic_new(vars));
+                constraints
+            }
+        }
+    }
+
+    pub fn ext_circuit_new<
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+        const CHALLENGES: usize,
+    >(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        vars: new_vars::StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }, { CHALLENGES }>,
+    ) -> Vec<ExtensionTarget<D>> {
+        match self {
+            ConstraintExpression::Empty => vec![],
+            ConstraintExpression::Instruction(instruction) => {
+                instruction.ext_circuit_new(builder, vars)
+            }
+            ConstraintExpression::Arithmetic(expr) => {
+                expr.expression.ext_circuit_new(builder, vars)
+            }
+            ConstraintExpression::Mul(instruction, multiplier) => {
+                let vals = instruction.ext_circuit_new(builder, vars);
+                assert_eq!(multiplier.size, 1, "Multiplier must be a single element");
+                let mult = multiplier.expression.ext_circuit_new(builder, vars)[0];
+                vals.iter()
+                    .map(|val| builder.mul_extension(*val, mult))
+                    .collect()
+            }
+            ConstraintExpression::Add(left, right) => {
+                let left = left.ext_circuit_new(builder, vars);
+                let right = right.ext_circuit_new(builder, vars);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| builder.add_extension(*l, *r))
+                    .collect()
+            }
+            ConstraintExpression::Sub(left, right) => {
+                let left = left.ext_circuit_new(builder, vars);
+                let right = right.ext_circuit_new(builder, vars);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| builder.sub_extension(*l, *r))
+                    .collect()
+            }
+            ConstraintExpression::Union(left, right) => {
+                let mut constraints = left.ext_circuit_new(builder, vars);
+                constraints.extend(right.ext_circuit_new(builder, vars));
                 constraints
             }
         }

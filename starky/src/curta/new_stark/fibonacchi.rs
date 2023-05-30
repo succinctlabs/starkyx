@@ -42,8 +42,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D, 1> for FibonacciS
     const CHALLENGES: usize = 0;
 
     /// Columns for each round
-    fn round_data(&self) -> [(usize, usize); 1] {
-        [(0, 4)]
+    fn round_lengths(&self) -> [usize; 1] {
+        [4]
     }
 
     /// The number of challenges per round

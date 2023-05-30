@@ -24,12 +24,12 @@ use super::vars::StarkEvaluationVars;
 use super::Stark;
 use crate::config::StarkConfig;
 use crate::constraint_consumer::ConstraintConsumer;
-use crate::curta::trace::types::{StarkTrace, TraceGenerator};
+use crate::curta::trace::types::StarkTraceGenerator;
 
 pub fn prove<F, C, S, T, const D: usize, const R: usize>(
     stark: S,
     config: &StarkConfig,
-    witness_generator: T,
+    mut witness_generator: T,
     num_rows: usize,
     public_inputs: [F; S::PUBLIC_INPUTS],
     timing: &mut TimingTree,
@@ -38,38 +38,30 @@ where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
     S: Stark<F, D, R>,
-    T: TraceGenerator<F, R>,
+    T: StarkTraceGenerator<S, F, D, R>,
     [(); S::COLUMNS]:,
     [(); S::PUBLIC_INPUTS]:,
     [(); S::CHALLENGES]:,
     [(); C::Hasher::HASH_SIZE]:,
 {
-    // let partial_trace_values = transpose(&trace_rows)
-    //     .into_par_iter()
-    //     .map(PolynomialValues::new)
-    //     .collect::<Vec<_>>();
-
     let mut challenger: Challenger<F, <C as GenericConfig<D>>::Hasher> = Challenger::new();
     let rate_bits = config.fri_config.rate_bits;
     let cap_height = config.fri_config.cap_height;
 
-    let round_data = stark.round_data();
-    let mut trace = StarkTrace::new(num_rows, round_data);
     let mut trace_commitments = Vec::new();
     let mut challenges = Vec::with_capacity(S::CHALLENGES);
 
     for r in 0..R {
-        let (read_slice, write_slice) = trace.split_round(r);
-        timed!(
+        let trace_values = timed!(
             timing,
             &format!("Generate trace for round {}", r),
-            witness_generator.generate_round(r, &challenges, read_slice, write_slice)
+            witness_generator.generate_round(&stark, r, &challenges)
         );
         let commitment = timed!(
             timing,
             &format!("compute trace commitment for round {}", r),
             PolynomialBatch::<F, C, D>::from_values(
-                write_slice.to_vec(),
+                trace_values,
                 rate_bits,
                 false,
                 cap_height,
@@ -227,14 +219,15 @@ where
 
     // Retrieve the LDE values at index `i`.
     let get_trace_values_packed = |i_start| -> [P; S::COLUMNS] {
-        trace_commitment
+        let trace = trace_commitment
             .iter()
             .flat_map(|commitment| commitment.get_lde_values_packed(i_start, step))
-            .collect::<Vec<_>>()
-            .try_into()
-            .expect("Invalid number of trace columns")
+            .collect::<Vec<_>>();
+        // .try_into()
+        // .expect("Invalid number of trace columns")
+        assert_eq!(trace.len(), S::COLUMNS);
+        trace.try_into().unwrap()
     };
-
     // Last element of the subgroup.
     let last = F::primitive_root_of_unity(degree_bits).inverse();
     let size = degree << quotient_degree_bits;
@@ -289,7 +282,6 @@ where
             })
         })
         .collect::<Vec<_>>();
-
     transpose(&quotient_values)
         .into_par_iter()
         .map(PolynomialValues::new)

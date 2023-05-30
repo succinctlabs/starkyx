@@ -343,6 +343,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             Chip {
                 instructions: self.instructions,
                 write_instructions: self.write_instructions,
+                instruction_indices: self.instruction_indices.clone(),
                 constraints: self.constraints,
                 range_checks_idx: (0, L::NUM_ARITHMETIC_COLUMNS),
                 range_data: self.range_data,

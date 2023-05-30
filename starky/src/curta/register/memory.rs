@@ -4,9 +4,8 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 
 use crate::curta::constraint::arithmetic::{ArithmeticExpression, ArithmeticExpressionSlice};
-use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
-
 use crate::curta::new_stark::vars as new_vars;
+use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 /// A contiguous chunk of memory in the trace and Stark data.
 /// Corresponds to a slice in vars.local_values, vars.next_values, vars.public_inputs,
@@ -159,6 +158,38 @@ impl MemorySlice {
     }
 
     #[inline]
+    pub fn packed_generic_vars_new<
+        'a,
+        F,
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+        const CHALLENGES: usize,
+    >(
+        &self,
+        vars: new_vars::StarkEvaluationVars<
+            'a,
+            FE,
+            P,
+            { COLUMNS },
+            { PUBLIC_INPUTS },
+            { CHALLENGES },
+        >,
+    ) -> &'a [P]
+    where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>,
+    {
+        match self {
+            MemorySlice::Local(index, length) => &vars.local_values[*index..*index + length],
+            MemorySlice::Next(index, length) => &vars.next_values[*index..*index + length],
+            _ => unimplemented!("Cannot get generic vars for public inputs or challenges"),
+        }
+    }
+
+    #[inline]
     pub fn packed_entries_new<
         F,
         FE,
@@ -166,10 +197,10 @@ impl MemorySlice {
         const D2: usize,
         const COLUMNS: usize,
         const PUBLIC_INPUTS: usize,
-        const CHALLENGES : usize,
+        const CHALLENGES: usize,
     >(
         &self,
-        vars: new_vars::StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }, {CHALLENGES}>,
+        vars: new_vars::StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }, { CHALLENGES }>,
     ) -> Vec<P>
     where
         FE: FieldExtension<D2, BaseField = F>,
@@ -212,11 +243,17 @@ impl MemorySlice {
         'a,
         const COLUMNS: usize,
         const PUBLIC_INPUTS: usize,
-        const CHALLENGES : usize,
+        const CHALLENGES: usize,
         const D: usize,
     >(
         &self,
-        vars: new_vars::StarkEvaluationTargets<'a, D, { COLUMNS }, { PUBLIC_INPUTS }, {CHALLENGES}>,
+        vars: new_vars::StarkEvaluationTargets<
+            'a,
+            D,
+            { COLUMNS },
+            { PUBLIC_INPUTS },
+            { CHALLENGES },
+        >,
     ) -> &'a [ExtensionTarget<D>] {
         match self {
             MemorySlice::Local(index, length) => &vars.local_values[*index..*index + length],

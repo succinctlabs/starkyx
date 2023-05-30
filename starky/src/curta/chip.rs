@@ -4,6 +4,7 @@
 //! and witness values.
 //!
 
+use alloc::collections::BTreeMap;
 use core::fmt::Debug;
 use core::ops::Range;
 
@@ -13,15 +14,16 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
+use super::builder::InstructionId;
 use super::constraint::Constraint;
 use super::instruction::write::WriteInstruction;
 use super::instruction::Instruction;
 use super::lookup::Lookup;
 use super::register::ElementRegister;
+use crate::curta::new_stark::{vars as new_vars, Stark as NewStark};
 // use crate::lookup::{eval_lookups, eval_lookups_circuit};
 // use crate::permutation::PermutationPair;
 use crate::stark::Stark;
-use crate::curta::new_stark::Stark as NewStark;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 /// A layout for a circuit that emulates field operations
@@ -48,6 +50,7 @@ where
     F: RichField + Extendable<D>,
 {
     pub(crate) instructions: Vec<L::Instruction>,
+    pub(crate) instruction_indices: BTreeMap<InstructionId, usize>,
     pub(crate) write_instructions: Vec<WriteInstruction>,
     pub(crate) constraints: Vec<Constraint<L::Instruction, F, D>>,
     pub(crate) range_checks_idx: (usize, usize),
@@ -191,6 +194,54 @@ where
         // }
     }
 
+    pub fn eval_packed_generic_new<
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+        const CHALLENGES: usize,
+    >(
+        &self,
+        vars: new_vars::StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }, { CHALLENGES }>,
+        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
+    ) where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>,
+    {
+        for consr in self.constraints.iter() {
+            consr.packed_generic_constraints_new(vars, yield_constr);
+        }
+        if let Some(range_data) = &self.range_data {
+            range_data.packed_generic_constraints_new::<F, D, FE, P, D2, COLUMNS, PUBLIC_INPUTS, CHALLENGES>(
+                vars,
+                yield_constr,
+            );
+        }
+    }
+
+    pub fn eval_ext_circuit_new<
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+        const CHALLENGES: usize,
+    >(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        vars: new_vars::StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }, { CHALLENGES }>,
+        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
+    ) {
+        for consr in self.constraints.iter() {
+            consr.ext_circuit_constraints_new(builder, vars, yield_constr);
+        }
+        if let Some(range_data) = &self.range_data {
+            range_data.ext_circuit_constraints_new::<F, D, COLUMNS, PUBLIC_INPUTS, CHALLENGES>(
+                builder,
+                vars,
+                yield_constr,
+            );
+        }
+    }
+
     fn constraint_degree(&self) -> usize {
         3
     }
@@ -279,10 +330,77 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     // }
 }
 
+#[derive(Debug, Clone)]
+pub struct ChipNewStark<L, F, const D: usize>
+where
+    L: StarkParameters<F, D>,
+    F: RichField + Extendable<D>,
+{
+    pub chip: Chip<L, F, D>,
+}
 
+impl<L, F, const D: usize> ChipNewStark<L, F, D>
+where
+    L: StarkParameters<F, D>,
+    F: RichField + Extendable<D>,
+{
+    pub fn new(chip: Chip<L, F, D>) -> Self {
+        Self { chip }
+    }
+}
 
+impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> NewStark<F, D, 2>
+    for ChipNewStark<L, F, D>
+{
+    const COLUMNS: usize = Chip::<L, F, D>::num_columns();
+    const PUBLIC_INPUTS: usize = 0;
+    const CHALLENGES: usize = 3;
 
+    fn round_lengths(&self) -> [usize; 2] {
+        let partial_trace_index = self.chip.partial_trace_index;
+        [partial_trace_index, Self::COLUMNS - partial_trace_index]
+    }
 
-// impl<L :StarkParameters<F, D> ,F: RichField + Extendable<D>, const D: usize> NewStark<F, D, 2> for ChipStark<L, F, D> {
+    fn num_challenges(&self, round: usize) -> usize {
+        match round {
+            0 => 3,
+            1 => 0,
+            _ => unreachable!(),
+        }
+    }
 
-// }
+    fn eval_packed_generic<FE, P, const D2: usize>(
+        &self,
+        vars: new_vars::StarkEvaluationVars<
+            FE,
+            P,
+            { Self::COLUMNS },
+            { Self::PUBLIC_INPUTS },
+            { Self::CHALLENGES },
+        >,
+        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
+    ) where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>,
+    {
+        self.chip.eval_packed_generic_new(vars, yield_constr)
+    }
+
+    fn eval_ext_circuit(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        vars: new_vars::StarkEvaluationTargets<
+            D,
+            { Self::COLUMNS },
+            { Self::PUBLIC_INPUTS },
+            { Self::CHALLENGES },
+        >,
+        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
+    ) {
+        self.chip.eval_ext_circuit_new(builder, vars, yield_constr)
+    }
+
+    fn constraint_degree(&self) -> usize {
+        self.chip.constraint_degree()
+    }
+}

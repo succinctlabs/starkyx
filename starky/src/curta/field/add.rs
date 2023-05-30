@@ -226,19 +226,20 @@ mod tests {
     use super::*;
     use crate::config::StarkConfig;
     use crate::curta::builder::StarkBuilder;
-    use crate::curta::chip::{ChipStark, StarkParameters};
+    use crate::curta::chip::{ChipNewStark, ChipStark, StarkParameters};
     use crate::curta::constraint::arithmetic::ArithmeticExpression;
     use crate::curta::extension::cubic::goldilocks_cubic::GoldilocksCubicParameters;
     use crate::curta::instruction::InstructionSet;
-    use crate::curta::parameters::ed25519::{Ed25519, Ed25519BaseField};
-    use crate::curta::parameters::EllipticCurveParameters;
-    use crate::curta::stark::prover::prove;
-    use crate::curta::stark::recursive_verifier::{
+    use crate::curta::new_stark::prover::prove;
+    use crate::curta::new_stark::recursive_verifier::{
         add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
         verify_stark_proof_circuit,
     };
-    use crate::curta::stark::verifier::verify_stark_proof;
-    use crate::curta::trace::trace;
+    use crate::curta::new_stark::verifier::verify_stark_proof;
+    use crate::curta::parameters::ed25519::{Ed25519, Ed25519BaseField};
+    use crate::curta::parameters::EllipticCurveParameters;
+    use crate::curta::trace::arithmetic::ArithmeticGenerator;
+    use crate::curta::trace::{trace, trace_new};
 
     #[derive(Clone, Debug, Copy)]
     struct FpAddTest;
@@ -257,6 +258,7 @@ mod tests {
         type P = Ed25519BaseField;
         type E = GoldilocksCubicParameters;
         type L = FpAddTest;
+        type S = ChipNewStark<L, F, D>;
         let _ = env_logger::builder().is_test(true).try_init();
 
         // Build the circuit.
@@ -275,7 +277,7 @@ mod tests {
 
         // Generate the trace.
         let num_rows = 2u64.pow(16) as usize;
-        let (handle, generator) = trace::<F, D>(spec);
+        let (handle, generator) = trace_new::<F, E, D>(num_rows);
         let mut timing = TimingTree::new("stark_proof", log::Level::Debug);
         let trace_rows = timed!(timing, "generate trace", {
             let p = <Ed25519 as EllipticCurveParameters>::BaseField::modulus();
@@ -288,26 +290,35 @@ mod tests {
                 handle.write_fp_add(i, &a_int, &b_int, a_add_b_ins).unwrap();
             }
             drop(handle);
-            generator
-                .generate_trace_rows(&chip, num_rows as usize)
-                .unwrap()
+            // generator
+            //     .generate_trace_rows(&chip, num_rows as usize)
+            //     .unwrap()
         });
 
         // Generate the proof.
         let config = StarkConfig::standard_fast_config();
-        let stark = ChipStark::new(chip);
-        let proof = timed!(
-            timing,
-            "generate proof",
-            prove::<F, C, L, E, D>(
-                stark.clone(),
-                &config,
-                trace_rows,
-                [],
-                &mut TimingTree::default(),
-            )
-            .unwrap()
-        );
+        let stark = ChipNewStark::new(chip);
+        let proof = prove::<F, C, S, ArithmeticGenerator<F, E, D>, D, 2>(
+            stark.clone(),
+            &config,
+            generator,
+            num_rows,
+            [],
+            &mut TimingTree::default(),
+        )
+        .unwrap();
+        // let proof = timed!(
+        //     timing,
+        //     "generate proof",
+        //     prove::<F, C, L, E, D>(
+        //         stark.clone(),
+        //         &config,
+        //         trace_rows,
+        //         [],
+        //         &mut TimingTree::default(),
+        //     )
+        //     .unwrap()
+        // );
         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
 
         // Generate the recursive proof.
@@ -323,7 +334,7 @@ mod tests {
         recursive_builder.print_gate_counts(0);
         let mut rec_pw = PartialWitness::new();
         set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-        verify_stark_proof_circuit::<F, C, L, D>(
+        verify_stark_proof_circuit::<F, C, S, D, 2>(
             &mut recursive_builder,
             stark,
             virtual_proof,

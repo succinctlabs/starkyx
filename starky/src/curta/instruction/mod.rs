@@ -20,8 +20,8 @@ use super::field::{
     FpAddInstruction, FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction,
 };
 use super::register::MemorySlice;
-use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 use crate::curta::new_stark::vars as new_vars;
+use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
     'static + Send + Sync + Clone
@@ -57,21 +57,33 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
     ) -> Vec<ExtensionTarget<D>>;
 
     /// Outputs the values of vanishing polynomial on packed elements.
-    fn packed_generic_new<FE, P, const D2: usize, const COLUMNS: usize, const PUBLIC_INPUTS: usize, const CHALLENGES: usize>(
+    fn packed_generic_new<
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+        const CHALLENGES: usize,
+    >(
         &self,
-        vars: new_vars::StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }, {CHALLENGES}>,
+        vars: new_vars::StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }, { CHALLENGES }>,
     ) -> Vec<P>
     where
         FE: FieldExtension<D2, BaseField = F>,
-        P: PackedField<Scalar = FE> {
-            vec![]
-        }
+        P: PackedField<Scalar = FE>,
+    {
+        vec![]
+    }
 
     /// Evaluates the vanishing polynomial inside a recursive circuit.
-    fn ext_circuit_new<const COLUMNS: usize, const PUBLIC_INPUTS: usize, const CHALLENGES: usize>(
+    fn ext_circuit_new<
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+        const CHALLENGES: usize,
+    >(
         &self,
         builder: &mut CircuitBuilder<F, D>,
-        vars: new_vars::StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }, {CHALLENGES}>,
+        vars: new_vars::StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }, { CHALLENGES }>,
     ) -> Vec<ExtensionTarget<D>> {
         vec![]
     }

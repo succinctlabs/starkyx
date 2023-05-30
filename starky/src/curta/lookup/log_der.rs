@@ -21,6 +21,7 @@ use crate::curta::extension::cubic::element::CubicElement;
 use crate::curta::extension::cubic::gadget::CubicGadget;
 use crate::curta::extension::cubic::register::CubicElementRegister;
 use crate::curta::extension::cubic::{CubicExtension, CubicParameters};
+use crate::curta::new_stark::vars as new_vars;
 use crate::curta::register::{
     ArrayRegister, ElementRegister, MemorySlice, Register, RegisterSerializable,
 };
@@ -30,12 +31,12 @@ use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 #[derive(Debug, Clone)]
 pub struct LogLookup {
     pub(crate) challenge_idx: usize,
-    table: ElementRegister,
-    values: ArrayRegister<ElementRegister>,
-    multiplicity: ElementRegister,
-    multiplicity_table_log: CubicElementRegister,
-    row_accumulators: ArrayRegister<CubicElementRegister>,
-    log_lookup_accumulator: CubicElementRegister,
+    pub(crate) table: ElementRegister,
+    pub(crate) values: ArrayRegister<ElementRegister>,
+    pub(crate) multiplicity: ElementRegister,
+    pub(crate) multiplicity_table_log: CubicElementRegister,
+    pub(crate) row_accumulators: ArrayRegister<CubicElementRegister>,
+    pub(crate) log_lookup_accumulator: CubicElementRegister,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -337,6 +338,259 @@ impl LogLookup {
             yield_constr.constraint_last_row(builder, consr);
         }
     }
+
+    pub fn packed_generic_constraints_new<
+        F: RichField + Extendable<D>,
+        const D: usize,
+        FE,
+        P,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+        const CHALLENGES: usize,
+    >(
+        &self,
+        vars: new_vars::StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }, { CHALLENGES }>,
+        yield_constr: &mut crate::constraint_consumer::ConstraintConsumer<P>,
+    ) where
+        FE: FieldExtension<D2, BaseField = F>,
+        P: PackedField<Scalar = FE>,
+    {
+        let b_idx = 3 * self.challenge_idx;
+        let beta_array = &vars.challenges[b_idx..b_idx + 3];
+        let beta = CubicElement([
+            P::from(beta_array[0]),
+            P::from(beta_array[1]),
+            P::from(beta_array[2]),
+        ]);
+
+        let multiplicity = CubicElement::from_base(
+            self.multiplicity.register().packed_generic_vars_new(vars)[0],
+            P::ZEROS,
+        );
+        let table = CubicElement::from_base(
+            self.table.register().packed_generic_vars_new(vars)[0],
+            P::ZEROS,
+        );
+        let multiplicity_table_log = CubicElement::from_slice(
+            self.multiplicity_table_log
+                .register()
+                .packed_generic_vars_new(vars),
+        );
+
+        let mult_table_constraint = multiplicity - multiplicity_table_log * (beta - table);
+        for consr in mult_table_constraint.0 {
+            yield_constr.constraint(consr);
+        }
+
+        let mut row_acc_iter = self
+            .row_accumulators
+            .iter()
+            .map(|r| CubicElement::from_slice(r.register().packed_generic_vars_new(vars)));
+
+        let mut values_pairs = (0..self.values.len())
+            .step_by(2)
+            .map(|k| {
+                (
+                    self.values.get(k).register().packed_generic_vars_new(vars)[0],
+                    self.values
+                        .get(k + 1)
+                        .register()
+                        .packed_generic_vars_new(vars)[0],
+                )
+            })
+            .map(|(a, b)| {
+                (
+                    CubicElement::from_base(a, P::ZEROS),
+                    CubicElement::from_base(b, P::ZEROS),
+                )
+            })
+            .map(|(a, b)| (beta - a, beta - b));
+
+        let ((beta_minus_a_0, beta_minus_b_0), acc_0) =
+            (values_pairs.next().unwrap(), row_acc_iter.next().unwrap());
+
+        let constr_0 = beta_minus_a_0 + beta_minus_b_0 - acc_0 * beta_minus_a_0 * beta_minus_b_0;
+        for consr in constr_0.0 {
+            yield_constr.constraint(consr);
+        }
+
+        let mut prev = acc_0;
+        for ((beta_minus_a, beta_minus_b), acc) in values_pairs.zip(row_acc_iter) {
+            let constraint =
+                (beta_minus_a + beta_minus_b) - (acc - prev) * beta_minus_a * beta_minus_b;
+            for consr in constraint.0 {
+                yield_constr.constraint(consr);
+            }
+            prev = acc;
+        }
+
+        let log_lookup_accumulator = CubicElement::from_slice(
+            self.log_lookup_accumulator
+                .register()
+                .packed_generic_vars_new(vars),
+        );
+        let log_lookup_accumulator_next = CubicElement::from_slice(
+            self.log_lookup_accumulator
+                .next()
+                .register()
+                .packed_generic_vars_new(vars),
+        );
+
+        let acc_transition_constraint =
+            log_lookup_accumulator_next - log_lookup_accumulator - prev + multiplicity_table_log;
+        for consr in acc_transition_constraint.0 {
+            yield_constr.constraint_transition(consr);
+        }
+
+        let acc_first_row_constraint = log_lookup_accumulator;
+        for consr in acc_first_row_constraint.0 {
+            yield_constr.constraint_first_row(consr);
+        }
+
+        let acc_last_row_constraint = log_lookup_accumulator + prev - multiplicity_table_log;
+        for consr in acc_last_row_constraint.0 {
+            yield_constr.constraint_last_row(consr);
+        }
+    }
+
+    pub fn ext_circuit_constraints_new<
+        F: RichField + Extendable<D>,
+        const D: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+        const CHALLENGES: usize,
+    >(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        vars: new_vars::StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }, { CHALLENGES }>,
+        yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
+    ) {
+        let b_idx = 3 * self.challenge_idx;
+        let beta_slice = &vars.challenges[b_idx..b_idx + 3];
+        let beta = CubicElement([beta_slice[0], beta_slice[1], beta_slice[2]]);
+
+        let multiplicity = CubicGadget::from_base_extension(
+            builder,
+            self.multiplicity.register().ext_circuit_vars_new(vars)[0],
+        );
+
+        let table = CubicGadget::from_base_extension(
+            builder,
+            self.table.register().ext_circuit_vars_new(vars)[0],
+        );
+        let multiplicity_table_log = CubicElement::from_slice(
+            self.multiplicity_table_log
+                .register()
+                .ext_circuit_vars_new(vars),
+        );
+
+        let beta_minus_table = CubicGadget::sub_extension(builder, &beta, &table);
+        let mut mult_table_constraint =
+            CubicGadget::mul_extension(builder, &multiplicity_table_log, &beta_minus_table);
+        mult_table_constraint =
+            CubicGadget::sub_extension(builder, &multiplicity, &mult_table_constraint);
+        for consr in mult_table_constraint.0 {
+            yield_constr.constraint(builder, consr);
+        }
+
+        let mut row_acc_vec = self
+            .row_accumulators
+            .iter()
+            .map(|r| CubicElement::from_slice(r.register().ext_circuit_vars_new(vars)))
+            .collect::<VecDeque<_>>();
+
+        let mut range_pairs = (0..self.values.len())
+            .step_by(2)
+            .map(|k| {
+                (
+                    self.values.get(k).register().ext_circuit_vars_new(vars)[0],
+                    self.values.get(k + 1).register().ext_circuit_vars_new(vars)[0],
+                )
+            })
+            .map(|(a, b)| {
+                (
+                    CubicGadget::from_base_extension(builder, a),
+                    CubicGadget::from_base_extension(builder, b),
+                )
+            })
+            .collect::<Vec<_>>()
+            .iter()
+            .map(|(a, b)| {
+                (
+                    CubicGadget::sub_extension(builder, &beta, a),
+                    CubicGadget::sub_extension(builder, &beta, b),
+                )
+            })
+            .collect::<VecDeque<_>>();
+
+        let ((beta_minus_a_0, beta_minus_b_0), acc_0) = (
+            range_pairs.pop_front().unwrap(),
+            row_acc_vec.pop_front().unwrap(),
+        );
+
+        let beta_minus_a_b = CubicGadget::mul_extension(builder, &beta_minus_a_0, &beta_minus_b_0);
+        let acc_beta_m_ab = CubicGadget::mul_extension(builder, &acc_0, &beta_minus_a_b);
+        let mut constr_0 = CubicGadget::add_extension(builder, &beta_minus_a_0, &beta_minus_b_0);
+        constr_0 = CubicGadget::sub_extension(builder, &constr_0, &acc_beta_m_ab);
+        for consr in constr_0.0 {
+            yield_constr.constraint(builder, consr);
+        }
+
+        let mut prev = acc_0;
+        for ((beta_minus_a, beta_minus_b), acc) in range_pairs.iter().zip(row_acc_vec.iter()) {
+            let acc_minus_prev = CubicGadget::sub_extension(builder, acc, &prev);
+            let mut product = CubicGadget::mul_extension(builder, beta_minus_a, &beta_minus_b);
+            product = CubicGadget::mul_extension(builder, &product, &acc_minus_prev);
+            let mut constraint = CubicGadget::add_extension(builder, &beta_minus_a, &beta_minus_b);
+            constraint = CubicGadget::sub_extension(builder, &constraint, &product);
+            for consr in constraint.0 {
+                yield_constr.constraint(builder, consr);
+            }
+            prev = *acc;
+        }
+
+        let log_lookup_accumulator = CubicElement::from_slice(
+            self.log_lookup_accumulator
+                .register()
+                .ext_circuit_vars_new(vars),
+        );
+        let log_lookup_accumulator_next = CubicElement::from_slice(
+            self.log_lookup_accumulator
+                .next()
+                .register()
+                .ext_circuit_vars_new(vars),
+        );
+
+        let mut acc_transition_constraint = CubicGadget::sub_extension(
+            builder,
+            &log_lookup_accumulator_next,
+            &log_lookup_accumulator,
+        );
+        acc_transition_constraint =
+            CubicGadget::sub_extension(builder, &acc_transition_constraint, &prev);
+        acc_transition_constraint = CubicGadget::add_extension(
+            builder,
+            &acc_transition_constraint,
+            &multiplicity_table_log,
+        );
+        for consr in acc_transition_constraint.0 {
+            yield_constr.constraint_transition(builder, consr);
+        }
+
+        let acc_first_row_constraint = log_lookup_accumulator;
+        for consr in acc_first_row_constraint.0 {
+            yield_constr.constraint_first_row(builder, consr);
+        }
+
+        let mut acc_last_row_constraint =
+            CubicGadget::add_extension(builder, &log_lookup_accumulator, &prev);
+        acc_last_row_constraint =
+            CubicGadget::sub_extension(builder, &acc_last_row_constraint, &multiplicity_table_log);
+        for consr in acc_last_row_constraint.0 {
+            yield_constr.constraint_last_row(builder, consr);
+        }
+    }
 }
 
 impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> StarkBuilder<L, F, D> {
@@ -398,7 +652,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         &self,
         num_rows: usize,
         trace_rows: &mut Vec<Vec<F>>,
-        beta_array: [F; 3],
+        beta_slice: &[F],
         lookup_data: &LogLookup,
         table_index: fn(F) -> usize,
     ) -> Result<()> {
@@ -408,7 +662,7 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         //     F::from_canonical_u64(BETAS[1]),
         //     F::from_canonical_u64(BETAS[2]),
         // ];
-        let beta = CubicExtension::<F, E>::from(beta_array);
+        let beta = CubicExtension::<F, E>::from_slice(beta_slice);
 
         let values_idx = lookup_data.values_idx();
 

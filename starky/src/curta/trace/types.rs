@@ -1,50 +1,31 @@
+use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
-use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
 use plonky2::util::transpose;
-use plonky2_maybe_rayon::*;
 
-pub trait TraceGenerator<F: Field, const R: usize> {
+use crate::curta::new_stark::Stark;
+
+pub trait StarkTraceGenerator<
+    S: Stark<F, D, R>,
+    F: RichField + Extendable<D>,
+    const D: usize,
+    const R: usize,
+>
+{
     fn generate_round(
-        &self,
+        &mut self,
+        stark: &S,
         round: usize,
         challenges: &[F],
-        current_values: &[PolynomialValues<F>],
-        write_slice: &mut [PolynomialValues<F>],
-    );
-}
-
-pub struct StarkTrace<F: Field, const R: usize> {
-    trace: Vec<PolynomialValues<F>>,
-    round_indices: [(usize, usize); R],
-}
-
-impl<F: Field, const R: usize> StarkTrace<F, R> {
-    pub fn new(num_rows: usize, round_indices: [(usize, usize); R]) -> Self {
-        let trace = vec![
-            PolynomialValues::new(vec![F::ZERO; num_rows]);
-            round_indices[R - 1].0 + round_indices[R - 1].1
-        ];
-        Self {
-            trace,
-            round_indices,
-        }
-    }
-
-    pub fn split_round(
-        &mut self,
-        round: usize,
-    ) -> (&[PolynomialValues<F>], &mut [PolynomialValues<F>]) {
-        let (read_slice, write_slice) = self.trace.split_at_mut(self.round_indices[round].0);
-        (read_slice, &mut write_slice[..self.round_indices[round].1])
-    }
+    ) -> Vec<PolynomialValues<F>>;
 }
 
 #[derive(Debug, Clone)]
-pub struct ConstantGenerator<F: Field> {
+pub struct ConstantGenerator<F: RichField> {
     trace: Vec<PolynomialValues<F>>,
 }
 
-impl<F: Field> ConstantGenerator<F> {
+impl<F: RichField> ConstantGenerator<F> {
     pub fn new(trace: Vec<PolynomialValues<F>>) -> Self {
         Self { trace }
     }
@@ -59,17 +40,18 @@ impl<F: Field> ConstantGenerator<F> {
     }
 }
 
-impl<F: Field, const R: usize> TraceGenerator<F, R> for ConstantGenerator<F> {
+impl<S: Stark<F, D, 1>, F: RichField + Extendable<D>, const D: usize>
+    StarkTraceGenerator<S, F, D, 1> for ConstantGenerator<F>
+{
     fn generate_round(
-        &self,
-        _round: usize,
+        &mut self,
+        _stark: &S,
+        round: usize,
         _challenges: &[F],
-        _current_values: &[PolynomialValues<F>],
-        write_slice: &mut [PolynomialValues<F>],
-    ) {
-        write_slice
-            .par_iter_mut()
-            .zip(self.trace.par_iter())
-            .for_each(|(col, val)| col.values.copy_from_slice(&val.values));
+    ) -> Vec<PolynomialValues<F>> {
+        match round {
+            0 => self.trace.clone(),
+            _ => unreachable!("Round out of bounds"),
+        }
     }
 }

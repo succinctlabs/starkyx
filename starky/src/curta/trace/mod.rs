@@ -1,3 +1,4 @@
+pub mod arithmetic;
 pub mod types;
 
 use alloc::collections::BTreeMap;
@@ -10,6 +11,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::util::transpose;
 use plonky2_maybe_rayon::*;
 
+use self::arithmetic::ArithmeticGenerator;
 use super::builder::InstructionId;
 use super::chip::StarkParameters;
 use super::extension::cubic::CubicParameters;
@@ -43,6 +45,13 @@ pub fn trace<F: RichField + Extendable<D>, const D: usize>(
 ) -> (TraceWriter<F, D>, TraceGenerator<F, D>) {
     let (tx, rx) = std::sync::mpsc::channel();
     (TraceWriter { tx }, TraceGenerator { spec, rx })
+}
+
+pub fn trace_new<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>(
+    num_rows: usize,
+) -> (TraceWriter<F, D>, ArithmeticGenerator<F, E, D>) {
+    let (tx, rx) = std::sync::mpsc::channel();
+    (TraceWriter { tx }, ArithmeticGenerator::new(num_rows, rx))
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> Clone for TraceWriter<F, D> {
@@ -118,7 +127,8 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         row_capacity: usize,
     ) -> Result<Vec<Vec<F>>> {
         // Initiaze the trace with capacity given by the user
-        let num_cols = chip.num_columns_no_range_checks();
+        // let num_cols = chip.num_columns_no_range_checks();
+        let num_cols = chip.partial_trace_index;
         let mut trace_rows = vec![vec![F::ZERO; num_cols]; row_capacity];
 
         while let Ok((row_index, id, mut row)) = self.rx.recv() {
@@ -137,11 +147,6 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
                 ),
             };
         }
-
-        if let Some(table) = chip.range_table {
-            self.write_range_table(row_capacity, &mut trace_rows, &table);
-        }
-
         Ok(trace_rows)
     }
 
@@ -168,17 +173,24 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceGenerator<F, D> {
         &self,
         chip: &Chip<L, F, D>,
         row_capacity: usize,
-        betas: &[[F; 3]],
+        betas: &[F],
     ) -> Result<Vec<PolynomialValues<F>>> {
         // Get trace rows
         let mut trace_rows = self.generate_trace_rows(chip, row_capacity)?;
+        trace_rows
+            .par_iter_mut()
+            .for_each(|row| row.resize(Chip::<L, F, D>::num_columns(), F::ZERO));
+
+        if let Some(table) = chip.range_table {
+            self.write_range_table(row_capacity, &mut trace_rows, &table);
+        }
 
         if let Some(Lookup::LogDerivative(data)) = &chip.range_data {
-            let beta_array = betas[data.challenge_idx];
+            let beta_slice = &betas[3 * data.challenge_idx..3 * data.challenge_idx + 3];
             self.write_log_lookups::<E>(
                 row_capacity,
                 &mut trace_rows,
-                beta_array,
+                beta_slice,
                 data,
                 Self::range_fn,
             )
@@ -308,9 +320,20 @@ impl<F: RichField + Extendable<D>, const D: usize> ExtendedTrace<F, D> {
          must be equal to the number of columns in the chip"
         );
 
+        trace_rows
+            .par_iter_mut()
+            .for_each(|row| row.resize(Chip::<L, F, D>::num_columns(), F::ZERO));
+        if let Some(table) = chip.range_table {
+            let table_reg = table.register();
+            for i in 0..row_capacity {
+                let value = F::from_canonical_usize(i);
+                table_reg.assign(trace_rows, 0, &mut vec![value], i);
+            }
+        }
+
         if let Some(Lookup::LogDerivative(data)) = &chip.range_data {
             let b_idx = 3 * data.challenge_idx;
-            let beta_slice = &betas[b_idx..b_idx+3];
+            let beta_slice = &betas[b_idx..b_idx + 3];
             Self::write_lookups::<E>(row_capacity, trace_rows, beta_slice, data, Self::range_fn)
                 .unwrap();
         }

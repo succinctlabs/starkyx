@@ -215,7 +215,9 @@ pub fn add_virtual_stark_proof<
     let fri_params = config.fri_params(degree_bits);
     let cap_height = fri_params.config.cap_height;
 
-    let num_leaves_per_oracle = once(S::COLUMNS)
+    let num_leaves_per_oracle = stark
+        .round_lengths()
+        .into_iter()
         .chain(once(stark.quotient_degree_factor() * config.num_challenges))
         .collect_vec();
 
@@ -292,7 +294,11 @@ pub fn set_stark_proof_target<F, C: GenericConfig<D, F = F>, W, const D: usize, 
     C::Hasher: AlgebraicHasher<F>,
     W: Witness<F>,
 {
-    for (cap, target_cap) in proof.trace_caps.iter().zip(proof_target.trace_caps.iter()) {
+    for (cap, target_cap) in proof
+        .trace_caps
+        .iter()
+        .zip_eq(proof_target.trace_caps.iter())
+    {
         witness.set_cap_target(target_cap, cap);
     }
     witness.set_cap_target(&proof_target.quotient_polys_cap, &proof.quotient_polys_cap);
