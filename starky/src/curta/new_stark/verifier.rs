@@ -16,6 +16,7 @@ use super::vars::StarkEvaluationVars;
 use super::Stark;
 use crate::config::StarkConfig;
 use crate::constraint_consumer::ConstraintConsumer;
+use crate::curta::air::starky::StarkParser;
 
 pub fn verify_stark_proof<
     F: RichField + Extendable<D>,
@@ -69,7 +70,7 @@ where
         next_values,
         quotient_polys,
     } = &proof.openings;
-    let vars = StarkEvaluationVars {
+    let vars = StarkEvaluationVars::<F::Extension, F::Extension, {S::COLUMNS}, {S::PUBLIC_INPUTS}, {S::CHALLENGES}> {
         local_values: &local_values.to_vec().try_into().unwrap(),
         next_values: &next_values.to_vec().try_into().unwrap(),
         public_inputs: &public_inputs
@@ -100,6 +101,16 @@ where
         l_0,
         l_last,
     );
+
+    // let mut parser = StarkParser {
+    //     local_vars: vars.local_values,
+    //     next_vars: vars.next_values,
+    //     public_inputs: vars.public_inputs,
+    //     challenges: vars.challenges,
+    //     consumer: &mut consumer,
+    // };
+
+    // stark.eval(&mut parser);
     eval_vanishing_poly::<F, F::Extension, F::Extension, S, D, D, R>(&stark, vars, &mut consumer);
     let vanishing_polys_zeta = consumer.accumulators();
 

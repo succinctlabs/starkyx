@@ -90,7 +90,7 @@ fn verify_stark_proof_with_challenges_circuit<
         next_values,
         quotient_polys,
     } = &proof.openings;
-    let vars = StarkEvaluationTargets::<D, {S::COLUMNS}, {S::PUBLIC_INPUTS}, {S::CHALLENGES}> {
+    let vars = StarkEvaluationTargets::<D, { S::COLUMNS }, { S::PUBLIC_INPUTS }, { S::CHALLENGES }> {
         local_values: &local_values.to_vec().try_into().unwrap(),
         next_values: &next_values.to_vec().try_into().unwrap(),
         public_inputs: &public_inputs
@@ -130,13 +130,13 @@ fn verify_stark_proof_with_challenges_circuit<
     //     eval_vanishing_poly_circuit::<F, S, D, R>(builder, &stark, vars, &mut consumer,)
     // );
 
-    let mut parser = RecursiveStarkParser { 
+    let mut parser = RecursiveStarkParser {
         builder: builder,
-        local_vars : vars.local_values,
-        next_vars : vars.next_values,
-        public_inputs : vars.public_inputs,
-        challenges : vars.challenges,
-        consumer : &mut consumer,
+        local_vars: vars.local_values,
+        next_vars: vars.next_values,
+        public_inputs: vars.public_inputs,
+        challenges: vars.challenges,
+        consumer: &mut consumer,
     };
     // eval_vanishing_poly_circuit::<F, S, D, R>(builder, &stark, vars, &mut consumer,);
     stark.eval(&mut parser);

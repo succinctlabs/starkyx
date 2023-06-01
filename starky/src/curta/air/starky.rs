@@ -1,4 +1,4 @@
-use plonky2::field::extension::Extendable;
+use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
@@ -7,7 +7,11 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use super::parser::AirParser;
 use crate::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
 
-pub struct StarkParser<'a, F: RichField + Extendable<D>, P: PackedField<Scalar = F>, const D: usize>
+pub struct StarkParser<'a, F, FE, P, const D: usize, const D2: usize>
+where
+ F: RichField + Extendable<D>,
+ FE: FieldExtension<D2, BaseField = F>,
+ P: PackedField<Scalar = FE>,
 {
     pub(crate) local_vars: &'a [P],
     pub(crate) next_vars: &'a [P],
@@ -25,14 +29,18 @@ pub struct RecursiveStarkParser<'a, F: RichField + Extendable<D>, const D: usize
     pub(crate) consumer: &'a mut RecursiveConstraintConsumer<F, D>,
 }
 
-impl<'a, F: RichField + Extendable<D>, P: PackedField<Scalar = F>, const D: usize> AirParser
-    for StarkParser<'a, F, P, D>
+impl<'a, F, FE, P, const D: usize, const D2: usize> AirParser
+    for StarkParser<'a, F, FE, P, D, D2>
+    where
+    F: RichField + Extendable<D>,
+    FE: FieldExtension<D2, BaseField = F>,
+    P: PackedField<Scalar = FE>,
 {
     type Field = F;
     type Var = P;
 
     fn constant(&mut self, value: Self::Field) -> Self::Var {
-        P::from(value)
+        P::from(FE::from_basefield(value))
     }
 
     fn local_slice(&self) -> &[Self::Var] {
@@ -91,15 +99,17 @@ impl<'a, F: RichField + Extendable<D>, P: PackedField<Scalar = F>, const D: usiz
     }
 
     fn scalar_mul(&mut self, a: Self::Var, b: Self::Field) -> Self::Var {
-        a * b
+        a * FE::from_basefield(b)
     }
 
     fn scalar_add(&mut self, a: Self::Var, b: Self::Field) -> Self::Var {
-        a + b
+        a + FE::from_basefield(b)
     }
 }
 
-impl<'a, F: RichField + Extendable<D>, const D: usize> AirParser for RecursiveStarkParser<'a, F, D> {
+impl<'a, F: RichField + Extendable<D>, const D: usize> AirParser
+    for RecursiveStarkParser<'a, F, D>
+{
     type Field = F;
     type Var = ExtensionTarget<D>;
 
@@ -128,15 +138,18 @@ impl<'a, F: RichField + Extendable<D>, const D: usize> AirParser for RecursiveSt
     }
 
     fn constraint_transition(&mut self, constraint: Self::Var) {
-        self.consumer.constraint_transition(&mut self.builder, constraint);
+        self.consumer
+            .constraint_transition(&mut self.builder, constraint);
     }
 
     fn constraint_first_row(&mut self, constraint: Self::Var) {
-        self.consumer.constraint_first_row(&mut self.builder, constraint);
+        self.consumer
+            .constraint_first_row(&mut self.builder, constraint);
     }
 
     fn constraint_last_row(&mut self, constraint: Self::Var) {
-        self.consumer.constraint_last_row(&mut self.builder, constraint);
+        self.consumer
+            .constraint_last_row(&mut self.builder, constraint);
     }
 
     fn add(&mut self, a: Self::Var, b: Self::Var) -> Self::Var {
@@ -168,5 +181,4 @@ impl<'a, F: RichField + Extendable<D>, const D: usize> AirParser for RecursiveSt
         let b = self.builder.constant(b);
         self.builder.scalar_mul_ext(b, a)
     }
-
 }

@@ -22,7 +22,7 @@ pub trait AirParser: Send + Sized {
 
     fn sub(&mut self, a: Self::Var, b: Self::Var) -> Self::Var;
 
-    fn neg(&mut self, a: Self::Var) -> Self::Var; 
+    fn neg(&mut self, a: Self::Var) -> Self::Var;
 
     /// Multiply two vars while potantially updating the internal state
     fn mul(&mut self, a: Self::Var, b: Self::Var) -> Self::Var;

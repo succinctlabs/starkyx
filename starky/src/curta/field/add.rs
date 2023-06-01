@@ -30,6 +30,7 @@ use crate::curta::register::{
 use crate::curta::trace::TraceWriter;
 use crate::curta::utils::{compute_root_quotient_and_shift, split_u32_limbs_to_u16_limbs};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
+use crate::curta::new_stark::vars as new_vars;
 
 #[derive(Debug, Clone, Copy)]
 pub struct FpAddInstruction<P: FieldParameters> {
@@ -216,6 +217,37 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         ext_circuit_field_operation::<F, D, P>(builder, p_vanishing, p_witness_low, p_witness_high)
     }
 
+    fn packed_generic_new<FE, PF, const D2: usize, const COLUMNS: usize, const PUBLIC_INPUTS: usize, const CHALLENGES: usize,>(
+        &self,
+        vars: new_vars::StarkEvaluationVars<FE, PF, { COLUMNS }, { PUBLIC_INPUTS }, {CHALLENGES}>,
+    ) -> Vec<PF>
+    where
+        FE: FieldExtension<D2, BaseField = F>,
+        PF: PackedField<Scalar = FE>,
+    {
+        // Get the packed entries.
+        let p_a = self.a.register().packed_generic_vars_new(vars);
+        let p_b = self.b.register().packed_generic_vars_new(vars);
+        let p_result = self.result.register().packed_generic_vars_new(vars);
+        let p_carry = self.carry.register().packed_generic_vars_new(vars);
+        let p_witness_low = self.witness_low.register().packed_generic_vars_new(vars);
+        let p_witness_high = self.witness_high.register().packed_generic_vars_new(vars);
+
+        // Compute the vanishing polynomial a(x) + b(x) - result(x) - carry(x) * p(x).
+        let p_a_plus_b = PolynomialOps::add(p_a, p_b);
+        let p_a_plus_b_minus_result = PolynomialOps::sub(&p_a_plus_b, p_result);
+        let p_modulus = Polynomial::<FE>::from_iter(modulus_field_iter::<FE, P>());
+        let p_carry_mul_modulus = PolynomialOps::scalar_poly_mul(p_carry, p_modulus.as_slice());
+        let p_vanishing = PolynomialOps::sub(&p_a_plus_b_minus_result, &p_carry_mul_modulus);
+
+        // Check [a(x) + b(x) - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
+        packed_generic_field_operation::<F, D, FE, PF, D2, P>(
+            p_vanishing,
+            p_witness_low,
+            p_witness_high,
+        )
+    }
+
     fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {
         let mut poly_parser = PolynomialParser::new(parser);
 
@@ -311,21 +343,19 @@ mod tests {
         let num_rows = 2u64.pow(16) as usize;
         let (handle, generator) = trace_new::<F, E, D>(num_rows);
         let mut timing = TimingTree::new("stark_proof", log::Level::Debug);
-        let trace_rows = timed!(timing, "generate trace", {
-            let p = <Ed25519 as EllipticCurveParameters>::BaseField::modulus();
-            let mut rng = thread_rng();
-            for i in 0..num_rows {
-                let a_int: BigUint = rng.gen_biguint(256) % &p;
-                let b_int = rng.gen_biguint(256) % &p;
-                handle.write_field(i, &a_int, a).unwrap();
-                handle.write_field(i, &b_int, b).unwrap();
-                handle.write_fp_add(i, &a_int, &b_int, a_add_b_ins).unwrap();
-            }
-            drop(handle);
-            // generator
-            //     .generate_trace_rows(&chip, num_rows as usize)
-            //     .unwrap()
-        });
+        let p = <Ed25519 as EllipticCurveParameters>::BaseField::modulus();
+        let mut rng = thread_rng();
+        for i in 0..num_rows {
+            let a_int: BigUint = rng.gen_biguint(256) % &p;
+            let b_int = rng.gen_biguint(256) % &p;
+            handle.write_field(i, &a_int, a).unwrap();
+            handle.write_field(i, &b_int, b).unwrap();
+            handle.write_fp_add(i, &a_int, &b_int, a_add_b_ins).unwrap();
+        }
+        drop(handle);
+        // generator
+        //     .generate_trace_rows(&chip, num_rows as usize)
+        //     .unwrap()
 
         // Generate the proof.
         let config = StarkConfig::standard_fast_config();

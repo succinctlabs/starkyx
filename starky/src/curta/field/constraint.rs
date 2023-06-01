@@ -49,6 +49,7 @@ where
         .collect()
 }
 
+
 pub fn ext_circuit_field_operation<
     F: RichField + Extendable<D>,
     const D: usize,
