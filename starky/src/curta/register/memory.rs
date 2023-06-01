@@ -3,6 +3,8 @@ use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 
+use crate::curta::air::air::Air;
+use crate::curta::air::parser::AirParser;
 use crate::curta::constraint::arithmetic::{ArithmeticExpression, ArithmeticExpressionSlice};
 use crate::curta::new_stark::vars as new_vars;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
@@ -267,6 +269,17 @@ impl MemorySlice {
         ArithmeticExpression {
             expression: ArithmeticExpressionSlice::from_raw_register(*self),
             size: self.len(),
+        }
+    }
+
+    pub fn eval_slice<'a, AP: AirParser>(&self, parser: &'a AP) -> &'a [AP::Var] {
+        match self {
+            MemorySlice::Local(index, length) => &parser.local_slice()[*index..*index + length],
+            MemorySlice::Next(index, length) => &parser.next_slice()[*index..*index + length],
+            MemorySlice::Public(index, length) => &parser.public_slice()[*index..*index + length],
+            MemorySlice::Challenge(index, length) => {
+                &parser.challenge_slice()[*index..*index + length]
+            }
         }
     }
 }

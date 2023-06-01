@@ -1,5 +1,6 @@
 use super::cell::CellType;
 use super::{RegisterSerializable, RegisterSized};
+use crate::curta::air::parser::AirParser;
 use crate::curta::register::memory::MemorySlice;
 use crate::curta::register::Register;
 
@@ -27,4 +28,10 @@ impl RegisterSized for U16Register {
     }
 }
 
-impl Register for U16Register {}
+impl Register for U16Register {
+    type Value<AP: AirParser> = AP::Var;
+
+    fn eval<AP: AirParser>(&self, parser: &AP) -> Self::Value<AP> {
+        self.register().eval_slice(parser)[0]
+    }
+}

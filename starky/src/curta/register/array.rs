@@ -1,6 +1,7 @@
 use core::marker::PhantomData;
 
 use super::{CellType, Register, RegisterSerializable};
+use crate::curta::air::parser::AirParser;
 use crate::curta::register::memory::MemorySlice;
 
 /// A helper struct for representing an array of registers. In particular, it makes it easier
@@ -67,6 +68,10 @@ impl<T: Register> ArrayRegister<T> {
 
     pub fn iter(&self) -> ArrayIterator<T> {
         self.into_iter()
+    }
+
+    pub fn eval<AP: AirParser>(&self, parser: &AP) -> Vec<AP::Var> {
+        self.register().eval_slice(parser).to_vec()
     }
 }
 

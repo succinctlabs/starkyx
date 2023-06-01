@@ -15,6 +15,7 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 pub use set::{FromInstructionSet, InstructionSet};
 
+use super::air::parser::AirParser;
 use super::constraint::expression::ConstraintExpression;
 use super::field::{
     FpAddInstruction, FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction,
@@ -94,5 +95,9 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
 
     fn expr(&self) -> ConstraintExpression<Self, F, D> {
         ConstraintExpression::Instruction(self.clone())
+    }
+
+    fn eval<P: AirParser<Field = F>>(&self, parser: &mut P) -> Vec<P::Var> {
+        vec![]
     }
 }

@@ -1,5 +1,6 @@
 pub mod gadget;
 pub mod ops;
+pub mod parser;
 
 use core::fmt::Debug;
 use core::iter;
@@ -23,6 +24,10 @@ pub struct Polynomial<F> {
 
 impl<T: Clone> Polynomial<T> {
     pub fn new_from_vec(coefficients: Vec<T>) -> Self {
+        Self { coefficients }
+    }
+
+    pub fn from_coefficients(coefficients: Vec<T>) -> Self {
         Self { coefficients }
     }
 

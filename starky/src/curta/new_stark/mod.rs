@@ -1,8 +1,10 @@
+pub mod config;
 pub mod fibonacchi;
 pub mod get_challenges;
 pub mod proof;
 pub mod prover;
 pub mod recursive_verifier;
+pub mod stark;
 pub mod vanishing_poly;
 pub mod vars;
 pub mod verifier;
@@ -21,6 +23,7 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use self::vars::{StarkEvaluationTargets, StarkEvaluationVars};
+use super::air::parser::AirParser;
 use crate::config::StarkConfig;
 use crate::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
 
@@ -74,6 +77,8 @@ pub trait Stark<F: RichField + Extendable<D>, const D: usize, const R: usize>: S
         >,
         yield_constr: &mut RecursiveConstraintConsumer<F, D>,
     );
+
+    fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP);
 
     /// The maximum constraint degree.
     fn constraint_degree(&self) -> usize;
@@ -167,110 +172,4 @@ pub trait Stark<F: RichField + Extendable<D>, const D: usize, const R: usize>: S
         let batches = vec![zeta_batch, zeta_next_batch];
         FriInstanceInfoTarget { oracles, batches }
     }
-
-    // /// Computes the FRI instance used to prove this Stark.
-    // fn fri_instance(
-    //     &self,
-    //     zeta: <L::Field as Extendable<{ L::D }>>::Extension,
-    //     g: L::Field,
-    //     config: &StarkConfig,
-    // ) -> FriInstanceInfo<L::Field, { L::D }> {
-    //     let mut oracles = vec![];
-
-    //     let trace_info = FriPolynomialInfo::from_range(oracles.len(), 0..L::COLUMNS);
-    //     oracles.push(FriOracleInfo {
-    //         num_polys: L::COLUMNS,
-    //         blinding: false,
-    //     });
-
-    //     let permutation_zs_info = if self.uses_permutation_args() {
-    //         let num_z_polys = self.num_permutation_batches(config);
-    //         let polys = FriPolynomialInfo::from_range(oracles.len(), 0..num_z_polys);
-    //         oracles.push(FriOracleInfo {
-    //             num_polys: num_z_polys,
-    //             blinding: false,
-    //         });
-    //         polys
-    //     } else {
-    //         vec![]
-    //     };
-
-    //     let num_quotient_polys = self.quotient_degree_factor() * config.num_challenges;
-    //     let quotient_info = FriPolynomialInfo::from_range(oracles.len(), 0..num_quotient_polys);
-    //     oracles.push(FriOracleInfo {
-    //         num_polys: num_quotient_polys,
-    //         blinding: false,
-    //     });
-
-    //     let zeta_batch = FriBatchInfo {
-    //         point: zeta,
-    //         polynomials: [
-    //             trace_info.clone(),
-    //             permutation_zs_info.clone(),
-    //             quotient_info,
-    //         ]
-    //         .concat(),
-    //     };
-    //     let zeta_next_batch = FriBatchInfo {
-    //         point: zeta.scalar_mul(g),
-    //         polynomials: [trace_info, permutation_zs_info].concat(),
-    //     };
-    //     let batches = vec![zeta_batch, zeta_next_batch];
-
-    //     FriInstanceInfo { oracles, batches }
-    // }
-
-    // /// Computes the FRI instance used to prove this Stark.
-    // fn fri_instance_target(
-    //     &self,
-    //     builder: &mut CircuitBuilder<L::Field, { L::D }>,
-    //     zeta: ExtensionTarget<{ L::D }>,
-    //     g: L::Field,
-    //     config: &StarkConfig,
-    // ) -> FriInstanceInfoTarget<{ L::D }> {
-    //     let mut oracles = vec![];
-
-    //     let trace_info = FriPolynomialInfo::from_range(oracles.len(), 0..L::COLUMNS);
-    //     oracles.push(FriOracleInfo {
-    //         num_polys: L::COLUMNS,
-    //         blinding: false,
-    //     });
-
-    //     let permutation_zs_info = if self.uses_permutation_args() {
-    //         let num_z_polys = self.num_permutation_batches(config);
-    //         let polys = FriPolynomialInfo::from_range(oracles.len(), 0..num_z_polys);
-    //         oracles.push(FriOracleInfo {
-    //             num_polys: num_z_polys,
-    //             blinding: false,
-    //         });
-    //         polys
-    //     } else {
-    //         vec![]
-    //     };
-
-    //     let num_quotient_polys = self.quotient_degree_factor() * config.num_challenges;
-    //     let quotient_info = FriPolynomialInfo::from_range(oracles.len(), 0..num_quotient_polys);
-    //     oracles.push(FriOracleInfo {
-    //         num_polys: num_quotient_polys,
-    //         blinding: false,
-    //     });
-
-    //     let zeta_batch = FriBatchInfoTarget {
-    //         point: zeta,
-    //         polynomials: [
-    //             trace_info.clone(),
-    //             permutation_zs_info.clone(),
-    //             quotient_info,
-    //         ]
-    //         .concat(),
-    //     };
-    //     let zeta_next = builder.mul_const_extension(g, zeta);
-    //     let zeta_next_batch = FriBatchInfoTarget {
-    //         point: zeta_next,
-    //         polynomials: [trace_info, permutation_zs_info].concat(),
-    //     };
-    //     let batches = vec![zeta_batch, zeta_next_batch];
-
-    //     FriInstanceInfoTarget { oracles, batches }
-    // }
 }

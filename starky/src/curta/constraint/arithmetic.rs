@@ -7,6 +7,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
+use crate::curta::air::parser::AirParser;
 use crate::curta::new_stark::vars as new_vars;
 use crate::curta::register::{MemorySlice, Register};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
@@ -52,8 +53,12 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpression<F, D> {
         Self::from_constant(F::ONE)
     }
 
-    pub fn eval(&self, trace_rows: &[Vec<F>], row_index: usize) -> Vec<F> {
-        self.expression.eval(trace_rows, row_index)
+    pub fn eval_field(&self, trace_rows: &[Vec<F>], row_index: usize) -> Vec<F> {
+        self.expression.eval_field(trace_rows, row_index)
+    }
+
+    pub fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {
+        self.expression.eval(parser)
     }
 }
 
@@ -99,7 +104,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
         ArithmeticExpressionSlice::Const(constants)
     }
 
-    pub fn eval(&self, trace_rows: &[Vec<F>], row_index: usize) -> Vec<F> {
+    pub fn eval_field(&self, trace_rows: &[Vec<F>], row_index: usize) -> Vec<F> {
         match self {
             ArithmeticExpressionSlice::Input(memory) => {
                 let mut value = vec![F::ZERO; memory.len()];
@@ -108,26 +113,26 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
             }
             ArithmeticExpressionSlice::Const(constants) => constants.clone(),
             ArithmeticExpressionSlice::Add(left, right) => left
-                .eval(trace_rows, row_index)
+                .eval_field(trace_rows, row_index)
                 .iter()
-                .zip(right.eval(trace_rows, row_index).iter())
+                .zip(right.eval_field(trace_rows, row_index).iter())
                 .map(|(l, r)| *l + *r)
                 .collect(),
             ArithmeticExpressionSlice::Sub(left, right) => left
-                .eval(trace_rows, row_index)
+                .eval_field(trace_rows, row_index)
                 .iter()
-                .zip(right.eval(trace_rows, row_index).iter())
+                .zip(right.eval_field(trace_rows, row_index).iter())
                 .map(|(l, r)| *l - *r)
                 .collect(),
             ArithmeticExpressionSlice::ScalarMul(scalar, expr) => expr
-                .eval(trace_rows, row_index)
+                .eval_field(trace_rows, row_index)
                 .iter()
                 .map(|e| *e * *scalar)
                 .collect(),
             ArithmeticExpressionSlice::Mul(left, right) => left
-                .eval(trace_rows, row_index)
+                .eval_field(trace_rows, row_index)
                 .iter()
-                .zip(right.eval(trace_rows, row_index).iter())
+                .zip(right.eval_field(trace_rows, row_index).iter())
                 .map(|(l, r)| *l * *r)
                 .collect(),
         }
@@ -327,6 +332,47 @@ impl<F: RichField + Extendable<D>, const D: usize> ArithmeticExpressionSlice<F, 
                     .iter()
                     .zip(right_vals.iter())
                     .map(|(l, r)| builder.mul_extension(*l, *r))
+                    .collect()
+            }
+        }
+    }
+
+    pub fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {
+        match self {
+            ArithmeticExpressionSlice::Input(input) => input.eval_slice(parser).to_vec(),
+            ArithmeticExpressionSlice::Const(constants) => {
+                constants.iter().map(|x| parser.constant(*x)).collect()
+            }
+            ArithmeticExpressionSlice::Add(left, right) => {
+                let left = left.eval(parser);
+                let right = right.eval(parser);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| parser.add(*l, *r))
+                    .collect()
+            }
+            ArithmeticExpressionSlice::Sub(left, right) => {
+                let left = left.eval(parser);
+                let right = right.eval(parser);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| parser.sub(*l, *r))
+                    .collect()
+            }
+            ArithmeticExpressionSlice::ScalarMul(scalar, expr) => {
+                let expr_val = expr.eval(parser);
+                expr_val
+                    .iter()
+                    .map(|x| parser.scalar_mul(*x, *scalar))
+                    .collect()
+            }
+            ArithmeticExpressionSlice::Mul(left, right) => {
+                let left_vals = left.eval(parser);
+                let right_vals = right.eval(parser);
+                left_vals
+                    .iter()
+                    .zip(right_vals.iter())
+                    .map(|(l, r)| parser.mul(*l, *r))
                     .collect()
             }
         }

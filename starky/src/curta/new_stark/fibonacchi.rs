@@ -5,6 +5,7 @@ use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 
 use super::Stark;
+use crate::curta::air::parser::AirParser;
 use crate::curta::trace::types::ConstantGenerator;
 
 #[derive(Debug, Clone)]
@@ -108,6 +109,28 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D, 1> for FibonacciS
             builder.sub_extension(tmp, vars.local_values[1])
         };
         yield_constr.constraint_transition(builder, second_col_constraint);
+    }
+
+    fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) {
+        // Check public inputs.
+        let pis_constraints = [
+            parser.sub(parser.local_slice()[0], parser.public_slice()[0]),
+            parser.sub(parser.local_slice()[1], parser.public_slice()[1]),
+            parser.sub(parser.local_slice()[1], parser.public_slice()[2]),
+        ];
+        parser.constraint_first_row(pis_constraints[0]);
+        parser.constraint_first_row(pis_constraints[1]);
+        parser.constraint_last_row(pis_constraints[2]);
+
+        // x0' <- x1
+        let first_col_constraint = parser.sub(parser.next_slice()[0], parser.local_slice()[1]);
+        parser.constraint_transition(first_col_constraint);
+        // x1' <- x0 + x1
+        let second_col_constraint = {
+            let tmp = parser.sub(parser.next_slice()[1], parser.local_slice()[0]);
+            parser.sub(tmp, parser.local_slice()[1])
+        };
+        parser.constraint_transition(second_col_constraint);
     }
 
     fn constraint_degree(&self) -> usize {

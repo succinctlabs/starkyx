@@ -7,6 +7,7 @@ pub mod element;
 pub mod expression_constraints;
 pub mod gadget;
 pub mod goldilocks_cubic;
+pub mod parser;
 pub mod register;
 
 use core::iter::{Product, Sum};

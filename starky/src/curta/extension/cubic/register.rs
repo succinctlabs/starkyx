@@ -2,6 +2,8 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
 use super::cubic_expression::CubicExpression;
+use super::element::CubicElement;
+use crate::curta::air::parser::AirParser;
 use crate::curta::register::{
     ArrayRegister, CellType, ElementRegister, MemorySlice, Register, RegisterSerializable,
     RegisterSized,
@@ -45,4 +47,10 @@ impl RegisterSized for CubicElementRegister {
     }
 }
 
-impl Register for CubicElementRegister {}
+impl Register for CubicElementRegister {
+    type Value<AP: AirParser> = CubicElement<AP::Var>;
+
+    fn eval<AP: AirParser>(&self, parser: &AP) -> Self::Value<AP> {
+        CubicElement::from_slice(self.register().eval_slice(parser))
+    }
+}

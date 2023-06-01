@@ -10,6 +10,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use self::expression::ConstraintExpression;
+use super::air::parser::AirParser;
 use super::instruction::Instruction;
 use crate::curta::new_stark::vars as new_vars;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
@@ -189,6 +190,35 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize> Constra
                 let vals = constraint.ext_circuit_new(builder, vars);
                 for &val in vals.iter() {
                     yield_constr.constraint(builder, val);
+                }
+            }
+        }
+    }
+
+    pub fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) {
+        match self {
+            Constraint::First(constraint) => {
+                let vals = constraint.eval(parser);
+                for val in vals {
+                    parser.constraint_first_row(val);
+                }
+            }
+            Constraint::Last(constraint) => {
+                let vals = constraint.eval(parser);
+                for val in vals {
+                    parser.constraint_last_row(val);
+                }
+            }
+            Constraint::Transition(constraint) => {
+                let vals = constraint.eval(parser);
+                for val in vals {
+                    parser.constraint_transition(val);
+                }
+            }
+            Constraint::All(constraint) => {
+                let vals = constraint.eval(parser);
+                for val in vals {
+                    parser.constraint(val);
                 }
             }
         }

@@ -16,6 +16,8 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
 pub use self::u16::U16Register;
+use super::air::air::Air;
+use super::air::parser::AirParser;
 use super::constraint::arithmetic::{ArithmeticExpression, ArithmeticExpressionSlice};
 
 /// Adds serialization and deserialization to a register for converting between the canonical type
@@ -51,6 +53,10 @@ pub trait RegisterSized {
 pub trait Register:
     RegisterSerializable + RegisterSized + 'static + Sized + Clone + Send + Sync + Copy
 {
+    type Value<AP: AirParser>;
+
+    fn eval<AP: AirParser>(&self, parser: &AP) -> Self::Value<AP>;
+
     /// Initializes the register given a memory slice with checks on length.
     fn from_register(register: MemorySlice) -> Self {
         if register.len() != Self::size_of() {

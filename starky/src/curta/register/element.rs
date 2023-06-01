@@ -1,4 +1,5 @@
 use super::{CellType, Register, RegisterSerializable, RegisterSized};
+use crate::curta::air::parser::AirParser;
 use crate::curta::register::memory::MemorySlice;
 
 /// A register for a single element/column in the trace. The value is not constrainted.
@@ -23,4 +24,10 @@ impl RegisterSized for ElementRegister {
     }
 }
 
-impl Register for ElementRegister {}
+impl Register for ElementRegister {
+    type Value<AP: AirParser> = AP::Var;
+
+    fn eval<AP: AirParser>(&self, parser: &AP) -> Self::Value<AP> {
+        self.register().eval_slice(parser)[0]
+    }
+}

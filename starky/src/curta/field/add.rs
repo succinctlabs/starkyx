@@ -2,6 +2,8 @@
 //!
 //! To understand the implementation, it may be useful to refer to `mod.rs`.
 
+use alloc::vec;
+
 use anyhow::Result;
 use num::BigUint;
 use plonky2::field::extension::{Extendable, FieldExtension};
@@ -10,18 +12,20 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::constraint::packed_generic_field_operation;
+use super::constraint::{eval_field_operation, packed_generic_field_operation};
 use super::*;
+use crate::curta::air::parser::AirParser;
 use crate::curta::builder::StarkBuilder;
 use crate::curta::chip::StarkParameters;
 use crate::curta::field::constraint::ext_circuit_field_operation;
 use crate::curta::instruction::Instruction;
 use crate::curta::parameters::FieldParameters;
+use crate::curta::polynomial::parser::PolynomialParser;
 use crate::curta::polynomial::{
     to_u16_le_limbs_polynomial, Polynomial, PolynomialGadget, PolynomialOps,
 };
 use crate::curta::register::{
-    ArrayRegister, FieldRegister, MemorySlice, RegisterSerializable, U16Register,
+    ArrayRegister, FieldRegister, MemorySlice, Register, RegisterSerializable, U16Register,
 };
 use crate::curta::trace::TraceWriter;
 use crate::curta::utils::{compute_root_quotient_and_shift, split_u32_limbs_to_u16_limbs};
@@ -210,6 +214,34 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         let p_vanishing = PG::sub_extension(builder, &p_a_plus_b_minus_result, &p_mul_times_carry);
 
         ext_circuit_field_operation::<F, D, P>(builder, p_vanishing, p_witness_low, p_witness_high)
+    }
+
+    fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {
+        let mut poly_parser = PolynomialParser::new(parser);
+
+        let p_a = self.a.eval(poly_parser.parser);
+        let p_b = self.b.eval(poly_parser.parser);
+        let p_result = self.result.eval(poly_parser.parser);
+        let p_carry = self.carry.eval(poly_parser.parser);
+
+        let p_a_plus_b = poly_parser.add(&p_a, &p_b);
+        let p_a_plus_b_minus_result = poly_parser.sub(&p_a_plus_b, &p_result);
+        let p_limbs = poly_parser.constant(&Polynomial::from_iter(modulus_field_iter::<F, P>()));
+
+        let p_mul_times_carry = poly_parser.mul(&p_carry, &p_limbs);
+        let p_vanishing = poly_parser.sub(&p_a_plus_b_minus_result, &p_mul_times_carry);
+
+        let p_witness_low =
+            Polynomial::from_coefficients(self.witness_low.eval(poly_parser.parser));
+        let p_witness_high =
+            Polynomial::from_coefficients(self.witness_high.eval(poly_parser.parser));
+
+        eval_field_operation::<AP, P>(
+            &mut poly_parser,
+            &p_vanishing,
+            &p_witness_low,
+            &p_witness_high,
+        )
     }
 }
 

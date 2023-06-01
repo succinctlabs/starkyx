@@ -13,6 +13,7 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::arithmetic::ArithmeticExpression;
+use crate::curta::air::parser::AirParser;
 use crate::curta::instruction::Instruction;
 use crate::curta::new_stark::vars as new_vars;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
@@ -236,6 +237,41 @@ impl<I: Instruction<F, D>, F: RichField + Extendable<D>, const D: usize>
             ConstraintExpression::Union(left, right) => {
                 let mut constraints = left.ext_circuit_new(builder, vars);
                 constraints.extend(right.ext_circuit_new(builder, vars));
+                constraints
+            }
+        }
+    }
+
+    pub fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {
+        match self {
+            ConstraintExpression::Empty => vec![],
+            ConstraintExpression::Instruction(instruction) => instruction.eval(parser),
+            ConstraintExpression::Arithmetic(expr) => expr.expression.eval(parser),
+            ConstraintExpression::Mul(instruction, multiplier) => {
+                let vals = instruction.eval(parser);
+                assert_eq!(multiplier.size, 1, "Multiplier must be a single element");
+                let mult = multiplier.expression.eval(parser)[0];
+                vals.iter().map(|val| parser.mul(*val, mult)).collect()
+            }
+            ConstraintExpression::Add(left, right) => {
+                let left = left.eval(parser);
+                let right = right.eval(parser);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| parser.add(*l, *r))
+                    .collect()
+            }
+            ConstraintExpression::Sub(left, right) => {
+                let left = left.eval(parser);
+                let right = right.eval(parser);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| parser.sub(*l, *r))
+                    .collect()
+            }
+            ConstraintExpression::Union(left, right) => {
+                let mut constraints = left.eval(parser);
+                constraints.extend(right.eval(parser));
                 constraints
             }
         }

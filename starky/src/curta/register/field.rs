@@ -2,7 +2,9 @@ use std::marker::PhantomData;
 
 use super::cell::CellType;
 use super::{Register, RegisterSerializable, RegisterSized};
+use crate::curta::air::parser::AirParser;
 use crate::curta::parameters::FieldParameters;
+use crate::curta::polynomial::Polynomial;
 use crate::curta::register::memory::MemorySlice;
 
 /// A register for representing a field element. The value is decomposed into a series of U16 limbs
@@ -34,4 +36,10 @@ impl<P: FieldParameters> RegisterSized for FieldRegister<P> {
     }
 }
 
-impl<P: FieldParameters> Register for FieldRegister<P> {}
+impl<P: FieldParameters> Register for FieldRegister<P> {
+    type Value<AP: AirParser> = Polynomial<AP::Var>;
+
+    fn eval<AP: AirParser>(&self, parser: &AP) -> Self::Value<AP> {
+        Polynomial::from_slice(self.register().eval_slice(parser))
+    }
+}

@@ -34,15 +34,15 @@ impl<F: RichField + Extendable<D>, const D: usize> CubicExpression<F, D> {
         self.0
     }
 
-    pub fn eval<P: CubicParameters<F>>(
+    pub fn eval_field<P: CubicParameters<F>>(
         &self,
         trace_rows: &[Vec<F>],
         row_index: usize,
     ) -> CubicExtension<F, P> {
         let value = (
-            self.0[0].eval(trace_rows, row_index),
-            self.0[1].eval(trace_rows, row_index),
-            self.0[2].eval(trace_rows, row_index),
+            self.0[0].eval_field(trace_rows, row_index),
+            self.0[1].eval_field(trace_rows, row_index),
+            self.0[2].eval_field(trace_rows, row_index),
         );
         assert_eq!(value.0.len(), 1);
         assert_eq!(value.1.len(), 1);
@@ -170,18 +170,18 @@ mod tests {
                 .collect::<Vec<_>>();
             let trace = vec![row];
 
-            let a_eval = a.eval::<P>(&trace, 0);
-            let b_eval = b.eval::<P>(&trace, 0);
-            let c_eval = c.eval::<P>(&trace, 0);
+            let a_eval = a.eval_field::<P>(&trace, 0);
+            let b_eval = b.eval_field::<P>(&trace, 0);
+            let c_eval = c.eval_field::<P>(&trace, 0);
 
             assert_eq!(a_eval, a_v);
             assert_eq!(b_eval, b_v);
             assert_eq!(c_eval, c_v);
 
-            let expr_a_p_b_eval = expr_a_p_b.eval::<P>(&trace, 0);
-            let expr_a_m_b_eval = expr_a_m_b.eval::<P>(&trace, 0);
-            let expr_ab_eval = expr_ab.eval::<P>(&trace, 0);
-            let expr_ab_p_c_eval = expr_ab_p_c.eval::<P>(&trace, 0);
+            let expr_a_p_b_eval = expr_a_p_b.eval_field::<P>(&trace, 0);
+            let expr_a_m_b_eval = expr_a_m_b.eval_field::<P>(&trace, 0);
+            let expr_ab_eval = expr_ab.eval_field::<P>(&trace, 0);
+            let expr_ab_p_c_eval = expr_ab_p_c.eval_field::<P>(&trace, 0);
 
             assert_eq!(expr_a_p_b_eval, a_v + b_v);
             assert_eq!(expr_a_m_b_eval, a_v - b_v);

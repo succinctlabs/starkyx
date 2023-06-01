@@ -22,6 +22,7 @@ use super::vars::StarkEvaluationTargets;
 use super::Stark;
 use crate::config::StarkConfig;
 use crate::constraint_consumer::RecursiveConstraintConsumer;
+use crate::curta::air::starky::RecursiveStarkParser;
 
 pub fn verify_stark_proof_circuit<
     F: RichField + Extendable<D>,
@@ -89,7 +90,7 @@ fn verify_stark_proof_with_challenges_circuit<
         next_values,
         quotient_polys,
     } = &proof.openings;
-    let vars = StarkEvaluationTargets {
+    let vars = StarkEvaluationTargets::<D, {S::COLUMNS}, {S::PUBLIC_INPUTS}, {S::CHALLENGES}> {
         local_values: &local_values.to_vec().try_into().unwrap(),
         next_values: &next_values.to_vec().try_into().unwrap(),
         public_inputs: &public_inputs
@@ -123,11 +124,23 @@ fn verify_stark_proof_with_challenges_circuit<
         l_last,
     );
 
-    with_context!(
-        builder,
-        "evaluate vanishing polynomial",
-        eval_vanishing_poly_circuit::<F, S, D, R>(builder, &stark, vars, &mut consumer,)
-    );
+    // with_context!(
+    //     builder,
+    //     "evaluate vanishing polynomial",
+    //     eval_vanishing_poly_circuit::<F, S, D, R>(builder, &stark, vars, &mut consumer,)
+    // );
+
+    let mut parser = RecursiveStarkParser { 
+        builder: builder,
+        local_vars : vars.local_values,
+        next_vars : vars.next_values,
+        public_inputs : vars.public_inputs,
+        challenges : vars.challenges,
+        consumer : &mut consumer,
+    };
+    // eval_vanishing_poly_circuit::<F, S, D, R>(builder, &stark, vars, &mut consumer,);
+    stark.eval(&mut parser);
+
     let vanishing_polys_zeta = consumer.accumulators();
 
     // Check each polynomial identity, of the form `vanishing(x) = Z_H(x) quotient(x)`, at zeta.

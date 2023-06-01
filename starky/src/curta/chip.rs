@@ -14,6 +14,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
+use super::air::parser::AirParser;
 use super::builder::InstructionId;
 use super::constraint::Constraint;
 use super::instruction::write::WriteInstruction;
@@ -242,6 +243,16 @@ where
         }
     }
 
+    pub fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) {
+        for consr in self.constraints.iter() {
+            consr.eval(parser);
+        }
+
+        if let Some(range_data) = &self.range_data {
+            range_data.eval(parser);
+        }
+    }
+
     fn constraint_degree(&self) -> usize {
         3
     }
@@ -398,6 +409,10 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> New
         yield_constr: &mut crate::constraint_consumer::RecursiveConstraintConsumer<F, D>,
     ) {
         self.chip.eval_ext_circuit_new(builder, vars, yield_constr)
+    }
+
+    fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) {
+        self.chip.eval(parser);
     }
 
     fn constraint_degree(&self) -> usize {

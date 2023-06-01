@@ -24,6 +24,7 @@ use super::vars::StarkEvaluationVars;
 use super::Stark;
 use crate::config::StarkConfig;
 use crate::constraint_consumer::ConstraintConsumer;
+use crate::curta::air::starky::StarkParser;
 use crate::curta::trace::types::StarkTraceGenerator;
 
 pub fn prove<F, C, S, T, const D: usize, const R: usize>(
@@ -257,13 +258,27 @@ where
                 lagrange_basis_first,
                 lagrange_basis_last,
             );
-            let vars = StarkEvaluationVars {
-                local_values: &get_trace_values_packed(i_start),
-                next_values: &get_trace_values_packed(i_next_start),
-                public_inputs: &public_inputs,
-                challenges: &challenges,
+            // let vars = StarkEvaluationVars {
+            //     local_values: &get_trace_values_packed(i_start),
+            //     next_values: &get_trace_values_packed(i_next_start),
+            //     public_inputs: &public_inputs,
+            //     challenges: &challenges,
+            // };
+            // // eval_vanishing_poly::<F, F, P, S, D, 1, R>(&stark, vars, &mut consumer);
+            // stark.eval_packed_generic(vars, &mut consumer);
+
+            let public_vars = public_inputs.map(|x| P::from(x));
+            let challenge_vars = challenges.map(|x| P::from(x));
+
+            let mut parser = StarkParser {
+                local_vars: &get_trace_values_packed(i_start),
+                next_vars: &get_trace_values_packed(i_next_start),
+                public_inputs: &public_vars,
+                challenges: &challenge_vars,
+                consumer: &mut consumer,
             };
-            eval_vanishing_poly::<F, F, P, S, D, 1, R>(&stark, vars, &mut consumer);
+
+            stark.eval(&mut parser);
 
             let mut constraints_evals = consumer.accumulators();
             // We divide the constraints evaluations by `Z_H(x)`.

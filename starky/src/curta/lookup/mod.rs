@@ -10,6 +10,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
+use super::air::parser::AirParser;
 use crate::curta::new_stark::vars as new_vars;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -114,6 +115,12 @@ impl Lookup {
                     vars,
                     yield_constr,
                 ),
+        }
+    }
+
+    pub fn eval<AP: AirParser>(&self, parser: &mut AP) {
+        match self {
+            Lookup::LogDerivative(log_lookup) => log_lookup.eval(parser),
         }
     }
 }
