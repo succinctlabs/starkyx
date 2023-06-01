@@ -9,6 +9,8 @@ use crate::curta::instruction::{
 use crate::curta::parameters::FieldParameters;
 use crate::curta::register::{FieldRegister, MemorySlice};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
+use crate::curta::new_stark::vars as new_vars;
+use crate::curta::air::parser::AirParser;
 
 macro_rules! instruction_set {
     ($($var:ident$(<$($t:ident),+>)?),*) => {
@@ -72,6 +74,45 @@ macro_rules! instruction_set {
             ) -> Vec<ExtensionTarget<D>> {
                 match &self {
                     $(InstructionSet::$var(variant) => Instruction::<F, D>::ext_circuit(variant, builder, vars),)*
+                }
+            }
+
+            fn packed_generic_new<
+                FE,
+                Q,
+                const D2: usize,
+                const COLUMNS: usize,
+                const PUBLIC_INPUTS: usize,
+                const CHALLENGES: usize,
+            >(
+                &self,
+                vars: new_vars::StarkEvaluationVars<FE, Q, { COLUMNS }, { PUBLIC_INPUTS }, {CHALLENGES}>,
+            ) -> Vec<Q> where
+                FE: FieldExtension<D2, BaseField = F>,
+                Q: PackedField<Scalar = FE>
+            {
+                match &self {
+                    $(InstructionSet::$var(variant) => Instruction::<F, D>::packed_generic_new(variant, vars),)*
+                }
+            }
+
+            fn ext_circuit_new<
+            const COLUMNS: usize,
+            const PUBLIC_INPUTS: usize,
+            const CHALLENGES: usize,
+        >(
+            &self,
+            builder: &mut CircuitBuilder<F, D>,
+            vars: new_vars::StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }, { CHALLENGES }>,
+        ) -> Vec<ExtensionTarget<D>> {
+            match &self {
+                $(InstructionSet::$var(variant) => Instruction::<F, D>::ext_circuit_new(variant, builder, vars),)*
+            } 
+        }
+
+            fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {
+                match &self {
+                    $(InstructionSet::$var(variant) => Instruction::<F, D>::eval(variant, parser),)*
                 }
             }
         }

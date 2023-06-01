@@ -16,7 +16,6 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
 pub use self::u16::U16Register;
-use super::air::air::Air;
 use super::air::parser::AirParser;
 use super::constraint::arithmetic::{ArithmeticExpression, ArithmeticExpressionSlice};
 
