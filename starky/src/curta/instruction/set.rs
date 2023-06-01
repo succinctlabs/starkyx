@@ -1,16 +1,16 @@
 use plonky2::iop::ext_target::ExtensionTarget;
 
 use super::{FpAddInstruction, FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction};
+use crate::curta::air::parser::AirParser;
 use crate::curta::bool::SelectInstruction;
 use crate::curta::field::FpDenInstruction;
 use crate::curta::instruction::{
     CircuitBuilder, Extendable, FieldExtension, Instruction, PackedField, RichField,
 };
+use crate::curta::new_stark::vars as new_vars;
 use crate::curta::parameters::FieldParameters;
 use crate::curta::register::{FieldRegister, MemorySlice};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
-use crate::curta::new_stark::vars as new_vars;
-use crate::curta::air::parser::AirParser;
 
 macro_rules! instruction_set {
     ($($var:ident$(<$($t:ident),+>)?),*) => {
@@ -107,7 +107,7 @@ macro_rules! instruction_set {
         ) -> Vec<ExtensionTarget<D>> {
             match &self {
                 $(InstructionSet::$var(variant) => Instruction::<F, D>::ext_circuit_new(variant, builder, vars),)*
-            } 
+            }
         }
 
             fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {

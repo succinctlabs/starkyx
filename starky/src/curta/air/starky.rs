@@ -9,9 +9,9 @@ use crate::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer
 
 pub struct StarkParser<'a, F, FE, P, const D: usize, const D2: usize>
 where
- F: RichField + Extendable<D>,
- FE: FieldExtension<D2, BaseField = F>,
- P: PackedField<Scalar = FE>,
+    F: RichField + Extendable<D>,
+    FE: FieldExtension<D2, BaseField = F>,
+    P: PackedField<Scalar = FE>,
 {
     pub(crate) local_vars: &'a [P],
     pub(crate) next_vars: &'a [P],
@@ -29,9 +29,8 @@ pub struct RecursiveStarkParser<'a, F: RichField + Extendable<D>, const D: usize
     pub(crate) consumer: &'a mut RecursiveConstraintConsumer<F, D>,
 }
 
-impl<'a, F, FE, P, const D: usize, const D2: usize> AirParser
-    for StarkParser<'a, F, FE, P, D, D2>
-    where
+impl<'a, F, FE, P, const D: usize, const D2: usize> AirParser for StarkParser<'a, F, FE, P, D, D2>
+where
     F: RichField + Extendable<D>,
     FE: FieldExtension<D2, BaseField = F>,
     P: PackedField<Scalar = FE>,

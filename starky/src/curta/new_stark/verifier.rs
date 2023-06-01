@@ -70,7 +70,13 @@ where
         next_values,
         quotient_polys,
     } = &proof.openings;
-    let vars = StarkEvaluationVars::<F::Extension, F::Extension, {S::COLUMNS}, {S::PUBLIC_INPUTS}, {S::CHALLENGES}> {
+    let vars = StarkEvaluationVars::<
+        F::Extension,
+        F::Extension,
+        { S::COLUMNS },
+        { S::PUBLIC_INPUTS },
+        { S::CHALLENGES },
+    > {
         local_values: &local_values.to_vec().try_into().unwrap(),
         next_values: &next_values.to_vec().try_into().unwrap(),
         public_inputs: &public_inputs
@@ -102,16 +108,16 @@ where
         l_last,
     );
 
-    // let mut parser = StarkParser {
-    //     local_vars: vars.local_values,
-    //     next_vars: vars.next_values,
-    //     public_inputs: vars.public_inputs,
-    //     challenges: vars.challenges,
-    //     consumer: &mut consumer,
-    // };
+    let mut parser = StarkParser {
+        local_vars: vars.local_values,
+        next_vars: vars.next_values,
+        public_inputs: vars.public_inputs,
+        challenges: vars.challenges,
+        consumer: &mut consumer,
+    };
 
-    // stark.eval(&mut parser);
-    eval_vanishing_poly::<F, F::Extension, F::Extension, S, D, D, R>(&stark, vars, &mut consumer);
+    stark.eval(&mut parser);
+    // eval_vanishing_poly::<F, F::Extension, F::Extension, S, D, D, R>(&stark, vars, &mut consumer);
     let vanishing_polys_zeta = consumer.accumulators();
 
     // Check each polynomial identity, of the form `vanishing(x) = Z_H(x) quotient(x)`, at zeta.

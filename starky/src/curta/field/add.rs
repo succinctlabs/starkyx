@@ -19,6 +19,7 @@ use crate::curta::builder::StarkBuilder;
 use crate::curta::chip::StarkParameters;
 use crate::curta::field::constraint::ext_circuit_field_operation;
 use crate::curta::instruction::Instruction;
+use crate::curta::new_stark::vars as new_vars;
 use crate::curta::parameters::FieldParameters;
 use crate::curta::polynomial::parser::PolynomialParser;
 use crate::curta::polynomial::{
@@ -30,7 +31,6 @@ use crate::curta::register::{
 use crate::curta::trace::TraceWriter;
 use crate::curta::utils::{compute_root_quotient_and_shift, split_u32_limbs_to_u16_limbs};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
-use crate::curta::new_stark::vars as new_vars;
 
 #[derive(Debug, Clone, Copy)]
 pub struct FpAddInstruction<P: FieldParameters> {
@@ -217,9 +217,16 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         ext_circuit_field_operation::<F, D, P>(builder, p_vanishing, p_witness_low, p_witness_high)
     }
 
-    fn packed_generic_new<FE, PF, const D2: usize, const COLUMNS: usize, const PUBLIC_INPUTS: usize, const CHALLENGES: usize,>(
+    fn packed_generic_new<
+        FE,
+        PF,
+        const D2: usize,
+        const COLUMNS: usize,
+        const PUBLIC_INPUTS: usize,
+        const CHALLENGES: usize,
+    >(
         &self,
-        vars: new_vars::StarkEvaluationVars<FE, PF, { COLUMNS }, { PUBLIC_INPUTS }, {CHALLENGES}>,
+        vars: new_vars::StarkEvaluationVars<FE, PF, { COLUMNS }, { PUBLIC_INPUTS }, { CHALLENGES }>,
     ) -> Vec<PF>
     where
         FE: FieldExtension<D2, BaseField = F>,
