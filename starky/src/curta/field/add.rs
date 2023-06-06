@@ -360,9 +360,6 @@ mod tests {
             handle.write_fp_add(i, &a_int, &b_int, a_add_b_ins).unwrap();
         }
         drop(handle);
-        // generator
-        //     .generate_trace_rows(&chip, num_rows as usize)
-        //     .unwrap()
 
         // Generate the proof.
         let config = StarkConfig::standard_fast_config();
