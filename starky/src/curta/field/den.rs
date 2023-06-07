@@ -4,14 +4,10 @@
 
 use anyhow::Result;
 use num::BigUint;
-use plonky2::field::extension::{Extendable, FieldExtension};
-use plonky2::field::packed::PackedField;
+use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
-use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::constraint::{
-    eval_field_operation, ext_circuit_field_operation, packed_generic_field_operation,
-};
+use super::constraint::eval_field_operation;
 use super::*;
 use crate::curta::air::parser::AirParser;
 use crate::curta::builder::StarkBuilder;
@@ -20,15 +16,12 @@ use crate::curta::field::modulus_field_iter;
 use crate::curta::instruction::Instruction;
 use crate::curta::parameters::FieldParameters;
 use crate::curta::polynomial::parser::PolynomialParser;
-use crate::curta::polynomial::{
-    to_u16_le_limbs_polynomial, Polynomial, PolynomialGadget, PolynomialOps,
-};
+use crate::curta::polynomial::{to_u16_le_limbs_polynomial, Polynomial};
 use crate::curta::register::{
     ArrayRegister, MemorySlice, Register, RegisterSerializable, U16Register,
 };
 use crate::curta::trace::writer::TraceWriter;
 use crate::curta::utils::{compute_root_quotient_and_shift, split_u32_limbs_to_u16_limbs};
-use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Debug, Clone, Copy)]
 pub struct FpDenInstruction<P: FieldParameters> {
@@ -143,83 +136,6 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         ]
     }
 
-    fn packed_generic<FE, PF, const D2: usize, const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        &self,
-        vars: StarkEvaluationVars<FE, PF, { COLUMNS }, { PUBLIC_INPUTS }>,
-    ) -> Vec<PF>
-    where
-        FE: FieldExtension<D2, BaseField = F>,
-        PF: PackedField<Scalar = FE>,
-    {
-        // Get the packed entries.
-        let p_a = self.a.register().packed_generic_vars(vars);
-        let p_b = self.b.register().packed_generic_vars(vars);
-        let p_result = self.result.register().packed_generic_vars(vars);
-        let p_carry = self.carry.register().packed_generic_vars(vars);
-        let p_witness_low = self.witness_low.register().packed_generic_vars(vars);
-        let p_witness_high = self.witness_high.register().packed_generic_vars(vars);
-
-        // Compute the vanishing polynomial:
-        //      lhs(x) = sign * (b(x) * result(x) + result(x)) + (1 - sign) * (b(x) * result(x) + a(x))
-        //      rhs(x) = sign * a(x) + (1 - sign) * result(x)
-        //      lhs(x) - rhs(x) - carry(x) * p(x)
-        let p_equation_lhs = if self.sign {
-            PolynomialOps::add(&PolynomialOps::mul(p_b, p_result), p_result)
-        } else {
-            PolynomialOps::add(&PolynomialOps::mul(p_b, p_result), p_a)
-        };
-        let p_equation_rhs = if self.sign { p_a } else { p_result };
-        let p_lhs_minus_rhs = PolynomialOps::sub(&p_equation_lhs, p_equation_rhs);
-        let p_modulus = Polynomial::<FE>::from_iter(modulus_field_iter::<FE, P>());
-        let p_carry_mul_modulus = PolynomialOps::scalar_poly_mul(p_carry, p_modulus.as_slice());
-        let p_vanishing = PolynomialOps::sub(&p_lhs_minus_rhs, &p_carry_mul_modulus);
-
-        // Check [lhs(x) - rhs(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
-        packed_generic_field_operation::<F, D, FE, PF, D2, P>(
-            p_vanishing,
-            p_witness_low,
-            p_witness_high,
-        )
-    }
-
-    fn ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-    ) -> Vec<ExtensionTarget<D>> {
-        // Get the packed entries.
-        let p_a = self.a.register().ext_circuit_vars(vars);
-        let p_b = self.b.register().ext_circuit_vars(vars);
-        let p_result = self.result.register().ext_circuit_vars(vars);
-        let p_carry = self.carry.register().ext_circuit_vars(vars);
-        let p_witness_low = self.witness_low.register().ext_circuit_vars(vars);
-        let p_witness_high = self.witness_high.register().ext_circuit_vars(vars);
-
-        // Compute the vanishing polynomial:
-        //      lhs(x) = sign * (b(x) * result(x) + result(x)) + (1 - sign) * (b(x) * result(x) + a(x))
-        //      rhs(x) = sign * a(x) + (1 - sign) * result(x)
-        //      lhs(x) - rhs(x) - carry(x) * p(x)
-        let p_b_times_res = PolynomialGadget::mul_extension(builder, p_b, p_result);
-        let p_equation_lhs = if self.sign {
-            PolynomialGadget::add_extension(builder, &p_b_times_res, p_result)
-        } else {
-            PolynomialGadget::add_extension(builder, &p_b_times_res, p_a)
-        };
-        let p_equation_rhs = if self.sign { p_a } else { p_result };
-        let p_lhs_minus_rhs =
-            PolynomialGadget::sub_extension(builder, &p_equation_lhs, p_equation_rhs);
-        let p_limbs = PolynomialGadget::constant_extension(
-            builder,
-            &modulus_field_iter::<F::Extension, P>().collect::<Vec<_>>()[..],
-        );
-        let mul_times_carry = PolynomialGadget::mul_extension(builder, p_carry, &p_limbs[..]);
-        let p_vanishing =
-            PolynomialGadget::sub_extension(builder, &p_lhs_minus_rhs, &mul_times_carry);
-
-        // Check [lhs(x) - rhs(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
-        ext_circuit_field_operation::<F, D, P>(builder, p_vanishing, p_witness_low, p_witness_high)
-    }
-
     fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {
         let mut poly_parser = PolynomialParser::new(parser);
 
@@ -264,6 +180,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
 mod tests {
     use num::bigint::RandBigInt;
     use plonky2::iop::witness::PartialWitness;
+    use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::timed;

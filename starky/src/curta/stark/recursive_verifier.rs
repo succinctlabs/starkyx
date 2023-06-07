@@ -124,7 +124,7 @@ fn verify_stark_proof_with_challenges_circuit<
     );
 
     let mut parser = RecursiveStarkParser {
-        builder: builder,
+        builder,
         local_vars: vars.local_values,
         next_vars: vars.next_values,
         public_inputs: vars.public_inputs,

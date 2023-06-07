@@ -117,10 +117,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Mul for CubicExpression<F, D>
                 + x_1.clone() * y_2.clone()
                 + x_2.clone() * y_1.clone()
                 - x_2.clone() * y_2.clone(),
-            x_0.clone() * y_2.clone()
-                + x_1.clone() * y_1.clone()
-                + x_2.clone() * y_0.clone()
-                + x_2.clone() * y_2.clone(),
+            x_0 * y_2.clone() + x_1 * y_1 + x_2.clone() * y_0 + x_2 * y_2,
         ])
     }
 }

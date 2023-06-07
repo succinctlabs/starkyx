@@ -105,7 +105,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
         // Write multiplicities into the trace
         let multiplicity = lookup_data.multiplicity.register();
         for i in 0..num_rows {
-            multiplicity.assign(trace_rows, 0, &mut vec![multiplicities[i]], i);
+            multiplicity.assign(trace_rows, 0, &mut [multiplicities[i]], i);
         }
 
         // Write multiplicity inverse constraint
@@ -134,8 +134,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
                 for (k, pair) in values.chunks(2).enumerate() {
                     let beta_minus_a = beta - pair[0].into();
                     let beta_minus_b = beta - pair[1].into();
-                    accumumulator += CubicExtension::from(beta_minus_a).inverse()
-                        + CubicExtension::from(beta_minus_b).inverse();
+                    accumumulator += beta_minus_a.inverse() + beta_minus_b.inverse();
                     accumulators[3 * k..3 * k + 3]
                         .copy_from_slice(&accumumulator.base_field_array());
                 }

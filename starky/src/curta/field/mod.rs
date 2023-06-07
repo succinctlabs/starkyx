@@ -119,55 +119,6 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         }
     }
 
-    fn packed_generic<FE, PF, const D2: usize, const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        &self,
-        vars: crate::vars::StarkEvaluationVars<FE, PF, { COLUMNS }, { PUBLIC_INPUTS }>,
-    ) -> Vec<PF>
-    where
-        FE: plonky2::field::extension::FieldExtension<D2, BaseField = F>,
-        PF: plonky2::field::packed::PackedField<Scalar = FE>,
-    {
-        match self {
-            FpInstruction::Add(add) => {
-                <FpAddInstruction<P> as Instruction<F, D>>::packed_generic(add, vars)
-            }
-            FpInstruction::Mul(mul) => {
-                <FpMulInstruction<P> as Instruction<F, D>>::packed_generic(mul, vars)
-            }
-            FpInstruction::Quad(quad) => {
-                <FpInnerProductInstruction<P> as Instruction<F, D>>::packed_generic(quad, vars)
-            }
-            FpInstruction::MulConst(mul_const) => {
-                <FpMulConstInstruction<P> as Instruction<F, D>>::packed_generic(mul_const, vars)
-            }
-        }
-    }
-
-    fn ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        &self,
-        builder: &mut plonky2::plonk::circuit_builder::CircuitBuilder<F, D>,
-        vars: crate::vars::StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-    ) -> Vec<ExtensionTarget<D>> {
-        match self {
-            FpInstruction::Add(add) => {
-                <FpAddInstruction<P> as Instruction<F, D>>::ext_circuit(add, builder, vars)
-            }
-            FpInstruction::Mul(mul) => {
-                <FpMulInstruction<P> as Instruction<F, D>>::ext_circuit(mul, builder, vars)
-            }
-            FpInstruction::Quad(quad) => {
-                <FpInnerProductInstruction<P> as Instruction<F, D>>::ext_circuit(
-                    quad, builder, vars,
-                )
-            }
-            FpInstruction::MulConst(mul_const) => {
-                <FpMulConstInstruction<P> as Instruction<F, D>>::ext_circuit(
-                    mul_const, builder, vars,
-                )
-            }
-        }
-    }
-
     fn eval<AP: super::air::parser::AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {
         match self {
             FpInstruction::Add(add) => {

@@ -19,25 +19,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for WriteIn
         self.0.assign(trace_rows, 0, row, row_index);
     }
 
-    fn packed_generic<FE, P, const D2: usize, const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        &self,
-        _vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
-    ) -> Vec<P>
-    where
-        FE: FieldExtension<D2, BaseField = F>,
-        P: PackedField<Scalar = FE>,
-    {
-        vec![]
-    }
-
-    fn ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        &self,
-        _builder: &mut CircuitBuilder<F, D>,
-        _vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-    ) -> Vec<ExtensionTarget<D>> {
-        vec![]
-    }
-
     fn eval<AP: AirParser<Field = F>>(&self, _parser: &mut AP) -> Vec<AP::Var> {
         vec![]
     }

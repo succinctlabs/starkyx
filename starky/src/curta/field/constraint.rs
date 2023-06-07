@@ -76,7 +76,7 @@ pub fn ext_circuit_field_operation<
     // Multiply by (x-2^16) and make the constraint
     let neg_limb = builder.constant_extension(-limb_fe);
     let root_monomial = &[neg_limb, builder.constant_extension(F::Extension::ONE)];
-    let p_witness_mul_root = PG::mul_extension(builder, &p_witness.as_slice(), root_monomial);
+    let p_witness_mul_root = PG::mul_extension(builder, p_witness.as_slice(), root_monomial);
 
     // Check [a(x) + b(x) - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
     PG::sub_extension(builder, &p_vanishing, &p_witness_mul_root)
@@ -104,6 +104,6 @@ pub fn eval_field_operation<AP: AirParser, P: FieldParameters>(
     let p_witness_mul_root = poly_parser.scalar_poly_mul(&p_witness, &root_monomiial);
 
     poly_parser
-        .sub(&p_vanishing, &p_witness_mul_root)
+        .sub(p_vanishing, &p_witness_mul_root)
         .coefficients
 }

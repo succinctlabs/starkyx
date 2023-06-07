@@ -120,16 +120,16 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
         // x3_numerator = x1 * y2 + x2 * y1.
         let x3_numerator = self.write_fp_inner_product(
             row_index,
-            vec![&x1, &x2],
-            vec![&y2, &y1],
+            vec![x1, x2],
+            vec![y2, y1],
             gadget.x3_numerator_ins,
         )?;
 
         // y3_numerator = y1 * y2 + x1 * x2.
         let y3_numerator = self.write_fp_inner_product(
             row_index,
-            vec![&y1, &x1],
-            vec![&y2, &x2],
+            vec![y1, x1],
+            vec![y2, x2],
             gadget.y3_numerator_ins,
         )?;
 

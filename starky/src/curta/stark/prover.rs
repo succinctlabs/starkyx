@@ -178,9 +178,9 @@ where
 
 /// Computes the quotient polynomials `(sum alpha^i C_i(x)) / Z_H(x)` for `alpha` in `alphas`,
 /// where the `C_i`s are the Stark constraints.
-fn compute_quotient_polys<'a, F, P, C, S, const D: usize, const R: usize>(
+fn compute_quotient_polys<F, P, C, S, const D: usize, const R: usize>(
     stark: &S,
-    trace_commitment: &'a [PolynomialBatch<F, C, D>],
+    trace_commitment: &[PolynomialBatch<F, C, D>],
     public_inputs: [F; S::PUBLIC_INPUTS],
     challenges: [F; S::CHALLENGES],
     alphas: Vec<F>,

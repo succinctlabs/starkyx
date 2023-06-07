@@ -40,22 +40,7 @@ pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
             });
     }
 
-    /// Outputs the values of vanishing polynomial on packed elements.
-    fn packed_generic<FE, P, const D2: usize, const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        &self,
-        vars: StarkEvaluationVars<FE, P, { COLUMNS }, { PUBLIC_INPUTS }>,
-    ) -> Vec<P>
-    where
-        FE: FieldExtension<D2, BaseField = F>,
-        P: PackedField<Scalar = FE>;
-
-    /// Evaluates the vanishing polynomial inside a recursive circuit.
-    fn ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-    ) -> Vec<ExtensionTarget<D>>;
-
+    /// Returns evaluations of vanishing polynomials constraints.
     fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var>;
 
     fn constraint_degree() -> usize {

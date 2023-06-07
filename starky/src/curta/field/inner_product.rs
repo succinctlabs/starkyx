@@ -90,15 +90,15 @@ impl<F: RichField + Extendable<D>, const D: usize> TraceWriter<F, D> {
         // Make little endian polynomial limbs.
         let p_a_vec = a
             .into_iter()
-            .map(|a| to_u16_le_limbs_polynomial::<F, P>(&a))
+            .map(|a| to_u16_le_limbs_polynomial::<F, P>(a))
             .collect::<Vec<Polynomial<F>>>();
         let p_b_vec = b
             .into_iter()
-            .map(|b| to_u16_le_limbs_polynomial::<F, P>(&b))
+            .map(|b| to_u16_le_limbs_polynomial::<F, P>(b))
             .collect::<Vec<Polynomial<F>>>();
-        let p_modulus = to_u16_le_limbs_polynomial::<F, P>(&modulus);
-        let p_result = to_u16_le_limbs_polynomial::<F, P>(&result);
-        let p_carry = to_u16_le_limbs_polynomial::<F, P>(&carry);
+        let p_modulus = to_u16_le_limbs_polynomial::<F, P>(modulus);
+        let p_result = to_u16_le_limbs_polynomial::<F, P>(result);
+        let p_carry = to_u16_le_limbs_polynomial::<F, P>(carry);
 
         // Compute the vanishing polynomial.
         let p_inner_product = p_a_vec.into_iter().zip(p_b_vec.into_iter()).fold(
@@ -137,103 +137,6 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
             *self.witness_low.register(),
             *self.witness_high.register(),
         ]
-    }
-
-    fn packed_generic<FE, PF, const D2: usize, const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        &self,
-        vars: StarkEvaluationVars<FE, PF, { COLUMNS }, { PUBLIC_INPUTS }>,
-    ) -> Vec<PF>
-    where
-        FE: FieldExtension<D2, BaseField = F>,
-        PF: PackedField<Scalar = FE>,
-    {
-        // Get packed entries.
-        let p_a_vec = self
-            .a
-            .clone()
-            .into_iter()
-            .map(|x| x.register().packed_generic_vars(vars))
-            .collect::<Vec<_>>();
-        let p_b_vec = self
-            .b
-            .clone()
-            .into_iter()
-            .map(|x| x.register().packed_generic_vars(vars))
-            .collect::<Vec<_>>();
-        let p_result = self.result.register().packed_generic_vars(vars);
-        let p_carry = self.carry.register().packed_generic_vars(vars);
-        let p_witness_low = self.witness_low.register().packed_generic_vars(vars);
-        let p_witness_high = self.witness_high.register().packed_generic_vars(vars);
-
-        // Construct the expected vanishing polynmial.
-        let p_zero = vec![PF::ZEROS];
-        let p_inner_product = p_a_vec
-            .into_iter()
-            .zip(p_b_vec)
-            .map(|(a, b)| PolynomialOps::mul(a, b))
-            .fold(p_zero, |acc, x| PolynomialOps::add(&acc, &x[..]));
-        let p_inner_product_minus_result = PolynomialOps::sub(&p_inner_product, p_result);
-        let p_limbs = Polynomial::<FE>::from_iter(modulus_field_iter::<FE, P>());
-        let mul_times_carry = PolynomialOps::scalar_poly_mul(p_carry, p_limbs.as_slice());
-        let p_vanishing = PolynomialOps::sub(&p_inner_product_minus_result, &mul_times_carry);
-
-        // Check [(\sum_i a_i(x) + b_i(x)) - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
-        packed_generic_field_operation::<F, D, FE, PF, D2, P>(
-            p_vanishing,
-            p_witness_low,
-            p_witness_high,
-        )
-    }
-
-    fn ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-    ) -> Vec<ExtensionTarget<D>> {
-        // Get the packed entries.
-        let p_a_vec = self
-            .a
-            .clone()
-            .into_iter()
-            .map(|x| x.register().ext_circuit_vars(vars))
-            .collect::<Vec<_>>();
-        let p_b_vec = self
-            .b
-            .clone()
-            .into_iter()
-            .map(|x| x.register().ext_circuit_vars(vars))
-            .collect::<Vec<_>>();
-        let p_result = self.result.register().ext_circuit_vars(vars);
-        let p_carry = self.carry.register().ext_circuit_vars(vars);
-        let p_witness_low = self.witness_low.register().ext_circuit_vars(vars);
-        let p_witness_high = self.witness_high.register().ext_circuit_vars(vars);
-
-        // Construct the expected vanishing polynmial
-        let p_zero = vec![builder.zero_extension()];
-        let p_inner_product = p_a_vec
-            .into_iter()
-            .zip(p_b_vec)
-            .map(|(a, b)| PolynomialGadget::mul_extension(builder, a, b))
-            .collect::<Vec<_>>()
-            .into_iter()
-            .fold(p_zero, |acc, x| {
-                PolynomialGadget::add_extension(builder, &acc, &x[..])
-            });
-        let p_inner_product_minus_result =
-            PolynomialGadget::sub_extension(builder, &p_inner_product, p_result);
-        let p_modulus = PolynomialGadget::constant_extension(
-            builder,
-            &modulus_field_iter::<F::Extension, P>().collect::<Vec<_>>(),
-        );
-        let p_carry_mul_modulus = PolynomialGadget::mul_extension(builder, p_carry, &p_modulus[..]);
-        let p_vanishing = PolynomialGadget::sub_extension(
-            builder,
-            &p_inner_product_minus_result,
-            &p_carry_mul_modulus,
-        );
-
-        // Check [(\sum_i a_i(x) + b_i(x)) - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
-        ext_circuit_field_operation::<F, D, P>(builder, p_vanishing, p_witness_low, p_witness_high)
     }
 
     fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {

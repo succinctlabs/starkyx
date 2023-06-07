@@ -43,19 +43,19 @@ where
     }
 
     fn local_slice(&self) -> &[Self::Var] {
-        &self.local_vars
+        self.local_vars
     }
 
     fn next_slice(&self) -> &[Self::Var] {
-        &self.next_vars
+        self.next_vars
     }
 
     fn challenge_slice(&self) -> &[Self::Var] {
-        &self.challenges
+        self.challenges
     }
 
     fn public_slice(&self) -> &[Self::Var] {
-        &self.public_inputs
+        self.public_inputs
     }
 
     fn constraint(&mut self, constraint: Self::Var) {
@@ -117,38 +117,36 @@ impl<'a, F: RichField + Extendable<D>, const D: usize> AirParser
     }
 
     fn local_slice(&self) -> &[Self::Var] {
-        &self.local_vars
+        self.local_vars
     }
 
     fn next_slice(&self) -> &[Self::Var] {
-        &self.next_vars
+        self.next_vars
     }
 
     fn challenge_slice(&self) -> &[Self::Var] {
-        &self.challenges
+        self.challenges
     }
 
     fn public_slice(&self) -> &[Self::Var] {
-        &self.public_inputs
+        self.public_inputs
     }
 
     fn constraint(&mut self, constraint: Self::Var) {
-        self.consumer.constraint(&mut self.builder, constraint);
+        self.consumer.constraint(self.builder, constraint);
     }
 
     fn constraint_transition(&mut self, constraint: Self::Var) {
         self.consumer
-            .constraint_transition(&mut self.builder, constraint);
+            .constraint_transition(self.builder, constraint);
     }
 
     fn constraint_first_row(&mut self, constraint: Self::Var) {
-        self.consumer
-            .constraint_first_row(&mut self.builder, constraint);
+        self.consumer.constraint_first_row(self.builder, constraint);
     }
 
     fn constraint_last_row(&mut self, constraint: Self::Var) {
-        self.consumer
-            .constraint_last_row(&mut self.builder, constraint);
+        self.consumer.constraint_last_row(self.builder, constraint);
     }
 
     fn add(&mut self, a: Self::Var, b: Self::Var) -> Self::Var {

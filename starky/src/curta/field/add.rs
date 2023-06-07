@@ -157,65 +157,6 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         ]
     }
 
-    fn packed_generic<FE, PF, const D2: usize, const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        &self,
-        vars: StarkEvaluationVars<FE, PF, { COLUMNS }, { PUBLIC_INPUTS }>,
-    ) -> Vec<PF>
-    where
-        FE: FieldExtension<D2, BaseField = F>,
-        PF: PackedField<Scalar = FE>,
-    {
-        // Get the packed entries.
-        let p_a = self.a.register().packed_generic_vars(vars);
-        let p_b = self.b.register().packed_generic_vars(vars);
-        let p_result = self.result.register().packed_generic_vars(vars);
-        let p_carry = self.carry.register().packed_generic_vars(vars);
-        let p_witness_low = self.witness_low.register().packed_generic_vars(vars);
-        let p_witness_high = self.witness_high.register().packed_generic_vars(vars);
-
-        // Compute the vanishing polynomial a(x) + b(x) - result(x) - carry(x) * p(x).
-        let p_a_plus_b = PolynomialOps::add(p_a, p_b);
-        let p_a_plus_b_minus_result = PolynomialOps::sub(&p_a_plus_b, p_result);
-        let p_modulus = Polynomial::<FE>::from_iter(modulus_field_iter::<FE, P>());
-        let p_carry_mul_modulus = PolynomialOps::scalar_poly_mul(p_carry, p_modulus.as_slice());
-        let p_vanishing = PolynomialOps::sub(&p_a_plus_b_minus_result, &p_carry_mul_modulus);
-
-        // Check [a(x) + b(x) - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
-        packed_generic_field_operation::<F, D, FE, PF, D2, P>(
-            p_vanishing,
-            p_witness_low,
-            p_witness_high,
-        )
-    }
-
-    fn ext_circuit<const COLUMNS: usize, const PUBLIC_INPUTS: usize>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-        vars: StarkEvaluationTargets<D, { COLUMNS }, { PUBLIC_INPUTS }>,
-    ) -> Vec<ExtensionTarget<D>> {
-        type PG = PolynomialGadget;
-
-        // Get the packed entries.
-        let p_a = self.a.register().ext_circuit_vars(vars);
-        let p_b = self.b.register().ext_circuit_vars(vars);
-        let p_result = self.result.register().ext_circuit_vars(vars);
-        let p_carry = self.carry.register().ext_circuit_vars(vars);
-        let p_witness_low = self.witness_low.register().ext_circuit_vars(vars);
-        let p_witness_high = self.witness_high.register().ext_circuit_vars(vars);
-
-        // Compute the vanishing polynomial a(x) + b(x) - result(x) - carry(x) * p(x).
-        let p_a_plus_b = PG::add_extension(builder, p_a, p_b);
-        let p_a_plus_b_minus_result = PG::sub_extension(builder, &p_a_plus_b, p_result);
-        let p_limbs = PG::constant_extension(
-            builder,
-            &modulus_field_iter::<F::Extension, P>().collect::<Vec<_>>()[..],
-        );
-        let p_mul_times_carry = PG::mul_extension(builder, p_carry, &p_limbs[..]);
-        let p_vanishing = PG::sub_extension(builder, &p_a_plus_b_minus_result, &p_mul_times_carry);
-
-        ext_circuit_field_operation::<F, D, P>(builder, p_vanishing, p_witness_low, p_witness_high)
-    }
-
     fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {
         let mut poly_parser = PolynomialParser::new(parser);
 
