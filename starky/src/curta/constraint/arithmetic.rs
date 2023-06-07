@@ -8,8 +8,8 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use crate::curta::air::parser::AirParser;
-use crate::curta::new_stark::vars as new_vars;
 use crate::curta::register::{MemorySlice, Register};
+use crate::curta::stark::vars as new_vars;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 /// An abstract representation of an arithmetic expression.
@@ -520,21 +520,23 @@ mod tests {
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+    use plonky2::timed;
     use plonky2::util::timing::TimingTree;
 
     use super::*;
     use crate::config::StarkConfig;
     use crate::curta::builder::StarkBuilder;
     use crate::curta::chip::{ChipStark, StarkParameters};
+    use crate::curta::extension::cubic::goldilocks_cubic::GoldilocksCubicParameters;
     use crate::curta::instruction::write::WriteInstruction;
     use crate::curta::register::U16Register;
-    use crate::curta::trace::trace;
-    use crate::prover::prove;
-    use crate::recursive_verifier::{
+    use crate::curta::stark::prover::prove;
+    use crate::curta::stark::recursive_verifier::{
         add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
         verify_stark_proof_circuit,
     };
-    use crate::verifier::verify_stark_proof;
+    use crate::curta::stark::verifier::verify_stark_proof;
+    use crate::curta::trace::arithmetic::{trace, ArithmeticGenerator};
 
     #[derive(Clone, Debug)]
     pub struct TestArithmeticExpression<F, const D: usize> {
@@ -558,8 +560,8 @@ mod tests {
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D>
         for Test2ArithmeticExpression<F, D>
     {
-        const NUM_ARITHMETIC_COLUMNS: usize = 3;
-        const NUM_FREE_COLUMNS: usize = 0;
+        const NUM_ARITHMETIC_COLUMNS: usize = 4;
+        const NUM_FREE_COLUMNS: usize = 14;
 
         type Instruction = WriteInstruction;
     }
@@ -569,25 +571,32 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
+        type E = GoldilocksCubicParameters;
         type S = ChipStark<Test2ArithmeticExpression<F, D>, F, D>;
+
+        let _ = env_logger::builder().is_test(true).try_init();
+        let mut timing = TimingTree::new("stark_proof", log::Level::Debug);
 
         let mut builder = StarkBuilder::<Test2ArithmeticExpression<F, D>, F, D>::new();
 
         let input_1 = builder.alloc::<U16Register>();
         let input_2 = builder.alloc::<U16Register>();
         let output = builder.alloc::<U16Register>();
+        let zero = builder.alloc::<U16Register>();
 
         builder.write_data(&input_1).unwrap();
         builder.write_data(&input_2).unwrap();
         builder.write_data(&output).unwrap();
+        builder.write_data(&zero).unwrap();
 
         let mul_expr = input_1.expr() * input_2.expr();
         builder.assert_expressions_equal(mul_expr.clone(), output.expr());
+        builder.assert_expression_zero(zero.expr());
 
-        let (chip, spec) = builder.build();
+        let chip = builder.build();
 
         let num_rows = 2u64.pow(16) as usize;
-        let (handle, generator) = trace::<F, D>(spec);
+        let (handle, generator) = trace::<F, E, D>(num_rows);
 
         for i in 0..num_rows {
             let a_val = F::ONES + F::ONES;
@@ -596,29 +605,27 @@ mod tests {
             handle.write_data(i, input_1, vec![a_val]).unwrap();
             handle.write_data(i, input_2, vec![b_val]).unwrap();
             handle.write_data(i, output, vec![c_val]).unwrap();
+            handle.write_data(i, zero, vec![F::ZEROS]).unwrap();
         }
         drop(handle);
 
-        let trace = generator.generate_trace(&chip, num_rows).unwrap();
-
+        // Generate the proof.
         let config = StarkConfig::standard_fast_config();
         let stark = ChipStark::new(chip);
-
-        // Verify proof as a stark
-        let proof = prove::<F, C, S, D>(
+        let proof = prove::<F, C, S, ArithmeticGenerator<F, E, D>, D, 2>(
             stark.clone(),
             &config,
-            trace,
+            generator,
+            num_rows,
             [],
             &mut TimingTree::default(),
         )
         .unwrap();
         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
 
-        // Verify recursive proof in a circuit
+        // Generate the recursive proof.
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
-
         let degree_bits = proof.proof.recover_degree_bits(&config);
         let virtual_proof = add_virtual_stark_proof_with_pis(
             &mut recursive_builder,
@@ -626,31 +633,32 @@ mod tests {
             &config,
             degree_bits,
         );
-
         recursive_builder.print_gate_counts(0);
-
         let mut rec_pw = PartialWitness::new();
         set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-
-        verify_stark_proof_circuit::<F, C, S, D>(
+        verify_stark_proof_circuit::<F, C, S, D, 2>(
             &mut recursive_builder,
             stark,
             virtual_proof,
             &config,
         );
-
         let recursive_data = recursive_builder.build::<C>();
-
-        let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
-        let recursive_proof = plonky2::plonk::prover::prove(
-            &recursive_data.prover_only,
-            &recursive_data.common,
-            rec_pw,
-            &mut timing,
-        )
-        .unwrap();
-
+        let recursive_proof = timed!(
+            timing,
+            "generate recursive proof",
+            plonky2::plonk::prover::prove(
+                &recursive_data.prover_only,
+                &recursive_data.common,
+                rec_pw,
+                &mut TimingTree::default(),
+            )
+            .unwrap()
+        );
+        timed!(
+            timing,
+            "verify recursive proof",
+            recursive_data.verify(recursive_proof).unwrap()
+        );
         timing.print();
-        recursive_data.verify(recursive_proof).unwrap();
     }
 }

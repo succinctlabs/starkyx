@@ -9,17 +9,23 @@ use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::constraint::{ext_circuit_field_operation, packed_generic_field_operation};
+use super::constraint::{
+    eval_field_operation, ext_circuit_field_operation, packed_generic_field_operation,
+};
 use super::*;
+use crate::curta::air::parser::AirParser;
 use crate::curta::builder::StarkBuilder;
 use crate::curta::chip::StarkParameters;
 use crate::curta::instruction::Instruction;
 use crate::curta::parameters::FieldParameters;
+use crate::curta::polynomial::parser::PolynomialParser;
 use crate::curta::polynomial::{
     to_u16_le_limbs_polynomial, Polynomial, PolynomialGadget, PolynomialOps,
 };
-use crate::curta::register::{ArrayRegister, MemorySlice, RegisterSerializable, U16Register};
-use crate::curta::trace::TraceWriter;
+use crate::curta::register::{
+    ArrayRegister, MemorySlice, Register, RegisterSerializable, U16Register,
+};
+use crate::curta::trace::writer::TraceWriter;
 use crate::curta::utils::{compute_root_quotient_and_shift, split_u32_limbs_to_u16_limbs};
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -229,6 +235,43 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
         // Check [(\sum_i a_i(x) + b_i(x)) - result(x) - carry(x) * p(x)] - [witness(x) * (x-2^16)] = 0.
         ext_circuit_field_operation::<F, D, P>(builder, p_vanishing, p_witness_low, p_witness_high)
     }
+
+    fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {
+        let p_a_vec = self.a.iter().map(|x| x.eval(parser)).collect::<Vec<_>>();
+        let p_b_vec = self.b.iter().map(|x| x.eval(parser)).collect::<Vec<_>>();
+
+        let p_result = self.result.eval(parser);
+        let p_carry = self.carry.eval(parser);
+
+        let mut poly_parser = PolynomialParser::new(parser);
+
+        let p_zero = poly_parser.zero();
+
+        let p_inner_product = p_a_vec
+            .iter()
+            .zip(p_b_vec.iter())
+            .map(|(p_a, p_b)| poly_parser.mul(p_a, p_b))
+            .collect::<Vec<_>>()
+            .iter()
+            .fold(p_zero, |acc, x| poly_parser.add(&acc, x));
+
+        let p_inner_product_minus_result = poly_parser.sub(&p_inner_product, &p_result);
+        let p_limbs = poly_parser.constant(&Polynomial::from_iter(modulus_field_iter::<F, P>()));
+        let p_carry_mul_modulus = poly_parser.mul(&p_carry, &p_limbs);
+        let p_vanishing = poly_parser.sub(&p_inner_product_minus_result, &p_carry_mul_modulus);
+
+        let p_witness_low =
+            Polynomial::from_coefficients(self.witness_low.eval(poly_parser.parser));
+        let p_witness_high =
+            Polynomial::from_coefficients(self.witness_high.eval(poly_parser.parser));
+
+        eval_field_operation::<AP, P>(
+            &mut poly_parser,
+            &p_vanishing,
+            &p_witness_low,
+            &p_witness_high,
+        )
+    }
 }
 
 #[cfg(test)]
@@ -237,6 +280,7 @@ mod tests {
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+    use plonky2::timed;
     use plonky2::util::timing::TimingTree;
     //use plonky2_maybe_rayon::*;
     use rand::thread_rng;
@@ -245,21 +289,22 @@ mod tests {
     use crate::config::StarkConfig;
     use crate::curta::builder::StarkBuilder;
     use crate::curta::chip::{ChipStark, StarkParameters};
+    use crate::curta::extension::cubic::goldilocks_cubic::GoldilocksCubicParameters;
     use crate::curta::parameters::ed25519::Ed25519BaseField;
-    use crate::curta::trace::trace;
-    use crate::prover::prove;
-    use crate::recursive_verifier::{
+    use crate::curta::stark::prover::prove;
+    use crate::curta::stark::recursive_verifier::{
         add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
         verify_stark_proof_circuit,
     };
-    use crate::verifier::verify_stark_proof;
+    use crate::curta::stark::verifier::verify_stark_proof;
+    use crate::curta::trace::arithmetic::{trace, ArithmeticGenerator};
 
     #[derive(Clone, Debug, Copy)]
     struct FpInnerProductTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for FpInnerProductTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 156;
-        const NUM_FREE_COLUMNS: usize = 0;
+        const NUM_FREE_COLUMNS: usize = 242;
         type Instruction = FpInnerProductInstruction<Ed25519BaseField>;
     }
 
@@ -269,10 +314,15 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         type Fp = FieldRegister<Ed25519BaseField>;
+        type L = FpInnerProductTest;
         type S = ChipStark<FpInnerProductTest, F, D>;
+        type E = GoldilocksCubicParameters;
+
+        let _ = env_logger::builder().is_test(true).try_init();
+        let mut timing = TimingTree::new("stark_proof", log::Level::Debug);
 
         // Construct the circuit.
-        let mut builder = StarkBuilder::<FpInnerProductTest, F, D>::new();
+        let mut builder = StarkBuilder::<L, F, D>::new();
         let a = builder.alloc::<Fp>();
         let b = builder.alloc::<Fp>();
         let c = builder.alloc::<Fp>();
@@ -282,11 +332,11 @@ mod tests {
         builder.write_data(&b).unwrap();
         builder.write_data(&c).unwrap();
         builder.write_data(&d).unwrap();
-        let (chip, spec) = builder.build();
+        let chip = builder.build();
 
         // Construct the trace.
-        let num_rows = 2u64.pow(16);
-        let (handle, generator) = trace::<F, D>(spec);
+        let num_rows = 2u64.pow(16) as usize;
+        let (handle, generator) = trace::<F, E, D>(num_rows);
         let p = Ed25519BaseField::modulus();
         let mut rng = thread_rng();
         for i in 0..num_rows {
@@ -310,22 +360,22 @@ mod tests {
             assert_eq!(result, (a_int * c_int + b_int * d_int) % &p);
         }
         drop(handle);
-        let trace = generator.generate_trace(&chip, num_rows as usize).unwrap();
 
-        // Construct the proof.
+        // Generate the proof.
         let config = StarkConfig::standard_fast_config();
         let stark = ChipStark::new(chip);
-        let proof = prove::<F, C, S, D>(
+        let proof = prove::<F, C, S, ArithmeticGenerator<F, E, D>, D, 2>(
             stark.clone(),
             &config,
-            trace,
+            generator,
+            num_rows,
             [],
             &mut TimingTree::default(),
         )
         .unwrap();
         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
 
-        // Verify recursive proof in a circuit.
+        // Generate the recursive proof.
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
         let degree_bits = proof.proof.recover_degree_bits(&config);
@@ -338,22 +388,29 @@ mod tests {
         recursive_builder.print_gate_counts(0);
         let mut rec_pw = PartialWitness::new();
         set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-        verify_stark_proof_circuit::<F, C, S, D>(
+        verify_stark_proof_circuit::<F, C, S, D, 2>(
             &mut recursive_builder,
             stark,
             virtual_proof,
             &config,
         );
         let recursive_data = recursive_builder.build::<C>();
-        let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
-        let recursive_proof = plonky2::plonk::prover::prove(
-            &recursive_data.prover_only,
-            &recursive_data.common,
-            rec_pw,
-            &mut timing,
-        )
-        .unwrap();
+        let recursive_proof = timed!(
+            timing,
+            "generate recursive proof",
+            plonky2::plonk::prover::prove(
+                &recursive_data.prover_only,
+                &recursive_data.common,
+                rec_pw,
+                &mut TimingTree::default(),
+            )
+            .unwrap()
+        );
+        timed!(
+            timing,
+            "verify recursive proof",
+            recursive_data.verify(recursive_proof).unwrap()
+        );
         timing.print();
-        recursive_data.verify(recursive_proof).unwrap();
     }
 }

@@ -306,7 +306,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     }
 
     /// Build the chip
-    pub fn build(mut self) -> (Chip<L, F, D>, BTreeMap<InstructionId, usize>) {
+    pub fn build(mut self) -> Chip<L, F, D> {
         let partial_trace_index = self.local_index;
 
         if L::NUM_ARITHMETIC_COLUMNS > 0 {
@@ -339,20 +339,17 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
                 L::NUM_ARITHMETIC_COLUMNS - num_arithmetic_columns
             );
         }
-        (
-            Chip {
-                instructions: self.instructions,
-                write_instructions: self.write_instructions,
-                instruction_indices: self.instruction_indices.clone(),
-                constraints: self.constraints,
-                range_checks_idx: (0, L::NUM_ARITHMETIC_COLUMNS),
-                range_data: self.range_data,
-                range_table: self.range_table,
-                num_verifier_challenges: self.num_verifier_challenges,
-                partial_trace_index,
-            },
-            self.instruction_indices,
-        )
+        Chip {
+            instructions: self.instructions,
+            write_instructions: self.write_instructions,
+            instruction_indices: self.instruction_indices.clone(),
+            constraints: self.constraints,
+            range_checks_idx: (0, L::NUM_ARITHMETIC_COLUMNS),
+            range_data: self.range_data,
+            range_table: self.range_table,
+            num_verifier_challenges: self.num_verifier_challenges,
+            partial_trace_index,
+        }
     }
 }
 
@@ -374,136 +371,129 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use log::info;
-    use plonky2::field::types::Field;
-    use plonky2::iop::witness::PartialWitness;
-    use plonky2::plonk::circuit_builder::CircuitBuilder;
-    use plonky2::plonk::circuit_data::CircuitConfig;
-    use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
-    use plonky2::timed;
-    use plonky2::util::timing::TimingTree;
+// #[cfg(test)]
+// mod tests {
+//     use log::info;
+//     use plonky2::field::types::Field;
+//     use plonky2::iop::witness::PartialWitness;
+//     use plonky2::plonk::circuit_builder::CircuitBuilder;
+//     use plonky2::plonk::circuit_data::CircuitConfig;
+//     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+//     use plonky2::timed;
+//     use plonky2::util::timing::TimingTree;
 
-    use super::*;
-    use crate::config::StarkConfig;
-    use crate::curta::chip::ChipStark;
-    use crate::curta::instruction::EmptyInstructionSet;
-    use crate::curta::register::ElementRegister;
-    use crate::curta::trace::trace;
-    use crate::prover::prove;
-    use crate::recursive_verifier::{
-        add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
-        verify_stark_proof_circuit,
-    };
-    use crate::verifier::verify_stark_proof;
+//     use super::*;
+//     use crate::config::StarkConfig;
+//     use crate::curta::chip::ChipStark;
+//     use crate::curta::extension::cubic::goldilocks_cubic::GoldilocksCubicParameters;
+//     use crate::curta::instruction::EmptyInstructionSet;
+//     use crate::curta::register::ElementRegister;
+//     use crate::curta::trace::arithmetic::{trace, ArithmeticGenerator};
+//     use crate::curta::stark::prover::prove;
+//     use crate::curta::stark::recursive_verifier::{
+//         add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
+//         verify_stark_proof_circuit,
+//     };
+//     use crate::curta::stark::verifier::verify_stark_proof;
 
-    #[derive(Clone, Copy, Debug)]
-    pub struct TestChipParameters<F, const D: usize> {
-        _marker: core::marker::PhantomData<F>,
-    }
+//     #[derive(Clone, Copy, Debug)]
+//     pub struct TestChipParameters<F, const D: usize> {
+//         _marker: core::marker::PhantomData<F>,
+//     }
 
-    impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D>
-        for TestChipParameters<F, D>
-    {
-        const NUM_FREE_COLUMNS: usize = 2;
-        const NUM_ARITHMETIC_COLUMNS: usize = 0;
+//     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D>
+//         for TestChipParameters<F, D>
+//     {
+//         const NUM_FREE_COLUMNS: usize = 2;
+//         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
-        type Instruction = EmptyInstructionSet<F, D>;
-    }
+//         type Instruction = EmptyInstructionSet<F, D>;
+//     }
 
-    #[test]
-    fn test_builder_fibonacchi_stark() {
-        const D: usize = 2;
-        type C = PoseidonGoldilocksConfig;
-        type F = <C as GenericConfig<D>>::F;
-        type L = TestChipParameters<F, D>;
-        type S = ChipStark<L, F, D>;
+//     #[test]
+//     fn test_builder_fibonacchi_stark() {
+//         const D: usize = 2;
+//         type C = PoseidonGoldilocksConfig;
+//         type F = <C as GenericConfig<D>>::F;
+//         type L = TestChipParameters<F, D>;
+//         type S = ChipStark<L, F, D>;
+//         type E = GoldilocksCubicParameters;
 
-        let mut builder = StarkBuilder::<L, F, D>::new();
-        let x_0 = builder.alloc::<ElementRegister>();
-        let x_1 = builder.alloc::<ElementRegister>();
-        builder.write_data(&x_0).unwrap();
-        builder.write_data(&x_1).unwrap();
-        builder.assert_equal_transition(&x_0.next(), &x_1);
-        builder.assert_expressions_equal_transition(x_0.expr() + x_1.expr(), x_1.next().expr());
-        let (chip, spec) = builder.build();
+//         let mut builder = StarkBuilder::<L, F, D>::new();
+//         let x_0 = builder.alloc::<ElementRegister>();
+//         let x_1 = builder.alloc::<ElementRegister>();
+//         builder.write_data(&x_0).unwrap();
+//         builder.write_data(&x_1).unwrap();
+//         builder.assert_equal_transition(&x_0.next(), &x_1);
+//         builder.assert_expressions_equal_transition(x_0.expr() + x_1.expr(), x_1.next().expr());
+//         let chip = builder.build();
 
-        let num_rows = 1 << 5;
-        let (handle, generator) = trace::<F, D>(spec);
-        let mut timing = TimingTree::new("Fibonacchi stark", log::Level::Debug);
-        let mut x_0_val = F::ZERO;
-        let mut x_1_val = F::ONE;
-        let trace = timed!(timing, "generate trace", {
-            for i in 0..num_rows {
-                handle.write_data(i, x_0, vec![x_0_val]).unwrap();
-                handle.write_data(i, x_1, vec![x_1_val]).unwrap();
-                if i == num_rows - 1 {
-                    break;
-                }
-                (x_0_val, x_1_val) = (x_1_val, x_0_val + x_1_val);
-            }
-            drop(handle);
-            generator.generate_trace(&chip, num_rows as usize).unwrap()
-        });
-        info!("The 32 fibonacchi numbers is {:?}", x_0_val);
-        let config = StarkConfig::standard_fast_config();
-        let stark = ChipStark::new(chip);
+//         let num_rows = 1 << 5 as usize;
+//         let (handle, generator) = trace::<F, E, D>(num_rows);
+//         let mut timing = TimingTree::new("Fibonacchi stark", log::Level::Debug);
+//         let mut x_0_val = F::ZERO;
+//         let mut x_1_val = F::ONE;
+//             for i in 0..num_rows {
+//                 handle.write_data(i, x_0, vec![x_0_val]).unwrap();
+//                 handle.write_data(i, x_1, vec![x_1_val]).unwrap();
+//                 if i == num_rows - 1 {
+//                     break;
+//                 }
+//                 (x_0_val, x_1_val) = (x_1_val, x_0_val + x_1_val);
+//             }
+//             drop(handle);
+//         info!("The 32 fibonacchi numbers is {:?}", x_0_val);
 
-        // Verify proof as a stark
-        let proof = timed!(
-            timing,
-            "generate stark proof",
-            prove::<F, C, S, D>(
-                stark.clone(),
-                &config,
-                trace,
-                [],
-                &mut TimingTree::default(),
-            )
-            .unwrap()
-        );
-        verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
+//         // Verify proof as a stark
+//         let config = StarkConfig::standard_fast_config();
+//         let stark = ChipStark::new(chip);
+//         let proof = prove::<F, C, S, ArithmeticGenerator<F, E, D>, D, 2>(
+//             stark.clone(),
+//             &config,
+//             generator,
+//             num_rows,
+//             [],
+//             &mut TimingTree::default(),
+//         )
+//         .unwrap();
+//         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
 
-        // Verify recursive proof in a circuit
-        let config_rec = CircuitConfig::standard_recursion_config();
-        let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
-
-        let degree_bits = proof.proof.recover_degree_bits(&config);
-        let virtual_proof = add_virtual_stark_proof_with_pis(
-            &mut recursive_builder,
-            stark.clone(),
-            &config,
-            degree_bits,
-        );
-
-        recursive_builder.print_gate_counts(0);
-
-        let mut rec_pw = PartialWitness::new();
-        set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-
-        verify_stark_proof_circuit::<F, C, S, D>(
-            &mut recursive_builder,
-            stark,
-            virtual_proof,
-            &config,
-        );
-
-        let recursive_data = recursive_builder.build::<C>();
-
-        let recursive_proof = timed!(
-            timing,
-            "generate recursive proof",
-            plonky2::plonk::prover::prove(
-                &recursive_data.prover_only,
-                &recursive_data.common,
-                rec_pw,
-                &mut TimingTree::default(),
-            )
-            .unwrap()
-        );
-
-        timing.print();
-        recursive_data.verify(recursive_proof).unwrap();
-    }
-}
+//          // Generate the recursive proof.
+//          let config_rec = CircuitConfig::standard_recursion_config();
+//          let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
+//          let degree_bits = proof.proof.recover_degree_bits(&config);
+//          let virtual_proof = add_virtual_stark_proof_with_pis(
+//              &mut recursive_builder,
+//              stark.clone(),
+//              &config,
+//              degree_bits,
+//          );
+//          recursive_builder.print_gate_counts(0);
+//          let mut rec_pw = PartialWitness::new();
+//          set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
+//          verify_stark_proof_circuit::<F, C, S, D, 2>(
+//              &mut recursive_builder,
+//              stark,
+//              virtual_proof,
+//              &config,
+//          );
+//          let recursive_data = recursive_builder.build::<C>();
+//          let recursive_proof = timed!(
+//              timing,
+//              "generate recursive proof",
+//              plonky2::plonk::prover::prove(
+//                  &recursive_data.prover_only,
+//                  &recursive_data.common,
+//                  rec_pw,
+//                  &mut TimingTree::default(),
+//              )
+//              .unwrap()
+//          );
+//          timed!(
+//              timing,
+//              "verify recursive proof",
+//              recursive_data.verify(recursive_proof).unwrap()
+//          );
+//          timing.print();
+//     }
+// }

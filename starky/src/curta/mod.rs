@@ -9,7 +9,6 @@ pub mod extension;
 pub mod field;
 pub mod instruction;
 pub mod lookup;
-pub mod new_stark;
 pub mod parameters;
 pub mod polynomial;
 pub mod register;

@@ -8,8 +8,9 @@ use plonky2::util::transpose;
 use plonky2_maybe_rayon::*;
 
 use super::types::StarkTraceGenerator;
+use super::writer::TraceWriter;
 use crate::curta::builder::InstructionId;
-use crate::curta::chip::{Chip, ChipNewStark, StarkParameters};
+use crate::curta::chip::{Chip, ChipStark, StarkParameters};
 use crate::curta::extension::cubic::{CubicExtension, CubicParameters};
 use crate::curta::instruction::Instruction;
 use crate::curta::lookup::log_der::LogLookup;
@@ -23,6 +24,13 @@ pub struct ArithmeticGenerator<F: RichField + Extendable<D>, E: CubicParameters<
     num_rows: usize,
     rx: Receiver<(usize, InstructionId, Vec<F>)>,
     _marker: core::marker::PhantomData<E>,
+}
+
+pub fn trace<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>(
+    num_rows: usize,
+) -> (TraceWriter<F, D>, ArithmeticGenerator<F, E, D>) {
+    let (tx, rx) = std::sync::mpsc::channel();
+    (TraceWriter { tx }, ArithmeticGenerator::new(num_rows, rx))
 }
 
 impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
@@ -154,11 +162,11 @@ impl<
         F: RichField + Extendable<D>,
         E: CubicParameters<F>,
         const D: usize,
-    > StarkTraceGenerator<ChipNewStark<L, F, D>, F, D, 2> for ArithmeticGenerator<F, E, D>
+    > StarkTraceGenerator<ChipStark<L, F, D>, F, D, 2> for ArithmeticGenerator<F, E, D>
 {
     fn generate_round(
         &mut self,
-        stark: &ChipNewStark<L, F, D>,
+        stark: &ChipStark<L, F, D>,
         round: usize,
         challenges: &[F],
     ) -> Vec<plonky2::field::polynomial::PolynomialValues<F>> {
@@ -180,7 +188,7 @@ impl<
                     let table_reg = table.register();
                     for i in 0..self.num_rows {
                         let value = F::from_canonical_usize(i);
-                        table_reg.assign(&mut self.trace_rows, 0, &mut vec![value], i);
+                        table_reg.assign(&mut self.trace_rows, 0, &[value], i);
                     }
                 }
 

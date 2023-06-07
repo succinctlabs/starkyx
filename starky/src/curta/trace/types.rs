@@ -3,7 +3,7 @@ use plonky2::field::polynomial::PolynomialValues;
 use plonky2::hash::hash_types::RichField;
 use plonky2::util::transpose;
 
-use crate::curta::new_stark::Stark;
+use crate::curta::stark::Stark;
 
 pub trait StarkTraceGenerator<
     S: Stark<F, D, R>,

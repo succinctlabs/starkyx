@@ -19,77 +19,65 @@ use plonky2::util::{log2_ceil, log2_strict, transpose};
 use plonky2_maybe_rayon::*;
 
 use super::proof::{StarkOpeningSet, StarkProof, StarkProofWithPublicInputs};
-use super::vanishing_poly::eval_vanishing_poly;
+use super::Stark;
 use crate::config::StarkConfig;
 use crate::constraint_consumer::ConstraintConsumer;
-use crate::curta::chip::{ChipStark, StarkParameters};
-use crate::curta::extension::cubic::CubicParameters;
-use crate::curta::trace::ExtendedTrace;
-use crate::permutation::{
-    compute_permutation_z_polys, get_n_permutation_challenge_sets, PermutationChallengeSet,
-    PermutationCheckVars,
-};
-use crate::stark::Stark;
-use crate::vars::StarkEvaluationVars;
+use crate::curta::air::starky::StarkParser;
+use crate::curta::trace::types::StarkTraceGenerator;
 
-pub fn prove<F, C, L, E: CubicParameters<F>, const D: usize>(
-    stark: ChipStark<L, F, D>,
+pub fn prove<F, C, S, T, const D: usize, const R: usize>(
+    stark: S,
     config: &StarkConfig,
-    mut trace_rows: Vec<Vec<F>>,
-    public_inputs: [F; ChipStark::<L, F, D>::PUBLIC_INPUTS],
+    mut witness_generator: T,
+    num_rows: usize,
+    public_inputs: [F; S::PUBLIC_INPUTS],
     timing: &mut TimingTree,
-) -> Result<StarkProofWithPublicInputs<F, C, D>>
+) -> Result<StarkProofWithPublicInputs<F, C, D, R>>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
-    L: StarkParameters<F, D>,
-    [(); ChipStark::<L, F, D>::COLUMNS]:,
-    [(); ChipStark::<L, F, D>::PUBLIC_INPUTS]:,
+    S: Stark<F, D, R>,
+    T: StarkTraceGenerator<S, F, D, R>,
+    [(); S::COLUMNS]:,
+    [(); S::PUBLIC_INPUTS]:,
+    [(); S::CHALLENGES]:,
     [(); C::Hasher::HASH_SIZE]:,
 {
-    let partial_trace_values = transpose(&trace_rows)
-        .into_par_iter()
-        .map(PolynomialValues::new)
-        .collect::<Vec<_>>();
-
     let mut challenger: Challenger<F, <C as GenericConfig<D>>::Hasher> = Challenger::new();
     let rate_bits = config.fri_config.rate_bits;
     let cap_height = config.fri_config.cap_height;
 
-    let partial_trace_commitment = timed!(
-        timing,
-        "compute trace commitment",
-        PolynomialBatch::<F, C, D>::from_values(
-            // TODO: Cloning this isn't great; consider having `from_values` accept a reference,
-            // or having `compute_permutation_z_polys` read trace values from the `PolynomialBatch`.
-            partial_trace_values[0..stark.partial_trace_index()].to_vec(),
-            rate_bits,
-            false,
-            cap_height,
+    let mut trace_commitments = Vec::new();
+    let mut challenges = Vec::with_capacity(S::CHALLENGES);
+
+    for r in 0..R {
+        let trace_values = timed!(
             timing,
-            None,
-        )
-    );
+            &format!("Generate trace for round {}", r),
+            witness_generator.generate_round(&stark, r, &challenges)
+        );
+        let commitment = timed!(
+            timing,
+            &format!("compute trace commitment for round {}", r),
+            PolynomialBatch::<F, C, D>::from_values(
+                trace_values,
+                rate_bits,
+                false,
+                cap_height,
+                timing,
+                None,
+            )
+        );
+        let cap = commitment.merkle_tree.cap.clone();
+        challenger.observe_cap(&cap);
+        trace_commitments.push(commitment);
 
-    let partial_trace_cap = partial_trace_commitment.merkle_tree.cap.clone();
-    challenger.observe_cap(&partial_trace_cap);
+        // Get the challenges for next round
+        let round_challenges = challenger.get_n_challenges(stark.num_challenges(r));
+        challenges.extend(round_challenges);
+    }
 
-    let stark_betas = challenger.get_n_challenges(3 * stark.num_verifier_challenges());
-    // .chunks(3)
-    // .map(|chunk| {
-    //     assert_eq!(chunk.len(), 3);
-    //     [chunk[0], chunk[1], chunk[2]]
-    // })
-    // .collect::<Vec<_>>();
-
-    let num_rows = trace_rows.len();
-    let trace_poly_values = ExtendedTrace::generate_trace_with_challenges::<L, E>(
-        &stark.chip(),
-        &mut trace_rows,
-        num_rows,
-        &stark_betas,
-    )?;
-    let degree = trace_poly_values[0].len();
+    let degree = num_rows;
     let degree_bits = log2_strict(degree);
     let fri_params = config.fri_params(degree_bits);
     assert!(
@@ -97,71 +85,18 @@ where
         "FRI total reduction arity is too large.",
     );
 
-    let trace_commitment = timed!(
-        timing,
-        "compute trace commitment",
-        PolynomialBatch::<F, C, D>::from_values(
-            // TODO: Cloning this isn't great; consider having `from_values` accept a reference,
-            // or having `compute_permutation_z_polys` read trace values from the `PolynomialBatch`.
-            trace_poly_values.clone(),
-            rate_bits,
-            false,
-            cap_height,
-            timing,
-            None,
-        )
-    );
-
-    let trace_cap = trace_commitment.merkle_tree.cap.clone();
-    // let mut challenger = Challenger::new();
-    challenger.observe_cap(&trace_cap);
-
-    // Permutation arguments.
-    let permutation_zs_commitment_challenges = stark.uses_permutation_args().then(|| {
-        let permutation_challenge_sets = get_n_permutation_challenge_sets(
-            &mut challenger,
-            config.num_challenges,
-            stark.permutation_batch_size(),
-        );
-        let permutation_z_polys = compute_permutation_z_polys::<F, ChipStark<L, F, D>, D>(
-            &stark,
-            config,
-            &trace_poly_values,
-            &permutation_challenge_sets,
-        );
-
-        let permutation_zs_commitment = timed!(
-            timing,
-            "compute permutation Z commitments",
-            PolynomialBatch::from_values(
-                permutation_z_polys,
-                rate_bits,
-                false,
-                config.fri_config.cap_height,
-                timing,
-                None,
-            )
-        );
-        (permutation_zs_commitment, permutation_challenge_sets)
-    });
-    let permutation_zs_commitment = permutation_zs_commitment_challenges
-        .as_ref()
-        .map(|(comm, _)| comm);
-    let permutation_zs_cap = permutation_zs_commitment
-        .as_ref()
-        .map(|commit| commit.merkle_tree.cap.clone());
-    if let Some(cap) = &permutation_zs_cap {
-        challenger.observe_cap(cap);
-    }
-
     let alphas = challenger.get_n_challenges(config.num_challenges);
-    let quotient_polys = compute_quotient_polys::<F, <F as Packable>::Packing, C, L, D>(
+    ensure!(
+        challenges.len() == S::CHALLENGES,
+        "Number of challenges does not match"
+    );
+    let challenges_array: [F; S::CHALLENGES] = challenges.try_into().unwrap();
+    let quotient_polys = compute_quotient_polys::<F, <F as Packable>::Packing, C, S, D, R>(
         &stark,
-        &trace_commitment,
-        &permutation_zs_commitment_challenges,
+        &trace_commitments,
         public_inputs,
+        challenges_array,
         alphas,
-        stark_betas,
         degree_bits,
         config,
     );
@@ -199,17 +134,11 @@ where
         zeta.exp_power_of_2(degree_bits) != F::Extension::ONE,
         "Opening point is in the subgroup."
     );
-    let openings = StarkOpeningSet::new(
-        zeta,
-        g,
-        &trace_commitment,
-        permutation_zs_commitment,
-        &quotient_commitment,
-    );
+    let openings = StarkOpeningSet::new(zeta, g, &trace_commitments, &quotient_commitment);
     challenger.observe_openings(&openings.to_fri_openings());
 
-    let initial_merkle_trees = once(&trace_commitment)
-        .chain(permutation_zs_commitment)
+    let initial_merkle_trees = trace_commitments
+        .iter()
         .chain(once(&quotient_commitment))
         .collect_vec();
 
@@ -224,10 +153,18 @@ where
             timing,
         )
     );
+
+    let trace_caps = trace_commitments
+        .into_iter()
+        .map(|c| c.merkle_tree.cap)
+        .collect_vec();
+    ensure!(
+        trace_caps.len() == R,
+        "Number of trace commitments does not match"
+    );
+    let trace_caps: [_; R] = trace_caps.try_into().unwrap();
     let proof = StarkProof {
-        partial_trace_cap,
-        trace_cap,
-        permutation_zs_cap,
+        trace_caps,
         quotient_polys_cap,
         openings,
         opening_proof,
@@ -241,16 +178,12 @@ where
 
 /// Computes the quotient polynomials `(sum alpha^i C_i(x)) / Z_H(x)` for `alpha` in `alphas`,
 /// where the `C_i`s are the Stark constraints.
-fn compute_quotient_polys<'a, F, P, C, L, const D: usize>(
-    stark: &ChipStark<L, F, D>,
-    trace_commitment: &'a PolynomialBatch<F, C, D>,
-    permutation_zs_commitment_challenges: &'a Option<(
-        PolynomialBatch<F, C, D>,
-        Vec<PermutationChallengeSet<F>>,
-    )>,
-    public_inputs: [F; ChipStark::<L, F, D>::PUBLIC_INPUTS],
+fn compute_quotient_polys<'a, F, P, C, S, const D: usize, const R: usize>(
+    stark: &S,
+    trace_commitment: &'a [PolynomialBatch<F, C, D>],
+    public_inputs: [F; S::PUBLIC_INPUTS],
+    challenges: [F; S::CHALLENGES],
     alphas: Vec<F>,
-    betas: Vec<F>,
     degree_bits: usize,
     config: &StarkConfig,
 ) -> Vec<PolynomialCoeffs<F>>
@@ -258,9 +191,10 @@ where
     F: RichField + Extendable<D>,
     P: PackedField<Scalar = F>,
     C: GenericConfig<D, F = F>,
-    L: StarkParameters<F, D>,
-    [(); ChipStark::<L, F, D>::COLUMNS]:,
-    [(); ChipStark::<L, F, D>::PUBLIC_INPUTS]:,
+    S: Stark<F, D, R>,
+    [(); S::COLUMNS]:,
+    [(); S::PUBLIC_INPUTS]:,
+    [(); S::CHALLENGES]:,
 {
     let degree = 1 << degree_bits;
     let rate_bits = config.fri_config.rate_bits;
@@ -283,13 +217,16 @@ where
     let z_h_on_coset = ZeroPolyOnCoset::<F>::new(degree_bits, quotient_degree_bits);
 
     // Retrieve the LDE values at index `i`.
-    let get_trace_values_packed = |i_start| -> [P; ChipStark::<L, F, D>::COLUMNS] {
-        trace_commitment
-            .get_lde_values_packed(i_start, step)
-            .try_into()
-            .unwrap()
+    let get_trace_values_packed = |i_start| -> [P; S::COLUMNS] {
+        let trace = trace_commitment
+            .iter()
+            .flat_map(|commitment| commitment.get_lde_values_packed(i_start, step))
+            .collect::<Vec<_>>();
+        // .try_into()
+        // .expect("Invalid number of trace columns")
+        assert_eq!(trace.len(), S::COLUMNS);
+        trace.try_into().unwrap()
     };
-
     // Last element of the subgroup.
     let last = F::primitive_root_of_unity(degree_bits).inverse();
     let size = degree << quotient_degree_bits;
@@ -319,26 +256,18 @@ where
                 lagrange_basis_first,
                 lagrange_basis_last,
             );
-            let vars = StarkEvaluationVars {
-                local_values: &get_trace_values_packed(i_start),
-                next_values: &get_trace_values_packed(i_next_start),
-                public_inputs: &public_inputs,
+            let public_vars = public_inputs.map(|x| P::from(x));
+            let challenge_vars = challenges.map(|x| P::from(x));
+
+            let mut parser = StarkParser {
+                local_vars: &get_trace_values_packed(i_start),
+                next_vars: &get_trace_values_packed(i_next_start),
+                public_inputs: &public_vars,
+                challenges: &challenge_vars,
+                consumer: &mut consumer,
             };
-            let permutation_check_data = permutation_zs_commitment_challenges.as_ref().map(
-                |(permutation_zs_commitment, permutation_challenge_sets)| PermutationCheckVars {
-                    local_zs: permutation_zs_commitment.get_lde_values_packed(i_start, step),
-                    next_zs: permutation_zs_commitment.get_lde_values_packed(i_next_start, step),
-                    permutation_challenge_sets: permutation_challenge_sets.to_vec(),
-                },
-            );
-            eval_vanishing_poly::<F, F, P, L, D, 1>(
-                &stark,
-                config,
-                vars,
-                permutation_check_data,
-                &mut consumer,
-                &betas,
-            );
+
+            stark.eval(&mut parser);
 
             let mut constraints_evals = consumer.accumulators();
             // We divide the constraints evaluations by `Z_H(x)`.
@@ -357,7 +286,6 @@ where
             })
         })
         .collect::<Vec<_>>();
-
     transpose(&quotient_values)
         .into_par_iter()
         .map(PolynomialValues::new)

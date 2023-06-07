@@ -6,11 +6,12 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
+use super::air::parser::AirParser;
 use super::builder::StarkBuilder;
 use super::chip::StarkParameters;
 use super::instruction::Instruction;
 use super::register::{BitRegister, MemorySlice, Register};
-use super::trace::TraceWriter;
+use super::trace::writer::TraceWriter;
 use crate::curta::register::RegisterSerializable;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
@@ -102,6 +103,28 @@ impl<F: RichField + Extendable<D>, const D: usize, T: Register> Instruction<F, D
             })
             .collect()
     }
+
+    fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {
+        let bit = self.bit.eval(parser);
+        let true_slice = self.true_value.register().eval_slice(parser).to_vec();
+        let false_slice = self.false_value.register().eval_slice(parser).to_vec();
+        let result_slice = self.result.register().eval_slice(parser).to_vec();
+
+        let one = parser.one();
+        let one_minus_bit = parser.sub(one, bit);
+
+        true_slice
+            .iter()
+            .zip(false_slice.iter())
+            .zip(result_slice.iter())
+            .map(|((x_true, x_false), x)| {
+                let bit_x_true = parser.mul(*x_true, bit);
+                let one_minus_bit_x_false = parser.mul(*x_false, one_minus_bit);
+                let expected_res = parser.add(bit_x_true, one_minus_bit_x_false);
+                parser.sub(expected_res, *x)
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -113,27 +136,29 @@ mod tests {
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+    use plonky2::timed;
     use plonky2::util::timing::TimingTree;
 
     use super::*;
     use crate::config::StarkConfig;
     use crate::curta::builder::StarkBuilder;
     use crate::curta::chip::{ChipStark, StarkParameters};
+    use crate::curta::extension::cubic::goldilocks_cubic::GoldilocksCubicParameters;
     use crate::curta::register::BitRegister;
-    use crate::curta::trace::trace;
-    use crate::prover::prove;
-    use crate::recursive_verifier::{
+    use crate::curta::stark::prover::prove;
+    use crate::curta::stark::recursive_verifier::{
         add_virtual_stark_proof_with_pis, set_stark_proof_with_pis_target,
         verify_stark_proof_circuit,
     };
-    use crate::verifier::verify_stark_proof;
+    use crate::curta::stark::verifier::verify_stark_proof;
+    use crate::curta::trace::arithmetic::{trace, ArithmeticGenerator};
 
     #[derive(Debug, Clone, Copy)]
     pub struct BoolTest;
 
     impl<F: RichField + Extendable<D>, const D: usize> StarkParameters<F, D> for BoolTest {
         const NUM_ARITHMETIC_COLUMNS: usize = 10;
-        const NUM_FREE_COLUMNS: usize = 10;
+        const NUM_FREE_COLUMNS: usize = 27;
         type Instruction = SelectInstruction<BitRegister>;
     }
 
@@ -142,7 +167,11 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
+        type E = GoldilocksCubicParameters;
         type S = ChipStark<BoolTest, F, D>;
+
+        let _ = env_logger::builder().is_test(true).try_init();
+        let mut timing = TimingTree::new("stark_proof", log::Level::Debug);
 
         let mut builder = StarkBuilder::<BoolTest, F, D>::new();
 
@@ -154,12 +183,12 @@ mod tests {
         let dummy = builder.alloc::<BitRegister>();
         builder.write_data(&dummy).unwrap();
 
-        let (chip, spec) = builder.build();
+        let chip = builder.build();
 
         // Test successful proof
         // Construct the trace
         let num_rows = 2u64.pow(5) as usize;
-        let (handle, generator) = trace::<F, D>(spec.clone());
+        let (handle, generator) = trace::<F, E, D>(num_rows);
         for i in 0..num_rows {
             handle.write_data(i, bit_one, vec![F::ONE]).unwrap();
             handle.write_data(i, bit_zero, vec![F::ZERO]).unwrap();
@@ -167,27 +196,23 @@ mod tests {
         }
         drop(handle);
 
-        let trace = generator.generate_trace(&chip, num_rows).unwrap();
-
+        // Generate the proof.
         let config = StarkConfig::standard_fast_config();
         let stark = ChipStark::new(chip.clone());
-
-        // Verify proof as a stark
-        let proof = prove::<F, C, S, D>(
+        let proof = prove::<F, C, S, ArithmeticGenerator<F, E, D>, D, 2>(
             stark.clone(),
             &config,
-            trace,
+            generator,
+            num_rows,
             [],
             &mut TimingTree::default(),
         )
         .unwrap();
-
         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
 
-        // Verify recursive proof in a circuit
+        // Generate the recursive proof.
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
-
         let degree_bits = proof.proof.recover_degree_bits(&config);
         let virtual_proof = add_virtual_stark_proof_with_pis(
             &mut recursive_builder,
@@ -195,35 +220,38 @@ mod tests {
             &config,
             degree_bits,
         );
-
         recursive_builder.print_gate_counts(0);
-
         let mut rec_pw = PartialWitness::new();
         set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-
-        verify_stark_proof_circuit::<F, C, S, D>(
+        verify_stark_proof_circuit::<F, C, S, D, 2>(
             &mut recursive_builder,
             stark,
             virtual_proof,
             &config,
         );
-
         let recursive_data = recursive_builder.build::<C>();
-
-        let recursive_proof = plonky2::plonk::prover::prove(
-            &recursive_data.prover_only,
-            &recursive_data.common,
-            rec_pw,
-            &mut TimingTree::default(),
-        )
-        .unwrap();
-
-        recursive_data.verify(recursive_proof).unwrap();
+        let recursive_proof = timed!(
+            timing,
+            "generate recursive proof",
+            plonky2::plonk::prover::prove(
+                &recursive_data.prover_only,
+                &recursive_data.common,
+                rec_pw,
+                &mut TimingTree::default(),
+            )
+            .unwrap()
+        );
+        timed!(
+            timing,
+            "verify recursive proof",
+            recursive_data.verify(recursive_proof).unwrap()
+        );
+        timing.print();
 
         // test unsuccesfull proof
         // Construct the trace
         let num_rows = 2u64.pow(5) as usize;
-        let (handle, generator) = crate::curta::trace::trace::<F, D>(spec);
+        let (handle, generator) = trace::<F, E, D>(num_rows);
         for i in 0..num_rows {
             handle.write_data(i, bit_zero, vec![F::ZERO]).unwrap();
             handle
@@ -233,22 +261,21 @@ mod tests {
         }
         drop(handle);
 
-        let trace = generator.generate_trace(&chip, num_rows).unwrap();
-
         let config = StarkConfig::standard_fast_config();
         let stark = ChipStark::new(chip);
 
         // Verify proof as a stark
-        let proof = prove::<F, C, S, D>(
+        let proof = prove::<F, C, S, ArithmeticGenerator<F, E, D>, D, 2>(
             stark.clone(),
             &config,
-            trace,
+            generator,
+            num_rows,
             [],
             &mut TimingTree::default(),
         )
         .unwrap();
 
-        let res = verify_stark_proof(stark, proof, &config);
+        let res = verify_stark_proof(stark.clone(), proof.clone(), &config);
         assert!(res.is_err())
     }
 
@@ -257,7 +284,11 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
+        type E = GoldilocksCubicParameters;
         type S = ChipStark<BoolTest, F, D>;
+
+        let _ = env_logger::builder().is_test(true).try_init();
+        let mut timing = TimingTree::new("stark_proof", log::Level::Debug);
 
         let mut builder = StarkBuilder::<BoolTest, F, D>::new();
         let bit = builder.alloc::<BitRegister>();
@@ -267,12 +298,12 @@ mod tests {
         let y = builder.alloc::<BitRegister>();
         builder.write_data(&y).unwrap();
         let sel = builder.select(&bit, &x, &y);
-        let (chip, spec) = builder.build();
+        let chip = builder.build();
 
         // Test successful proof
         // Construct the trace
         let num_rows = 2u64.pow(5) as usize;
-        let (handle, generator) = trace::<F, D>(spec);
+        let (handle, generator) = trace::<F, E, D>(num_rows);
 
         for i in 0..num_rows {
             let x_i = 0u16;
@@ -292,27 +323,23 @@ mod tests {
         }
         drop(handle);
 
-        let trace = generator.generate_trace(&chip, num_rows).unwrap();
-
+        // Generate the proof.
         let config = StarkConfig::standard_fast_config();
         let stark = ChipStark::new(chip);
-
-        // Verify proof as a stark
-        let proof = prove::<F, C, S, D>(
+        let proof = prove::<F, C, S, ArithmeticGenerator<F, E, D>, D, 2>(
             stark.clone(),
             &config,
-            trace,
+            generator,
+            num_rows,
             [],
             &mut TimingTree::default(),
         )
         .unwrap();
-
         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
 
-        // Verify recursive proof in a circuit
+        // Generate the recursive proof.
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
-
         let degree_bits = proof.proof.recover_degree_bits(&config);
         let virtual_proof = add_virtual_stark_proof_with_pis(
             &mut recursive_builder,
@@ -320,29 +347,32 @@ mod tests {
             &config,
             degree_bits,
         );
-
         recursive_builder.print_gate_counts(0);
-
         let mut rec_pw = PartialWitness::new();
         set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-
-        verify_stark_proof_circuit::<F, C, S, D>(
+        verify_stark_proof_circuit::<F, C, S, D, 2>(
             &mut recursive_builder,
             stark,
             virtual_proof,
             &config,
         );
-
         let recursive_data = recursive_builder.build::<C>();
-
-        let recursive_proof = plonky2::plonk::prover::prove(
-            &recursive_data.prover_only,
-            &recursive_data.common,
-            rec_pw,
-            &mut TimingTree::default(),
-        )
-        .unwrap();
-
-        recursive_data.verify(recursive_proof).unwrap();
+        let recursive_proof = timed!(
+            timing,
+            "generate recursive proof",
+            plonky2::plonk::prover::prove(
+                &recursive_data.prover_only,
+                &recursive_data.common,
+                rec_pw,
+                &mut TimingTree::default(),
+            )
+            .unwrap()
+        );
+        timed!(
+            timing,
+            "verify recursive proof",
+            recursive_data.verify(recursive_proof).unwrap()
+        );
+        timing.print();
     }
 }

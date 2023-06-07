@@ -11,7 +11,7 @@ use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::air::parser::AirParser;
-use crate::curta::new_stark::vars as new_vars;
+use crate::curta::stark::vars as new_vars;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Debug, Clone)]

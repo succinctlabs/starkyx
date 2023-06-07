@@ -13,7 +13,7 @@ use crate::curta::builder::StarkBuilder;
 use crate::curta::chip::StarkParameters;
 use crate::curta::parameters::FieldParameters;
 use crate::curta::register::Register;
-use crate::curta::trace::TraceWriter;
+use crate::curta::trace::writer::TraceWriter;
 
 #[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]

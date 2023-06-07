@@ -37,4 +37,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Instruction<F, D> for WriteIn
     ) -> Vec<ExtensionTarget<D>> {
         vec![]
     }
+
+    fn eval<AP: AirParser<Field = F>>(&self, _parser: &mut AP) -> Vec<AP::Var> {
+        vec![]
+    }
 }

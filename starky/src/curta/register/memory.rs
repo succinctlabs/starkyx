@@ -5,7 +5,7 @@ use plonky2::iop::ext_target::ExtensionTarget;
 
 use crate::curta::air::parser::AirParser;
 use crate::curta::constraint::arithmetic::{ArithmeticExpression, ArithmeticExpressionSlice};
-use crate::curta::new_stark::vars as new_vars;
+use crate::curta::stark::vars as new_vars;
 use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 /// A contiguous chunk of memory in the trace and Stark data.

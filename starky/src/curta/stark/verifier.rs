@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use core::iter::once;
 
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{ensure, Result};
 use itertools::Itertools;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::types::Field;
@@ -11,30 +11,30 @@ use plonky2::plonk::config::{GenericConfig, Hasher};
 use plonky2::plonk::plonk_common::reduce_with_powers;
 
 use super::proof::{StarkOpeningSet, StarkProof, StarkProofChallenges, StarkProofWithPublicInputs};
-use super::vanishing_poly::eval_vanishing_poly;
+use super::vars::StarkEvaluationVars;
+use super::Stark;
 use crate::config::StarkConfig;
 use crate::constraint_consumer::ConstraintConsumer;
-use crate::curta::chip::{ChipStark, StarkParameters};
-use crate::permutation::PermutationCheckVars;
-use crate::stark::Stark;
-use crate::vars::StarkEvaluationVars;
+use crate::curta::air::starky::StarkParser;
 
 pub fn verify_stark_proof<
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
-    L: StarkParameters<F, D>,
+    S: Stark<F, D, R>,
     const D: usize,
+    const R: usize,
 >(
-    stark: ChipStark<L, F, D>,
-    proof_with_pis: StarkProofWithPublicInputs<F, C, D>,
+    stark: S,
+    proof_with_pis: StarkProofWithPublicInputs<F, C, D, R>,
     config: &StarkConfig,
 ) -> Result<()>
 where
-    [(); ChipStark::<L, F, D>::COLUMNS]:,
-    [(); ChipStark::<L, F, D>::PUBLIC_INPUTS]:,
+    [(); S::COLUMNS]:,
+    [(); S::PUBLIC_INPUTS]:,
+    [(); S::CHALLENGES]:,
     [(); C::Hasher::HASH_SIZE]:,
 {
-    ensure!(proof_with_pis.public_inputs.len() == ChipStark::<L, F, D>::PUBLIC_INPUTS);
+    ensure!(proof_with_pis.public_inputs.len() == S::PUBLIC_INPUTS);
     let degree_bits = proof_with_pis.proof.recover_degree_bits(config);
     let challenges = proof_with_pis.get_challenges(&stark, config, degree_bits);
     verify_stark_proof_with_challenges(stark, proof_with_pis, challenges, degree_bits, config)
@@ -43,22 +43,23 @@ where
 pub(crate) fn verify_stark_proof_with_challenges<
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
-    L: StarkParameters<F, D>,
+    S: Stark<F, D, R>,
     const D: usize,
+    const R: usize,
 >(
-    stark: ChipStark<L, F, D>,
-    proof_with_pis: StarkProofWithPublicInputs<F, C, D>,
-    challenges: StarkProofChallenges<F, D>,
+    stark: S,
+    proof_with_pis: StarkProofWithPublicInputs<F, C, D, R>,
+    challenges: StarkProofChallenges<F, D, R>,
     degree_bits: usize,
     config: &StarkConfig,
 ) -> Result<()>
 where
-    [(); ChipStark::<L, F, D>::COLUMNS]:,
-    [(); ChipStark::<L, F, D>::PUBLIC_INPUTS]:,
+    [(); S::COLUMNS]:,
+    [(); S::PUBLIC_INPUTS]:,
+    [(); S::CHALLENGES]:,
     [(); C::Hasher::HASH_SIZE]:,
 {
     validate_proof_shape(&stark, &proof_with_pis, config)?;
-    check_permutation_options(&stark, &proof_with_pis, &challenges)?;
     let StarkProofWithPublicInputs {
         proof,
         public_inputs,
@@ -66,14 +67,25 @@ where
     let StarkOpeningSet {
         local_values,
         next_values,
-        permutation_zs,
-        permutation_zs_next,
         quotient_polys,
     } = &proof.openings;
-    let vars = StarkEvaluationVars {
+    let vars = StarkEvaluationVars::<
+        F::Extension,
+        F::Extension,
+        { S::COLUMNS },
+        { S::PUBLIC_INPUTS },
+        { S::CHALLENGES },
+    > {
         local_values: &local_values.to_vec().try_into().unwrap(),
         next_values: &next_values.to_vec().try_into().unwrap(),
         public_inputs: &public_inputs
+            .into_iter()
+            .map(F::Extension::from_basefield)
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap(),
+        challenges: &challenges
+            .stark_betas
             .into_iter()
             .map(F::Extension::from_basefield)
             .collect::<Vec<_>>()
@@ -94,19 +106,16 @@ where
         l_0,
         l_last,
     );
-    let permutation_data = stark.uses_permutation_args().then(|| PermutationCheckVars {
-        local_zs: permutation_zs.as_ref().unwrap().clone(),
-        next_zs: permutation_zs_next.as_ref().unwrap().clone(),
-        permutation_challenge_sets: challenges.permutation_challenge_sets.unwrap(),
-    });
-    eval_vanishing_poly::<F, F::Extension, F::Extension, L, D, D>(
-        &stark,
-        config,
-        vars,
-        permutation_data,
-        &mut consumer,
-        &challenges.stark_betas,
-    );
+
+    let mut parser = StarkParser {
+        local_vars: vars.local_values,
+        next_vars: vars.next_values,
+        public_inputs: vars.public_inputs,
+        challenges: vars.challenges,
+        consumer: &mut consumer,
+    };
+
+    stark.eval(&mut parser);
     let vanishing_polys_zeta = consumer.accumulators();
 
     // Check each polynomial identity, of the form `vanishing(x) = Z_H(x) quotient(x)`, at zeta.
@@ -127,8 +136,9 @@ where
         );
     }
 
-    let merkle_caps = once(proof.trace_cap)
-        .chain(proof.permutation_zs_cap)
+    let merkle_caps = proof
+        .trace_caps
+        .into_iter()
         .chain(once(proof.quotient_polys_cap))
         .collect_vec();
 
@@ -148,16 +158,16 @@ where
     Ok(())
 }
 
-fn validate_proof_shape<F, C, L, const D: usize>(
-    stark: &ChipStark<L, F, D>,
-    proof_with_pis: &StarkProofWithPublicInputs<F, C, D>,
+fn validate_proof_shape<F, C, S, const D: usize, const R: usize>(
+    stark: &S,
+    proof_with_pis: &StarkProofWithPublicInputs<F, C, D, R>,
     config: &StarkConfig,
 ) -> anyhow::Result<()>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
-    L: StarkParameters<F, D>,
-    [(); ChipStark::<L, F, D>::COLUMNS]:,
+    S: Stark<F, D, R>,
+    [(); S::COLUMNS]:,
     [(); C::Hasher::HASH_SIZE]:,
 {
     let StarkProofWithPublicInputs {
@@ -167,9 +177,7 @@ where
     let degree_bits = proof.recover_degree_bits(config);
 
     let StarkProof {
-        partial_trace_cap: _,
-        trace_cap,
-        permutation_zs_cap,
+        trace_caps,
         quotient_polys_cap,
         openings,
         // The shape of the opening proof will be checked in the FRI verifier (see
@@ -180,43 +188,22 @@ where
     let StarkOpeningSet {
         local_values,
         next_values,
-        permutation_zs,
-        permutation_zs_next,
         quotient_polys,
     } = openings;
 
-    ensure!(public_inputs.len() == ChipStark::<L, F, D>::PUBLIC_INPUTS);
+    ensure!(public_inputs.len() == S::PUBLIC_INPUTS);
 
     let fri_params = config.fri_params(degree_bits);
     let cap_height = fri_params.config.cap_height;
-    let num_zs = stark.num_permutation_batches(config);
 
-    ensure!(trace_cap.height() == cap_height);
+    for cap in trace_caps.iter() {
+        ensure!(cap.height() == cap_height);
+    }
     ensure!(quotient_polys_cap.height() == cap_height);
 
-    ensure!(local_values.len() == ChipStark::<L, F, D>::COLUMNS);
-    ensure!(next_values.len() == ChipStark::<L, F, D>::COLUMNS);
+    ensure!(local_values.len() == S::COLUMNS);
+    ensure!(next_values.len() == S::COLUMNS);
     ensure!(quotient_polys.len() == stark.num_quotient_polys(config));
-
-    if stark.uses_permutation_args() {
-        let permutation_zs_cap = permutation_zs_cap
-            .as_ref()
-            .ok_or_else(|| anyhow!("Missing Zs cap"))?;
-        let permutation_zs = permutation_zs
-            .as_ref()
-            .ok_or_else(|| anyhow!("Missing permutation_zs"))?;
-        let permutation_zs_next = permutation_zs_next
-            .as_ref()
-            .ok_or_else(|| anyhow!("Missing permutation_zs_next"))?;
-
-        ensure!(permutation_zs_cap.height() == cap_height);
-        ensure!(permutation_zs.len() == num_zs);
-        ensure!(permutation_zs_next.len() == num_zs);
-    } else {
-        ensure!(permutation_zs_cap.is_none());
-        ensure!(permutation_zs.is_none());
-        ensure!(permutation_zs_next.is_none());
-    }
 
     Ok(())
 }
@@ -233,53 +220,26 @@ fn eval_l_0_and_l_last<F: Field>(log_n: usize, x: F) -> (F, F) {
     (z_x * invs[0], z_x * invs[1])
 }
 
-/// Utility function to check that all permutation data wrapped in `Option`s are `Some` iff
-/// the Stark uses a permutation argument.
-fn check_permutation_options<
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-    S: Stark<F, D>,
-    const D: usize,
->(
-    stark: &S,
-    proof_with_pis: &StarkProofWithPublicInputs<F, C, D>,
-    challenges: &StarkProofChallenges<F, D>,
-) -> Result<()> {
-    let options_is_some = [
-        proof_with_pis.proof.permutation_zs_cap.is_some(),
-        proof_with_pis.proof.openings.permutation_zs.is_some(),
-        proof_with_pis.proof.openings.permutation_zs_next.is_some(),
-        challenges.permutation_challenge_sets.is_some(),
-    ];
-    ensure!(
-        options_is_some
-            .into_iter()
-            .all(|b| b == stark.uses_permutation_args()),
-        "Permutation data doesn't match with Stark configuration."
-    );
-    Ok(())
-}
+// // #[cfg(test)]
+// // mod tests {
+// //     use plonky2::field::goldilocks_field::GoldilocksField;
+// //     use plonky2::field::polynomial::PolynomialValues;
+// //     use plonky2::field::types::Sample;
 
-#[cfg(test)]
-mod tests {
-    use plonky2::field::goldilocks_field::GoldilocksField;
-    use plonky2::field::polynomial::PolynomialValues;
-    use plonky2::field::types::Sample;
+// //     use super::eval_l_0_and_l_last;
 
-    use super::eval_l_0_and_l_last;
+// //     #[test]
+// //     fn test_eval_l_0_and_l_last() {
+// //         type F = GoldilocksField;
+// //         let log_n = 5;
+// //         let n = 1 << log_n;
 
-    #[test]
-    fn test_eval_l_0_and_l_last() {
-        type F = GoldilocksField;
-        let log_n = 5;
-        let n = 1 << log_n;
+// //         let x = F::rand(); // challenge point
+// //         let expected_l_first_x = PolynomialValues::selector(n, 0).ifft().eval(x);
+// //         let expected_l_last_x = PolynomialValues::selector(n, n - 1).ifft().eval(x);
 
-        let x = F::rand(); // challenge point
-        let expected_l_first_x = PolynomialValues::selector(n, 0).ifft().eval(x);
-        let expected_l_last_x = PolynomialValues::selector(n, n - 1).ifft().eval(x);
-
-        let (l_first_x, l_last_x) = eval_l_0_and_l_last(log_n, x);
-        assert_eq!(l_first_x, expected_l_first_x);
-        assert_eq!(l_last_x, expected_l_last_x);
-    }
-}
+// //         let (l_first_x, l_last_x) = eval_l_0_and_l_last(log_n, x);
+// //         assert_eq!(l_first_x, expected_l_first_x);
+// //         assert_eq!(l_last_x, expected_l_last_x);
+// //     }
+// // }

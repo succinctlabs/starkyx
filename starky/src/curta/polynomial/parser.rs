@@ -21,6 +21,10 @@ impl<'a, P: AirParser> PolynomialParser<'a, P> {
             .collect()
     }
 
+    pub fn zero(&mut self) -> Polynomial<P::Var> {
+        Polynomial::from_coefficients(vec![self.parser.zero()])
+    }
+
     pub fn add(&mut self, a: &Polynomial<P::Var>, b: &Polynomial<P::Var>) -> Polynomial<P::Var> {
         a.coefficients
             .iter()

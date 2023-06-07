@@ -211,7 +211,7 @@ mod tests {
         verify_stark_proof_circuit,
     };
     use crate::curta::stark::verifier::verify_stark_proof;
-    use crate::curta::trace::trace;
+    use crate::curta::trace::arithmetic::{trace, ArithmeticGenerator};
 
     #[derive(Clone, Debug, Copy)]
     pub struct Ed25519ScalarMulTest;
@@ -229,6 +229,7 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type E = Ed25519;
         type L = Ed25519ScalarMulTest;
+        type S = ChipStark<L, F, D>;
         type CUB = GoldilocksCubicParameters;
         let _ = env_logger::builder().is_test(true).try_init();
 
@@ -244,64 +245,57 @@ mod tests {
             .unwrap();
         builder.write_ec_point(&res).unwrap();
         builder.write_ec_point(&temp).unwrap();
-        let (chip, spec) = builder.build();
+        let chip = builder.build();
 
         // Generate the trace.
-        let num_rows = 2u64.pow(16);
-        let (handle, generator) = trace::<F, D>(spec);
+        let num_rows = 2u64.pow(16) as usize;
+        let (handle, generator) = trace::<F, CUB, D>(num_rows);
         let mut timing = TimingTree::new("Ed_Add row", log::Level::Debug);
-        let trace = timed!(timing, "generate trace", {
-            let mut counter_val = F::ONE;
-            let counter_gen = F::primitive_root_of_unity(8);
-            for j in 0..(1 << 16) {
-                handle
-                    .write_data(j, scalar_mul_gadget.cyclic_counter, vec![counter_val])
+        let mut counter_val = F::ONE;
+        let counter_gen = F::primitive_root_of_unity(8);
+        for j in 0..(1 << 16) {
+            handle
+                .write_data(j, scalar_mul_gadget.cyclic_counter, vec![counter_val])
+                .unwrap();
+            counter_val *= counter_gen;
+        }
+        for i in 0..256usize {
+            let handle = handle.clone();
+            let scalar_mul_gadget = scalar_mul_gadget.clone();
+            rayon::spawn(move || {
+                let mut rng = thread_rng();
+                let a = rng.gen_biguint(256);
+                let point = E::generator() * a;
+                let scalar = rng.gen_biguint(256);
+                let res = handle
+                    .write_ed25519_double_and_add(
+                        256 * i,
+                        &scalar,
+                        &point,
+                        scalar_mul_gadget.clone().double_and_add_gadget,
+                    )
                     .unwrap();
-                counter_val *= counter_gen;
-            }
-            for i in 0..256usize {
-                let handle = handle.clone();
-                let scalar_mul_gadget = scalar_mul_gadget.clone();
-                rayon::spawn(move || {
-                    let mut rng = thread_rng();
-                    let a = rng.gen_biguint(256);
-                    let point = E::generator() * a;
-                    let scalar = rng.gen_biguint(256);
-                    let res = handle
-                        .write_ed25519_double_and_add(
-                            256 * i,
-                            &scalar,
-                            &point,
-                            scalar_mul_gadget.clone().double_and_add_gadget,
-                        )
-                        .unwrap();
-                    assert_eq!(res, point * scalar);
-                });
-            }
-            drop(handle);
-            generator
-                .generate_trace_rows(&chip, num_rows as usize)
-                .unwrap()
-        });
+                assert_eq!(res, point * scalar);
+            });
+        }
+        drop(handle);
 
         // Generate the proof.
         let config = StarkConfig::standard_fast_config();
         let stark = ChipStark::new(chip);
-        let proof = timed!(
-            timing,
-            "generate stark proof",
-            prove::<F, C, L, CUB, D>(
-                stark.clone(),
-                &config,
-                trace,
-                [],
-                &mut TimingTree::default(),
-            )
-            .unwrap()
-        );
+        let proof = prove::<F, C, S, ArithmeticGenerator<F, CUB, D>, D, 2>(
+            stark.clone(),
+            &config,
+            generator,
+            num_rows,
+            [],
+            &mut TimingTree::default(),
+        )
+        .unwrap();
+        // Verify proof as a stark
         verify_stark_proof(stark.clone(), proof.clone(), &config).unwrap();
 
-        // Verify recursive proof in a circuit.
+        // Generate the recursive proof.
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
         let degree_bits = proof.proof.recover_degree_bits(&config);
@@ -314,7 +308,7 @@ mod tests {
         recursive_builder.print_gate_counts(0);
         let mut rec_pw = PartialWitness::new();
         set_stark_proof_with_pis_target(&mut rec_pw, &virtual_proof, &proof);
-        verify_stark_proof_circuit::<F, C, L, D>(
+        verify_stark_proof_circuit::<F, C, S, D, 2>(
             &mut recursive_builder,
             stark,
             virtual_proof,
@@ -332,8 +326,12 @@ mod tests {
             )
             .unwrap()
         );
+        timed!(
+            timing,
+            "verify recursive proof",
+            recursive_data.verify(recursive_proof).unwrap()
+        );
         timing.print();
-        recursive_data.verify(recursive_proof).unwrap();
     }
 
     // A function for testing wrong proof that doesn't connect the two rows of the
@@ -397,6 +395,7 @@ mod tests {
         type F = <C as GenericConfig<D>>::F;
         type E = Ed25519;
         type L = Ed25519ScalarMulTest;
+        type S = ChipStark<L, F, D>;
         type CUB = GoldilocksCubicParameters;
         let _ = env_logger::builder().is_test(true).try_init();
 
@@ -412,61 +411,53 @@ mod tests {
             .unwrap();
         builder.write_ec_point(&res).unwrap();
         builder.write_ec_point(&temp).unwrap();
-        let (chip, spec) = builder.build();
+        let chip = builder.build();
 
         // Generate the trace.
-        let num_rows = 2u64.pow(16);
-        let (handle, generator) = trace::<F, D>(spec);
-        let mut timing = TimingTree::new("Ed_Add row", log::Level::Debug);
-        let trace = timed!(timing, "generate trace", {
-            let mut counter_val = F::ONE;
-            let counter_gen = F::primitive_root_of_unity(8);
-            for j in 0..(1 << 16) {
-                handle
-                    .write_data(j, scalar_mul_gadget.cyclic_counter, vec![counter_val])
-                    .unwrap();
-                counter_val *= counter_gen;
-            }
-            for i in 0..256usize {
-                let handle = handle.clone();
-                let scalar_mul_gadget = scalar_mul_gadget.clone();
-                rayon::spawn(move || {
-                    let mut rng = thread_rng();
-                    let a = rng.gen_biguint(256);
-                    let point = E::generator() * a;
-                    let scalar = rng.gen_biguint(256);
-                    let res = write_ed_double_add_test_transition(
-                        &handle,
-                        256 * i,
-                        &scalar,
-                        &point,
-                        scalar_mul_gadget.clone().double_and_add_gadget,
-                    )
-                    .unwrap();
-                    assert_ne!(res, point * scalar);
-                });
-            }
-            drop(handle);
-            generator
-                .generate_trace_rows(&chip, num_rows as usize)
-                .unwrap()
-        });
-        let config = StarkConfig::standard_fast_config();
-        let stark = ChipStark::new(chip);
+        let num_rows = 2u64.pow(16) as usize;
+        let (handle, generator) = trace::<F, CUB, D>(num_rows);
+        let mut counter_val = F::ONE;
+        let counter_gen = F::primitive_root_of_unity(8);
+        for j in 0..(1 << 16) {
+            handle
+                .write_data(j, scalar_mul_gadget.cyclic_counter, vec![counter_val])
+                .unwrap();
+            counter_val *= counter_gen;
+        }
+        for i in 0..256usize {
+            let handle = handle.clone();
+            let scalar_mul_gadget = scalar_mul_gadget.clone();
+            rayon::spawn(move || {
+                let mut rng = thread_rng();
+                let a = rng.gen_biguint(256);
+                let point = E::generator() * a;
+                let scalar = rng.gen_biguint(256);
+                let res = write_ed_double_add_test_transition(
+                    &handle,
+                    256 * i,
+                    &scalar,
+                    &point,
+                    scalar_mul_gadget.clone().double_and_add_gadget,
+                )
+                .unwrap();
+                assert_ne!(res, point * scalar);
+            });
+        }
+        drop(handle);
 
         // Verify proof as a stark.
-        let proof = timed!(
-            timing,
-            "generate stark proof",
-            prove::<F, C, L, CUB, D>(
-                stark.clone(),
-                &config,
-                trace,
-                [],
-                &mut TimingTree::default(),
-            )
-            .unwrap()
-        );
+        // Generate the proof.
+        let config = StarkConfig::standard_fast_config();
+        let stark = ChipStark::new(chip);
+        let proof = prove::<F, C, S, ArithmeticGenerator<F, CUB, D>, D, 2>(
+            stark.clone(),
+            &config,
+            generator,
+            num_rows,
+            [],
+            &mut TimingTree::default(),
+        )
+        .unwrap();
         let res = verify_stark_proof(stark.clone(), proof, &config);
         assert!(res.is_err());
     }
