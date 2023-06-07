@@ -6,30 +6,23 @@ use alloc::vec;
 
 use anyhow::Result;
 use num::BigUint;
-use plonky2::field::extension::{Extendable, FieldExtension};
-use plonky2::field::packed::PackedField;
+use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
-use plonky2::iop::ext_target::ExtensionTarget;
-use plonky2::plonk::circuit_builder::CircuitBuilder;
 
-use super::constraint::{eval_field_operation, packed_generic_field_operation};
+use super::constraint::eval_field_operation;
 use super::*;
 use crate::curta::air::parser::AirParser;
 use crate::curta::builder::StarkBuilder;
 use crate::curta::chip::StarkParameters;
-use crate::curta::field::constraint::ext_circuit_field_operation;
 use crate::curta::instruction::Instruction;
 use crate::curta::parameters::FieldParameters;
 use crate::curta::polynomial::parser::PolynomialParser;
-use crate::curta::polynomial::{
-    to_u16_le_limbs_polynomial, Polynomial, PolynomialGadget, PolynomialOps,
-};
+use crate::curta::polynomial::{to_u16_le_limbs_polynomial, Polynomial};
 use crate::curta::register::{
     ArrayRegister, FieldRegister, MemorySlice, Register, RegisterSerializable, U16Register,
 };
 use crate::curta::trace::writer::TraceWriter;
 use crate::curta::utils::{compute_root_quotient_and_shift, split_u32_limbs_to_u16_limbs};
-use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 #[derive(Debug, Clone, Copy)]
 pub struct FpAddInstruction<P: FieldParameters> {
@@ -190,6 +183,7 @@ impl<F: RichField + Extendable<D>, const D: usize, P: FieldParameters> Instructi
 mod tests {
     use num::bigint::RandBigInt;
     use plonky2::iop::witness::PartialWitness;
+    use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::timed;

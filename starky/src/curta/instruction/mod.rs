@@ -8,11 +8,8 @@ mod set;
 pub mod write;
 
 pub use empty::EmptyInstructionSet;
-use plonky2::field::extension::{Extendable, FieldExtension};
-use plonky2::field::packed::PackedField;
+use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
-use plonky2::iop::ext_target::ExtensionTarget;
-use plonky2::plonk::circuit_builder::CircuitBuilder;
 pub use set::{FromInstructionSet, InstructionSet};
 
 use super::air::parser::AirParser;
@@ -21,7 +18,6 @@ use super::field::{
     FpAddInstruction, FpInnerProductInstruction, FpMulConstInstruction, FpMulInstruction,
 };
 use super::register::MemorySlice;
-use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 pub trait Instruction<F: RichField + Extendable<D>, const D: usize>:
     'static + Send + Sync + Clone

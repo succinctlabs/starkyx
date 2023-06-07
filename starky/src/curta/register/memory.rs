@@ -1,12 +1,8 @@
-use plonky2::field::extension::{Extendable, FieldExtension};
-use plonky2::field::packed::PackedField;
+use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
-use plonky2::iop::ext_target::ExtensionTarget;
 
 use crate::curta::air::parser::AirParser;
 use crate::curta::constraint::arithmetic::{ArithmeticExpression, ArithmeticExpressionSlice};
-use crate::curta::stark::vars as new_vars;
-use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 /// A contiguous chunk of memory in the trace and Stark data.
 /// Corresponds to a slice in vars.local_values, vars.next_values, vars.public_inputs,

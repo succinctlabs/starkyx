@@ -1,11 +1,10 @@
 //! This module implements a lookup argument based on the logarithmic derivative as in
 //! https://eprint.iacr.org/2022/1530.pdf
 //!
-//! The basic idea
 
 use alloc::collections::VecDeque;
 
-use plonky2::field::extension::{Extendable, FieldExtension};
+use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 
 use super::Lookup;

@@ -6,16 +6,12 @@
 use core::ops::{Add, Mul, Sub};
 use std::sync::Arc;
 
-use plonky2::field::extension::{Extendable, FieldExtension};
-use plonky2::field::packed::PackedField;
+use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
-use plonky2::iop::ext_target::ExtensionTarget;
-use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use super::arithmetic::ArithmeticExpression;
 use crate::curta::air::parser::AirParser;
 use crate::curta::instruction::Instruction;
-use crate::vars::{StarkEvaluationTargets, StarkEvaluationVars};
 
 /// An abstract representation of a general AIR vanishing polynomial
 ///

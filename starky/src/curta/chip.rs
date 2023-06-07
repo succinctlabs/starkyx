@@ -51,7 +51,6 @@ where
     pub(crate) range_data: Option<Lookup>,
     pub(crate) range_table: Option<ElementRegister>,
     pub(crate) partial_trace_index: usize,
-    pub(crate) num_verifier_challenges: usize,
 }
 
 impl<L, F, const D: usize> Chip<L, F, D>

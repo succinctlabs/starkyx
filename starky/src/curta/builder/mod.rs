@@ -326,7 +326,7 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
                 L::NUM_FREE_COLUMNS - num_free_columns
             );
         }
-        let num_arithmetic_columns = self.local_arithmetic_index; //- self.local_index;
+        let num_arithmetic_columns = self.local_arithmetic_index;
         if num_arithmetic_columns > L::NUM_ARITHMETIC_COLUMNS {
             panic!(
                 "Not enough arithmetic columns. Expected {} arithmetic columns, got {}.",
@@ -347,7 +347,6 @@ impl<L: StarkParameters<F, D>, F: RichField + Extendable<D>, const D: usize> Sta
             range_checks_idx: (0, L::NUM_ARITHMETIC_COLUMNS),
             range_data: self.range_data,
             range_table: self.range_table,
-            num_verifier_challenges: self.num_verifier_challenges,
             partial_trace_index,
         }
     }

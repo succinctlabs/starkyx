@@ -104,8 +104,8 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
 
         // Write multiplicities into the trace
         let multiplicity = lookup_data.multiplicity.register();
-        for i in 0..num_rows {
-            multiplicity.assign(trace_rows, 0, &mut [multiplicities[i]], i);
+        for (i, mult) in multiplicities.iter().enumerate() {
+            multiplicity.assign(trace_rows, 0, &[*mult], i);
         }
 
         // Write multiplicity inverse constraint
