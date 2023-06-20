@@ -4,9 +4,7 @@ use alloc::vec::Vec;
 use itertools::Itertools;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::fri::oracle::PolynomialBatch;
-use plonky2::fri::proof::{
-    CompressedFriProof, FriChallenges, FriChallengesTarget, FriProof, FriProofTarget,
-};
+use plonky2::fri::proof::{FriChallenges, FriChallengesTarget, FriProof, FriProofTarget};
 use plonky2::fri::structure::{
     FriOpeningBatch, FriOpeningBatchTarget, FriOpenings, FriOpeningsTarget,
 };
@@ -84,30 +82,6 @@ pub struct StarkProofWithPublicInputs<
 pub struct StarkProofWithPublicInputsTarget<const D: usize, const R: usize> {
     pub proof: StarkProofTarget<D, R>,
     pub public_inputs: Vec<Target>,
-}
-
-pub struct CompressedStarkProof<
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-    const D: usize,
-    const R: usize,
-> {
-    /// Merkle cap of LDEs of trace values.
-    pub trace_caps: [MerkleCap<F, C::Hasher>; R],
-    /// Purported values of each polynomial at the challenge point.
-    pub openings: StarkOpeningSet<F, D>,
-    /// A batch FRI argument for all openings.
-    pub opening_proof: CompressedFriProof<F, C::Hasher, D>,
-}
-
-pub struct CompressedStarkProofWithPublicInputs<
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-    const D: usize,
-    const R: usize,
-> {
-    pub proof: CompressedStarkProof<F, C, D, R>,
-    pub public_inputs: Vec<F>,
 }
 
 pub(crate) struct StarkProofChallenges<

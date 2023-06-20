@@ -18,8 +18,8 @@ use crate::curta::utils::{bigint_into_u16_digits, biguint_to_16_digits_field};
 /// A wrapper around a vector of field elements that implements polynomial operations. Often used
 /// to represent polynomials when computing with traces.
 #[derive(Debug, Clone)]
-pub struct Polynomial<F> {
-    pub coefficients: Vec<F>,
+pub struct Polynomial<T> {
+    pub coefficients: Vec<T>,
 }
 
 impl<T: Clone> Polynomial<T> {
