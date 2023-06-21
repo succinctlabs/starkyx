@@ -4,7 +4,11 @@ use super::Polynomial;
 use crate::air::parser::AirParser;
 
 pub trait PolynomialParser: AirParser {
-    fn zero_poly(&mut self) -> Polynomial<Self::Var>;
+    fn zero_poly(&mut self) -> Polynomial<Self::Var> {
+        Polynomial {
+            coefficients: vec![self.zero()],
+        }
+    }
 
     fn constant_poly(&mut self, polynomial: &Polynomial<Self::Field>) -> Polynomial<Self::Var> {
         polynomial
@@ -124,17 +128,33 @@ pub trait PolynomialParser: AirParser {
         &mut self,
         a: &Polynomial<Self::Var>,
         b: &Self::Var,
-    ) -> Polynomial<Self::Var>;
+    ) -> Polynomial<Self::Var> {
+        a.coefficients.iter().map(|x| self.mul(*x, *b)).collect()
+    }
 
     fn poly_mul_const(
         &mut self,
         a: &Polynomial<Self::Var>,
         b: &Self::Field,
-    ) -> Polynomial<Self::Field>;
+    ) -> Polynomial<Self::Var> {
+        a.coefficients
+            .iter()
+            .map(|x| self.mul_const(*x, *b))
+            .collect()
+    }
 
     fn poly_mul_poly_const(
         &mut self,
         a: &Polynomial<Self::Var>,
         b: &Polynomial<Self::Field>,
-    ) -> Polynomial<Self::Field>;
+    ) -> Polynomial<Self::Var> {
+        let mut result = vec![self.zero(); a.coefficients.len() + b.coefficients.len() - 1];
+        for (i, a) in a.coefficients.iter().enumerate() {
+            for (j, b) in b.coefficients.iter().enumerate() {
+                let ab = self.mul_const(*a, *b);
+                result[i + j] = self.add(result[i + j], ab);
+            }
+        }
+        Polynomial::from_coefficients(result)
+    }
 }

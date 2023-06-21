@@ -3,9 +3,7 @@ use crate::math::prelude::*;
 pub trait AirParser: Send + Sized {
     type Field: Field;
 
-    type Var: Copy;
-
-    fn constant(&mut self, value: Self::Field) -> Self::Var;
+    type Var: Copy + 'static;
 
     fn local_slice(&self) -> &[Self::Var];
     fn next_slice(&self) -> &[Self::Var];
@@ -16,6 +14,8 @@ pub trait AirParser: Send + Sized {
     fn constraint_transition(&mut self, constraint: Self::Var);
     fn constraint_first_row(&mut self, constraint: Self::Var);
     fn constraint_last_row(&mut self, constraint: Self::Var);
+
+    fn constant(&mut self, value: Self::Field) -> Self::Var;
 
     /// Add two vars while potantially updating the internal state
     fn add(&mut self, a: Self::Var, b: Self::Var) -> Self::Var;
