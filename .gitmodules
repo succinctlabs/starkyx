@@ -1,0 +1,3 @@
+[submodule "Plonky3"]
+	path = Plonky3
+	url = git@github.com:Plonky3/Plonky3.git

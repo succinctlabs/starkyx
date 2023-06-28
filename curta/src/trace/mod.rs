@@ -1,4 +1,5 @@
 pub mod commit;
+pub mod pcs;
 
 /// A stark trace which is stored as a matrix in row major order
 #[derive(Debug, Clone)]

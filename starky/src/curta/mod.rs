@@ -1,11 +1,9 @@
 pub mod air;
 pub mod builder;
-pub mod challenger;
 pub mod chip;
 pub mod commit;
 pub mod constraint;
 pub mod ec;
-pub mod math;
 
 pub mod bool;
 pub mod extension;
