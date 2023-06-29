@@ -1,4 +1,4 @@
 pub mod challenger;
 pub mod field;
 pub mod parser;
-pub mod fri;
+pub mod stark;

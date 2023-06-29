@@ -1,7 +1,5 @@
 use crate::air::parser::AirParser;
 
-pub mod hash;
-
 pub trait Challenger<AP: AirParser>: Sized {
     type Element: Copy + 'static;
 

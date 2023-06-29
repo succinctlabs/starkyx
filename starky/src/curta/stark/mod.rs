@@ -1,4 +1,3 @@
-pub mod config;
 pub mod fibonacchi;
 pub mod get_challenges;
 pub mod proof;
