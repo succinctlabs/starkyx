@@ -9,7 +9,7 @@ use plonky2::fri::witness_util::set_fri_proof_target;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::iop::target::Target;
-use plonky2::iop::witness::Witness;
+use plonky2::iop::witness::WitnessWrite;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2::plonk::plonk_common::reduce_with_powers;
@@ -359,7 +359,7 @@ pub fn set_stark_proof_target<F, C: GenericConfig<D, F = F>, W, const D: usize>(
 ) where
     F: RichField + Extendable<D>,
     C::Hasher: AlgebraicHasher<F>,
-    W: Witness<F>,
+    W: WitnessWrite<F>,
 {
     for (cap, target_cap) in proof
         .trace_caps

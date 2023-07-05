@@ -12,7 +12,7 @@ use crate::plonky2::parser::{RecursiveStarkParser, StarkParser};
 use crate::stark::config::StarkConfig;
 
 #[derive(Debug, Clone)]
-pub struct StarkyConfig<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> {
+pub struct StarkyConfig<F, C, const D: usize> {
     pub security_bits: usize,
 
     /// The number of challenge points to generate, for IOPs that have soundness errors of (roughly)

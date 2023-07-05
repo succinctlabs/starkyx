@@ -17,7 +17,7 @@ anyhow = { version = "1.0.40", default-features = false }
 itertools = { version = "0.10.0", default-features = false }
 log = { version = "0.4.14", default-features = false }
 plonky2_maybe_rayon = { version = "0.1.0", default-features = false }
-plonky2 = { version = "0.1.2", default-features = false , optional = true}
+plonky2 = { version = "0.1", default-features = false , optional = true}
 num = { version = "0.4", default-features = false }
 enum_dispatch = "0.3.11"
 enum_delegate = "0.2.0"

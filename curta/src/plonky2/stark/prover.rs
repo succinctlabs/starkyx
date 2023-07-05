@@ -33,7 +33,6 @@ impl<F, C, P, const D: usize> StarkyProver<F, C, F, P, D, 1>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
-    F: RichField + Extendable<D>,
     P: PackedField<Scalar = F>,
 {
     pub fn new() -> Self {

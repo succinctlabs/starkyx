@@ -26,7 +26,7 @@ pub mod proof;
 pub mod prover;
 pub mod verifier;
 
-pub trait Plonky2Stark<F: RichField + Extendable<D>, const D: usize>: Sync {
+pub trait Plonky2Stark<F: RichField + Extendable<D>, const D: usize>: 'static + Sync {
     const COLUMNS: usize;
 
     type Air;
@@ -172,7 +172,8 @@ impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
     }
 }
 
-impl<F, A: Sync, const D: usize, const COLUMNS: usize> Plonky2Stark<F, D> for Starky<A, COLUMNS>
+impl<F, A: Sync + 'static, const D: usize, const COLUMNS: usize> Plonky2Stark<F, D>
+    for Starky<A, COLUMNS>
 where
     F: RichField + Extendable<D>,
 {
@@ -186,29 +187,117 @@ where
 
 #[cfg(test)]
 mod tests {
+    use core::fmt::Debug;
+
     use plonky2::field::goldilocks_field::GoldilocksField;
     use plonky2::field::packable::Packable;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_data::CircuitConfig;
-    use plonky2::plonk::config::PoseidonGoldilocksConfig;
+    use plonky2::plonk::config::AlgebraicHasher;
     use plonky2::util::timing::TimingTree;
-    use prover::StarkyProver;
-    use verifier::StarkyVerifier;
 
     use super::*;
     use crate::air::fibonacci::FibonacciAir;
     use crate::math::prelude::*;
     use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
     use crate::plonky2::stark::gadget::StarkGadget;
-    use crate::plonky2::stark::verifier::set_stark_proof_target;
-    use crate::trace::generator::ConstantGenerator;
+    use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
+    use crate::plonky2::stark::prover::StarkyProver;
+    use crate::plonky2::stark::verifier::StarkyVerifier;
+    use crate::trace::generator::{ConstantGenerator, TraceGenerator};
+
+    /// Generate the proof and verify as a stark
+    pub(crate) fn test_starky<
+        S,
+        T,
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F, FE = F::Extension>,
+        const D: usize,
+    >(
+        stark: &S,
+        config: &StarkyConfig<F, C, D>,
+        trace_generator: &T,
+        public_inputs: &[F],
+    ) where
+        S: Plonky2Stark<F, D>,
+        S::Air: for<'a> RAir<StarkParser<'a, F, C::FE, C::FE, D, D>>
+            + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
+        T: for<'a> TraceGenerator<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
+        for<'a> <T as TraceGenerator<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>>::Error:
+            Into<anyhow::Error>,
+        [(); S::COLUMNS]:,
+    {
+        let proof = StarkyProver::<F, C, F, <F as Packable>::Packing, D, 1>::prove(
+            config,
+            stark,
+            trace_generator,
+            public_inputs,
+        )
+        .unwrap();
+
+        // Verify the proof as a stark
+        StarkyVerifier::verify(&config, stark, proof, &public_inputs).unwrap();
+    }
+
+    /// Generate a Stark proof and a recursive proof using the witness generator
+    pub(crate) fn test_recursive_starky<
+        S,
+        T,
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F, FE = F::Extension> + 'static,
+        const D: usize,
+    >(
+        stark: S,
+        config: StarkyConfig<F, C, D>,
+        trace_generator: T,
+        public_inputs: &[F],
+    ) where
+        S: Plonky2Stark<F, D> + Debug + Send + Sync,
+        C::Hasher: AlgebraicHasher<F>,
+        S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
+            + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
+        T: 'static
+            + Debug
+            + Sync
+            + Send
+            + for<'a> TraceGenerator<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
+        for<'a> <T as TraceGenerator<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>>::Error:
+            Into<anyhow::Error>,
+        [(); S::COLUMNS]:,
+    {
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut builder = CircuitBuilder::<F, D>::new(config_rec);
+        let virtual_proof = builder.add_virtual_stark_proof(&stark, &config);
+
+        builder.print_gate_counts(0);
+        let mut pw = PartialWitness::new();
+        // Set public inputs.
+        let public_input_targets = builder.add_virtual_targets(public_inputs.len());
+        for (&pi_t, &pi) in public_input_targets.iter().zip(public_inputs.iter()) {
+            pw.set_target(pi_t, pi);
+        }
+        let generator = SimpleStarkWitnessGenerator::new(
+            config,
+            stark,
+            virtual_proof,
+            public_input_targets,
+            trace_generator,
+        );
+        builder.add_simple_generator(generator);
+
+        let data = builder.build::<C>();
+        let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
+        let recursive_proof =
+            plonky2::plonk::prover::prove(&data.prover_only, &data.common, pw, &mut timing)
+                .unwrap();
+        timing.print();
+        data.verify(recursive_proof).unwrap();
+    }
 
     #[test]
     fn test_plonky2_fibonacci_stark() {
         type F = GoldilocksField;
-        type C = PoseidonGoldilocksConfig;
         type SC = PoseidonGoldilocksStarkConfig;
-        const D: usize = 2;
 
         let num_rows = 1 << 5 as usize;
         let air = FibonacciAir::new();
@@ -225,41 +314,10 @@ mod tests {
 
         let config = SC::standard_fast_config(num_rows);
 
-        let proof = StarkyProver::<F, C, F, <F as Packable>::Packing, 2, 1>::prove(
-            &config,
-            &stark,
-            &trace_generator,
-            &public_inputs,
-        )
-        .unwrap();
-
-        // Verify the proof as a stark
-        StarkyVerifier::verify(&config, &stark, proof.clone(), &public_inputs).unwrap();
+        // Generate proof and verify as a stark
+        test_starky(&stark, &config, &trace_generator, &public_inputs);
 
         // Test the recursive proof.
-        let config_rec = CircuitConfig::standard_recursion_config();
-        let mut recursive_builder = CircuitBuilder::<F, D>::new(config_rec);
-        let virtual_proof = recursive_builder.add_virtual_stark_proof(&stark, &config);
-
-        recursive_builder.print_gate_counts(0);
-        let mut rec_pw = PartialWitness::new();
-        // Set public inputs.
-        let public_input_targets = recursive_builder.add_virtual_targets(3);
-        for (&pi_t, pi) in public_input_targets.iter().zip(public_inputs) {
-            rec_pw.set_target(pi_t, pi);
-        }
-        set_stark_proof_target(&mut rec_pw, &virtual_proof, &proof);
-        recursive_builder.verify_stark_proof(&config, &stark, virtual_proof, &public_input_targets);
-        let recursive_data = recursive_builder.build::<C>();
-        let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
-        let recursive_proof = plonky2::plonk::prover::prove(
-            &recursive_data.prover_only,
-            &recursive_data.common,
-            rec_pw,
-            &mut timing,
-        )
-        .unwrap();
-        timing.print();
-        recursive_data.verify(recursive_proof).unwrap();
+        test_recursive_starky(stark, config, trace_generator, &public_inputs);
     }
 }
