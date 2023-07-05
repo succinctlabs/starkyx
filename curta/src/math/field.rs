@@ -168,7 +168,7 @@ pub trait Sample: Sized {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+pub mod tests {
     use super::*;
 
     pub fn ring_test<F: Ring + Eq + Sample>() {
