@@ -148,7 +148,6 @@ where
         let round_challenges = challenger.get_n_challenges(builder, stark.num_challenges(r));
         challenges.extend(round_challenges);
     }
-
     let stark_alphas = challenger.get_n_challenges(builder, num_challenges);
 
     challenger.observe_cap(quotient_polys_cap);

@@ -2,36 +2,36 @@ use anyhow::{anyhow, Error};
 
 use super::StarkTrace;
 use crate::air::parser::AirParser;
-use crate::stark::config::StarkConfig;
-use crate::stark::Stark;
+use crate::air::RAir;
+use crate::math::prelude::*;
 
-pub trait TraceGenerator<AP: AirParser, C: StarkConfig<AP>> {
+pub trait TraceGenerator<AP: AirParser> {
     type Error;
-    fn generate_round<S: Stark<AP, C>>(
+    fn generate_round<A: RAir<AP>>(
         &self,
-        stark: &S,
+        air: &A,
         round: usize,
         challenges: &[AP::Field],
     ) -> Result<StarkTrace<AP::Field>, Self::Error>;
 }
 
 #[derive(Debug, Clone)]
-pub struct ConstantGenerator<AP: AirParser> {
-    trace: StarkTrace<AP::Field>,
+pub struct ConstantGenerator<F: Field> {
+    trace: StarkTrace<F>,
 }
 
-impl<AP: AirParser> ConstantGenerator<AP> {
-    pub fn new(trace: StarkTrace<AP::Field>) -> Self {
+impl<F: Field> ConstantGenerator<F> {
+    pub fn new(trace: StarkTrace<F>) -> Self {
         Self { trace }
     }
 }
 
-impl<AP: AirParser, C: StarkConfig<AP>> TraceGenerator<AP, C> for ConstantGenerator<AP> {
+impl<F: Field, AP: AirParser<Field = F>> TraceGenerator<AP> for ConstantGenerator<F> {
     type Error = Error;
 
-    fn generate_round<S: Stark<AP, C>>(
+    fn generate_round<A: RAir<AP>>(
         &self,
-        _stark: &S,
+        _air: &A,
         round: usize,
         _challenges: &[AP::Field],
     ) -> Result<StarkTrace<AP::Field>, Self::Error> {

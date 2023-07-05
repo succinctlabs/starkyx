@@ -1,5 +1,7 @@
 pub mod generator;
 
+use core::slice::ChunksExact;
+
 use crate::maybe_rayon::*;
 /// A stark trace which is stored as a matrix in row major order
 #[derive(Debug, Clone)]
@@ -59,7 +61,7 @@ impl<T> StarkTrace<T> {
         }
     }
 
-    pub fn rows(&self) -> impl Iterator<Item = &[T]> {
+    pub fn rows(&self) -> ChunksExact<'_, T> {
         self.values.chunks_exact(self.width)
     }
 
@@ -77,7 +79,7 @@ impl<T> StarkTrace<T> {
         }
     }
 
-    pub fn window(&self, r:usize) -> TraceWindow<'_, T> {
+    pub fn window(&self, r: usize) -> TraceWindow<'_, T> {
         debug_assert!(r < self.height());
         let last_row = self.height() - 1;
         match r {
@@ -116,6 +118,19 @@ impl<T> StarkTrace<T> {
         let last_row = self.height() - 1;
         (0..=last_row).into_par_iter().map(|r| self.window(r))
     }
+
+    pub fn as_columns(&self) -> Vec<Vec<T>>
+    where
+        T: Copy,
+    {
+        let mut columns = vec![Vec::with_capacity(self.height()); self.width];
+        for row in self.rows() {
+            for (i, &v) in row.iter().enumerate() {
+                columns[i].push(v);
+            }
+        }
+        columns
+    }
 }
 
 impl<'a, T> TraceView<'a, T> {
@@ -128,7 +143,7 @@ impl<'a, T> TraceView<'a, T> {
         &self.values[r * self.width..(r + 1) * self.width]
     }
 
-    pub fn window(&'a self, r: usize) -> TraceWindow<'a, T>  {
+    pub fn window(&'a self, r: usize) -> TraceWindow<'a, T> {
         debug_assert!(r < self.height());
         let last_row = self.height() - 1;
         match r {
@@ -161,7 +176,7 @@ impl<'a, T> TraceView<'a, T> {
         (0..=last_row).map(|r| self.window(r))
     }
 
-    pub fn windows_par_iter(&self) -> impl ParallelIterator<Item = TraceWindow<'_, T>> 
+    pub fn windows_par_iter(&self) -> impl ParallelIterator<Item = TraceWindow<'_, T>>
     where
         T: Sync,
     {

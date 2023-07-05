@@ -5,6 +5,7 @@ use plonky2::fri::reduction_strategies::FriReductionStrategy;
 use plonky2::fri::{FriConfig, FriParams};
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+use plonky2::util::log2_strict;
 
 use crate::plonky2::challenger::{Plonky2Challenger, Plonky2RecursiveChallenger};
 use crate::plonky2::parser::{RecursiveStarkParser, StarkParser};
@@ -18,6 +19,11 @@ pub struct StarkyConfig<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>
     /// `degree / |F|`.
     pub num_challenges: usize,
 
+    /// The number of bits in the degree of the column polynomials
+    ///
+    /// Number Rows = 2^{degree_bits}
+    pub degree_bits: usize,
+
     pub fri_config: FriConfig,
 
     _marker: core::marker::PhantomData<(F, C)>,
@@ -28,10 +34,12 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>
 {
     /// A typical configuration with a rate of 2, resulting in fast but large proofs.
     /// Targets ~100 bit conjectured security.
-    pub fn standard_fast_config() -> Self {
+    pub fn standard_fast_config(num_rows: usize) -> Self {
+        let degree_bits = log2_strict(num_rows);
         Self {
             security_bits: 100,
             num_challenges: 2,
+            degree_bits,
             fri_config: FriConfig {
                 rate_bits: 1,
                 cap_height: 4,
@@ -43,8 +51,8 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>
         }
     }
 
-    pub(crate) fn fri_params(&self, degree_bits: usize) -> FriParams {
-        self.fri_config.fri_params(degree_bits, false)
+    pub(crate) fn fri_params(&self) -> FriParams {
+        self.fri_config.fri_params(self.degree_bits, false)
     }
 }
 

@@ -4,9 +4,9 @@ use crate::math::prelude::*;
 use crate::trace::StarkTrace;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FibonacchiAir;
+pub struct FibonacciAir;
 
-impl FibonacchiAir {
+impl FibonacciAir {
     pub fn new() -> Self {
         Self {}
     }
@@ -34,13 +34,13 @@ impl FibonacchiAir {
     }
 }
 
-impl Default for FibonacchiAir {
+impl Default for FibonacciAir {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<AP: AirParser> Air<AP> for FibonacchiAir {
+impl<AP: AirParser> Air<AP> for FibonacciAir {
     fn eval(&self, parser: &mut AP) {
         // Check public inputs.
         let pis_constraints = [
@@ -66,6 +66,10 @@ impl<AP: AirParser> Air<AP> for FibonacchiAir {
     fn constraint_degree(&self) -> usize {
         2
     }
+
+    fn width(&self) -> usize {
+        4
+    }
 }
 
 #[cfg(test)]
@@ -80,11 +84,14 @@ mod tests {
         type F = GoldilocksField;
 
         let num_rows = 1 << 5 as usize;
+        let air = FibonacciAir::new();
 
-        let air = FibonacchiAir::new();
-        
-        let public_inputs = [F::ZERO, F::ONE, FibonacchiAir::fibonacci(num_rows - 1, F::ZERO, F::ONE)];
-        let trace = FibonacchiAir::generate_trace(F::ZERO, F::ONE, num_rows);
+        let public_inputs = [
+            F::ZERO,
+            F::ONE,
+            FibonacciAir::fibonacci(num_rows - 1, F::ZERO, F::ONE),
+        ];
+        let trace = FibonacciAir::generate_trace(F::ZERO, F::ONE, num_rows);
 
         for window in trace.windows_iter() {
             assert_eq!(window.local_slice.len(), 4);
