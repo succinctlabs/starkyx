@@ -12,7 +12,7 @@ use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::config::GenericConfig;
 use plonky2::util::timing::TimingTree;
-use plonky2::util::{log2_ceil, log2_strict, transpose};
+use plonky2::util::{log2_ceil, transpose};
 
 use super::config::StarkyConfig;
 use super::Plonky2Stark;
@@ -264,8 +264,8 @@ where
                 let mut parser = StarkParser {
                     local_vars: &get_trace_values_packed(i_start),
                     next_vars: &get_trace_values_packed(i_next_start),
-                    public_inputs: &public_inputs_vars,
-                    challenges: &challenges_vars,
+                    public_inputs: public_inputs_vars,
+                    challenges: challenges_vars,
                     consumer: &mut consumer,
                 };
 

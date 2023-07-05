@@ -92,7 +92,7 @@ impl<T> StarkTrace<T> {
             },
             r if r == last_row => TraceWindow {
                 local_slice: self.row(last_row),
-                next_slice: &self.row(0),
+                next_slice: self.row(0),
                 row: r,
                 is_first_row: false,
                 is_last_row: true,
@@ -156,7 +156,7 @@ impl<'a, T> TraceView<'a, T> {
             },
             r if r == last_row => TraceWindow {
                 local_slice: self.row(last_row),
-                next_slice: &self.row(0),
+                next_slice: self.row(0),
                 row: r,
                 is_first_row: false,
                 is_last_row: true,

@@ -76,8 +76,8 @@ where
         );
 
         let mut parser = StarkParser {
-            local_vars: &local_values,
-            next_vars: &next_values,
+            local_vars: local_values,
+            next_vars: next_values,
             public_inputs: &public_inputs_ext,
             challenges: &challenges_ext,
             consumer: &mut consumer,
@@ -191,7 +191,7 @@ where
             quotient_polys,
         } = &proof.openings;
 
-        let challenges = proof.get_challenges_target(builder, config, &public_inputs, stark);
+        let challenges = proof.get_challenges_target(builder, config, public_inputs, stark);
 
         let degree_bits = proof.recover_degree_bits(config);
 
