@@ -7,6 +7,7 @@ pub mod element;
 pub mod memory;
 pub mod bit;
 pub mod array;
+pub mod u16;
 
 /// Adds serialization and deserialization to a register for converting between the canonical type
 /// and `MemorySlice`.
