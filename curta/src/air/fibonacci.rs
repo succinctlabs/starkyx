@@ -1,5 +1,5 @@
 use super::parser::AirParser;
-use super::Air;
+use super::RAir;
 use crate::math::prelude::*;
 use crate::trace::StarkTrace;
 
@@ -40,7 +40,7 @@ impl Default for FibonacciAir {
     }
 }
 
-impl<AP: AirParser> Air<AP> for FibonacciAir {
+impl<AP: AirParser> RAir<AP> for FibonacciAir {
     fn eval(&self, parser: &mut AP) {
         // Check public inputs.
         let pis_constraints = [
@@ -69,6 +69,14 @@ impl<AP: AirParser> Air<AP> for FibonacciAir {
 
     fn width(&self) -> usize {
         4
+    }
+
+    fn round_lengths(&self) -> Vec<usize> {
+        vec![RAir::<AP>::width(self)]
+    }
+
+    fn num_challenges(&self, _round: usize) -> usize {
+        0
     }
 }
 

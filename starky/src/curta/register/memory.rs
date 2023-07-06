@@ -109,6 +109,7 @@ impl MemorySlice {
         }
     }
 
+    #[inline]
     pub fn eval_slice<'a, AP: AirParser>(&self, parser: &'a AP) -> &'a [AP::Var] {
         match self {
             MemorySlice::Local(index, length) => &parser.local_slice()[*index..*index + length],

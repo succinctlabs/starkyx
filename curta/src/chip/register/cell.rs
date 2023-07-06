@@ -2,4 +2,5 @@
 pub enum CellType {
     U16,
     Bit,
+    Element,
 }

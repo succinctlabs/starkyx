@@ -1,9 +1,9 @@
-use core::fmt::{Debug, Display};
+use core::fmt::Debug;
 
 use crate::math::prelude::*;
 use crate::trace::TraceWindow;
 
-pub trait AirParser: Send + Sized {
+pub trait AirParser: Sized {
     type Field: Field;
 
     type Var: Debug + Copy + 'static;
@@ -67,17 +67,17 @@ pub trait AirParser: Send + Sized {
 }
 
 #[derive(Debug, Clone)]
-pub struct TraceWindowParser<'a, F: Field> {
-    window: TraceWindow<'a, F>,
-    challenge_slice: &'a [F],
-    public_slice: &'a [F],
+pub struct TraceWindowParser<'a, T> {
+    window: TraceWindow<'a, T>,
+    challenge_slice: &'a [T],
+    public_slice: &'a [T],
 }
 
-impl<'a, F: Field> TraceWindowParser<'a, F> {
+impl<'a, T> TraceWindowParser<'a, T> {
     pub fn new(
-        window: TraceWindow<'a, F>,
-        challenge_slice: &'a [F],
-        public_slice: &'a [F],
+        window: TraceWindow<'a, T>,
+        challenge_slice: &'a [T],
+        public_slice: &'a [T],
     ) -> Self {
         Self {
             window,
@@ -87,7 +87,7 @@ impl<'a, F: Field> TraceWindowParser<'a, F> {
     }
 }
 
-impl<'a, F: Field + Display> AirParser for TraceWindowParser<'a, F> {
+impl<'a, F: Field> AirParser for TraceWindowParser<'a, F> {
     type Field = F;
 
     type Var = F;
@@ -112,7 +112,7 @@ impl<'a, F: Field + Display> AirParser for TraceWindowParser<'a, F> {
         assert_eq!(
             constraint,
             F::ZERO,
-            "Nonzero constraint: {} at row: {}",
+            "Nonzero constraint: {:?} at row: {}",
             constraint,
             self.window.row
         );
@@ -123,7 +123,7 @@ impl<'a, F: Field + Display> AirParser for TraceWindowParser<'a, F> {
             assert_eq!(
                 constraint,
                 F::ZERO,
-                "Nonzero constraint: {} at row: {}",
+                "Nonzero constraint: {:?} at row: {}",
                 constraint,
                 self.window.row
             );
@@ -135,7 +135,7 @@ impl<'a, F: Field + Display> AirParser for TraceWindowParser<'a, F> {
             assert_eq!(
                 constraint,
                 F::ZERO,
-                "Nonzero constraint at first row: {}",
+                "Nonzero constraint at first row: {:?}",
                 constraint
             );
         }
@@ -146,7 +146,7 @@ impl<'a, F: Field + Display> AirParser for TraceWindowParser<'a, F> {
             assert_eq!(
                 constraint,
                 F::ZERO,
-                "Nonzero constraint at last row: {}",
+                "Nonzero constraint at last row: {:?}",
                 constraint
             );
         }
@@ -170,5 +170,84 @@ impl<'a, F: Field + Display> AirParser for TraceWindowParser<'a, F> {
 
     fn mul(&mut self, a: Self::Var, b: Self::Var) -> Self::Var {
         a * b
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct MulParser<AP: AirParser> {
+    parser: AP,
+    multiplier: AP::Var,
+}
+
+impl<AP: AirParser> AirParser for MulParser<AP> {
+    type Field = AP::Field;
+    type Var = AP::Var;
+
+    fn local_slice(&self) -> &[Self::Var] {
+        self.parser.local_slice()
+    }
+
+    fn next_slice(&self) -> &[Self::Var] {
+        self.parser.next_slice()
+    }
+
+    fn challenge_slice(&self) -> &[Self::Var] {
+        self.parser.challenge_slice()
+    }
+
+    fn public_slice(&self) -> &[Self::Var] {
+        self.parser.public_slice()
+    }
+
+    fn constraint(&mut self, constraint: Self::Var) {
+        let constr = self.parser.mul(constraint, self.multiplier);
+        self.parser.constraint(constr);
+    }
+
+    fn constraint_transition(&mut self, constraint: Self::Var) {
+        let constr = self.parser.mul(constraint, self.multiplier);
+        self.parser.constraint_transition(constr);
+    }
+
+    fn constraint_first_row(&mut self, constraint: Self::Var) {
+        let constr = self.parser.mul(constraint, self.multiplier);
+        self.parser.constraint_first_row(constr);
+    }
+
+    fn constraint_last_row(&mut self, constraint: Self::Var) {
+        let constr = self.parser.mul(constraint, self.multiplier);
+        self.parser.constraint_last_row(constr);
+    }
+
+    fn constant(&mut self, value: Self::Field) -> Self::Var {
+        self.parser.constant(value)
+    }
+
+    fn add(&mut self, a: Self::Var, b: Self::Var) -> Self::Var {
+        self.parser.add(a, b)
+    }
+
+    fn sub(&mut self, a: Self::Var, b: Self::Var) -> Self::Var {
+        self.parser.sub(a, b)
+    }
+
+    fn neg(&mut self, a: Self::Var) -> Self::Var {
+        self.parser.neg(a)
+    }
+
+    fn mul(&mut self, a: Self::Var, b: Self::Var) -> Self::Var {
+        self.parser.mul(a, b)
+    }
+
+    fn add_const(&mut self, a: Self::Var, b: Self::Field) -> Self::Var {
+        self.parser.add_const(a, b)
+    }
+
+    fn sub_const(&mut self, a: Self::Var, b: Self::Field) -> Self::Var {
+        self.parser.sub_const(a, b)
+    }
+
+    fn mul_const(&mut self, a: Self::Var, b: Self::Field) -> Self::Var {
+        self.parser.mul_const(a, b)
     }
 }

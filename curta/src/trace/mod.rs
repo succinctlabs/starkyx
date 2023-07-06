@@ -1,4 +1,5 @@
 pub mod generator;
+pub mod writer;
 
 use core::slice::ChunksExact;
 
@@ -32,25 +33,30 @@ pub struct TraceWindow<'a, T> {
 }
 
 impl<T> StarkTrace<T> {
+    #[inline]
     pub fn from_rows(values: Vec<T>, width: usize) -> Self {
         debug_assert_eq!(values.len() % width, 0);
         Self { values, width }
     }
 
+    #[inline]
     pub fn height(&self) -> usize {
         self.values.len() / self.width
     }
 
+    #[inline]
     pub fn row(&self, r: usize) -> &[T] {
         debug_assert!(r < self.height());
         &self.values[r * self.width..(r + 1) * self.width]
     }
 
+    #[inline]
     pub fn row_mut(&mut self, r: usize) -> &mut [T] {
         debug_assert!(r < self.height());
         &mut self.values[r * self.width..(r + 1) * self.width]
     }
 
+    #[inline]
     /// Expand the trace, to a minimum of `height` rows.
     pub fn expand_to_height(&mut self, height: usize)
     where
@@ -61,10 +67,12 @@ impl<T> StarkTrace<T> {
         }
     }
 
+    #[inline]
     pub fn rows(&self) -> ChunksExact<'_, T> {
         self.values.chunks_exact(self.width)
     }
 
+    #[inline]
     pub fn view(&self) -> TraceView<'_, T> {
         TraceView {
             values: &self.values,
@@ -72,6 +80,7 @@ impl<T> StarkTrace<T> {
         }
     }
 
+    #[inline]
     pub fn view_mut(&mut self) -> TraceViewMut<'_, T> {
         TraceViewMut {
             values: &mut self.values,
@@ -79,10 +88,11 @@ impl<T> StarkTrace<T> {
         }
     }
 
-    pub fn window(&self, r: usize) -> TraceWindow<'_, T> {
-        debug_assert!(r < self.height());
+    #[inline]
+    pub fn window(&self, row: usize) -> TraceWindow<'_, T> {
+        debug_assert!(row < self.height());
         let last_row = self.height() - 1;
-        match r {
+        match row {
             0 => TraceWindow {
                 local_slice: self.row(0),
                 next_slice: self.row(1),
@@ -106,11 +116,14 @@ impl<T> StarkTrace<T> {
             },
         }
     }
+
+    #[inline]
     pub fn windows_iter(&self) -> impl Iterator<Item = TraceWindow<'_, T>> {
         let last_row = self.height() - 1;
         (0..=last_row).map(|r| self.window(r))
     }
 
+    #[inline]
     pub fn windows_par_iter(&self) -> impl ParallelIterator<Item = TraceWindow<'_, T>>
     where
         T: Sync,
@@ -134,15 +147,18 @@ impl<T> StarkTrace<T> {
 }
 
 impl<'a, T> TraceView<'a, T> {
+    #[inline]
     pub fn height(&self) -> usize {
         self.values.len() / self.width
     }
 
+    #[inline]
     pub fn row(&self, r: usize) -> &[T] {
         debug_assert!(r < self.height());
         &self.values[r * self.width..(r + 1) * self.width]
     }
 
+    #[inline]
     pub fn window(&'a self, r: usize) -> TraceWindow<'a, T> {
         debug_assert!(r < self.height());
         let last_row = self.height() - 1;

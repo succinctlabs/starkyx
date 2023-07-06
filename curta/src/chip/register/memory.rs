@@ -1,3 +1,8 @@
+use core::hash::Hash;
+
+use crate::air::parser::AirParser;
+use crate::trace::{TraceView, TraceViewMut};
+
 /// A contiguous chunk of memory in the trace and Stark data.
 /// Corresponds to a slice in vars.local_values, vars.next_values, vars.public_inputs,
 /// or vars.challenges.
@@ -60,5 +65,68 @@ impl MemorySlice {
     #[inline]
     pub const fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    #[inline]
+    pub fn eval_slice<'a, AP: AirParser>(&self, parser: &'a AP) -> &'a [AP::Var] {
+        match self {
+            MemorySlice::Local(index, length) => &parser.local_slice()[*index..*index + length],
+            MemorySlice::Next(index, length) => &parser.next_slice()[*index..*index + length],
+            MemorySlice::Public(index, length) => &parser.public_slice()[*index..*index + length],
+            MemorySlice::Challenge(index, length) => {
+                &parser.challenge_slice()[*index..*index + length]
+            }
+        }
+    }
+
+    #[inline]
+    pub fn read<'a, T: Copy>(&self, trace_view: &'a TraceView<T>, row_index: usize) -> &'a [T] {
+        match self {
+            MemorySlice::Local(index, length) => {
+                &trace_view.row(row_index)[*index..*index + length]
+            }
+            MemorySlice::Next(index, length) => {
+                &trace_view.row(row_index + 1)[*index..*index + length]
+            }
+            MemorySlice::Public(_, _) => unimplemented!("Cannot assign to public inputs"),
+            MemorySlice::Challenge(_, _) => unimplemented!("Cannot assign to challenges"),
+        }
+    }
+
+    /// Assigns a value to the location specified by the memory slice
+    ///
+    /// The values are read from `value` starting at `local_index`. The new local index is returned.
+    #[inline]
+    pub fn assign<T: Copy>(
+        &self,
+        trace_view: &mut TraceViewMut<T>,
+        local_index: usize,
+        value: &[T],
+        row_index: usize,
+    ) -> usize {
+        let value = &value[local_index..local_index + self.len()];
+        match self {
+            MemorySlice::Local(index, length) => {
+                trace_view.row_mut(row_index)[*index..*index + length].copy_from_slice(value);
+            }
+            MemorySlice::Next(index, length) => {
+                trace_view.row_mut(row_index + 1)[*index..*index + length].copy_from_slice(value);
+            }
+            MemorySlice::Public(_, _) => unimplemented!("Cannot assign to public inputs"),
+            MemorySlice::Challenge(_, _) => unimplemented!("Cannot assign to challenges"),
+        }
+        local_index + self.len()
+    }
+}
+
+impl Hash for MemorySlice {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.get_range().hash(state);
+        match self {
+            MemorySlice::Local(_, _) => "local".hash(state),
+            MemorySlice::Next(_, _) => "next".hash(state),
+            MemorySlice::Public(_, _) => "public".hash(state),
+            MemorySlice::Challenge(_, _) => "challenge".hash(state),
+        }
     }
 }
