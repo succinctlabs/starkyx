@@ -2,11 +2,11 @@ use self::cell::CellType;
 use self::memory::MemorySlice;
 use crate::air::parser::AirParser;
 
+pub mod array;
+pub mod bit;
 pub mod cell;
 pub mod element;
 pub mod memory;
-pub mod bit;
-pub mod array;
 pub mod u16;
 
 /// Adds serialization and deserialization to a register for converting between the canonical type

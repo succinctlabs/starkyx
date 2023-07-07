@@ -173,13 +173,19 @@ impl<'a, F: Field> AirParser for TraceWindowParser<'a, F> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct MulParser<AP: AirParser> {
-    parser: AP,
-    multiplier: AP::Var,
+#[derive(Debug)]
+pub struct MulParser<'a, AP: AirParser> {
+    pub parser: &'a mut AP,
+    pub multiplier: AP::Var,
 }
 
-impl<AP: AirParser> AirParser for MulParser<AP> {
+impl<'a, AP: AirParser> MulParser<'a, AP> {
+    pub fn new(parser: &'a mut AP, multiplier: AP::Var) -> Self {
+        Self { parser, multiplier }
+    }
+}
+
+impl<'a, AP: AirParser> AirParser for MulParser<'a, AP> {
     type Field = AP::Field;
     type Var = AP::Var;
 

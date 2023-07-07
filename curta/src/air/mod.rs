@@ -6,6 +6,11 @@ pub mod fibonacci;
 
 use parser::AirParser;
 
+pub trait AirConstraint<AP: AirParser> {
+    /// Evaluation of the vanishing polynomials.
+    fn eval(&self, parser: &mut AP);
+}
+
 pub trait RAir<AP: AirParser> {
     /// Evaluation of the vanishing polynomials.
     fn eval(&self, parser: &mut AP);

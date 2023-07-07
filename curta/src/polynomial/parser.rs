@@ -1,7 +1,7 @@
 use itertools::Itertools;
 
 use super::Polynomial;
-use crate::air::parser::AirParser;
+use crate::air::parser::{AirParser, MulParser};
 
 pub trait PolynomialParser: AirParser {
     fn zero_poly(&mut self) -> Polynomial<Self::Var> {
@@ -156,5 +156,103 @@ pub trait PolynomialParser: AirParser {
             }
         }
         Polynomial::from_coefficients(result)
+    }
+}
+
+impl<'a, AP: PolynomialParser> PolynomialParser for MulParser<'a, AP> {
+    fn zero_poly(&mut self) -> Polynomial<Self::Var> {
+        self.parser.zero_poly()
+    }
+
+    fn constant_poly(&mut self, polynomial: &Polynomial<Self::Field>) -> Polynomial<Self::Var> {
+        self.parser.constant_poly(polynomial)
+    }
+
+    fn poly_add(
+        &mut self,
+        a: &Polynomial<Self::Var>,
+        b: &Polynomial<Self::Var>,
+    ) -> Polynomial<Self::Var> {
+        self.parser.poly_add(a, b)
+    }
+
+    fn poly_sub(
+        &mut self,
+        a: &Polynomial<Self::Var>,
+        b: &Polynomial<Self::Var>,
+    ) -> Polynomial<Self::Var> {
+        self.parser.poly_sub(a, b)
+    }
+
+    fn poly_add_poly_const(
+        &mut self,
+        a: &Polynomial<Self::Var>,
+        b: &Polynomial<Self::Field>,
+    ) -> Polynomial<Self::Var> {
+        self.parser.poly_add_poly_const(a, b)
+    }
+
+    fn poly_sub_poly_const(
+        &mut self,
+        a: &Polynomial<Self::Var>,
+        b: &Polynomial<Self::Field>,
+    ) -> Polynomial<Self::Var> {
+        self.parser.poly_sub_poly_const(a, b)
+    }
+
+    fn poly_scalar_add(
+        &mut self,
+        a: &Polynomial<Self::Var>,
+        b: &Self::Var,
+    ) -> Polynomial<Self::Var> {
+        self.parser.poly_scalar_add(a, b)
+    }
+
+    fn poly_scalar_sub(
+        &mut self,
+        a: &Polynomial<Self::Var>,
+        b: &Self::Var,
+    ) -> Polynomial<Self::Var> {
+        self.parser.poly_scalar_sub(a, b)
+    }
+
+    fn poly_sub_const(
+        &mut self,
+        a: &Polynomial<Self::Var>,
+        b: &Self::Field,
+    ) -> Polynomial<Self::Var> {
+        self.parser.poly_sub_const(a, b)
+    }
+
+    fn poly_mul(
+        &mut self,
+        a: &Polynomial<Self::Var>,
+        b: &Polynomial<Self::Var>,
+    ) -> Polynomial<Self::Var> {
+        self.parser.poly_mul(a, b)
+    }
+
+    fn poly_scalar_mul(
+        &mut self,
+        a: &Polynomial<Self::Var>,
+        b: &Self::Var,
+    ) -> Polynomial<Self::Var> {
+        self.parser.poly_scalar_mul(a, b)
+    }
+
+    fn poly_mul_const(
+        &mut self,
+        a: &Polynomial<Self::Var>,
+        b: &Self::Field,
+    ) -> Polynomial<Self::Var> {
+        self.parser.poly_mul_const(a, b)
+    }
+
+    fn poly_mul_poly_const(
+        &mut self,
+        a: &Polynomial<Self::Var>,
+        b: &Polynomial<Self::Field>,
+    ) -> Polynomial<Self::Var> {
+        self.parser.poly_mul_poly_const(a, b)
     }
 }

@@ -5,7 +5,7 @@ use std::sync::RwLock;
 use super::StarkTrace;
 use crate::air::parser::TraceWindowParser;
 use crate::chip::register::memory::MemorySlice;
-use crate::chip::register::Register;
+use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::*;
 
 #[derive(Debug)]
@@ -37,7 +37,12 @@ impl<F: Field> TraceWriter<F> {
     }
 
     #[inline]
-    pub fn write_batch(&self, memory_slices: &[MemorySlice], values: &[F], row_index: usize) {
+    pub fn write_unsafe_batch_raw(
+        &self,
+        memory_slices: &[MemorySlice],
+        values: &[F],
+        row_index: usize,
+    ) {
         let mut trace = self.0.trace.write().unwrap();
         memory_slices.iter().fold(0, |local_index, memory_slice| {
             memory_slice.assign(&mut trace.view_mut(), local_index, values, row_index)
@@ -45,9 +50,30 @@ impl<F: Field> TraceWriter<F> {
     }
 
     #[inline]
-    pub fn write(&self, memory_slice: MemorySlice, value: &[F], row_index: usize) {
+    pub fn write_unsafe_raw(&self, memory_slice: MemorySlice, value: &[F], row_index: usize) {
         let mut trace = self.0.trace.write().unwrap();
         memory_slice.assign(&mut trace.view_mut(), 0, value, row_index);
+    }
+
+    #[inline]
+    pub fn write_batch<T: RegisterSerializable>(
+        &self,
+        data_slice: &[T],
+        values: &[F],
+        row_index: usize,
+    ) {
+        let mut trace = self.0.trace.write().unwrap();
+        data_slice.iter().fold(0, |local_index, data| {
+            data.register()
+                .assign(&mut trace.view_mut(), local_index, values, row_index)
+        });
+    }
+
+    #[inline]
+    pub fn write<T: RegisterSerializable>(&self, data: &T, value: &[F], row_index: usize) {
+        let mut trace = self.0.trace.write().unwrap();
+        data.register()
+            .assign(&mut trace.view_mut(), 0, value, row_index);
     }
 }
 
