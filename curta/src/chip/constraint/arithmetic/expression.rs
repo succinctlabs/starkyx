@@ -3,6 +3,7 @@ use core::ops::{Add, Mul, Sub};
 
 use super::expression_slice::ArithmeticExpressionSlice;
 use crate::air::parser::AirParser;
+use crate::chip::register::memory::MemorySlice;
 use crate::math::prelude::*;
 /// An abstract representation of an arithmetic expression.
 ///
@@ -47,6 +48,10 @@ impl<F: Field> ArithmeticExpression<F> {
 
     pub fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {
         self.expression.eval(parser)
+    }
+
+    pub fn registers(&self) -> Vec<MemorySlice> {
+        self.expression.registers()
     }
 }
 

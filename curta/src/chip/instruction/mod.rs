@@ -5,8 +5,11 @@ use std::collections::HashSet;
 use super::register::memory::MemorySlice;
 use crate::math::prelude::*;
 use crate::trace::writer::TraceWriter;
+pub mod assign;
+pub mod bit;
 pub mod empty;
 pub mod node;
+pub mod set;
 pub mod write;
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
@@ -27,7 +30,7 @@ pub trait Instruction<F: Field>: 'static + Send + Sync + Debug + Clone {
     /// Writes the instruction to the trace.
     ///
     /// This method is called after all the inputs returned from `inputs` have been written to the trace.
-    fn write(&self, writer: &TraceWriter<F>);
+    fn write(&self, writer: &TraceWriter<F>, row_index: usize);
 
     fn constraint_degree(&self) -> usize {
         2
@@ -35,5 +38,22 @@ pub trait Instruction<F: Field>: 'static + Send + Sync + Debug + Clone {
 
     fn id(&self) -> InstructionId {
         InstructionId::CustomInstruction(self.trace_layout())
+    }
+}
+
+/// An instruction that only consists of constraints
+pub trait ConstraintInstruction: 'static + Clone + Debug + Send + Sync {}
+
+impl<F: Field, C: ConstraintInstruction> Instruction<F> for C {
+    fn trace_layout(&self) -> Vec<MemorySlice> {
+        vec![]
+    }
+
+    fn inputs(&self) -> HashSet<MemorySlice> {
+        HashSet::new()
+    }
+
+    fn write(&self, _writer: &TraceWriter<F>, _row_index: usize) {
+        unimplemented!()
     }
 }

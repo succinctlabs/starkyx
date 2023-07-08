@@ -1,4 +1,5 @@
 use super::{AirBuilder, AirParameters};
+use crate::chip::instruction::set::InstructionSet;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cell::CellType;
 use crate::chip::register::memory::MemorySlice;
@@ -44,12 +45,10 @@ impl<L: AirParameters> AirBuilder<L> {
             CellType::Element => self.get_local_memory(T::size_of()),
             CellType::U16 => self.get_local_u16_memory(T::size_of()),
             CellType::Bit => {
-                unimplemented!("Bit registers are not yet supported")
-                // let reg = self.get_local_memory(T::size_of());
-                // let constraint_expr =
-                //     ConstraintExpression::from(reg.expr() * (reg.expr() - F::ONE));
-                // self.constraints.push(Constraint::All(constraint_expr));
-                // reg
+                let reg = self.get_local_memory(T::size_of());
+                let constraint = InstructionSet::bits(&reg);
+                self.register_from_instruction_set(constraint);
+                reg
             }
         };
         T::from_register(register)
@@ -61,11 +60,10 @@ impl<L: AirParameters> AirBuilder<L> {
             CellType::Element => self.get_local_memory(size_of),
             CellType::U16 => self.get_local_u16_memory(size_of),
             CellType::Bit => {
-                unimplemented!("Bit registers are not yet supported")
-                // let reg = self.get_local_memory(size_of);
-                // let constraint = Constraint::All((reg.expr() * (reg.expr() - F::ONE)).into());
-                // self.constraints.push(constraint);
-                // reg
+                let reg = self.get_local_memory(size_of);
+                let constraint = InstructionSet::bits(&reg);
+                self.register_from_instruction_set(constraint);
+                reg
             }
         };
         ArrayRegister::<T>::from_register_unsafe(register)
@@ -78,29 +76,12 @@ impl<L: AirParameters> AirBuilder<L> {
             CellType::Element => self.get_next_memory(T::size_of()),
             CellType::U16 => self.get_next_u16_memory(T::size_of()),
             CellType::Bit => {
-                unimplemented!("Bit registers are not yet supported")
-                // let reg = self.get_next_memory(T::size_of());
-                // let constraint = Constraint::All((reg.expr() * (reg.expr() - F::ONE)).into());
-                // self.constraints.push(constraint);
-                // reg
+                let reg = self.get_next_memory(T::size_of());
+                let constraint = InstructionSet::bits(&reg);
+                self.register_from_instruction_set(constraint);
+                reg
             }
         };
         T::from_register(register)
     }
-
-    // /// This method should be applied to any data that needs to be manually written to the trace by
-    // /// the user during trace generation. It currently does not do any actual checks, but this can
-    // /// be changed later.
-    // pub fn write_data<T: Register>(&mut self, data: &T) -> Result<()> {
-    //     let register = data.register();
-    //     let label = InstructionId::Write(*register);
-    //     let existing_value = self
-    //         .instruction_indices
-    //         .insert(label, self.write_instructions.len());
-    //     if existing_value.is_some() {
-    //         return Err(anyhow!("Instruction label already exists"));
-    //     }
-    //     self.write_instructions.push(WriteInstruction(*register));
-    //     Ok(())
-    // }
 }

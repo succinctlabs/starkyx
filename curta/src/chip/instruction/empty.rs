@@ -8,11 +8,11 @@ use crate::math::prelude::*;
 
 /// A defult instruction set that contains no custom instructions
 #[derive(Clone, Debug)]
-pub struct EmptyInstructionSet<F> {
+pub struct EmptyInstruction<F> {
     _marker: core::marker::PhantomData<F>,
 }
 
-impl<F: Field> Instruction<F> for EmptyInstructionSet<F> {
+impl<F: Field> Instruction<F> for EmptyInstruction<F> {
     fn trace_layout(&self) -> Vec<MemorySlice> {
         Vec::new()
     }
@@ -21,9 +21,9 @@ impl<F: Field> Instruction<F> for EmptyInstructionSet<F> {
         HashSet::new()
     }
 
-    fn write(&self, _writer: &crate::trace::writer::TraceWriter<F>) {}
+    fn write(&self, _writer: &crate::trace::writer::TraceWriter<F>, _row_index: usize) {}
 }
 
-impl<F: Field, AP: AirParser<Field = F>> AirConstraint<AP> for EmptyInstructionSet<F> {
+impl<F: Field, AP: AirParser<Field = F>> AirConstraint<AP> for EmptyInstruction<F> {
     fn eval(&self, _parser: &mut AP) {}
 }

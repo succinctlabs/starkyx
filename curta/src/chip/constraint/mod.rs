@@ -1,22 +1,30 @@
 use self::arithmetic::expression::ArithmeticExpression;
 use self::arithmetic::ArithmeticConstraint;
+use super::instruction::set::InstructionSet;
 use super::AirParameters;
 use crate::air::parser::{AirParser, MulParser};
 use crate::air::AirConstraint;
 pub mod arithmetic;
 
+#[derive(Debug, Clone)]
 pub enum Constraint<L: AirParameters> {
-    Instruction(L::Instruction),
+    Instruction(InstructionSet<L::Field, L::Instruction>),
     MulInstruction(ArithmeticExpression<L::Field>, L::Instruction),
     Arithmetic(ArithmeticConstraint<L::Field>),
 }
 
 impl<L: AirParameters> Constraint<L> {
+    pub(crate) fn from_instruction_set(
+        instruction: InstructionSet<L::Field, L::Instruction>,
+    ) -> Self {
+        Self::Instruction(instruction)
+    }
+
     pub fn from_instruction<I>(instruction: I) -> Self
     where
         L::Instruction: From<I>,
     {
-        Self::Instruction(instruction.into())
+        Self::Instruction(InstructionSet::CustomInstruction(instruction.into()))
     }
 }
 
@@ -35,5 +43,11 @@ where
             }
             Constraint::Arithmetic(constraint) => constraint.eval(parser),
         }
+    }
+}
+
+impl<L: AirParameters> From<ArithmeticConstraint<L::Field>> for Constraint<L> {
+    fn from(constraint: ArithmeticConstraint<L::Field>) -> Self {
+        Self::Arithmetic(constraint)
     }
 }

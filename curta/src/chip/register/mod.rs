@@ -1,6 +1,9 @@
 use self::cell::CellType;
 use self::memory::MemorySlice;
+use super::constraint::arithmetic::expression::ArithmeticExpression;
+use super::constraint::arithmetic::expression_slice::ArithmeticExpressionSlice;
 use crate::air::parser::AirParser;
+use crate::math::prelude::*;
 
 pub mod array;
 pub mod bit;
@@ -53,10 +56,23 @@ pub trait Register:
         }
         Self::from_register_unsafe(register)
     }
-    // fn expr<F: RichField + Extendable<D>, const D: usize>(&self) -> ArithmeticExpression<F, D> {
-    //     ArithmeticExpression {
-    //         expression: ArithmeticExpressionSlice::from_raw_register(*self.register()),
-    //         size: Self::size_of(),
-    //     }
-    // }
+
+    fn expr<F: Field>(&self) -> ArithmeticExpression<F> {
+        ArithmeticExpression {
+            expression: ArithmeticExpressionSlice::from_raw_register(*self.register()),
+            size: Self::size_of(),
+        }
+    }
+}
+
+impl RegisterSerializable for MemorySlice {
+    const CELL: CellType = CellType::Element;
+
+    fn register(&self) -> &MemorySlice {
+        self
+    }
+
+    fn from_register_unsafe(register: MemorySlice) -> Self {
+        register
+    }
 }

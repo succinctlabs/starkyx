@@ -1,3 +1,4 @@
+use self::constraint::Constraint;
 use self::instruction::Instruction;
 use crate::air::parser::{AirParser, MulParser};
 use crate::air::AirConstraint;
@@ -34,5 +35,5 @@ where
 }
 
 pub struct Chip<L: AirParameters> {
-    constraints: Vec<L::Instruction>,
+    constraints: Vec<Constraint<L>>,
 }

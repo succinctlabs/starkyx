@@ -47,6 +47,32 @@ impl<F: Field> ArithmeticExpressionSlice<F> {
         ArithmeticExpressionSlice::Const(constants)
     }
 
+    pub fn registers(&self) -> Vec<MemorySlice> {
+        match self {
+            ArithmeticExpressionSlice::Input(input) => vec![*input],
+            ArithmeticExpressionSlice::Const(_) => vec![],
+            ArithmeticExpressionSlice::Add(left, right) => {
+                let mut left = left.registers();
+                let mut right = right.registers();
+                left.append(&mut right);
+                left
+            }
+            ArithmeticExpressionSlice::Sub(left, right) => {
+                let mut left = left.registers();
+                let mut right = right.registers();
+                left.append(&mut right);
+                left
+            }
+            ArithmeticExpressionSlice::ScalarMul(_, expr) => expr.registers(),
+            ArithmeticExpressionSlice::Mul(left, right) => {
+                let mut left = left.registers();
+                let mut right = right.registers();
+                left.append(&mut right);
+                left
+            }
+        }
+    }
+
     pub fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {
         match self {
             ArithmeticExpressionSlice::Input(input) => input.eval_slice(parser).to_vec(),
