@@ -1,6 +1,5 @@
-//! Generating the trace for the AIR given by a Chip. 
-//! 
+//! Generating the trace for the AIR given by a Chip.
+//!
 
-
-pub mod writer;
 pub mod generator;
+pub mod writer;

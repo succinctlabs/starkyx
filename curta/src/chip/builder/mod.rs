@@ -5,6 +5,7 @@ use super::constraint::Constraint;
 use super::instruction::node::{InstructionGraph, InstructionNode, WrappedInstruction};
 use super::instruction::set::InstructionSet;
 use super::instruction::Instruction;
+use super::register::memory::MemorySlice;
 use super::register::Register;
 use super::{AirParameters, Chip};
 
@@ -83,10 +84,12 @@ impl<L: AirParameters> AirBuilder<L> {
                         nodes[row_index].add_dep(other_node);
                     }
                 }
-                if inputs.contains(&output.next()) {
-                    for row_index in 1..self.num_rows {
-                        let other_node = WrappedInstruction::new(other.clone(), row_index);
-                        nodes[row_index - 1].add_dep(other_node);
+                if let MemorySlice::Next(index, length) = output {
+                    if inputs.contains(&MemorySlice::Local(index, length)) {
+                        for row_index in 1..self.num_rows {
+                            let other_node = WrappedInstruction::new(other.clone(), row_index);
+                            nodes[row_index - 1].add_dep(other_node);
+                        }
                     }
                 }
             }

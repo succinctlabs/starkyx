@@ -7,11 +7,11 @@ use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::*;
-use crate::trace::StarkTrace;
+use crate::trace::AirTrace;
 
 #[derive(Debug)]
 pub struct WriterData<T> {
-    trace: RwLock<StarkTrace<T>>,
+    trace: RwLock<AirTrace<T>>,
     challenges: Vec<T>,
     public_inputs: Vec<T>,
     height: usize,
@@ -22,7 +22,7 @@ pub struct TraceWriter<T>(pub Arc<WriterData<T>>);
 
 impl<T> TraceWriter<T> {
     #[inline]
-    pub fn new(trace: StarkTrace<T>, public_inputs: Vec<T>, challenges: Vec<T>) -> Self {
+    pub fn new(trace: AirTrace<T>, public_inputs: Vec<T>, challenges: Vec<T>) -> Self {
         let height = trace.height();
         Self(Arc::new(WriterData {
             trace: RwLock::new(trace),

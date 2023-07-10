@@ -1,11 +1,12 @@
 use super::constraint::Constraint;
 use super::{AirParameters, Chip};
 use crate::air::parser::AirParser;
-use crate::air::{RAir, AirConstraint};
+use crate::air::{AirConstraint, RAir};
 
-impl<AP: AirParser, L: AirParameters<Field = AP::Field>> RAir<AP> for Chip<L> 
-where Constraint<L> : AirConstraint<AP> {
-
+impl<AP: AirParser, L: AirParameters<Field = AP::Field>> RAir<AP> for Chip<L>
+where
+    Constraint<L>: AirConstraint<AP>,
+{
     /// Evaluation of the vanishing polynomials.
     fn eval(&self, parser: &mut AP) {
         for constraint in self.constraints.iter() {

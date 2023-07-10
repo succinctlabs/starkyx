@@ -222,9 +222,8 @@ mod tests {
         S: Plonky2Stark<F, D>,
         S::Air: for<'a> RAir<StarkParser<'a, F, C::FE, C::FE, D, D>>
             + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
-        T: for<'a> TraceGenerator<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
-        for<'a> <T as TraceGenerator<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>>::Error:
-            Into<anyhow::Error>,
+        T: TraceGenerator<F, S::Air>,
+        T::Error: Into<anyhow::Error>,
         [(); S::COLUMNS]:,
     {
         let proof = StarkyProver::<F, C, F, <F as Packable>::Packing, D, 1>::prove(
@@ -256,13 +255,8 @@ mod tests {
         C::Hasher: AlgebraicHasher<F>,
         S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
             + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
-        T: 'static
-            + Debug
-            + Sync
-            + Send
-            + for<'a> TraceGenerator<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
-        for<'a> <T as TraceGenerator<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>>::Error:
-            Into<anyhow::Error>,
+        T: Debug + Send + Sync + 'static + TraceGenerator<F, S::Air>,
+        T::Error: Into<anyhow::Error>,
         [(); S::COLUMNS]:,
     {
         let config_rec = CircuitConfig::standard_recursion_config();
@@ -301,7 +295,7 @@ mod tests {
 
         let num_rows = 1 << 5 as usize;
         let air = FibonacciAir::new();
-        let stark = Starky::<FibonacciAir, 4>::new(air);
+        let stark = Starky::<FibonacciAir, 2>::new(air);
 
         let public_inputs = [
             F::ZERO,

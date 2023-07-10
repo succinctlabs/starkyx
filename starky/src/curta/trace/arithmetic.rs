@@ -7,7 +7,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::util::transpose;
 use plonky2_maybe_rayon::*;
 
-use super::types::StarkTraceGenerator;
+use super::types::AirTraceGenerator;
 use super::writer::TraceWriter;
 use crate::curta::builder::InstructionId;
 use crate::curta::chip::{Chip, ChipStark, StarkParameters};
@@ -161,7 +161,7 @@ impl<
         F: RichField + Extendable<D>,
         E: CubicParameters<F>,
         const D: usize,
-    > StarkTraceGenerator<ChipStark<L, F, D>, F, D, 2> for ArithmeticGenerator<F, E, D>
+    > AirTraceGenerator<ChipStark<L, F, D>, F, D, 2> for ArithmeticGenerator<F, E, D>
 {
     fn generate_round(
         &mut self,

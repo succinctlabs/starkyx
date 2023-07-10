@@ -5,7 +5,7 @@ use plonky2::util::transpose;
 
 use crate::curta::stark::Stark;
 
-pub trait StarkTraceGenerator<
+pub trait AirTraceGenerator<
     S: Stark<F, D, R>,
     F: RichField + Extendable<D>,
     const D: usize,
@@ -40,8 +40,8 @@ impl<F: RichField> ConstantGenerator<F> {
     }
 }
 
-impl<S: Stark<F, D, 1>, F: RichField + Extendable<D>, const D: usize>
-    StarkTraceGenerator<S, F, D, 1> for ConstantGenerator<F>
+impl<S: Stark<F, D, 1>, F: RichField + Extendable<D>, const D: usize> AirTraceGenerator<S, F, D, 1>
+    for ConstantGenerator<F>
 {
     fn generate_round(
         &mut self,

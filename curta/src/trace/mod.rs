@@ -5,7 +5,7 @@ use core::slice::ChunksExact;
 use crate::maybe_rayon::*;
 /// A stark trace which is stored as a matrix in row major order
 #[derive(Debug, Clone)]
-pub struct StarkTrace<T> {
+pub struct AirTrace<T> {
     values: Vec<T>,
     width: usize,
 }
@@ -31,7 +31,7 @@ pub struct TraceWindow<'a, T> {
     pub is_last_row: bool,
 }
 
-impl<T> StarkTrace<T> {
+impl<T> AirTrace<T> {
     #[inline]
     pub fn from_rows(values: Vec<T>, width: usize) -> Self {
         debug_assert_eq!(values.len() % width, 0);

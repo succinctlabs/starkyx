@@ -58,8 +58,8 @@ where
     P: PackedField<Scalar = F>,
     S: Plonky2Stark<F, D> + Debug + Send + 'static,
     S::Air: for<'a> RAir<StarkParser<'a, F, F, P, D, 1>>,
-    T: Debug + Send + Sync + 'static + for<'a> TraceGenerator<StarkParser<'a, F, F, P, D, 1>>,
-    for<'a> <T as TraceGenerator<StarkParser<'a, F, F, P, D, 1>>>::Error: Into<anyhow::Error>,
+    T: Debug + Send + Sync + 'static + TraceGenerator<F, S::Air>,
+    T::Error: Into<anyhow::Error>,
     [(); S::COLUMNS]:,
 {
     fn dependencies(&self) -> Vec<Target> {

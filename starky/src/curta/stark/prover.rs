@@ -23,7 +23,7 @@ use super::Stark;
 use crate::config::StarkConfig;
 use crate::constraint_consumer::ConstraintConsumer;
 use crate::curta::air::starky::StarkParser;
-use crate::curta::trace::types::StarkTraceGenerator;
+use crate::curta::trace::types::AirTraceGenerator;
 
 pub fn prove<F, C, S, T, const D: usize, const R: usize>(
     stark: S,
@@ -37,7 +37,7 @@ where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
     S: Stark<F, D, R>,
-    T: StarkTraceGenerator<S, F, D, R>,
+    T: AirTraceGenerator<S, F, D, R>,
     [(); S::COLUMNS]:,
     [(); S::PUBLIC_INPUTS]:,
     [(); S::CHALLENGES]:,

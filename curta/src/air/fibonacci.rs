@@ -1,7 +1,7 @@
 use super::parser::AirParser;
 use super::RAir;
 use crate::math::prelude::*;
-use crate::trace::StarkTrace;
+use crate::trace::AirTrace;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FibonacciAir;
@@ -15,7 +15,7 @@ impl FibonacciAir {
         (0..n).fold((x0, x1), |x, _| (x.1, x.0 + x.1)).1
     }
 
-    pub fn generate_trace<F: Field>(x0: F, x1: F, num_rows: usize) -> StarkTrace<F> {
+    pub fn generate_trace<F: Field>(x0: F, x1: F, num_rows: usize) -> AirTrace<F> {
         let trace_rows = (0..num_rows)
             .scan([x0, x1], |acc, _| {
                 let tmp = *acc;
@@ -26,7 +26,7 @@ impl FibonacciAir {
             .flat_map(|arr| arr)
             .collect::<Vec<_>>();
         assert!(trace_rows.len() == num_rows * 2);
-        let trace = StarkTrace::from_rows(trace_rows, 2);
+        let trace = AirTrace::from_rows(trace_rows, 2);
         trace
     }
 }
