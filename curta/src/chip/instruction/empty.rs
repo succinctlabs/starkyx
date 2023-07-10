@@ -4,6 +4,7 @@ use super::Instruction;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::register::memory::MemorySlice;
+use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 
 /// A defult instruction set that contains no custom instructions
@@ -21,7 +22,7 @@ impl<F: Field> Instruction<F> for EmptyInstruction<F> {
         HashSet::new()
     }
 
-    fn write(&self, _writer: &crate::trace::writer::TraceWriter<F>, _row_index: usize) {}
+    fn write(&self, _writer: &TraceWriter<F>, _row_index: usize) {}
 }
 
 impl<F: Field, AP: AirParser<Field = F>> AirConstraint<AP> for EmptyInstruction<F> {

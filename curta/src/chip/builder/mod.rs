@@ -1,14 +1,12 @@
 pub mod arithmetic;
 pub mod memory;
 
-use super::constraint::arithmetic::expression::ArithmeticExpression;
 use super::constraint::Constraint;
-use super::instruction::assign::{AssignInstruction, AssignType};
-use super::instruction::node::{InstructionNode, WrappedInstruction};
+use super::instruction::node::{InstructionGraph, InstructionNode, WrappedInstruction};
 use super::instruction::set::InstructionSet;
 use super::instruction::Instruction;
 use super::register::Register;
-use super::AirParameters;
+use super::{AirParameters, Chip};
 
 #[derive(Debug, Clone)]
 pub struct AirBuilder<L: AirParameters> {
@@ -18,7 +16,7 @@ pub struct AirBuilder<L: AirParameters> {
     next_arithmetic_index: usize,
     next_index: usize,
     instructions: Vec<InstructionSet<L::Field, L::Instruction>>,
-    nodes: Vec<InstructionNode<L::Field, L::Instruction>>,
+    nodes: Vec<InstructionNode<L>>,
     constraints: Vec<Constraint<L>>,
 }
 
@@ -72,7 +70,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let inputs = instruction.inputs();
         let mut nodes = (0..self.num_rows)
             .map(|row_index| {
-                let node = InstructionNode::new((instruction.clone(), row_index).into());
+                let node = InstructionNode::<L>::new((instruction.clone(), row_index).into());
                 node
             })
             .collect::<Vec<_>>();
@@ -99,15 +97,71 @@ impl<L: AirParameters> AirBuilder<L> {
         self.nodes.append(&mut nodes);
     }
 
-    pub fn set_to_expression<T: Register>(
-        &mut self,
-        data: &T,
-        expression: ArithmeticExpression<L::Field>,
-    ) {
-        let instr = AssignInstruction::new(expression.clone(), *data.register(), AssignType::All);
-        self.register_from_instruction_set(InstructionSet::Assign(instr));
+    pub fn build(self) -> (Chip<L>, InstructionGraph<L>) {
+        (
+            Chip {
+                constraints: self.constraints,
+            },
+            InstructionGraph::<L>::new(&self.nodes),
+        )
     }
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use plonky2::field::goldilocks_field::GoldilocksField;
+
+    use super::*;
+    use crate::air::fibonacci::FibonacciAir;
+    use crate::air::parser::{AirParser, TraceWindowParser};
+    use crate::air::RAir;
+    use crate::chip::instruction::empty::EmptyInstruction;
+    use crate::chip::register::element::ElementRegister;
+    use crate::chip::register::RegisterSerializable;
+    use crate::math::prelude::*;
+
+    pub struct FibonacciParameters<F>(core::marker::PhantomData<F>);
+
+    impl<F: Field> AirParameters for FibonacciParameters<F> {
+        type Field = F;
+        type Instruction = EmptyInstruction<F>;
+        const NUM_ARITHMETIC_COLUMNS: usize = 0;
+        const NUM_FREE_COLUMNS: usize = 2;
+    }
+
+    #[test]
+    fn test_builder_fibonacci_air() {
+        type F = GoldilocksField;
+        type L = FibonacciParameters<F>;
+
+        let num_rows = 1 << 5 as usize;
+
+        let mut builder = AirBuilder::<L>::new(num_rows);
+        let x_0 = builder.alloc::<ElementRegister>();
+        let x_1 = builder.alloc::<ElementRegister>();
+
+        // x0' <- x1
+        let first_col_constraint = x_0.next().expr() - x_1.expr();
+        builder.assert_expression_zero_transition(first_col_constraint);
+        // x1' <- x0 + x1
+        let second_col_constraint = x_1.next().expr() - (x_0.expr() + x_1.expr());
+        builder.assert_expression_zero_transition(second_col_constraint);
+
+        let (air, _) = builder.build();
+
+        let public_inputs = [
+            F::ZERO,
+            F::ONE,
+            FibonacciAir::fibonacci(num_rows - 1, F::ZERO, F::ONE),
+        ];
+
+        let trace = FibonacciAir::generate_trace(F::ZERO, F::ONE, num_rows);
+
+        for window in trace.windows_iter() {
+            assert_eq!(window.local_slice.len(), 2);
+            let mut window_parser = TraceWindowParser::new(window, &[], &public_inputs);
+            assert_eq!(window_parser.local_slice().len(), 2);
+            air.eval(&mut window_parser);
+        }
+    }
+}

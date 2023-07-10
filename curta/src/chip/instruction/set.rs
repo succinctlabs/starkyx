@@ -7,9 +7,8 @@ use super::{Instruction, InstructionId};
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::register::memory::MemorySlice;
+use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
-use crate::trace::writer::TraceWriter;
-
 #[derive(Debug, Clone)]
 pub enum InstructionSet<F, I> {
     CustomInstruction(I),

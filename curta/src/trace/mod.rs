@@ -1,5 +1,4 @@
 pub mod generator;
-pub mod writer;
 
 use core::slice::ChunksExact;
 

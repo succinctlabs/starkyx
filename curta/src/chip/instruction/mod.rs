@@ -3,8 +3,9 @@ use core::hash::Hash;
 use std::collections::HashSet;
 
 use super::register::memory::MemorySlice;
+use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
-use crate::trace::writer::TraceWriter;
+
 pub mod assign;
 pub mod bit;
 pub mod empty;

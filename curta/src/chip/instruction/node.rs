@@ -6,11 +6,14 @@ use dep_graph::{DepGraph, Node};
 use super::set::InstructionSet;
 use super::{Instruction, InstructionId};
 use crate::chip::register::memory::MemorySlice;
+use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
-pub type InstructionNode<F, I> = Node<WrappedInstruction<F, I>>;
+pub type InstructionNode<L> =
+    Node<WrappedInstruction<<L as AirParameters>::Field, <L as AirParameters>::Instruction>>;
 
-pub type InstructionGraph<F, I> = DepGraph<WrappedInstruction<F, I>>;
+pub type InstructionGraph<L> =
+    DepGraph<WrappedInstruction<<L as AirParameters>::Field, <L as AirParameters>::Instruction>>;
 
 #[derive(Debug, Clone)]
 pub struct WrappedInstruction<F, I> {

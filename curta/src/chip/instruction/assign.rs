@@ -7,8 +7,8 @@ use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::chip::register::memory::MemorySlice;
+use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
-use crate::trace::writer::TraceWriter;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AssignType {

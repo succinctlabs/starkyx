@@ -2,16 +2,17 @@ use alloc::sync::Arc;
 use core::ops::Deref;
 use std::sync::RwLock;
 
-use super::StarkTrace;
 use crate::air::parser::TraceWindowParser;
 use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::*;
+use crate::trace::StarkTrace;
 
 #[derive(Debug)]
 pub struct WriterData<T> {
     trace: RwLock<StarkTrace<T>>,
+    challenges: Vec<T>,
     public_inputs: Vec<T>,
     height: usize,
 }
@@ -21,11 +22,12 @@ pub struct TraceWriter<T>(pub Arc<WriterData<T>>);
 
 impl<T> TraceWriter<T> {
     #[inline]
-    pub fn new(trace: StarkTrace<T>, public_inputs: Vec<T>) -> Self {
+    pub fn new(trace: StarkTrace<T>, public_inputs: Vec<T>, challenges: Vec<T>) -> Self {
         let height = trace.height();
         Self(Arc::new(WriterData {
             trace: RwLock::new(trace),
             public_inputs,
+            challenges,
             height,
         }))
     }
@@ -41,7 +43,7 @@ impl<F: Field> TraceWriter<F> {
     pub fn read<R: Register>(&self, register: R, row_index: usize) -> R::Value<F> {
         let trace = self.0.trace.read().unwrap();
         let window = trace.window(row_index);
-        let parser = TraceWindowParser::new(window, &self.0.public_inputs, &[]);
+        let parser = TraceWindowParser::new(window, &self.0.challenges, &self.0.public_inputs);
         register.eval(&parser)
     }
 
@@ -52,7 +54,7 @@ impl<F: Field> TraceWriter<F> {
     ) -> Vec<F> {
         let trace = self.0.trace.read().unwrap();
         let window = trace.window(row_index);
-        let mut parser = TraceWindowParser::new(window, &self.0.public_inputs, &[]);
+        let mut parser = TraceWindowParser::new(window, &&self.0.challenges, &self.0.public_inputs);
         expression.eval(&mut parser)
     }
 

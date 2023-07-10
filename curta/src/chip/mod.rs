@@ -1,7 +1,5 @@
 use self::constraint::Constraint;
 use self::instruction::Instruction;
-use crate::air::parser::{AirParser, MulParser};
-use crate::air::AirConstraint;
 use crate::math::prelude::*;
 
 pub mod air;
@@ -11,6 +9,7 @@ pub mod ec;
 pub mod field;
 pub mod instruction;
 pub mod register;
+pub mod trace;
 
 pub trait AirParameters {
     type Field: Field;
@@ -26,12 +25,6 @@ pub trait AirParameters {
 
     /// The type of instruction that the chip supports
     type Instruction: Instruction<Self::Field>;
-}
-
-pub trait Parser<L: AirParameters>: AirParser
-where
-    L::Instruction: AirConstraint<Self> + for<'a> AirConstraint<MulParser<'a, Self>>,
-{
 }
 
 pub struct Chip<L: AirParameters> {
