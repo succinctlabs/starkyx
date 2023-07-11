@@ -1,4 +1,4 @@
-use core::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
+use core::ops::{Add, Mul, Sub};
 
 use super::field::{Field, Ring};
 
