@@ -7,6 +7,8 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use self::consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
+use super::field::cubic::parameters::CubicParameters;
+use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::AirParser;
 use crate::polynomial::parser::PolynomialParser;
 
@@ -118,6 +120,15 @@ where
 {
 }
 
+impl<'a, F, FE, E: CubicParameters<F>, P, const D: usize, const D2: usize> CubicParser<E>
+    for StarkParser<'a, F, FE, P, D, D2>
+where
+    F: RichField + Extendable<D>,
+    FE: FieldExtension<D2, BaseField = F>,
+    P: PackedField<Scalar = FE>,
+{
+}
+
 impl<'a, F: RichField + Extendable<D>, const D: usize> AirParser
     for RecursiveStarkParser<'a, F, D>
 {
@@ -193,6 +204,11 @@ impl<'a, F: RichField + Extendable<D>, const D: usize> AirParser
 }
 
 impl<'a, F: RichField + Extendable<D>, const D: usize> PolynomialParser
+    for RecursiveStarkParser<'a, F, D>
+{
+}
+
+impl<'a, F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> CubicParser<E>
     for RecursiveStarkParser<'a, F, D>
 {
 }

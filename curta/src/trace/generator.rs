@@ -36,9 +36,7 @@ impl<F: Field, A> TraceGenerator<F, A> for ConstantGenerator<F> {
         _public_inputs: &[F],
     ) -> Result<AirTrace<F>, Self::Error> {
         match round {
-            0 => {
-                Ok(self.trace.clone())
-            }
+            0 => Ok(self.trace.clone()),
             _ => Err(anyhow!("Constant generator has only one round")),
         }
     }

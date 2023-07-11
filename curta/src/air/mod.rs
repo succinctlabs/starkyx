@@ -1,3 +1,4 @@
+pub mod extension;
 pub mod opening;
 pub mod parser;
 

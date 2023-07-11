@@ -48,6 +48,17 @@ impl<T> AirTrace<T> {
     }
 
     #[inline]
+    pub fn new_with_value(width: usize, num_rows: usize, value: T) -> Self
+    where
+        T: Copy,
+    {
+        Self {
+            values: vec![value; width * num_rows],
+            width,
+        }
+    }
+
+    #[inline]
     pub fn from_rows(values: Vec<T>, width: usize) -> Self {
         debug_assert_eq!(values.len() % width, 0);
         Self { values, width }

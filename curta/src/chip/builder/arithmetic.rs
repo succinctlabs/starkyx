@@ -2,7 +2,7 @@ use super::AirBuilder;
 use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::chip::constraint::arithmetic::ArithmeticConstraint;
 use crate::chip::instruction::assign::{AssignInstruction, AssignType};
-use crate::chip::instruction::set::InstructionSet;
+use crate::chip::instruction::set::AirInstruction;
 use crate::chip::register::Register;
 use crate::chip::AirParameters;
 
@@ -101,7 +101,8 @@ impl<L: AirParameters> AirBuilder<L> {
         expression: ArithmeticExpression<L::Field>,
     ) {
         let instr = AssignInstruction::new(expression.clone(), *data.register(), AssignType::All);
-        self.register_from_instruction_set(InstructionSet::Assign(instr));
+        self.register_air_instruction_internal(AirInstruction::Assign(instr))
+            .unwrap();
     }
 
     #[inline]
@@ -111,7 +112,8 @@ impl<L: AirParameters> AirBuilder<L> {
         expression: ArithmeticExpression<L::Field>,
     ) {
         let instr = AssignInstruction::new(expression.clone(), *data.register(), AssignType::First);
-        self.register_from_instruction_set(InstructionSet::Assign(instr));
+        self.register_air_instruction_internal(AirInstruction::Assign(instr))
+            .unwrap();
     }
 
     #[inline]
@@ -121,7 +123,8 @@ impl<L: AirParameters> AirBuilder<L> {
         expression: ArithmeticExpression<L::Field>,
     ) {
         let instr = AssignInstruction::new(expression.clone(), *data.register(), AssignType::Last);
-        self.register_from_instruction_set(InstructionSet::Assign(instr));
+        self.register_air_instruction_internal(AirInstruction::Assign(instr))
+            .unwrap();
     }
 
     #[inline]
@@ -129,9 +132,14 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         data: &T,
         expression: ArithmeticExpression<L::Field>,
-    ) {
-        let instr =
-            AssignInstruction::new(expression.clone(), *data.register(), AssignType::Transition);
-        self.register_from_instruction_set(InstructionSet::Assign(instr));
+    ) -> AirInstruction<L::Field, L::Instruction> {
+        let instr = AirInstruction::Assign(AssignInstruction::new(
+            expression.clone(),
+            *data.register(),
+            AssignType::Transition,
+        ));
+        self.register_air_instruction_internal(instr.clone())
+            .unwrap();
+        instr
     }
 }

@@ -16,7 +16,7 @@ where
 
     /// The maximal constraint degree
     fn constraint_degree(&self) -> usize {
-        todo!()
+        3
     }
 
     /// Columns for each round

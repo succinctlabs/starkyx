@@ -40,6 +40,7 @@ pub trait AirParameters {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Chip<L: AirParameters> {
     constraints: Vec<Constraint<L>>,
 }

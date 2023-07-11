@@ -30,11 +30,23 @@ impl<T> TraceWriter<T> {
     }
 
     #[inline]
+    pub fn new_with_value(width: usize, num_rows: usize, value: T) -> Self
+    where
+        T: Copy,
+    {
+        let height = num_rows;
+        Self(Arc::new(WriterData {
+            trace: RwLock::new(AirTrace::new_with_value(width, num_rows, value)),
+            height,
+        }))
+    }
+
+    #[inline]
     pub fn height(&self) -> usize {
         self.height
     }
 
-    pub fn trace(self) -> AirTrace<T>
+    pub fn trace(&self) -> AirTrace<T>
     where
         T: Clone,
     {

@@ -1,5 +1,5 @@
 use super::{AirBuilder, AirParameters};
-use crate::chip::instruction::set::InstructionSet;
+use crate::chip::instruction::set::AirInstruction;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cell::CellType;
 use crate::chip::register::memory::MemorySlice;
@@ -46,8 +46,8 @@ impl<L: AirParameters> AirBuilder<L> {
             CellType::U16 => self.get_local_u16_memory(T::size_of()),
             CellType::Bit => {
                 let reg = self.get_local_memory(T::size_of());
-                let constraint = InstructionSet::bits(&reg);
-                self.register_from_instruction_set(constraint);
+                let constraint = AirInstruction::bits(&reg);
+                self.register_air_instruction_internal(constraint).unwrap();
                 reg
             }
         };
@@ -61,8 +61,8 @@ impl<L: AirParameters> AirBuilder<L> {
             CellType::U16 => self.get_local_u16_memory(size_of),
             CellType::Bit => {
                 let reg = self.get_local_memory(size_of);
-                let constraint = InstructionSet::bits(&reg);
-                self.register_from_instruction_set(constraint);
+                let constraint = AirInstruction::bits(&reg);
+                self.register_air_instruction_internal(constraint).unwrap();
                 reg
             }
         };
@@ -77,8 +77,8 @@ impl<L: AirParameters> AirBuilder<L> {
             CellType::U16 => self.get_next_u16_memory(T::size_of()),
             CellType::Bit => {
                 let reg = self.get_next_memory(T::size_of());
-                let constraint = InstructionSet::bits(&reg);
-                self.register_from_instruction_set(constraint);
+                let constraint = AirInstruction::bits(&reg);
+                self.register_air_instruction_internal(constraint).unwrap();
                 reg
             }
         };

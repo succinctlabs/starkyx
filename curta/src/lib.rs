@@ -5,6 +5,7 @@
 #![feature(test)]
 #![feature(const_trait_impl)]
 #![feature(const_ops)]
+#![feature(specialization)]
 
 extern crate alloc;
 
