@@ -11,8 +11,11 @@ pub mod instruction;
 pub mod register;
 pub mod trace;
 
+#[const_trait]
 pub trait AirParameters {
     type Field: Field;
+
+    type Challenge: ExtensionField<Self::Field>;
 
     /// The number of columns that need to be ranged-checked to range 0..num_rows
     ///
@@ -25,6 +28,16 @@ pub trait AirParameters {
 
     /// The type of instruction that the chip supports
     type Instruction: Instruction<Self::Field>;
+
+    fn num_columns() -> usize {
+        Self::NUM_ARITHMETIC_COLUMNS + Self::NUM_FREE_COLUMNS
+    }
+
+    fn num_rows_bits() -> usize;
+
+    fn num_rows() -> usize {
+        1 << Self::num_rows_bits()
+    }
 }
 
 pub struct Chip<L: AirParameters> {

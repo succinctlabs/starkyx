@@ -3,6 +3,8 @@ use core::slice;
 use super::algebra::Algebra;
 use super::field::Field;
 
+pub mod cubic;
+
 /// A ring extension of a field with a fixed basis
 pub trait Extension<F: Field>: Algebra<F> {
     /// The dimension (i.e. degree) of the extension

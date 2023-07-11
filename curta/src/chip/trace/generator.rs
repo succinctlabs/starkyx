@@ -1,24 +1,24 @@
+use core::marker::PhantomData;
+use std::sync::RwLock;
+
+use alloc::sync::Arc;
 use anyhow::{Error, Result};
 
-use crate::chip::{Chip, AirParameters};
-use crate::math::prelude::*;
-use crate::trace::generator::TraceGenerator;
+use crate::chip::AirParameters;
+use crate::maybe_rayon::*;
 use crate::trace::AirTrace;
 
-#[derive(Debug, Clone)]
-pub struct CurtaGenerator<L : AirParameters> {
-    pub trace: Option<AirTrace<L::Field>>,
+use super::writer::TraceWriter;
+
+#[derive(Debug)]
+pub struct ArithmeticGenerator<L: AirParameters>{
+    writer: TraceWriter<L::Field>,
 }
 
-impl<L : AirParameters> TraceGenerator<L::Field, Chip<L>> for CurtaGenerator<L> {
-    type Error = Error;
-
-    fn generate_round(
-            &self,
-            air: &Chip<L>,
-            round: usize,
-            challenges: &[L::Field],
-        ) -> Result<AirTrace<L::Field>> {
-        todo!()
+impl<L : ~const AirParameters> ArithmeticGenerator<L> {
+    pub fn new() -> Self {
+        Self {
+            writer : TraceWriter::new(L::num_columns(), L::num_rows()),
+        }
     }
 }

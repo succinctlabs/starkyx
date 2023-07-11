@@ -112,8 +112,8 @@ impl MemorySlice {
             MemorySlice::Next(index, length) => {
                 trace_view.row_mut(row_index + 1)[*index..*index + length].copy_from_slice(value);
             }
-            MemorySlice::Public(_, _) => unimplemented!("Cannot assign to public inputs"),
-            MemorySlice::Challenge(_, _) => unimplemented!("Cannot assign to challenges"),
+            MemorySlice::Public(_, _) => unreachable!("Cannot assign to public inputs"),
+            MemorySlice::Challenge(_, _) => unreachable!("Cannot assign to challenges"),
         }
         local_index + self.len()
     }

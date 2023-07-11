@@ -1,3 +1,4 @@
+use core::hash::{Hash, Hasher};
 use std::collections::HashSet;
 
 use super::assign::AssignInstruction;
@@ -9,6 +10,7 @@ use crate::air::AirConstraint;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
+
 #[derive(Debug, Clone)]
 pub enum InstructionSet<F, I> {
     CustomInstruction(I),
@@ -94,5 +96,23 @@ impl<F, I> InstructionSet<F, I> {
 
     pub fn assign(assignment: AssignInstruction<F>) -> Self {
         InstructionSet::Assign(assignment)
+    }
+}
+
+impl<F: Field, I: Instruction<F>> PartialEq for InstructionSet<F, I> {
+    fn eq(&self, other: &Self) -> bool {
+        self.id() == other.id()
+    }
+}
+
+impl<F: Field, I: Instruction<F>> PartialOrd for InstructionSet<F, I> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.id().partial_cmp(&other.id())
+    }
+}
+
+impl<F: Field, I: Instruction<F>> Hash for InstructionSet<F, I> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id().hash(state);
     }
 }

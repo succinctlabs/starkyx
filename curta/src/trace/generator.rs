@@ -1,8 +1,6 @@
 use anyhow::{anyhow, Error};
 
 use super::AirTrace;
-use crate::air::parser::AirParser;
-use crate::air::RAir;
 use crate::math::prelude::*;
 
 pub trait TraceGenerator<F, A> {
@@ -12,6 +10,7 @@ pub trait TraceGenerator<F, A> {
         air: &A,
         round: usize,
         challenges: &[F],
+        public_inputs: &[F],
     ) -> Result<AirTrace<F>, Self::Error>;
 }
 
@@ -34,9 +33,12 @@ impl<F: Field, A> TraceGenerator<F, A> for ConstantGenerator<F> {
         _air: &A,
         round: usize,
         _challenges: &[F],
+        _public_inputs: &[F],
     ) -> Result<AirTrace<F>, Self::Error> {
         match round {
-            0 => Ok(self.trace.clone()),
+            0 => {
+                Ok(self.trace.clone())
+            }
             _ => Err(anyhow!("Constant generator has only one round")),
         }
     }

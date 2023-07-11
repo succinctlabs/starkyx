@@ -54,7 +54,5 @@ impl<F: Field, C: ConstraintInstruction> Instruction<F> for C {
         HashSet::new()
     }
 
-    fn write(&self, _writer: &TraceWriter<F>, _row_index: usize) {
-        unimplemented!()
-    }
+    fn write(&self, _writer: &TraceWriter<F>, _row_index: usize) {}
 }

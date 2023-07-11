@@ -216,7 +216,7 @@ mod tests {
     >(
         stark: &S,
         config: &StarkyConfig<F, C, D>,
-        trace_generator: &T,
+        trace_generator: &mut T,
         public_inputs: &[F],
     ) where
         S: Plonky2Stark<F, D>,
@@ -304,12 +304,12 @@ mod tests {
         ];
 
         let trace = FibonacciAir::generate_trace(F::ZERO, F::ONE, num_rows);
-        let trace_generator = ConstantGenerator::new(trace);
+        let mut trace_generator = ConstantGenerator::new(trace);
 
         let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
-        test_starky(&stark, &config, &trace_generator, &public_inputs);
+        test_starky(&stark, &config, &mut trace_generator, &public_inputs);
 
         // Test the recursive proof.
         test_recursive_starky(stark, config, trace_generator, &public_inputs);

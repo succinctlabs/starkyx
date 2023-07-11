@@ -4,6 +4,7 @@ use std::sync::RwLock;
 
 use crate::air::parser::TraceWindowParser;
 use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
+use crate::chip::instruction::Instruction;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::*;
@@ -12,8 +13,6 @@ use crate::trace::AirTrace;
 #[derive(Debug)]
 pub struct WriterData<T> {
     trace: RwLock<AirTrace<T>>,
-    challenges: Vec<T>,
-    public_inputs: Vec<T>,
     height: usize,
 }
 
@@ -22,12 +21,10 @@ pub struct TraceWriter<T>(pub Arc<WriterData<T>>);
 
 impl<T> TraceWriter<T> {
     #[inline]
-    pub fn new(trace: AirTrace<T>, public_inputs: Vec<T>, challenges: Vec<T>) -> Self {
-        let height = trace.height();
+    pub fn new(width: usize, num_rows: usize) -> Self {
+        let height = num_rows;
         Self(Arc::new(WriterData {
-            trace: RwLock::new(trace),
-            public_inputs,
-            challenges,
+            trace: RwLock::new(AirTrace::new_with_capacity(width, num_rows)),
             height,
         }))
     }
@@ -36,6 +33,13 @@ impl<T> TraceWriter<T> {
     pub fn height(&self) -> usize {
         self.height
     }
+
+    pub fn trace(self) -> AirTrace<T>
+    where
+        T: Clone,
+    {
+        self.0.trace.read().unwrap().clone()
+    }
 }
 
 impl<F: Field> TraceWriter<F> {
@@ -43,7 +47,7 @@ impl<F: Field> TraceWriter<F> {
     pub fn read<R: Register>(&self, register: R, row_index: usize) -> R::Value<F> {
         let trace = self.0.trace.read().unwrap();
         let window = trace.window(row_index);
-        let parser = TraceWindowParser::new(window, &self.0.challenges, &self.0.public_inputs);
+        let parser = TraceWindowParser::new(window, &[], &[]);
         register.eval(&parser)
     }
 
@@ -54,7 +58,7 @@ impl<F: Field> TraceWriter<F> {
     ) -> Vec<F> {
         let trace = self.0.trace.read().unwrap();
         let window = trace.window(row_index);
-        let mut parser = TraceWindowParser::new(window, &&self.0.challenges, &self.0.public_inputs);
+        let mut parser = TraceWindowParser::new(window, &[], &[]);
         expression.eval(&mut parser)
     }
 
@@ -96,6 +100,11 @@ impl<F: Field> TraceWriter<F> {
         let mut trace = self.0.trace.write().unwrap();
         data.register()
             .assign(&mut trace.view_mut(), 0, value, row_index);
+    }
+
+    #[inline]
+    pub fn write_instruction(&self, instruction: &impl Instruction<F>, row_index: usize) {
+        instruction.write(self, row_index)
     }
 }
 

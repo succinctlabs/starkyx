@@ -6,8 +6,8 @@ use crate::maybe_rayon::*;
 /// A stark trace which is stored as a matrix in row major order
 #[derive(Debug, Clone)]
 pub struct AirTrace<T> {
-    values: Vec<T>,
-    width: usize,
+    pub(crate) values: Vec<T>,
+    pub(crate) width: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -32,6 +32,21 @@ pub struct TraceWindow<'a, T> {
 }
 
 impl<T> AirTrace<T> {
+    pub const fn new(width: usize) -> Self {
+        Self {
+            values: Vec::new(),
+            width,
+        }
+    }
+
+    #[inline]
+    pub fn new_with_capacity(width: usize, num_rows: usize) -> Self {
+        Self {
+            values: Vec::with_capacity(width * num_rows),
+            width,
+        }
+    }
+
     #[inline]
     pub fn from_rows(values: Vec<T>, width: usize) -> Self {
         debug_assert_eq!(values.len() % width, 0);

@@ -3,14 +3,7 @@ use core::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
 use super::field::{Field, Ring};
 
 pub trait Algebra<F: Field>:
-    Ring
-    + From<F>
-    + Add<F, Output = Self>
-    + AddAssign<F>
-    + Sub<F, Output = Self>
-    + SubAssign<F>
-    + Mul<F, Output = Self>
-    + MulAssign<F>
+    Ring + From<F> + Add<F, Output = Self> + Sub<F, Output = Self> + Mul<F, Output = Self>
 {
 }
 

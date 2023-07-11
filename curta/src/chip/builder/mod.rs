@@ -2,10 +2,7 @@ pub mod arithmetic;
 pub mod memory;
 
 use super::constraint::Constraint;
-use super::instruction::node::{InstructionGraph, InstructionNode, WrappedInstruction};
 use super::instruction::set::InstructionSet;
-use super::instruction::Instruction;
-use super::register::memory::MemorySlice;
 use super::register::Register;
 use super::{AirParameters, Chip};
 
@@ -17,7 +14,6 @@ pub struct AirBuilder<L: AirParameters> {
     next_arithmetic_index: usize,
     next_index: usize,
     instructions: Vec<InstructionSet<L::Field, L::Instruction>>,
-    nodes: Vec<InstructionNode<L>>,
     constraints: Vec<Constraint<L>>,
 }
 
@@ -30,7 +26,6 @@ impl<L: AirParameters> AirBuilder<L> {
             local_arithmetic_index: 0,
             next_arithmetic_index: 0,
             instructions: Vec::new(),
-            nodes: Vec::new(),
             constraints: Vec::new(),
         }
     }
@@ -61,51 +56,18 @@ impl<L: AirParameters> AirBuilder<L> {
         self.constraints
             .push(Constraint::from_instruction_set(instruction.clone()));
 
-        // If the instruction doesn't write to the trace, do nothing, otherwise,
-        // add the instruction to the instruction dependency graph.
-        if instruction.trace_layout().len() == 0 {
-            return;
-        }
-
-        // Add the instruction to the dependency graph
-        let inputs = instruction.inputs();
-        let mut nodes = (0..self.num_rows)
-            .map(|row_index| {
-                let node = InstructionNode::<L>::new((instruction.clone(), row_index).into());
-                node
-            })
-            .collect::<Vec<_>>();
-
-        for other in self.instructions.iter() {
-            for output in other.trace_layout() {
-                if inputs.contains(&output) {
-                    for row_index in 0..self.num_rows {
-                        let other_node = WrappedInstruction::new(other.clone(), row_index);
-                        nodes[row_index].add_dep(other_node);
-                    }
-                }
-                if let MemorySlice::Next(index, length) = output {
-                    if inputs.contains(&MemorySlice::Local(index, length)) {
-                        for row_index in 1..self.num_rows {
-                            let other_node = WrappedInstruction::new(other.clone(), row_index);
-                            nodes[row_index - 1].add_dep(other_node);
-                        }
-                    }
-                }
-            }
-        }
         // Add instruction to the instruction list
         self.instructions.push(instruction.clone());
-        // Add all the nodes to the node list
-        self.nodes.append(&mut nodes);
     }
 
-    pub fn build(self) -> (Chip<L>, InstructionGraph<L>) {
+    pub fn build(self) -> (Chip<L>, ()) {
+        // Create the instruction graph
+        for instruction in self.instructions.iter() {}
         (
             Chip {
                 constraints: self.constraints,
             },
-            InstructionGraph::<L>::new(&self.nodes),
+            (),
         )
     }
 }
@@ -125,11 +87,16 @@ mod tests {
 
     pub struct FibonacciParameters<F>(core::marker::PhantomData<F>);
 
-    impl<F: Field> AirParameters for FibonacciParameters<F> {
+    impl<F: Field> const AirParameters for FibonacciParameters<F> {
         type Field = F;
+        type Challenge = F;
         type Instruction = EmptyInstruction<F>;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
         const NUM_FREE_COLUMNS: usize = 2;
+
+        fn num_rows_bits() -> usize {
+            5
+        }
     }
 
     #[test]
