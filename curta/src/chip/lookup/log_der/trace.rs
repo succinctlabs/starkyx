@@ -67,7 +67,7 @@ impl<F: PrimeField> TraceWriter<F> {
         for row in trace.rows() {
             for value in row[values_idx.0..values_idx.1].iter() {
                 let index = table_index(*value);
-                assert!(index < 1 << 16);
+                assert!(index < num_rows);
                 multiplicities[index] += F::ONE;
             }
         }

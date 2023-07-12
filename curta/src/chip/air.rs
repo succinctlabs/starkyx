@@ -23,11 +23,11 @@ where
     fn round_lengths(&self) -> Vec<usize> {
         let total = L::num_columns();
         let execution_trace_length = self.execution_trace_length;
-        let execution_trace_length = total - execution_trace_length;
-        if execution_trace_length == 0 {
+        let extended_trace_length = total - execution_trace_length;
+        if extended_trace_length == 0 {
             return vec![total];
         }
-        vec![execution_trace_length, total - execution_trace_length]
+        vec![execution_trace_length, extended_trace_length]
     }
 
     /// The number of challenges after each round
