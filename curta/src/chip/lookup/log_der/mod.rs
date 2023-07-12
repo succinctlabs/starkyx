@@ -3,6 +3,8 @@
 //!
 
 use crate::chip::builder::AirBuilder;
+use crate::chip::constraint::Constraint;
+use crate::chip::lookup::Lookup;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::extension::ExtensionRegister;
@@ -32,11 +34,12 @@ impl<L: AirParameters> AirBuilder<L>
 where
     [(); L::Challenge::D]:,
 {
-    pub(crate) fn lookup_log_derivative(
+    pub fn lookup_log_derivative(
         &mut self,
         table: &ElementRegister,
         values: &ArrayRegister<ElementRegister>,
     ) {
+        // Allocate memory for the lookup
         let challenge = self.alloc_challenge::<ExtensionRegister<{ L::Challenge::D }>>();
         let multiplicities = self.alloc_array::<ElementRegister>(1);
         let multiplicity_table_log = self.alloc::<ExtensionRegister<{ L::Challenge::D }>>();
@@ -45,17 +48,23 @@ where
         let log_lookup_accumulator = self.alloc::<ExtensionRegister<{ L::Challenge::D }>>();
         let table = ArrayRegister::from_element(*table);
 
-        self.lookup_data
-            .push(super::Lookup::LogDerivative(LogLookup {
-                challenge,
-                table,
-                values: *values,
-                multiplicities,
-                multiplicity_table_log,
-                row_accumulators,
-                log_lookup_accumulator,
-                _marker: core::marker::PhantomData,
-            }));
+        let lookup_data = Lookup::LogDerivative(LogLookup {
+            challenge,
+            table,
+            values: *values,
+            multiplicities,
+            multiplicity_table_log,
+            row_accumulators,
+            log_lookup_accumulator,
+            _marker: core::marker::PhantomData,
+        });
+
+        // Add the lookup constraints
+        self.constraints
+            .push(Constraint::lookup(lookup_data.clone()));
+
+        // Add the lookup to the list of lookups
+        self.lookup_data.push(lookup_data);
     }
 
     pub(crate) fn lookup_log_derivative_split_table(

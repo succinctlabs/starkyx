@@ -1,6 +1,10 @@
 pub mod generator;
 
-use core::slice::ChunksExact;
+use core::slice::{ChunksExact, ChunksExactMut};
+
+use plonky2_maybe_rayon::rayon::slice::{
+    ChunksExact as ParChunksExact, ChunksExactMut as ParChunksExactMut,
+};
 
 use crate::maybe_rayon::*;
 /// A stark trace which is stored as a matrix in row major order
@@ -95,6 +99,27 @@ impl<T> AirTrace<T> {
     #[inline]
     pub fn rows(&self) -> ChunksExact<'_, T> {
         self.values.chunks_exact(self.width)
+    }
+
+    #[inline]
+    pub fn rows_mut(&mut self) -> ChunksExactMut<'_, T> {
+        self.values.chunks_exact_mut(self.width)
+    }
+
+    #[inline]
+    pub fn rows_par(&self) -> ParChunksExact<'_, T>
+    where
+        T: Send + Sync,
+    {
+        self.values.par_chunks_exact(self.width)
+    }
+
+    #[inline]
+    pub fn rows_par_mut(&mut self) -> ParChunksExactMut<'_, T>
+    where
+        T: Send + Sync,
+    {
+        self.values.par_chunks_exact_mut(self.width)
     }
 
     #[inline]

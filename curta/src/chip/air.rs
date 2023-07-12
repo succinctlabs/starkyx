@@ -21,12 +21,17 @@ where
 
     /// Columns for each round
     fn round_lengths(&self) -> Vec<usize> {
-        vec![L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS]
+        let total = L::num_columns();
+        let execution_trace_length = self.execution_trace_length;
+        vec![execution_trace_length, total - execution_trace_length]
     }
 
-    /// The number of challenges per round
-    fn num_challenges(&self, _round: usize) -> usize {
-        0
+    /// The number of challenges after each round
+    fn num_challenges(&self, round: usize) -> usize {
+        match round {
+            0 => self.num_challenges,
+            _ => 0,
+        }
     }
     fn width(&self) -> usize {
         L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS

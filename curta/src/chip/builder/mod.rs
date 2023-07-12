@@ -1,5 +1,6 @@
 pub mod arithmetic;
 pub mod memory;
+pub mod range_check;
 
 use alloc::collections::BTreeSet;
 
@@ -27,7 +28,6 @@ where
     pub(crate) instructions: InstructionSet<L>,
     pub(crate) constraints: Vec<Constraint<L>>,
     pub(crate) lookup_data: Vec<Lookup<L::Field, L::Challenge, 1>>,
-    pub(crate) lookup_data_split_table: Vec<Lookup<L::Field, L::Challenge, 2>>,
 }
 
 impl<L: AirParameters> AirBuilder<L>
@@ -45,7 +45,6 @@ where
             instructions: BTreeSet::new(),
             constraints: Vec::new(),
             lookup_data: Vec::new(),
-            lookup_data_split_table: Vec::new(),
         }
     }
 
@@ -89,10 +88,46 @@ where
             })
     }
 
-    pub fn build(self) -> (Chip<L>, InstructionSet<L>) {
+    pub fn build(mut self) -> (Chip<L>, InstructionSet<L>) {
+        let execution_trace_length = self.local_index;
+        // Add the range checks
+        if L::NUM_ARITHMETIC_COLUMNS > 0 {
+            self.arithmetic_range_checks();
+        }
+
+        // Check the number of columns in comparison to config
+        let num_free_columns = self.local_index - L::NUM_ARITHMETIC_COLUMNS; //self.local_index;
+        if num_free_columns > L::NUM_FREE_COLUMNS {
+            panic!(
+                "Not enough free columns. Expected {} free columns, got {}.",
+                num_free_columns,
+                L::NUM_FREE_COLUMNS
+            );
+        } else if num_free_columns < L::NUM_FREE_COLUMNS {
+            println!(
+                "Warning: {} free columns unused",
+                L::NUM_FREE_COLUMNS - num_free_columns
+            );
+        }
+        let num_arithmetic_columns = self.local_arithmetic_index;
+        if num_arithmetic_columns > L::NUM_ARITHMETIC_COLUMNS {
+            panic!(
+                "Not enough arithmetic columns. Expected {} arithmetic columns, got {}.",
+                num_arithmetic_columns,
+                L::NUM_ARITHMETIC_COLUMNS
+            );
+        } else if num_arithmetic_columns < L::NUM_ARITHMETIC_COLUMNS {
+            println!(
+                "Warning: {} arithmetic columns unused",
+                L::NUM_ARITHMETIC_COLUMNS - num_arithmetic_columns
+            );
+        }
+
         (
             Chip {
                 constraints: self.constraints,
+                num_challenges: self.challenge_index,
+                execution_trace_length,
             },
             self.instructions,
         )
@@ -111,7 +146,6 @@ mod tests {
     use crate::chip::register::element::ElementRegister;
     use crate::chip::register::RegisterSerializable;
     use crate::chip::trace::generator::ArithmeticGenerator;
-    use crate::math::prelude::*;
     use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
     use crate::plonky2::stark::tests::{test_recursive_starky, test_starky};
     use crate::plonky2::stark::Starky;

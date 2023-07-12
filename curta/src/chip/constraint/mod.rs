@@ -1,6 +1,7 @@
 use self::arithmetic::expression::ArithmeticExpression;
 use self::arithmetic::ArithmeticConstraint;
 use super::instruction::set::AirInstruction;
+use super::lookup::Lookup;
 use super::AirParameters;
 use crate::air::parser::{AirParser, MulParser};
 use crate::air::AirConstraint;
@@ -11,6 +12,7 @@ pub enum Constraint<L: AirParameters> {
     Instruction(AirInstruction<L::Field, L::Instruction>),
     MulInstruction(ArithmeticExpression<L::Field>, L::Instruction),
     Arithmetic(ArithmeticConstraint<L::Field>),
+    Lookup(Lookup<L::Field, L::Challenge, 1>),
 }
 
 impl<L: AirParameters> Constraint<L> {
@@ -25,6 +27,10 @@ impl<L: AirParameters> Constraint<L> {
         L::Instruction: From<I>,
     {
         Self::Instruction(AirInstruction::CustomInstruction(instruction.into()))
+    }
+
+    pub fn lookup(lookup: Lookup<L::Field, L::Challenge, 1>) -> Self {
+        Self::Lookup(lookup)
     }
 }
 
@@ -42,6 +48,7 @@ where
                 instruction.eval(&mut mul_parser);
             }
             Constraint::Arithmetic(constraint) => constraint.eval(parser),
+            Constraint::Lookup(lookup) => lookup.eval(parser),
         }
     }
 }

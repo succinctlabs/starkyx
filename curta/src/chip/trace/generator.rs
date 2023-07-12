@@ -1,13 +1,8 @@
-use alloc::sync::Arc;
-use core::marker::PhantomData;
-use std::sync::RwLock;
-
 use anyhow::{Error, Result};
 
 use super::writer::TraceWriter;
 use crate::chip::{AirParameters, Chip};
 use crate::math::prelude::*;
-use crate::maybe_rayon::*;
 use crate::trace::generator::TraceGenerator;
 use crate::trace::AirTrace;
 
@@ -27,8 +22,8 @@ impl<L: ~const AirParameters> ArithmeticGenerator<L> {
         self.writer.clone()
     }
 
-    pub fn trace(&self) -> AirTrace<L::Field> {
-        self.writer.trace().clone()
+    pub fn trace_clone(&self) -> AirTrace<L::Field> {
+        self.writer.read_trace().unwrap().clone()
     }
 }
 
@@ -43,7 +38,7 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
         public_inputs: &[L::Field],
     ) -> Result<AirTrace<L::Field>> {
         match round {
-            0 => Ok(self.trace()),
+            0 => Ok(self.trace_clone()),
             _ => todo!("Implement me"),
         }
     }

@@ -1,6 +1,6 @@
 use alloc::sync::Arc;
 use core::ops::Deref;
-use std::sync::RwLock;
+use std::sync::{LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::air::parser::TraceWindowParser;
 use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
@@ -46,11 +46,15 @@ impl<T> TraceWriter<T> {
         self.height
     }
 
-    pub fn trace(&self) -> AirTrace<T>
+    pub fn read_trace(&self) -> LockResult<RwLockReadGuard<'_, AirTrace<T>>>
     where
         T: Clone,
     {
-        self.0.trace.read().unwrap().clone()
+        self.0.trace.read()
+    }
+
+    pub fn write_trace(&self) -> LockResult<RwLockWriteGuard<'_, AirTrace<T>>> {
+        self.0.trace.write()
     }
 }
 

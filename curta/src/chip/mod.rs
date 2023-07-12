@@ -14,7 +14,7 @@ pub mod trace;
 
 #[const_trait]
 pub trait AirParameters {
-    type Field: Field;
+    type Field: PrimeField;
 
     type Challenge: ExtensionField<Self::Field>;
 
@@ -44,4 +44,6 @@ pub trait AirParameters {
 #[derive(Debug, Clone)]
 pub struct Chip<L: AirParameters> {
     constraints: Vec<Constraint<L>>,
+    execution_trace_length: usize,
+    num_challenges: usize,
 }
