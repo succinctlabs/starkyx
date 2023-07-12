@@ -8,6 +8,7 @@ pub mod constraint;
 pub mod ec;
 pub mod field;
 pub mod instruction;
+pub mod lookup;
 pub mod register;
 pub mod trace;
 

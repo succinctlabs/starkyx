@@ -15,6 +15,15 @@ impl<AP: CubicParser<E>, E: CubicParameters<AP::Field>>
         CubicElement([value, self.zero(), self.zero()])
     }
 
+    fn from_base_slice(&self, values: &[Self::Var]) -> Self::ExtensionVar {
+        assert!(values.len() == 3);
+        CubicElement([values[0], values[1], values[2]])
+    }
+
+    fn as_base_array(&self, value: Self::ExtensionVar) -> [Self::Var; 3] {
+        value.0
+    }
+
     fn one_extension(&mut self) -> Self::ExtensionVar {
         CubicElement([self.one(), self.zero(), self.zero()])
     }

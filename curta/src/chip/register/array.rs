@@ -70,8 +70,31 @@ impl<T: Register> ArrayRegister<T> {
         self.into_iter()
     }
 
-    pub fn eval<AP: AirParser>(&self, parser: &AP) -> Vec<AP::Var> {
+    #[inline]
+    pub fn eval_raw_slice<'a, AP: AirParser>(&self, parser: &'a AP) -> &'a [AP::Var] {
+        self.register().eval_slice(parser)
+    }
+
+    #[inline]
+    pub fn eval<AP: AirParser, I: FromIterator<T::Value<AP::Var>>>(self, parser: &AP) -> I {
+        self.into_iter().map(|r| r.eval(parser)).collect()
+    }
+
+    #[inline]
+    pub fn eval_vec<AP: AirParser>(&self, parser: &AP) -> Vec<AP::Var> {
         self.register().eval_slice(parser).to_vec()
+    }
+
+    #[inline]
+    pub fn eval_array<AP: AirParser, const N: usize>(&self, parser: &AP) -> [T::Value<AP::Var>; N] {
+        assert!(
+            self.len() == N,
+            "Array length mismatch, expected {}, got {}",
+            N,
+            self.len()
+        );
+        let elem_fn = |i| self.get(i).eval(parser);
+        core::array::from_fn(elem_fn)
     }
 }
 

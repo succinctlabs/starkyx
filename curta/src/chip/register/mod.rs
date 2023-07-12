@@ -9,6 +9,7 @@ pub mod array;
 pub mod bit;
 pub mod cell;
 pub mod element;
+pub mod extension;
 pub mod memory;
 pub mod u16;
 
