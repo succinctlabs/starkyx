@@ -9,16 +9,14 @@ use anyhow::{anyhow, Result};
 use super::constraint::Constraint;
 use super::instruction::set::{AirInstruction, InstructionSet};
 use super::lookup::Lookup;
+use super::register::element::ElementRegister;
 use super::register::Register;
 use super::{AirParameters, Chip};
 use crate::chip::instruction::Instruction;
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone)]
-pub struct AirBuilder<L: AirParameters>
-where
-    [(); L::Challenge::D]:,
-{
+pub struct AirBuilder<L: AirParameters> {
     local_index: usize,
     local_arithmetic_index: usize,
     next_arithmetic_index: usize,
@@ -27,13 +25,11 @@ where
     public_inputs_index: usize,
     pub(crate) instructions: InstructionSet<L>,
     pub(crate) constraints: Vec<Constraint<L>>,
-    pub(crate) lookup_data: Vec<Lookup<L::Field, L::Challenge, 1>>,
+    pub(crate) lookup_data: Vec<Lookup<L::Field, L::CubicParams, 1>>,
+    range_table: Option<ElementRegister>,
 }
 
-impl<L: AirParameters> AirBuilder<L>
-where
-    [(); L::Challenge::D]:,
-{
+impl<L: AirParameters> AirBuilder<L> {
     pub const fn new() -> Self {
         Self {
             local_index: L::NUM_ARITHMETIC_COLUMNS,
@@ -45,6 +41,7 @@ where
             instructions: BTreeSet::new(),
             constraints: Vec::new(),
             lookup_data: Vec::new(),
+            range_table: None,
         }
     }
 
@@ -88,6 +85,11 @@ where
             })
     }
 
+    #[inline]
+    pub fn range_fn(element: L::Field) -> usize {
+        element.as_canonical_u64() as usize
+    }
+
     pub fn build(mut self) -> (Chip<L>, InstructionSet<L>) {
         let execution_trace_length = self.local_index;
         // Add the range checks
@@ -128,6 +130,8 @@ where
                 constraints: self.constraints,
                 num_challenges: self.challenge_index,
                 execution_trace_length,
+                lookup_data: self.lookup_data,
+                range_table: self.range_table,
             },
             self.instructions,
         )
@@ -136,6 +140,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::sync::mpsc::channel;
+
     use plonky2::field::goldilocks_field::GoldilocksField;
 
     use super::*;
@@ -144,19 +150,22 @@ mod tests {
     use crate::air::RAir;
     use crate::chip::instruction::empty::EmptyInstruction;
     use crate::chip::register::element::ElementRegister;
+    use crate::chip::register::u16::U16Register;
     use crate::chip::register::RegisterSerializable;
     use crate::chip::trace::generator::ArithmeticGenerator;
+    use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
+    use crate::maybe_rayon::*;
     use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
     use crate::plonky2::stark::tests::{test_recursive_starky, test_starky};
     use crate::plonky2::stark::Starky;
 
     #[derive(Debug, Clone)]
-    pub struct FibonacciParameters<F>(core::marker::PhantomData<F>);
+    pub struct FibonacciParameters;
 
-    impl<F: Field> const AirParameters for FibonacciParameters<F> {
-        type Field = F;
-        type Challenge = F;
-        type Instruction = EmptyInstruction<F>;
+    impl const AirParameters for FibonacciParameters {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
+        type Instruction = EmptyInstruction<GoldilocksField>;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
         const NUM_FREE_COLUMNS: usize = 2;
 
@@ -168,7 +177,7 @@ mod tests {
     #[test]
     fn test_builder_fibonacci_air() {
         type F = GoldilocksField;
-        type L = FibonacciParameters<F>;
+        type L = FibonacciParameters;
 
         let mut builder = AirBuilder::<L>::new();
         let x_0 = builder.alloc::<ElementRegister>();
@@ -187,7 +196,7 @@ mod tests {
             FibonacciAir::fibonacci(L::num_rows() - 1, F::ZERO, F::ONE),
         ];
 
-        let generator = ArithmeticGenerator::<L>::new();
+        let generator = ArithmeticGenerator::<L>::new(&public_inputs);
 
         let writer = generator.new_writer();
 
@@ -198,7 +207,7 @@ mod tests {
             writer.write_instruction(&constr_1, i);
             writer.write_instruction(&constr_2, i);
         }
-        let trace = generator.trace();
+        let trace = generator.trace_clone();
 
         for window in trace.windows_iter() {
             assert_eq!(window.local_slice.len(), 2);
@@ -211,7 +220,7 @@ mod tests {
     #[test]
     fn test_builder_fibonacci_stark() {
         type F = GoldilocksField;
-        type L = FibonacciParameters<F>;
+        type L = FibonacciParameters;
         type SC = PoseidonGoldilocksStarkConfig;
 
         let mut builder = AirBuilder::<L>::new();
@@ -231,7 +240,7 @@ mod tests {
             FibonacciAir::fibonacci(L::num_rows() - 1, F::ZERO, F::ONE),
         ];
 
-        let generator = ArithmeticGenerator::<L>::new();
+        let generator = ArithmeticGenerator::<L>::new(&public_inputs);
 
         let writer = generator.new_writer();
 
@@ -250,5 +259,58 @@ mod tests {
 
         // Test the recursive proof.
         test_recursive_starky(stark, config, generator, &public_inputs);
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct SimpleTestParameters;
+
+    impl const AirParameters for SimpleTestParameters {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
+        type Instruction = EmptyInstruction<GoldilocksField>;
+        const NUM_ARITHMETIC_COLUMNS: usize = 2;
+        const NUM_FREE_COLUMNS: usize = 11;
+
+        fn num_rows_bits() -> usize {
+            16
+        }
+    }
+
+    #[test]
+    fn test_builder_simple_range_check() {
+        type F = GoldilocksField;
+        type L = SimpleTestParameters;
+        type SC = PoseidonGoldilocksStarkConfig;
+
+        let mut builder = AirBuilder::<L>::new();
+        let x_0 = builder.alloc::<U16Register>();
+        let x_1 = builder.alloc::<U16Register>();
+
+        let (air, _) = builder.build();
+
+        let generator = ArithmeticGenerator::<L>::new(&[]);
+
+        let (tx, rx) = channel();
+        for i in 0..L::num_rows() {
+            let writer = generator.new_writer();
+            let handle = tx.clone();
+            rayon::spawn(move || {
+                writer.write(&x_0, &[F::ZERO], i);
+                writer.write(&x_1, &[F::from_canonical_usize(i)], i);
+                handle.send(1).unwrap();
+            });
+        }
+        drop(tx);
+        for msg in rx.iter() {
+            assert!(msg == 1);
+        }
+        let stark = Starky::<_, { L::num_columns() }>::new(air);
+        let config = SC::standard_fast_config(L::num_rows());
+
+        // Generate proof and verify as a stark
+        test_starky(&stark, &config, &generator, &[]);
+
+        // Test the recursive proof.
+        test_recursive_starky(stark, config, generator, &[]);
     }
 }

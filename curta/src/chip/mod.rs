@@ -1,5 +1,8 @@
 use self::constraint::Constraint;
 use self::instruction::Instruction;
+use self::lookup::Lookup;
+use self::register::element::ElementRegister;
+use crate::math::extension::cubic::parameters::CubicParameters;
 use crate::math::prelude::*;
 
 pub mod air;
@@ -14,9 +17,9 @@ pub mod trace;
 
 #[const_trait]
 pub trait AirParameters {
-    type Field: PrimeField;
+    type Field: PrimeField64;
 
-    type Challenge: ExtensionField<Self::Field>;
+    type CubicParams: CubicParameters<Self::Field>;
 
     /// The number of columns that need to be ranged-checked to range 0..num_rows
     ///
@@ -46,4 +49,6 @@ pub struct Chip<L: AirParameters> {
     constraints: Vec<Constraint<L>>,
     execution_trace_length: usize,
     num_challenges: usize,
+    lookup_data: Vec<Lookup<L::Field, L::CubicParams, 1>>,
+    range_table: Option<ElementRegister>,
 }

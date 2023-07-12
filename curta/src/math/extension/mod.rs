@@ -5,6 +5,7 @@ use super::field::Field;
 
 pub mod cubic;
 
+pub use cubic::parameters::CubicParameters;
 /// A ring extension of a field with a fixed basis
 pub trait Extension<F: Field>: Algebra<F> {
     /// The dimension (i.e. degree) of the extension

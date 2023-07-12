@@ -13,6 +13,7 @@ use crate::trace::AirTrace;
 #[derive(Debug)]
 pub struct WriterData<T> {
     trace: RwLock<AirTrace<T>>,
+    public_inputs: Vec<T>,
     height: usize,
 }
 
@@ -21,22 +22,24 @@ pub struct TraceWriter<T>(pub Arc<WriterData<T>>);
 
 impl<T> TraceWriter<T> {
     #[inline]
-    pub fn new(width: usize, num_rows: usize) -> Self {
+    pub fn new(width: usize, num_rows: usize, public_inputs: Vec<T>) -> Self {
         let height = num_rows;
         Self(Arc::new(WriterData {
             trace: RwLock::new(AirTrace::new_with_capacity(width, num_rows)),
+            public_inputs,
             height,
         }))
     }
 
     #[inline]
-    pub fn new_with_value(width: usize, num_rows: usize, value: T) -> Self
+    pub fn new_with_value(width: usize, num_rows: usize, value: T, public_inputs: Vec<T>) -> Self
     where
         T: Copy,
     {
         let height = num_rows;
         Self(Arc::new(WriterData {
             trace: RwLock::new(AirTrace::new_with_value(width, num_rows, value)),
+            public_inputs,
             height,
         }))
     }
@@ -63,7 +66,7 @@ impl<F: Field> TraceWriter<F> {
     pub fn read<R: Register>(&self, register: R, row_index: usize) -> R::Value<F> {
         let trace = self.0.trace.read().unwrap();
         let window = trace.window(row_index);
-        let parser = TraceWindowParser::new(window, &[], &[]);
+        let parser = TraceWindowParser::new(window, &[], &self.public_inputs);
         register.eval(&parser)
     }
 
@@ -74,7 +77,7 @@ impl<F: Field> TraceWriter<F> {
     ) -> Vec<F> {
         let trace = self.0.trace.read().unwrap();
         let window = trace.window(row_index);
-        let mut parser = TraceWindowParser::new(window, &[], &[]);
+        let mut parser = TraceWindowParser::new(window, &[], &self.public_inputs);
         expression.eval(&mut parser)
     }
 

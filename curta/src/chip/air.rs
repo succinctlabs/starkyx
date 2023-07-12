@@ -23,6 +23,10 @@ where
     fn round_lengths(&self) -> Vec<usize> {
         let total = L::num_columns();
         let execution_trace_length = self.execution_trace_length;
+        let execution_trace_length = total - execution_trace_length;
+        if execution_trace_length == 0 {
+            return vec![total];
+        }
         vec![execution_trace_length, total - execution_trace_length]
     }
 

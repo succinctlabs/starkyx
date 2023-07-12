@@ -4,12 +4,8 @@ use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cell::CellType;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
-use crate::math::prelude::*;
 
-impl<L: AirParameters> AirBuilder<L>
-where
-    [(); L::Challenge::D]:,
-{
+impl<L: AirParameters> AirBuilder<L> {
     /// Allocates `size` cells/columns worth of memory and returns it as a `MemorySlice`.
     pub fn get_local_memory(&mut self, size: usize) -> MemorySlice {
         let register = MemorySlice::Local(self.local_index, size);

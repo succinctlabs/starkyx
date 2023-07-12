@@ -14,38 +14,34 @@ use crate::math::prelude::*;
 pub mod constraint;
 pub mod trace;
 
+/// Only supports degree 3 extensions
 #[derive(Debug, Clone)]
-pub struct LogLookup<F: Field, E: ExtensionField<F>, const N: usize>
-where
-    [(); E::D]:,
-{
-    pub(crate) challenge: ExtensionRegister<{ E::D }>,
+pub struct LogLookup<F: Field, E: CubicParameters<F>, const N: usize> {
+    pub(crate) challenge: ExtensionRegister<3>,
     pub(crate) table: ArrayRegister<ElementRegister>,
     pub(crate) values: ArrayRegister<ElementRegister>,
     pub(crate) multiplicities: ArrayRegister<ElementRegister>,
-    pub(crate) multiplicity_table_log: ExtensionRegister<{ E::D }>,
-    pub(crate) row_accumulators: ArrayRegister<ExtensionRegister<{ E::D }>>,
-    pub(crate) log_lookup_accumulator: ExtensionRegister<{ E::D }>,
+    pub(crate) multiplicity_table_log: ExtensionRegister<3>,
+    pub(crate) row_accumulators: ArrayRegister<ExtensionRegister<3>>,
+    pub(crate) log_lookup_accumulator: ExtensionRegister<3>,
+    table_index: fn(F) -> usize,
     _marker: core::marker::PhantomData<(F, E)>,
 }
 
 // LogLookUp Memory allocation
-impl<L: AirParameters> AirBuilder<L>
-where
-    [(); L::Challenge::D]:,
-{
+impl<L: AirParameters> AirBuilder<L> {
     pub fn lookup_log_derivative(
         &mut self,
         table: &ElementRegister,
         values: &ArrayRegister<ElementRegister>,
+        table_index: fn(L::Field) -> usize,
     ) {
         // Allocate memory for the lookup
-        let challenge = self.alloc_challenge::<ExtensionRegister<{ L::Challenge::D }>>();
+        let challenge = self.alloc_challenge::<ExtensionRegister<3>>();
         let multiplicities = self.alloc_array::<ElementRegister>(1);
-        let multiplicity_table_log = self.alloc::<ExtensionRegister<{ L::Challenge::D }>>();
-        let row_accumulators =
-            self.alloc_array::<ExtensionRegister<{ L::Challenge::D }>>(values.len() / 2);
-        let log_lookup_accumulator = self.alloc::<ExtensionRegister<{ L::Challenge::D }>>();
+        let multiplicity_table_log = self.alloc::<ExtensionRegister<3>>();
+        let row_accumulators = self.alloc_array::<ExtensionRegister<3>>(values.len() / 2);
+        let log_lookup_accumulator = self.alloc::<ExtensionRegister<3>>();
         let table = ArrayRegister::from_element(*table);
 
         let lookup_data = Lookup::LogDerivative(LogLookup {
@@ -56,6 +52,7 @@ where
             multiplicity_table_log,
             row_accumulators,
             log_lookup_accumulator,
+            table_index,
             _marker: core::marker::PhantomData,
         });
 
@@ -65,30 +62,5 @@ where
 
         // Add the lookup to the list of lookups
         self.lookup_data.push(lookup_data);
-    }
-
-    pub(crate) fn lookup_log_derivative_split_table(
-        &mut self,
-        table: &ArrayRegister<ElementRegister>,
-        values: &ArrayRegister<ElementRegister>,
-    ) {
-        let challenge = self.alloc_challenge::<ExtensionRegister<{ L::Challenge::D }>>();
-        let multiplicities = self.alloc_array::<ElementRegister>(2);
-        let multiplicity_table_log = self.alloc::<ExtensionRegister<{ L::Challenge::D }>>();
-        let row_accumulators =
-            self.alloc_array::<ExtensionRegister<{ L::Challenge::D }>>(values.len() / 2);
-        let log_lookup_accumulator = self.alloc::<ExtensionRegister<{ L::Challenge::D }>>();
-
-        self.lookup_data_split_table
-            .push(super::Lookup::LogDerivative(LogLookup {
-                challenge,
-                table: *table,
-                values: *values,
-                multiplicities,
-                multiplicity_table_log,
-                row_accumulators,
-                log_lookup_accumulator,
-                _marker: core::marker::PhantomData,
-            }));
     }
 }

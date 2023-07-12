@@ -1,6 +1,8 @@
 use core::fmt::Debug;
 
+use super::extension::cubic::CubicParser;
 use crate::math::prelude::*;
+use crate::polynomial::parser::PolynomialParser;
 use crate::trace::TraceWindow;
 
 pub trait AirParser: Sized {
@@ -173,6 +175,10 @@ impl<'a, F: Field> AirParser for TraceWindowParser<'a, F> {
     }
 }
 
+impl<'a, F: Field> PolynomialParser for TraceWindowParser<'a, F> {}
+
+impl<'a, F: Field, E: CubicParameters<F>> CubicParser<E> for TraceWindowParser<'a, F> {}
+
 #[derive(Debug)]
 pub struct MulParser<'a, AP: AirParser> {
     pub parser: &'a mut AP,
@@ -257,3 +263,6 @@ impl<'a, AP: AirParser> AirParser for MulParser<'a, AP> {
         self.parser.mul_const(a, b)
     }
 }
+
+// TODO: implement parser specific functions
+impl<'a, AP: CubicParser<E>, E: CubicParameters<AP::Field>> CubicParser<E> for MulParser<'a, AP> {}

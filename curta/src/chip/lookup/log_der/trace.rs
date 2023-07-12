@@ -3,9 +3,10 @@ use crate::chip::register::RegisterSerializable;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
+use crate::plonky2::field::cubic::extension::CubicExtension;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct SplitData {
+struct SplitData {
     mid: usize,
     values_range: (usize, usize),
     acc_range: (usize, usize),
@@ -27,10 +28,9 @@ impl SplitData {
         )
     }
 
-    pub(crate) fn split_data<F: Field, E: ExtensionField<F>>(log_data: &LogLookup<F, E, 1>) -> Self
-    where
-        [(); E::D]:,
-    {
+    pub(crate) fn split_data<F: Field, E: CubicParameters<F>>(
+        log_data: &LogLookup<F, E, 1>,
+    ) -> Self {
         let values_idx = log_data.values.register().get_range();
         let acc_idx = log_data.row_accumulators.register().get_range();
         assert!(
@@ -50,22 +50,19 @@ impl SplitData {
 }
 
 impl<F: PrimeField> TraceWriter<F> {
-    pub(crate) fn write_log_lookup<E: ExtensionField<F>>(
+    pub(crate) fn write_log_lookup<E: CubicParameters<F>>(
         &self,
         num_rows: usize,
         lookup_data: &LogLookup<F, E, 1>,
-        table_index: fn(F) -> usize,
-    ) where
-        [(); E::D]:,
-    {
-        let beta = E::from_base_slice(&self.read(lookup_data.challenge, 0));
-
+        beta: CubicExtension<F, E>,
+    ) {
+        let table_index = lookup_data.table_index;
         let values_idx = lookup_data.values.register().get_range();
 
         // Calculate multiplicities
         let mut multiplicities = vec![F::ZERO; num_rows];
 
-        let trace = self.read_trace().unwrap();
+        let trace = self.read_trace().unwrap().clone();
 
         for row in trace.rows() {
             for value in row[values_idx.0..values_idx.1].iter() {
@@ -86,8 +83,8 @@ impl<F: PrimeField> TraceWriter<F> {
             .par_iter()
             .enumerate()
             .map(|(i, x)| {
-                let table = E::from(F::from_canonical_usize(i));
-                E::from(*x) / (beta - table)
+                let table = CubicExtension::from(F::from_canonical_usize(i));
+                CubicExtension::from(*x) / (beta - table)
             })
             .collect::<Vec<_>>();
 
@@ -97,7 +94,7 @@ impl<F: PrimeField> TraceWriter<F> {
         }
 
         // Log accumulator
-        let mut value = E::ZERO;
+        let mut value = CubicExtension::ZERO;
         let split_data = SplitData::split_data(lookup_data);
         let accumulators = self
             .write_trace()
@@ -105,10 +102,10 @@ impl<F: PrimeField> TraceWriter<F> {
             .rows_par_mut()
             .map(|row| {
                 let (values, accumulators) = split_data.split(row);
-                let mut accumumulator = E::ZERO;
+                let mut accumumulator = CubicExtension::ZERO;
                 for (k, pair) in values.chunks(2).enumerate() {
-                    let beta_minus_a = beta - E::from(pair[0]);
-                    let beta_minus_b = beta - E::from(pair[1]);
+                    let beta_minus_a = beta - CubicExtension::from(pair[0]);
+                    let beta_minus_b = beta - CubicExtension::from(pair[1]);
                     accumumulator += beta_minus_a.inverse() + beta_minus_b.inverse();
                     accumulators[3 * k..3 * k + 3].copy_from_slice(accumumulator.as_base_slice());
                 }

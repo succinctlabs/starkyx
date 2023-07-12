@@ -1,8 +1,14 @@
+use alloc::sync::Arc;
+
 use anyhow::{Error, Result};
 
 use super::writer::TraceWriter;
+use crate::chip::lookup::Lookup;
+use crate::chip::register::RegisterSerializable;
 use crate::chip::{AirParameters, Chip};
 use crate::math::prelude::*;
+use crate::maybe_rayon::*;
+use crate::plonky2::field::cubic::extension::CubicExtension;
 use crate::trace::generator::TraceGenerator;
 use crate::trace::AirTrace;
 
@@ -12,9 +18,14 @@ pub struct ArithmeticGenerator<L: AirParameters> {
 }
 
 impl<L: ~const AirParameters> ArithmeticGenerator<L> {
-    pub fn new() -> Self {
+    pub fn new(public_inputs: &[L::Field]) -> Self {
         Self {
-            writer: TraceWriter::new_with_value(L::num_columns(), L::num_rows(), L::Field::ZERO),
+            writer: TraceWriter::new_with_value(
+                L::num_columns(),
+                L::num_rows(),
+                L::Field::ZERO,
+                public_inputs.to_vec(),
+            ),
         }
     }
 
@@ -24,6 +35,10 @@ impl<L: ~const AirParameters> ArithmeticGenerator<L> {
 
     pub fn trace_clone(&self) -> AirTrace<L::Field> {
         self.writer.read_trace().unwrap().clone()
+    }
+
+    pub fn strong_count(&self) -> usize {
+        Arc::strong_count(&self.writer.0)
     }
 }
 
@@ -35,11 +50,53 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
         air: &Chip<L>,
         round: usize,
         challenges: &[L::Field],
-        public_inputs: &[L::Field],
+        _public_inputs: &[L::Field],
     ) -> Result<AirTrace<L::Field>> {
         match round {
-            0 => Ok(self.trace_clone()),
-            _ => todo!("Implement me"),
+            0 => {
+                let trace = self.trace_clone();
+                let execution_trace_values = trace
+                    .rows_par()
+                    .flat_map(|row| row[..air.execution_trace_length].to_vec())
+                    .collect::<Vec<_>>();
+                Ok(AirTrace {
+                    values: execution_trace_values,
+                    width: air.execution_trace_length,
+                })
+            }
+            1 => {
+                let num_rows = L::num_rows();
+
+                // Write the range check table
+                if let Some(table) = &air.range_table {
+                    for i in 0..num_rows {
+                        self.writer
+                            .write(table, &[L::Field::from_canonical_usize(i)], i);
+                    }
+                }
+
+                // Write lookup proofs
+                for data in air.lookup_data.iter() {
+                    match data {
+                        Lookup::LogDerivative(data) => {
+                            let (b_idx_0, b_idx_1) = data.challenge.register().get_range();
+                            let beta =
+                                CubicExtension::from_base_slice(&challenges[b_idx_0..b_idx_1]);
+                            self.writer.write_log_lookup(num_rows, data, beta);
+                        }
+                    }
+                }
+                let trace = self.trace_clone();
+                let extended_trace_values = trace
+                    .rows_par()
+                    .flat_map(|row| row[air.execution_trace_length..].to_vec())
+                    .collect::<Vec<_>>();
+                Ok(AirTrace {
+                    values: extended_trace_values,
+                    width: L::num_columns() - air.execution_trace_length,
+                })
+            }
+            _ => unreachable!("Chip air IOP only has two rounds"),
         }
     }
 }

@@ -76,7 +76,9 @@ where
                 .map(PolynomialValues::from)
                 .collect::<Vec<_>>();
 
-            num_rows = trace_cols[0].len();
+            if r == 0 {
+                num_rows = trace_cols[0].len();
+            }
 
             let commitment = PolynomialBatch::<F, C, D>::from_values(
                 trace_cols,

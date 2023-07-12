@@ -5,12 +5,8 @@ use crate::chip::instruction::assign::{AssignInstruction, AssignType};
 use crate::chip::instruction::set::AirInstruction;
 use crate::chip::register::Register;
 use crate::chip::AirParameters;
-use crate::math::prelude::*;
 
-impl<L: AirParameters> AirBuilder<L>
-where
-    [(); L::Challenge::D]:,
-{
+impl<L: AirParameters> AirBuilder<L> {
     #[inline]
     pub fn assert_expression_zero(&mut self, expression: ArithmeticExpression<L::Field>) {
         let constraint = ArithmeticConstraint::All(expression);

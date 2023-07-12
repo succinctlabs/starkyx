@@ -3,6 +3,7 @@ use self::arithmetic::ArithmeticConstraint;
 use super::instruction::set::AirInstruction;
 use super::lookup::Lookup;
 use super::AirParameters;
+use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::{AirParser, MulParser};
 use crate::air::AirConstraint;
 pub mod arithmetic;
@@ -12,7 +13,7 @@ pub enum Constraint<L: AirParameters> {
     Instruction(AirInstruction<L::Field, L::Instruction>),
     MulInstruction(ArithmeticExpression<L::Field>, L::Instruction),
     Arithmetic(ArithmeticConstraint<L::Field>),
-    Lookup(Lookup<L::Field, L::Challenge, 1>),
+    Lookup(Lookup<L::Field, L::CubicParams, 1>),
 }
 
 impl<L: AirParameters> Constraint<L> {
@@ -29,7 +30,7 @@ impl<L: AirParameters> Constraint<L> {
         Self::Instruction(AirInstruction::CustomInstruction(instruction.into()))
     }
 
-    pub fn lookup(lookup: Lookup<L::Field, L::Challenge, 1>) -> Self {
+    pub fn lookup(lookup: Lookup<L::Field, L::CubicParams, 1>) -> Self {
         Self::Lookup(lookup)
     }
 }
@@ -37,6 +38,7 @@ impl<L: AirParameters> Constraint<L> {
 impl<L: AirParameters, AP: AirParser<Field = L::Field>> AirConstraint<AP> for Constraint<L>
 where
     L::Instruction: AirConstraint<AP> + for<'a> AirConstraint<MulParser<'a, AP>>,
+    AP: CubicParser<<L as AirParameters>::CubicParams>,
 {
     fn eval(&self, parser: &mut AP) {
         match self {

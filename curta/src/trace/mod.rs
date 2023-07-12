@@ -186,6 +186,9 @@ impl<T> AirTrace<T> {
     where
         T: Copy,
     {
+        if self.width == 0 {
+            return Vec::new();
+        }
         let mut columns = vec![Vec::with_capacity(self.height()); self.width];
         for row in self.rows() {
             for (i, &v) in row.iter().enumerate() {

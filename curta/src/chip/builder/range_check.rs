@@ -3,15 +3,13 @@ use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
+use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::AirParameters;
-use crate::math::prelude::*;
 
-impl<L: AirParameters> AirBuilder<L>
-where
-    [(); L::Challenge::D]:,
-{
+impl<L: AirParameters> AirBuilder<L> {
     pub(crate) fn arithmetic_range_checks(&mut self) {
         let table = self.alloc::<ElementRegister>();
+
         self.range_table = Some(table);
 
         let one = || -> ArithmeticExpression<L::Field> { ArithmeticExpression::one() };
@@ -33,6 +31,6 @@ where
             // L::NUM_ARITHMETIC_COLUMNS,
         ));
 
-        self.lookup_log_derivative(&table, &values)
+        self.lookup_log_derivative(&table, &values, Self::range_fn)
     }
 }

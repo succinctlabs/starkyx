@@ -2,15 +2,13 @@ use alloc::collections::VecDeque;
 use core::array;
 
 use super::LogLookup;
-use crate::air::extension::ExtensionParser;
+use crate::air::extension::cubic::CubicParser;
 use crate::air::AirConstraint;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::*;
 
-impl<E: ExtensionField<AP::Field>, AP: ExtensionParser<E>, const N: usize> AirConstraint<AP>
+impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>, const N: usize> AirConstraint<AP>
     for LogLookup<AP::Field, E, N>
-where
-    [(); E::D]:,
 {
     fn eval(&self, parser: &mut AP) {
         let beta = self.challenge.eval_extension(parser);
@@ -26,9 +24,6 @@ where
             .map(|e| parser.from_base_field(e));
 
         let multiplicities_table_log = self.multiplicity_table_log.eval_extension(parser);
-
-        // let beta_minus_table = cubic_parser.sub(&beta, &table);
-
         let beta_minus_table: [_; N] = array::from_fn(|i| parser.sub_extension(beta, table[i]));
 
         // Constrain multiplicities_table_log = sum(mult_i * log(beta - table_i))

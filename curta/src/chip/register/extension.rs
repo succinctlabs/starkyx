@@ -1,9 +1,10 @@
 use super::cell::CellType;
 use super::memory::MemorySlice;
 use super::{Register, RegisterSerializable, RegisterSized};
-use crate::air::extension::ExtensionParser;
+use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::AirParser;
-use crate::math::prelude::*;
+use crate::math::extension::cubic::parameters::CubicParameters;
+use crate::plonky2::field::cubic::element::CubicElement;
 
 /// A register for a single element/column in the trace. The value is not constrainted.
 #[derive(Debug, Clone, Copy)]
@@ -43,11 +44,11 @@ impl<const D: usize> Register for ExtensionRegister<D> {
     }
 }
 
-impl<const D: usize> ExtensionRegister<D> {
+impl ExtensionRegister<3> {
     #[inline]
-    pub fn eval_extension<E, AP: ExtensionParser<E>>(&self, parser: &AP) -> AP::ExtensionVar
+    pub fn eval_extension<E, AP: CubicParser<E>>(&self, parser: &AP) -> CubicElement<AP::Var>
     where
-        E: ExtensionField<AP::Field>,
+        E: CubicParameters<AP::Field>,
     {
         parser.from_base_slice(&self.eval(parser))
     }
