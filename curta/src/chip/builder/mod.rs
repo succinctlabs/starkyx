@@ -7,29 +7,45 @@ use anyhow::{anyhow, Result};
 
 use super::constraint::Constraint;
 use super::instruction::set::{AirInstruction, InstructionSet};
+use super::lookup::Lookup;
 use super::register::Register;
 use super::{AirParameters, Chip};
 use crate::chip::instruction::Instruction;
+use crate::math::prelude::*;
 
 #[derive(Debug, Clone)]
-pub struct AirBuilder<L: AirParameters> {
+pub struct AirBuilder<L: AirParameters>
+where
+    [(); L::Challenge::D]:,
+{
     local_index: usize,
     local_arithmetic_index: usize,
     next_arithmetic_index: usize,
     next_index: usize,
-    instructions: InstructionSet<L>,
-    constraints: Vec<Constraint<L>>,
+    challenge_index: usize,
+    public_inputs_index: usize,
+    pub(crate) instructions: InstructionSet<L>,
+    pub(crate) constraints: Vec<Constraint<L>>,
+    pub(crate) lookup_data: Vec<Lookup<L::Field, L::Challenge, 1>>,
+    pub(crate) lookup_data_split_table: Vec<Lookup<L::Field, L::Challenge, 2>>,
 }
 
-impl<L: AirParameters> AirBuilder<L> {
+impl<L: AirParameters> AirBuilder<L>
+where
+    [(); L::Challenge::D]:,
+{
     pub const fn new() -> Self {
         Self {
             local_index: L::NUM_ARITHMETIC_COLUMNS,
             next_index: L::NUM_ARITHMETIC_COLUMNS,
             local_arithmetic_index: 0,
             next_arithmetic_index: 0,
+            challenge_index: 0,
+            public_inputs_index: 0,
             instructions: BTreeSet::new(),
             constraints: Vec::new(),
+            lookup_data: Vec::new(),
+            lookup_data_split_table: Vec::new(),
         }
     }
 

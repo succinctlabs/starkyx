@@ -5,6 +5,10 @@ pub mod log_der;
 
 use log_der::LogLookup;
 
+use super::builder::AirBuilder;
+use super::register::array::ArrayRegister;
+use super::register::element::ElementRegister;
+use super::AirParameters;
 use crate::air::extension::ExtensionParser;
 use crate::air::AirConstraint;
 use crate::math::prelude::*;

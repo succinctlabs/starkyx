@@ -1,32 +1,11 @@
-//! This module implements a lookup argument based on the logarithmic derivative as in
-//! https://eprint.iacr.org/2022/1530.pdf
-//!
-
 use alloc::collections::VecDeque;
 use core::array;
 
+use super::LogLookup;
 use crate::air::extension::ExtensionParser;
 use crate::air::AirConstraint;
-use crate::chip::register::array::ArrayRegister;
-use crate::chip::register::element::ElementRegister;
-use crate::chip::register::extension::ExtensionRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::*;
-
-#[derive(Debug, Clone)]
-pub struct LogLookup<F: Field, E: ExtensionField<F>, const N: usize>
-where
-    [(); E::D]:,
-{
-    pub(crate) challenge: ExtensionRegister<{ E::D }>,
-    pub(crate) table: ArrayRegister<ElementRegister>,
-    pub(crate) values: ArrayRegister<ElementRegister>,
-    pub(crate) multiplicities: ArrayRegister<ElementRegister>,
-    pub(crate) multiplicity_table_log: ExtensionRegister<{ E::D }>,
-    pub(crate) row_accumulators: ArrayRegister<ExtensionRegister<{ E::D }>>,
-    pub(crate) log_lookup_accumulator: ExtensionRegister<{ E::D }>,
-    _marker: core::marker::PhantomData<(F, E)>,
-}
 
 impl<E: ExtensionField<AP::Field>, AP: ExtensionParser<E>, const N: usize> AirConstraint<AP>
     for LogLookup<AP::Field, E, N>
@@ -73,7 +52,7 @@ where
         parser.constraint_extension(mult_table_constraint);
 
         // Constraint the accumulators for the elements being looked up
-        // The accumulators collect the sums of the logarithmic derivatives 1/(beta - element_i) 
+        // The accumulators collect the sums of the logarithmic derivatives 1/(beta - element_i)
         let mut row_acc_queue = self
             .row_accumulators
             .iter()

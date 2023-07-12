@@ -40,6 +40,11 @@ impl<T: Register> ArrayRegister<T> {
     }
 
     #[inline]
+    pub fn from_element(element: T) -> Self {
+        Self::from_register_unsafe(*element.register())
+    }
+
+    #[inline]
     pub fn get(&self, idx: usize) -> T {
         if idx >= self.len() {
             panic!("Index out of bounds");
