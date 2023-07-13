@@ -12,7 +12,7 @@ use crate::plonky2::field::PrimeField64;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
-pub struct Ed25519AddGadget<E: EdwardsParameters> {
+pub struct EdAddGadget<E: EdwardsParameters> {
     p: AffinePointRegister<E>,
     q: AffinePointRegister<E>,
     pub result: AffinePointRegister<E>,
@@ -31,7 +31,7 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         p: &AffinePointRegister<E>,
         q: &AffinePointRegister<E>,
-    ) -> Ed25519AddGadget<E>
+    ) -> EdAddGadget<E>
     where
         L::Instruction: FromFieldInstruction<E::BaseField>,
     {
@@ -74,7 +74,7 @@ impl<L: AirParameters> AirBuilder<L> {
         // R = (x3, y3).
         let result = AffinePointRegister::new(x3_ins.result, y3_ins.result);
 
-        Ed25519AddGadget {
+        EdAddGadget {
             p: *p,
             q: *q,
             result,
@@ -91,10 +91,7 @@ impl<L: AirParameters> AirBuilder<L> {
 
     /// Doubles an elliptic curve point `P` on the Ed25519 elliptic curve. Under the hood, the
     /// addition formula is used.
-    pub fn ed_double<E: EdwardsParameters>(
-        &mut self,
-        p: &AffinePointRegister<E>,
-    ) -> Ed25519AddGadget<E>
+    pub fn ed_double<E: EdwardsParameters>(&mut self, p: &AffinePointRegister<E>) -> EdAddGadget<E>
     where
         L::Instruction: FromFieldInstruction<E::BaseField>,
     {
@@ -103,11 +100,7 @@ impl<L: AirParameters> AirBuilder<L> {
 }
 
 impl<F: PrimeField64> TraceWriter<F> {
-    pub fn write_ed_add<E: EdwardsParameters>(
-        &self,
-        gadget: Ed25519AddGadget<E>,
-        row_index: usize,
-    ) {
+    pub fn write_ed_add<E: EdwardsParameters>(&self, gadget: &EdAddGadget<E>, row_index: usize) {
         self.write_instruction(&gadget.x3_numerator_ins, row_index);
         self.write_instruction(&gadget.y3_numerator_ins, row_index);
         self.write_instruction(&gadget.x1_mul_y1_ins, row_index);
@@ -178,7 +171,7 @@ mod tests {
             rayon::spawn(move || {
                 writer.write_ec_point(&p, &p_int, i);
                 writer.write_ec_point(&q, &q_int, i);
-                writer.write_ed_add(gadget, i);
+                writer.write_ed_add(&gadget, i);
                 handle.send(1).unwrap();
             });
         }

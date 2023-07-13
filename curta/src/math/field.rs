@@ -61,6 +61,10 @@ pub trait Field:
     fn from_canonical_usize(n: usize) -> Self;
     fn from_noncanonical_biguint(n: BigUint) -> Self;
 
+    fn primitive_root_of_unity(n_log: usize) -> Self;
+
+    fn two_adic_subgroup(n_log: usize) -> Vec<Self>;
+
     fn inverse(&self) -> Self {
         self.try_inverse().expect("Tried to invert zero")
     }

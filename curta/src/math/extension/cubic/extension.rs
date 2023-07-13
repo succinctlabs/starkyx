@@ -258,4 +258,12 @@ impl<F: Field, P: CubicParameters<F>> Field for CubicExtension<F, P> {
     fn from_noncanonical_biguint(n: num::BigUint) -> Self {
         Self::from_base_field(F::from_noncanonical_biguint(n))
     }
+
+    fn primitive_root_of_unity(_n_log: usize) -> Self {
+        unimplemented!("CubicExtension::primitive_root_of_unity")
+    }
+
+    fn two_adic_subgroup(_n_log: usize) -> Vec<Self> {
+        unimplemented!("CubicExtension::two_adic_subgroup")
+    }
 }

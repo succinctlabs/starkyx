@@ -32,6 +32,14 @@ impl<F: Plonky2Field> Field for F {
     fn from_noncanonical_biguint(n: num::BigUint) -> Self {
         F::from_noncanonical_biguint(n)
     }
+
+    fn primitive_root_of_unity(n_log: usize) -> Self {
+        F::primitive_root_of_unity(n_log)
+    }
+
+    fn two_adic_subgroup(n_log: usize) -> Vec<Self> {
+        F::two_adic_subgroup(n_log)
+    }
 }
 
 impl<F: Plonky2Sample> Sample for F {
