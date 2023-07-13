@@ -281,7 +281,7 @@ pub fn get_powers<T>(x: T, one: T) -> PowersIter<T> {
     }
 }
 
-pub fn to_u16_le_limbs_polynomial<F: PrimeField, P: FieldParameters>(x: &BigUint) -> Polynomial<F> {
+pub fn to_u16_le_limbs_polynomial<F: Field, P: FieldParameters>(x: &BigUint) -> Polynomial<F> {
     let num_limbs = bigint_into_u16_digits(x, P::NB_LIMBS)
         .iter()
         .map(|x| F::from_canonical_u16(*x))
