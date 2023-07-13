@@ -6,6 +6,7 @@ use crate::math::extension::cubic::parameters::CubicParameters;
 use crate::math::prelude::*;
 
 pub mod air;
+pub mod bool;
 pub mod builder;
 pub mod constraint;
 pub mod ec;

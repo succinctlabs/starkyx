@@ -33,4 +33,8 @@ impl Register for U16Register {
     fn eval<AP: AirParser>(&self, parser: &AP) -> Self::Value<AP::Var> {
         self.register().eval_slice(parser)[0]
     }
+
+    fn align<T>(value: &Self::Value<T>) -> &[T] {
+        std::slice::from_ref(value)
+    }
 }

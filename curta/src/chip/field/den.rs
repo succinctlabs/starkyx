@@ -13,7 +13,9 @@ use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::u16::U16Register;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::trace::writer::TraceWriter;
-use crate::chip::utils::{split_u32_limbs_to_u16_limbs, field_limbs_to_biguint, compute_root_quotient_and_shift};
+use crate::chip::utils::{
+    compute_root_quotient_and_shift, field_limbs_to_biguint, split_u32_limbs_to_u16_limbs,
+};
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 use crate::polynomial::parser::PolynomialParser;
@@ -172,7 +174,6 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpDenInstruction<P>
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
@@ -187,7 +188,6 @@ mod tests {
     struct DenTest;
 
     impl const AirParameters for DenTest {
-
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 

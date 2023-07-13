@@ -64,6 +64,8 @@ pub trait Register:
             size: Self::size_of(),
         }
     }
+
+    fn align<T>(value: &Self::Value<T>) -> &[T];
 }
 
 impl RegisterSerializable for MemorySlice {

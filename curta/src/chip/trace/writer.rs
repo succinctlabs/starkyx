@@ -122,6 +122,11 @@ impl<F: Field> TraceWriter<F> {
     }
 
     #[inline]
+    pub fn write_value<T: Register>(&self, data: &T, value: &T::Value<F>, row_index: usize) {
+        self.write(data, T::align(value), row_index)
+    }
+
+    #[inline]
     pub fn write_instruction(&self, instruction: &impl Instruction<F>, row_index: usize) {
         instruction.write(self, row_index)
     }

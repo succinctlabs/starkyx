@@ -42,6 +42,10 @@ impl<const D: usize> Register for ExtensionRegister<D> {
         );
         core::array::from_fn(|i| slice[i])
     }
+
+    fn align<T>(value: &Self::Value<T>) -> &[T] {
+        value
+    }
 }
 
 impl ExtensionRegister<3> {

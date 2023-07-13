@@ -42,4 +42,8 @@ impl<P: FieldParameters> Register for FieldRegister<P> {
     fn eval<AP: AirParser>(&self, parser: &AP) -> Self::Value<AP::Var> {
         Polynomial::from_coefficients_slice(self.register().eval_slice(parser))
     }
+
+    fn align<T>(value: &Self::Value<T>) -> &[T] {
+        &value.coefficients
+    }
 }
