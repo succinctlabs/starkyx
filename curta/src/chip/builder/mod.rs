@@ -4,7 +4,7 @@ pub mod range_check;
 
 use alloc::collections::BTreeSet;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 use super::constraint::Constraint;
 use super::instruction::set::{AirInstruction, InstructionSet};
