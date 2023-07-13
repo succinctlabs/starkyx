@@ -83,10 +83,7 @@ impl<L: AirParameters> AirBuilder<L> {
 }
 
 // Constraints for FpAddInstruction
-impl<AP: PolynomialParser, P: FieldParameters> AirConstraint<AP> for FpAddInstruction<P>
-where
-    AP::Field: PrimeField,
-{
+impl<AP: PolynomialParser, P: FieldParameters> AirConstraint<AP> for FpAddInstruction<P> {
     fn eval(&self, parser: &mut AP) {
         let p_a = self.a.eval(parser);
         let p_b = self.b.eval(parser);

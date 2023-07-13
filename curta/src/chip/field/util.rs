@@ -10,9 +10,7 @@ pub fn eval_field_operation<AP: PolynomialParser, P: FieldParameters>(
     p_vanishing: &Polynomial<AP::Var>,
     p_witness_low: &Polynomial<AP::Var>,
     p_witness_high: &Polynomial<AP::Var>,
-) where
-    AP::Field: PrimeField,
-{
+) {
     // Reconstruct and shift back the witness polynomial
     let limb_field = AP::Field::from_canonical_u32(2u32.pow(16));
     let limb = parser.constant(limb_field);
@@ -36,7 +34,7 @@ pub fn eval_field_operation<AP: PolynomialParser, P: FieldParameters>(
     }
 }
 
-pub fn modulus_field_iter<F: PrimeField, P: FieldParameters>() -> impl Iterator<Item = F> {
+pub fn modulus_field_iter<F: Field, P: FieldParameters>() -> impl Iterator<Item = F> {
     P::MODULUS
         .into_iter()
         .map(|x| F::from_canonical_u16(x))
