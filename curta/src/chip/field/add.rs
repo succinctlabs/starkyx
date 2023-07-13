@@ -192,8 +192,8 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpAddInstruction<P>
 
 #[cfg(test)]
 mod tests {
-    use num::BigUint;
     use num::bigint::RandBigInt;
+    use num::BigUint;
     use rand::thread_rng;
 
     use super::*;
@@ -242,10 +242,9 @@ mod tests {
         for i in 0..L::num_rows() {
             let writer = generator.new_writer();
             let handle = tx.clone();
-            // rayon::spawn(move || {
-                let a_int: BigUint = rng.gen_biguint(256) % &p;
-                let b_int = rng.gen_biguint(256) % &p;
-
+            let a_int: BigUint = rng.gen_biguint(256) % &p;
+            let b_int = rng.gen_biguint(256) % &p;
+            rayon::spawn(move || {
                 let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
                 let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
 
@@ -254,7 +253,7 @@ mod tests {
                 writer.write_instruction(&add_insr, i);
 
                 handle.send(1).unwrap();
-            // });
+            });
         }
         drop(tx);
         for msg in rx.iter() {

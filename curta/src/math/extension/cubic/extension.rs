@@ -258,5 +258,4 @@ impl<F: Field, P: CubicParameters<F>> Field for CubicExtension<F, P> {
     fn from_noncanonical_biguint(n: num::BigUint) -> Self {
         Self::from_base_field(F::from_noncanonical_biguint(n))
     }
-
 }

@@ -43,6 +43,4 @@ impl<F: Plonky2Sample> Sample for F {
     }
 }
 
-impl<F: Plonky2PrimeField> PrimeField for F {
-
-}
+impl<F: Plonky2PrimeField> PrimeField for F {}

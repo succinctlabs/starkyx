@@ -115,9 +115,7 @@ pub trait Field:
 }
 
 /// A finite field of the form `F_p` for some prime `p`.
-pub trait PrimeField: Field {
-
-}
+pub trait PrimeField: Field {}
 
 /// A prime field of order less than `2^64`.
 pub trait PrimeField64: PrimeField {
