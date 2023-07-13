@@ -14,6 +14,7 @@ pub mod instruction;
 pub mod lookup;
 pub mod register;
 pub mod trace;
+pub mod utils;
 
 #[const_trait]
 pub trait AirParameters {

@@ -139,25 +139,25 @@ impl<L: AirParameters> AirBuilder<L> {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::sync::mpsc::channel;
+pub mod tests {
+    pub use std::sync::mpsc::channel;
 
-    use plonky2::field::goldilocks_field::GoldilocksField;
+    pub use plonky2::field::goldilocks_field::GoldilocksField;
 
     use super::*;
     use crate::air::fibonacci::FibonacciAir;
-    use crate::air::parser::{AirParser, TraceWindowParser};
-    use crate::air::RAir;
-    use crate::chip::instruction::empty::EmptyInstruction;
-    use crate::chip::register::element::ElementRegister;
-    use crate::chip::register::u16::U16Register;
-    use crate::chip::register::RegisterSerializable;
-    use crate::chip::trace::generator::ArithmeticGenerator;
-    use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
-    use crate::maybe_rayon::*;
-    use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
-    use crate::plonky2::stark::tests::{test_recursive_starky, test_starky};
-    use crate::plonky2::stark::Starky;
+    pub use crate::air::parser::{AirParser, TraceWindowParser};
+    pub use crate::air::RAir;
+    pub use crate::chip::instruction::empty::EmptyInstruction;
+    pub use crate::chip::register::element::ElementRegister;
+    pub use crate::chip::register::u16::U16Register;
+    pub use crate::chip::register::RegisterSerializable;
+    pub use crate::chip::trace::generator::ArithmeticGenerator;
+    pub use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
+    pub use crate::maybe_rayon::*;
+    pub use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
+    pub(crate) use crate::plonky2::stark::tests::{test_recursive_starky, test_starky};
+    pub use crate::plonky2::stark::Starky;
 
     #[derive(Debug, Clone)]
     pub struct FibonacciParameters;

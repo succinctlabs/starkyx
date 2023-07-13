@@ -21,7 +21,7 @@ pub enum InstructionId {
     Write(MemorySlice),
 }
 
-pub trait Instruction<F: Field>: 'static + Send + Sync + Debug + Clone {
+pub trait Instruction<F: Field>: 'static + Send + Sync + Clone + Debug {
     // Returns a vector of memory slices or contiguous memory regions of the row in the trace that
     // instruction relies on. These registers must be filled in by the `TraceWriter`.
     fn trace_layout(&self) -> Vec<MemorySlice>;

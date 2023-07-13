@@ -239,4 +239,24 @@ impl<F: Field, P: CubicParameters<F>> Field for CubicExtension<F, P> {
     fn try_inverse(&self) -> Option<Self> {
         self.try_inverse()
     }
+    fn from_canonical_u8(n: u8) -> Self {
+        Self::from_base_field(F::from_canonical_u8(n))
+    }
+    fn from_canonical_u16(n: u16) -> Self {
+        Self::from_base_field(F::from_canonical_u16(n))
+    }
+    fn from_canonical_u32(n: u32) -> Self {
+        Self::from_base_field(F::from_canonical_u32(n))
+    }
+    fn from_canonical_u64(n: u64) -> Self {
+        Self::from_base_field(F::from_canonical_u64(n))
+    }
+    fn from_canonical_usize(n: usize) -> Self {
+        Self::from_base_field(F::from_canonical_usize(n))
+    }
+
+    fn from_noncanonical_biguint(n: num::BigUint) -> Self {
+        Self::from_base_field(F::from_noncanonical_biguint(n))
+    }
+
 }

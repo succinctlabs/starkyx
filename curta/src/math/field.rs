@@ -54,6 +54,13 @@ pub trait Field:
     /// Inverts `self`, returning `None` if `self` is zero.
     fn try_inverse(&self) -> Option<Self>;
 
+    fn from_canonical_u8(n: u8) -> Self;
+    fn from_canonical_u16(n: u16) -> Self;
+    fn from_canonical_u32(n: u32) -> Self;
+    fn from_canonical_u64(n: u64) -> Self;
+    fn from_canonical_usize(n: usize) -> Self;
+    fn from_noncanonical_biguint(n: BigUint) -> Self;
+
     fn inverse(&self) -> Self {
         self.try_inverse().expect("Tried to invert zero")
     }
@@ -109,11 +116,7 @@ pub trait Field:
 
 /// A finite field of the form `F_p` for some prime `p`.
 pub trait PrimeField: Field {
-    fn from_canonical_u8(n: u8) -> Self;
-    fn from_canonical_u16(n: u16) -> Self;
-    fn from_canonical_u32(n: u32) -> Self;
-    fn from_canonical_u64(n: u64) -> Self;
-    fn from_canonical_usize(n: usize) -> Self;
+
 }
 
 /// A prime field of order less than `2^64`.

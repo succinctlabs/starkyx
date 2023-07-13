@@ -13,18 +13,6 @@ impl<F: Plonky2Field> Field for F {
     fn try_inverse(&self) -> Option<Self> {
         Some(self.inverse())
     }
-}
-
-impl<F: Plonky2Sample> Sample for F {
-    fn sample<R>(rng: &mut R) -> Self
-    where
-        R: rand::RngCore + ?Sized,
-    {
-        F::sample(rng)
-    }
-}
-
-impl<F: Plonky2PrimeField> PrimeField for F {
     fn from_canonical_u8(n: u8) -> Self {
         F::from_canonical_u8(n)
     }
@@ -40,4 +28,21 @@ impl<F: Plonky2PrimeField> PrimeField for F {
     fn from_canonical_usize(n: usize) -> Self {
         F::from_canonical_usize(n)
     }
+
+    fn from_noncanonical_biguint(n: num::BigUint) -> Self {
+        F::from_noncanonical_biguint(n)
+    }
+}
+
+impl<F: Plonky2Sample> Sample for F {
+    fn sample<R>(rng: &mut R) -> Self
+    where
+        R: rand::RngCore + ?Sized,
+    {
+        F::sample(rng)
+    }
+}
+
+impl<F: Plonky2PrimeField> PrimeField for F {
+
 }
