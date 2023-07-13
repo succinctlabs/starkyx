@@ -73,16 +73,17 @@ impl<L: AirParameters> AirBuilder<L> {
         self.constraints
             .push(Constraint::from_instruction_set(instruction.clone()));
 
-        // Add instruction to the instruction list
-        self.instructions
-            .insert(instruction.clone())
-            .then_some(())
-            .ok_or_else(|| {
-                anyhow!(
-                    "Instruction ID {:?} already exists in the instruction set",
-                    instruction.id()
-                )
-            })
+        // // Add instruction to the instruction list
+        // self.instructions
+        //     .insert(instruction.clone())
+        //     .then_some(())
+        //     .ok_or_else(|| {
+        //         anyhow!(
+        //             "Instruction ID {:?} already exists in the instruction set",
+        //             instruction.id()
+        //         )
+        //     })
+        Ok(())
     }
 
     #[inline]

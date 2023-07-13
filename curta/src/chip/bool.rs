@@ -90,3 +90,74 @@ impl<F: Field, T: Register + Debug> Instruction<F> for SelectInstruction<T> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chip::builder::tests::*;
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct SelectorTest;
+
+    impl const AirParameters for SelectorTest {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
+
+        const NUM_ARITHMETIC_COLUMNS: usize = 0;
+        const NUM_FREE_COLUMNS: usize = 4;
+        type Instruction = SelectInstruction<BitRegister>;
+
+        fn num_rows_bits() -> usize {
+            10
+        }
+    }
+
+    #[test]
+    fn test_selector() {
+        type F = GoldilocksField;
+        type L = SelectorTest;
+        type SC = PoseidonGoldilocksStarkConfig;
+
+        let mut builder = AirBuilder::<L>::new();
+
+        let bit = builder.alloc::<BitRegister>();
+        let x = builder.alloc::<BitRegister>();
+        let y = builder.alloc::<BitRegister>();
+
+        let sel = builder.select(&bit, &x, &y);
+
+        let (air, _) = builder.build();
+
+        let generator = ArithmeticGenerator::<L>::new(&[]);
+
+        let (tx, rx) = channel();
+        for i in 0..L::num_rows() {
+            let writer = generator.new_writer();
+            let handle = tx.clone();
+            let x_i = F::from_canonical_u16(0u16);
+            let y_i = F::from_canonical_u16(1u16);
+            let bit_i = if i % 2 == 0 { true } else { false };
+            let fbit = if bit_i { F::ONE } else { F::ZERO };
+            rayon::spawn(move || {
+                writer.write_value(&bit, &fbit, i);
+                writer.write_value(&x, &x_i, i);
+                writer.write_value(&y, &y_i, i);
+                writer.write_instruction(&sel, i);
+
+                handle.send(1).unwrap();
+            });
+        }
+        drop(tx);
+        for msg in rx.iter() {
+            assert!(msg == 1);
+        }
+        let stark = Starky::<_, { L::num_columns() }>::new(air);
+        let config = SC::standard_fast_config(L::num_rows());
+
+        // Generate proof and verify as a stark
+        test_starky(&stark, &config, &generator, &[]);
+
+        // Test the recursive proof.
+        test_recursive_starky(stark, config, generator, &[]);
+    }
+}
