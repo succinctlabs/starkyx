@@ -25,6 +25,18 @@ pub enum FpInstruction<P: FieldParameters> {
     Select(SelectInstruction<FieldRegister<P>>),
 }
 
+pub trait FromFieldInstruction<P: FieldParameters>:
+    From<FpAddInstruction<P>>
+    + From<FpMulInstruction<P>>
+    + From<FpMulConstInstruction<P>>
+    + From<FpInnerProductInstruction<P>>
+    + From<FpDenInstruction<P>>
+    + From<SelectInstruction<FieldRegister<P>>>
+{
+}
+
+impl<P: FieldParameters> FromFieldInstruction<P> for FpInstruction<P> {}
+
 impl<AP: PolynomialParser, P: FieldParameters> AirConstraint<AP> for FpInstruction<P> {
     fn eval(&self, parser: &mut AP) {
         match self {

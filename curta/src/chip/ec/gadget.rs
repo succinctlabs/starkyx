@@ -5,6 +5,7 @@ use crate::chip::field::parameters::FieldParameters;
 use crate::chip::field::register::FieldRegister;
 use crate::chip::register::Register;
 use crate::chip::trace::writer::TraceWriter;
+use crate::chip::utils::field_limbs_to_biguint;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 use crate::polynomial::to_u16_le_limbs_polynomial;
@@ -22,6 +23,8 @@ pub trait EllipticCurveGadget<E: EllipticCurveParameters> {
 }
 
 pub trait EllipticCurveWriter<E: EllipticCurveParameters> {
+    fn read_ec_point(&self, data: &AffinePointRegister<E>, row_index: usize) -> AffinePoint<E>;
+
     fn write_ec_point(
         &self,
         data: &AffinePointRegister<E>,
@@ -55,7 +58,17 @@ impl<L: AirParameters, E: EllipticCurveParameters> EllipticCurveGadget<E> for Ai
     }
 }
 
-impl<F: Field, E: EllipticCurveParameters> EllipticCurveWriter<E> for TraceWriter<F> {
+impl<F: PrimeField64, E: EllipticCurveParameters> EllipticCurveWriter<E> for TraceWriter<F> {
+    fn read_ec_point(&self, data: &AffinePointRegister<E>, row_index: usize) -> AffinePoint<E> {
+        let p_x = self.read(&data.x, row_index);
+        let p_y = self.read(&data.y, row_index);
+
+        let x = field_limbs_to_biguint(p_x.coefficients());
+        let y = field_limbs_to_biguint(p_y.coefficients());
+
+        AffinePoint::<E>::new(x, y)
+    }
+
     fn write_ec_point(
         &self,
         data: &AffinePointRegister<E>,

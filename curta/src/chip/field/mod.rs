@@ -28,12 +28,12 @@
 //! This technique generalizes for any quadratic sum with a "small" number of terms to avoid
 //! overflow.
 
-mod add;
-mod den;
-mod inner_product;
+pub mod add;
+pub mod den;
+pub mod inner_product;
 pub mod instruction;
-mod mul;
-mod mul_const;
+pub mod mul;
+pub mod mul_const;
 pub mod parameters;
 pub mod register;
 mod util;
