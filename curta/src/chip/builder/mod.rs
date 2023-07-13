@@ -12,7 +12,6 @@ use super::lookup::Lookup;
 use super::register::element::ElementRegister;
 use super::register::Register;
 use super::{AirParameters, Chip};
-use crate::chip::instruction::Instruction;
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone)]

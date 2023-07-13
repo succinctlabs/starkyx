@@ -86,15 +86,13 @@ impl<E: EdwardsParameters> Mul<BigUint> for AffinePoint<E> {
 #[cfg(test)]
 mod tests {
 
-    use super::*;
     use num::bigint::RandBigInt;
     use num::BigUint;
     use rand::thread_rng;
 
-    use crate::chip::ec::EllipticCurveParameters;
+    use super::{EdwardsParameters, *};
     use crate::chip::ec::edwards::ed25519::Ed25519;
-
-    use super::EdwardsParameters;
+    use crate::chip::ec::EllipticCurveParameters;
 
     #[test]
     fn test_bigint_ed_add() {
