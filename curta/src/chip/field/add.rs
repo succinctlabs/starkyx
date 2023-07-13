@@ -129,8 +129,8 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpAddInstruction<P>
     }
 
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
-        let p_a = writer.read(self.a, row_index);
-        let p_b = writer.read(self.b, row_index);
+        let p_a = writer.read(&self.a, row_index);
+        let p_b = writer.read(&self.b, row_index);
 
         let a_digits = p_a
             .coefficients

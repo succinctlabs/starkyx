@@ -63,7 +63,7 @@ impl<T> TraceWriter<T> {
 
 impl<F: Field> TraceWriter<F> {
     #[inline]
-    pub fn read<R: Register>(&self, register: R, row_index: usize) -> R::Value<F> {
+    pub fn read<R: Register>(&self, register: &R, row_index: usize) -> R::Value<F> {
         let trace = self.0.trace.read().unwrap();
         let window = trace.window(row_index);
         let parser = TraceWindowParser::new(window, &[], &self.public_inputs);

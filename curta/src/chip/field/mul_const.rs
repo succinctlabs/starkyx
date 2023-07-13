@@ -1,9 +1,8 @@
-
 use std::collections::HashSet;
 
 use num::{BigUint, Zero};
 
-use super::parameters::FieldParameters;
+use super::parameters::{FieldParameters, MAX_NB_LIMBS};
 use super::register::FieldRegister;
 use super::util;
 use crate::air::AirConstraint;
@@ -19,7 +18,6 @@ use crate::chip::AirParameters;
 use crate::math::prelude::*;
 use crate::polynomial::parser::PolynomialParser;
 use crate::polynomial::{to_u16_le_limbs_polynomial, Polynomial};
-use super::parameters::MAX_NB_LIMBS;
 
 #[derive(Debug, Clone, Copy)]
 pub struct FpMulConstInstruction<P: FieldParameters> {
@@ -36,7 +34,7 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn fp_mul_const<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,
-        c : [u16; MAX_NB_LIMBS],
+        c: [u16; MAX_NB_LIMBS],
     ) -> FpMulConstInstruction<P>
     where
         L::Instruction: From<FpMulConstInstruction<P>>,
@@ -89,7 +87,6 @@ impl<AP: PolynomialParser, P: FieldParameters> AirConstraint<AP> for FpMulConstI
 }
 
 impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpMulConstInstruction<P> {
-
     fn trace_layout(&self) -> Vec<MemorySlice> {
         vec![
             *self.result.register(),
@@ -110,7 +107,7 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpMulConstInstructi
     }
 
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
-        let p_a = writer.read(self.a, row_index);
+        let p_a = writer.read(&self.a, row_index);
         let mut c = BigUint::zero();
         for (i, limb) in self.c.iter().enumerate() {
             c += BigUint::from(*limb) << (16 * i);

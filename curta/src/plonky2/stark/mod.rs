@@ -270,7 +270,12 @@ pub(crate) mod tests {
         for (&pi_t, &pi) in public_input_targets.iter().zip(public_inputs.iter()) {
             pw.set_target(pi_t, pi);
         }
-        builder.verify_stark_proof(&config, &stark, virtual_proof.clone(), &public_input_targets);
+        builder.verify_stark_proof(
+            &config,
+            &stark,
+            virtual_proof.clone(),
+            &public_input_targets,
+        );
 
         let generator = SimpleStarkWitnessGenerator::new(
             config,

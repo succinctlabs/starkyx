@@ -80,7 +80,6 @@ impl<AP: PolynomialParser, P: FieldParameters> AirConstraint<AP> for FpMulInstru
 }
 
 impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpMulInstruction<P> {
-
     fn trace_layout(&self) -> Vec<MemorySlice> {
         vec![
             *self.result.register(),
@@ -102,8 +101,8 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpMulInstruction<P>
     }
 
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
-        let p_a = writer.read(self.a, row_index);
-        let p_b = writer.read(self.b, row_index);
+        let p_a = writer.read(&self.a, row_index);
+        let p_b = writer.read(&self.b, row_index);
 
         let a_digits = p_a
             .coefficients
