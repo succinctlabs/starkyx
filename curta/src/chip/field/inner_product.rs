@@ -179,8 +179,6 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpInnerProductInstr
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
@@ -245,7 +243,6 @@ mod tests {
                 let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
                 let p_c = Polynomial::<F>::from_biguint_field(&c_int, 16, 16);
                 let p_d = Polynomial::<F>::from_biguint_field(&d_int, 16, 16);
- 
 
                 writer.write(&a, p_a.coefficients(), i);
                 writer.write(&b, p_b.coefficients(), i);
