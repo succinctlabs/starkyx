@@ -178,13 +178,12 @@ impl<F: PrimeField64> TraceWriter<F> {
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
-    use plonky2_maybe_rayon::IndexedParallelIterator;
     use rand::thread_rng;
 
     use super::*;
     use crate::chip::builder::tests::*;
     use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
-    use crate::chip::ec::gadget::{EllipticCurveGadget, EllipticCurveWriter};
+    use crate::chip::ec::gadget::EllipticCurveGadget;
     use crate::chip::field::instruction::FpInstruction;
 
     #[derive(Clone, Debug, Copy)]
