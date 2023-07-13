@@ -14,7 +14,6 @@ use crate::chip::trace::writer::TraceWriter;
 use crate::chip::utils::{digits_to_biguint, split_u32_limbs_to_u16_limbs};
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
-use crate::plonky2::field::PrimeField;
 use crate::polynomial::parser::PolynomialParser;
 use crate::polynomial::{to_u16_le_limbs_polynomial, Polynomial};
 
