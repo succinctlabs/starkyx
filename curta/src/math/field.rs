@@ -123,25 +123,25 @@ pub trait PrimeField: Field {}
 
 /// A prime field of order less than `2^64`.
 pub trait PrimeField64: PrimeField {
-    const ORDER_U64: u64;
+    // const ORDER_U64: u64;
 
     fn as_canonical_u64(&self) -> u64;
 }
 
 /// A prime field of order less than `2^32`.
 pub trait PrimeField32: PrimeField {
-    const ORDER_U32: u32;
+    // const ORDER_U32: u32;
 
     fn as_canonical_u32(&self) -> u32;
 }
 
-impl<F: PrimeField32> PrimeField64 for F {
-    const ORDER_U64: u64 = <F as PrimeField32>::ORDER_U32 as u64;
+// default impl<F: PrimeField32> PrimeField64 for F {
+//     // default const ORDER_U64: u64 = <F as PrimeField32>::ORDER_U32 as u64;
 
-    fn as_canonical_u64(&self) -> u64 {
-        u64::from(self.as_canonical_u32())
-    }
-}
+//     default fn as_canonical_u64(&self) -> u64 {
+//         u64::from(self.as_canonical_u32())
+//     }
+// }
 
 /// Sampling of a random value.
 pub trait Sample: Sized {
@@ -243,20 +243,20 @@ pub mod tests {
         }
     }
 
-    pub fn modular_reduction_test<F: PrimeField64>() {
-        let order = F::ORDER_U64;
+    // pub fn modular_reduction_test<F: PrimeField64>() {
+    //     // let order = F::ORDER_U64;
 
-        let a = rand::random::<u64>();
-        let b = rand::random::<u64>();
+    //     let a = rand::random::<u64>();
+    //     let b = rand::random::<u64>();
 
-        let f_a = F::from_canonical_u64(a % order);
-        let f_b = F::from_canonical_u64(b % order);
+    //     let f_a = F::from_canonical_u64(a % order);
+    //     let f_b = F::from_canonical_u64(b % order);
 
-        // Test addition
-        assert_eq!((a + b) % order, (f_a + f_b).as_canonical_u64());
-        // Test subtraction
-        assert_eq!((a - b) % order, (f_a - f_b).as_canonical_u64());
-        // Test multiplication
-        assert_eq!((a * b) % order, (f_a * f_b).as_canonical_u64());
-    }
+    //     // Test addition
+    //     assert_eq!((a + b) % order, (f_a + f_b).as_canonical_u64());
+    //     // Test subtraction
+    //     assert_eq!((a - b) % order, (f_a - f_b).as_canonical_u64());
+    //     // Test multiplication
+    //     assert_eq!((a * b) % order, (f_a * f_b).as_canonical_u64());
+    // }
 }

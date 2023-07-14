@@ -4,10 +4,10 @@
 
 use crate::chip::builder::AirBuilder;
 use crate::chip::constraint::Constraint;
-use crate::chip::lookup::Lookup;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::extension::ExtensionRegister;
+use crate::chip::table::lookup::Lookup;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 

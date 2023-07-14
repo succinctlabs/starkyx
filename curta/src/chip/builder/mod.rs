@@ -8,9 +8,9 @@ use anyhow::Result;
 
 use super::constraint::Constraint;
 use super::instruction::set::{AirInstruction, InstructionSet};
-use super::lookup::Lookup;
 use super::register::element::ElementRegister;
 use super::register::Register;
+use super::table::lookup::Lookup;
 use super::{AirParameters, Chip};
 use crate::math::prelude::*;
 

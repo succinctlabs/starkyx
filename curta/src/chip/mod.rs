@@ -1,7 +1,7 @@
 use self::constraint::Constraint;
 use self::instruction::Instruction;
-use self::lookup::Lookup;
 use self::register::element::ElementRegister;
+use self::table::lookup::Lookup;
 use crate::math::extension::cubic::parameters::CubicParameters;
 use crate::math::prelude::*;
 
@@ -12,8 +12,8 @@ pub mod constraint;
 pub mod ec;
 pub mod field;
 pub mod instruction;
-pub mod lookup;
 pub mod register;
+pub mod table;
 pub mod trace;
 pub mod utils;
 

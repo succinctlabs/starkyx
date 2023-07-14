@@ -21,10 +21,10 @@ use crate::trace::generator::TraceGenerator;
 #[derive(Debug, Clone)]
 pub struct SimpleStarkWitnessGenerator<S, T, F, C, P, const D: usize> {
     config: StarkyConfig<F, C, D>,
-    stark: S,
-    proof_target: StarkProofTarget<D>,
-    public_input_targets: Vec<Target>,
-    trace_generator: T,
+    pub stark: S,
+    pub proof_target: StarkProofTarget<D>,
+    pub public_input_targets: Vec<Target>,
+    pub trace_generator: T,
     _marker: core::marker::PhantomData<P>,
 }
 

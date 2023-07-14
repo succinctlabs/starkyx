@@ -1,9 +1,9 @@
 use num::BigUint;
 
-use super::add::EdAddGadget;
-use super::EdwardsParameters;
 use crate::chip::bool::SelectInstruction;
 use crate::chip::builder::AirBuilder;
+use crate::chip::ec::edwards::add::EdAddGadget;
+use crate::chip::ec::edwards::EdwardsParameters;
 use crate::chip::ec::gadget::EllipticCurveWriter;
 use crate::chip::ec::point::{AffinePoint, AffinePointRegister};
 use crate::chip::field::instruction::FromFieldInstruction;
@@ -17,12 +17,12 @@ use crate::chip::AirParameters;
 use crate::math::prelude::*;
 use crate::plonky2::field::PrimeField64;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct EdDoubleAndAddGadget<E: EdwardsParameters> {
-    bit: BitRegister,
-    result: AffinePointRegister<E>,
-    temp: AffinePointRegister<E>,
+    pub bit: BitRegister,
+    pub result: AffinePointRegister<E>,
+    pub temp: AffinePointRegister<E>,
     result_next: AffinePointRegister<E>,
     temp_next: AffinePointRegister<E>,
     add_gadget: EdAddGadget<E>,
@@ -31,11 +31,11 @@ pub struct EdDoubleAndAddGadget<E: EdwardsParameters> {
     select_y_ins: SelectInstruction<FieldRegister<E::BaseField>>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct EdScalarMulGadget<E: EdwardsParameters> {
-    cyclic_counter: ElementRegister,
-    double_and_add_gadget: EdDoubleAndAddGadget<E>,
+    pub cyclic_counter: ElementRegister,
+    pub double_and_add_gadget: EdDoubleAndAddGadget<E>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {

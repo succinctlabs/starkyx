@@ -1,7 +1,7 @@
 use self::arithmetic::expression::ArithmeticExpression;
 use self::arithmetic::ArithmeticConstraint;
 use super::instruction::set::AirInstruction;
-use super::lookup::Lookup;
+use super::table::lookup::Lookup;
 use super::AirParameters;
 use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::{AirParser, MulParser};

@@ -1,5 +1,6 @@
 use plonky2::field::types::{
-    Field as Plonky2Field, PrimeField as Plonky2PrimeField, Sample as Plonky2Sample,
+    Field as Plonky2Field, PrimeField as Plonky2PrimeField, PrimeField64 as Plonky2PrimeField64,
+    Sample as Plonky2Sample,
 };
 
 pub use crate::math::prelude::*;
@@ -52,3 +53,9 @@ impl<F: Plonky2Sample> Sample for F {
 }
 
 impl<F: Plonky2PrimeField> PrimeField for F {}
+
+impl<F: Plonky2PrimeField64> PrimeField64 for F {
+    fn as_canonical_u64(&self) -> u64 {
+        self.to_canonical_u64()
+    }
+}

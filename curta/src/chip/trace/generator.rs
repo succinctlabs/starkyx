@@ -3,8 +3,8 @@ use alloc::sync::Arc;
 use anyhow::{Error, Result};
 
 use super::writer::TraceWriter;
-use crate::chip::lookup::Lookup;
 use crate::chip::register::RegisterSerializable;
+use crate::chip::table::lookup::Lookup;
 use crate::chip::{AirParameters, Chip};
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
@@ -12,7 +12,7 @@ use crate::plonky2::field::cubic::extension::CubicExtension;
 use crate::trace::generator::TraceGenerator;
 use crate::trace::AirTrace;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ArithmeticGenerator<L: AirParameters> {
     writer: TraceWriter<L::Field>,
 }
