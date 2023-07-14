@@ -6,15 +6,15 @@
 //! ```
 //! cargo run --release --example ed_scalar_mul
 //! ```
-//! 
+//!
 //!  To see the timing print, use:
 //! ```
-//! RUST_LOG="debug" cargo run --release --example ed_scalar_mul 
+//! RUST_LOG="debug" cargo run --release --example ed_scalar_mul
 //! ```
-//! 
+//!
 //! For maximum performence, set the compiler flag to optimize for your CPU architecture:
 //! ```
-//! RUST_LOG="debug" RUSTFLAGS=-Ctarget-cpu=native cargo run --release --example ed_scalar_mul 
+//! RUST_LOG="debug" RUSTFLAGS=-Ctarget-cpu=native cargo run --release --example ed_scalar_mul
 //! ```
 
 use curta::chip::ec::edwards::ed25519::Ed25519;

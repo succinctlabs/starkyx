@@ -1,6 +1,7 @@
 use self::arithmetic::expression::ArithmeticExpression;
 use self::arithmetic::ArithmeticConstraint;
 use super::instruction::set::AirInstruction;
+use super::table::evaluation::Evaluation;
 use super::table::lookup::Lookup;
 use super::AirParameters;
 use crate::air::extension::cubic::CubicParser;
@@ -14,6 +15,7 @@ pub enum Constraint<L: AirParameters> {
     MulInstruction(ArithmeticExpression<L::Field>, L::Instruction),
     Arithmetic(ArithmeticConstraint<L::Field>),
     Lookup(Lookup<L::Field, L::CubicParams, 1>),
+    Evaluation(Evaluation<L::Field, L::CubicParams>),
 }
 
 impl<L: AirParameters> Constraint<L> {
@@ -33,6 +35,10 @@ impl<L: AirParameters> Constraint<L> {
     pub fn lookup(lookup: Lookup<L::Field, L::CubicParams, 1>) -> Self {
         Self::Lookup(lookup)
     }
+
+    pub fn evaluation(evalutaion: Evaluation<L::Field, L::CubicParams>) -> Self {
+        Self::Evaluation(evalutaion)
+    }
 }
 
 impl<L: AirParameters, AP: AirParser<Field = L::Field>> AirConstraint<AP> for Constraint<L>
@@ -51,6 +57,7 @@ where
             }
             Constraint::Arithmetic(constraint) => constraint.eval(parser),
             Constraint::Lookup(lookup) => lookup.eval(parser),
+            Constraint::Evaluation(evaluation) => evaluation.eval(parser),
         }
     }
 }

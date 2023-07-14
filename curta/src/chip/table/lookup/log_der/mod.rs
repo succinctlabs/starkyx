@@ -14,7 +14,7 @@ use crate::math::prelude::*;
 pub mod constraint;
 pub mod trace;
 
-/// Only supports degree 3 extensions
+/// Currently, only supports an even number of values
 #[derive(Debug, Clone)]
 pub struct LogLookup<F: Field, E: CubicParameters<F>, const N: usize> {
     pub(crate) challenge: ExtensionRegister<3>,

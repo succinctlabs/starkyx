@@ -10,6 +10,7 @@ use super::constraint::Constraint;
 use super::instruction::set::{AirInstruction, InstructionSet};
 use super::register::element::ElementRegister;
 use super::register::Register;
+use super::table::evaluation::Evaluation;
 use super::table::lookup::Lookup;
 use super::{AirParameters, Chip};
 use crate::math::prelude::*;
@@ -25,6 +26,7 @@ pub struct AirBuilder<L: AirParameters> {
     pub(crate) instructions: InstructionSet<L>,
     pub(crate) constraints: Vec<Constraint<L>>,
     pub(crate) lookup_data: Vec<Lookup<L::Field, L::CubicParams, 1>>,
+    pub(crate) evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
     range_table: Option<ElementRegister>,
 }
 
@@ -40,6 +42,7 @@ impl<L: AirParameters> AirBuilder<L> {
             instructions: BTreeSet::new(),
             constraints: Vec::new(),
             lookup_data: Vec::new(),
+            evaluation_data: Vec::new(),
             range_table: None,
         }
     }

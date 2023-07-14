@@ -86,6 +86,12 @@ impl<L: AirParameters> AirBuilder<L> {
         T::from_register(register)
     }
 
+    pub fn alloc_challenge_array<T: Register>(&mut self, length: usize) -> ArrayRegister<T> {
+        let size_of = T::size_of() * length;
+        let register = self.get_challenge_memory(size_of);
+        ArrayRegister::<T>::from_register_unsafe(register)
+    }
+
     /// Allocates a new local register according to type `T` which implements the Register trait
     /// and returns it.
     pub fn alloc_public<T: Register>(&mut self) -> T {

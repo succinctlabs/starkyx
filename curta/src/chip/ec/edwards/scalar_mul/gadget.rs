@@ -178,6 +178,13 @@ impl<F: PrimeField64> TraceWriter<F> {
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
+    use plonky2::field::packable::Packable;
+    use plonky2::iop::witness::PartialWitness;
+    use plonky2::plonk::circuit_builder::CircuitBuilder;
+    use plonky2::plonk::circuit_data::CircuitConfig;
+    use plonky2::plonk::config::PoseidonGoldilocksConfig;
+    use plonky2::timed;
+    use plonky2::util::timing::TimingTree;
     use rand::thread_rng;
 
     use super::*;
@@ -185,6 +192,10 @@ mod tests {
     use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
     use crate::chip::ec::gadget::EllipticCurveGadget;
     use crate::chip::field::instruction::FpInstruction;
+    use crate::plonky2::stark::gadget::StarkGadget;
+    use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
+    use crate::plonky2::stark::prover::StarkyProver;
+    use crate::plonky2::stark::verifier::StarkyVerifier;
 
     #[derive(Clone, Debug, Copy)]
     pub struct Ed25519ScalarMulTest;
@@ -207,7 +218,13 @@ mod tests {
         type F = GoldilocksField;
         type L = Ed25519ScalarMulTest;
         type SC = PoseidonGoldilocksStarkConfig;
+        type C = PoseidonGoldilocksConfig;
+        const D: usize = 2;
         type E = Ed25519;
+
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let mut timing = TimingTree::new("Ed25519 Scalar mul", log::Level::Debug);
 
         let mut builder = AirBuilder::<L>::new();
 
@@ -229,35 +246,76 @@ mod tests {
             writer.write_value(&scalar_mul_gadget.cyclic_counter, &counter_val, j);
             counter_val *= counter_gen;
         }
-        for i in 0..256usize {
-            let writer = generator.new_writer();
-            let handle = tx.clone();
-            let gadget = scalar_mul_gadget.clone();
-            let a = rng.gen_biguint(256);
-            let point = E::generator() * a;
-            let scalar = rng.gen_biguint(256);
-            rayon::spawn(move || {
-                let res = writer.write_ed_double_and_add(
-                    &scalar,
-                    &point,
-                    &gadget.double_and_add_gadget,
-                    256 * i,
-                );
-                assert_eq!(res, point * scalar);
-                handle.send(1).unwrap();
-            });
-        }
-        drop(tx);
-        for msg in rx.iter() {
-            assert!(msg == 1);
-        }
+
+        timed!(timing, "generate trace", {
+            for i in 0..256usize {
+                let writer = generator.new_writer();
+                let handle = tx.clone();
+                let gadget = scalar_mul_gadget.clone();
+                let a = rng.gen_biguint(256);
+                let point = E::generator() * a;
+                let scalar = rng.gen_biguint(256);
+                rayon::spawn(move || {
+                    let res = writer.write_ed_double_and_add(
+                        &scalar,
+                        &point,
+                        &gadget.double_and_add_gadget,
+                        256 * i,
+                    );
+                    assert_eq!(res, point * scalar);
+                    handle.send(1).unwrap();
+                });
+            }
+            drop(tx);
+            for msg in rx.iter() {
+                assert!(msg == 1);
+            }
+        });
         let stark = Starky::<_, { L::num_columns() }>::new(air);
         let config = SC::standard_fast_config(L::num_rows());
 
         // Generate proof and verify as a stark
-        test_starky(&stark, &config, &generator, &[]);
+        // test_starky(&stark, &config, &generator, &[]);
+        let proof = timed!(
+            timing,
+            "Stark proof generagtion",
+            StarkyProver::<F, C, F, <F as Packable>::Packing, D, 1>::prove(
+                &config,
+                &stark,
+                &generator,
+                &[],
+            )
+            .unwrap()
+        );
+
+        // Verify the proof as a stark
+        StarkyVerifier::verify(&config, &stark, proof, &[]).unwrap();
 
         // Test the recursive proof.
-        test_recursive_starky(stark, config, generator, &[]);
+        // test_recursive_starky(stark, config, generator, &[]);
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut builder = CircuitBuilder::<F, D>::new(config_rec);
+        let virtual_proof = builder.add_virtual_stark_proof(&stark, &config);
+
+        builder.print_gate_counts(0);
+        let mut pw = PartialWitness::new();
+        // Set public inputs.
+        builder.verify_stark_proof(&config, &stark, virtual_proof.clone(), &[]);
+
+        let generator =
+            SimpleStarkWitnessGenerator::new(config, stark, virtual_proof, vec![], generator);
+        builder.add_simple_generator(generator);
+
+        let data = builder.build::<C>();
+        let recursive_proof = timed!(
+            timing,
+            "Total proof with a recursive envelope",
+            plonky2::plonk::prover::prove(&data.prover_only, &data.common, pw, &mut timing)
+                .unwrap()
+        );
+        timing.print();
+        data.verify(recursive_proof).unwrap();
+
+        timing.print();
     }
 }

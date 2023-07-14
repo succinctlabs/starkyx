@@ -1,4 +1,4 @@
-//! Lookup table
+//! Lookup argument
 //!
 
 pub mod log_der;
