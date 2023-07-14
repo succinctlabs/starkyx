@@ -28,6 +28,8 @@ use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
 use crate::plonky2::stark::{Plonky2Stark, Starky};
 use crate::trace::generator::TraceGenerator;
 
+pub type EdDSAStark<F, E> = Starky<Chip<ScalarMulEd25519<F, E>>, { 2330 + 1504 }>;
+
 #[derive(Debug, Clone, Copy)]
 pub struct AffinePointTarget {
     pub x: [Target; 16],
@@ -297,7 +299,7 @@ mod tests {
         type F = GoldilocksField;
         type E = GoldilocksCubicParameters;
         type C = PoseidonGoldilocksConfig;
-        type S = Starky<Chip<ScalarMulEd25519<F, E>>, { 2330 + 1504 }>;
+        type S = EdDSAStark<F, E>;
         const D: usize = 2;
 
         let _ = env_logger::builder().is_test(true).try_init();
