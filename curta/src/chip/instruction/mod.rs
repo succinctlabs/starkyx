@@ -8,6 +8,7 @@ use crate::math::prelude::*;
 
 pub mod assign;
 pub mod bit;
+pub mod cycle;
 pub mod empty;
 pub mod node;
 pub mod set;

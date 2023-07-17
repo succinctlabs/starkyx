@@ -4,6 +4,7 @@ use std::collections::HashSet;
 
 use super::assign::AssignInstruction;
 use super::bit::BitConstraint;
+use super::cycle::Cycle;
 use super::write::WriteInstruction;
 use super::{Instruction, InstructionId};
 use crate::air::parser::AirParser;
@@ -19,6 +20,7 @@ pub enum AirInstruction<F, I> {
     WriteInstruction(WriteInstruction),
     BitConstraint(BitConstraint),
     Assign(AssignInstruction<F>),
+    Cycle(Cycle<F>),
 }
 
 pub type InstructionSet<L> =
@@ -33,6 +35,7 @@ impl<F: Field, AP: AirParser<Field = F>, I: AirConstraint<AP>> AirConstraint<AP>
             AirInstruction::WriteInstruction(i) => AirConstraint::<AP>::eval(i, parser),
             AirInstruction::BitConstraint(i) => AirConstraint::<AP>::eval(i, parser),
             AirInstruction::Assign(i) => AirConstraint::<AP>::eval(i, parser),
+            AirInstruction::Cycle(i) => AirConstraint::<AP>::eval(i, parser),
         }
     }
 }
@@ -44,6 +47,7 @@ impl<F: Field, I: Instruction<F>> Instruction<F> for AirInstruction<F, I> {
             AirInstruction::WriteInstruction(i) => Instruction::<F>::trace_layout(i),
             AirInstruction::BitConstraint(i) => Instruction::<F>::trace_layout(i),
             AirInstruction::Assign(i) => i.trace_layout(),
+            AirInstruction::Cycle(i) => i.trace_layout(),
         }
     }
 
@@ -53,6 +57,7 @@ impl<F: Field, I: Instruction<F>> Instruction<F> for AirInstruction<F, I> {
             AirInstruction::WriteInstruction(i) => Instruction::<F>::inputs(i),
             AirInstruction::BitConstraint(i) => Instruction::<F>::inputs(i),
             AirInstruction::Assign(i) => Instruction::<F>::inputs(i),
+            AirInstruction::Cycle(i) => Instruction::<F>::inputs(i),
         }
     }
 
@@ -62,6 +67,7 @@ impl<F: Field, I: Instruction<F>> Instruction<F> for AirInstruction<F, I> {
             AirInstruction::WriteInstruction(i) => Instruction::<F>::write(i, writer, row_index),
             AirInstruction::BitConstraint(i) => Instruction::<F>::write(i, writer, row_index),
             AirInstruction::Assign(i) => Instruction::<F>::write(i, writer, row_index),
+            AirInstruction::Cycle(i) => Instruction::<F>::write(i, writer, row_index),
         }
     }
 
@@ -71,6 +77,7 @@ impl<F: Field, I: Instruction<F>> Instruction<F> for AirInstruction<F, I> {
             AirInstruction::WriteInstruction(i) => Instruction::<F>::constraint_degree(i),
             AirInstruction::BitConstraint(i) => Instruction::<F>::constraint_degree(i),
             AirInstruction::Assign(i) => Instruction::<F>::constraint_degree(i),
+            AirInstruction::Cycle(i) => Instruction::<F>::constraint_degree(i),
         }
     }
 
@@ -80,6 +87,7 @@ impl<F: Field, I: Instruction<F>> Instruction<F> for AirInstruction<F, I> {
             AirInstruction::WriteInstruction(i) => Instruction::<F>::id(i),
             AirInstruction::BitConstraint(i) => Instruction::<F>::id(i),
             AirInstruction::Assign(i) => Instruction::<F>::id(i),
+            AirInstruction::Cycle(i) => Instruction::<F>::id(i),
         }
     }
 }
@@ -101,6 +109,10 @@ impl<F, I> AirInstruction<F, I> {
 
     pub fn assign(assignment: AssignInstruction<F>) -> Self {
         AirInstruction::Assign(assignment)
+    }
+
+    pub fn cycle(cycle: Cycle<F>) -> Self {
+        AirInstruction::Cycle(cycle)
     }
 }
 

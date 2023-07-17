@@ -22,7 +22,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> const AirParameters for ScalarMulEd
     type CubicParams = E;
 
     const NUM_ARITHMETIC_COLUMNS: usize = 1504;
-    const NUM_FREE_COLUMNS: usize = 2330;
+    const NUM_FREE_COLUMNS: usize = 2331;
     type Instruction = FpInstruction<Ed25519BaseField>;
 
     fn num_rows_bits() -> usize {
@@ -31,7 +31,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> const AirParameters for ScalarMulEd
 }
 
 impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
-    pub fn air() -> (Chip<Self>, EdScalarMulGadget<Ed25519>) {
+    pub fn air() -> (Chip<Self>, EdScalarMulGadget<F, Ed25519>) {
         let mut builder = AirBuilder::<Self>::new();
 
         let res = builder.alloc_unchecked_ec_point();

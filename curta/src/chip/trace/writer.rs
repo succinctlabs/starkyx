@@ -5,6 +5,7 @@ use std::sync::{LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use crate::air::parser::TraceWindowParser;
 use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::chip::instruction::Instruction;
+use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::*;
@@ -70,6 +71,19 @@ impl<F: Field> TraceWriter<F> {
         register.eval(&parser)
     }
 
+    #[inline]
+    pub fn read_vec<R: Register>(
+        &self,
+        array: &ArrayRegister<R>,
+        row_index: usize,
+    ) -> Vec<R::Value<F>> {
+        array
+            .into_iter()
+            .map(|register| self.read(&register, row_index))
+            .collect()
+    }
+
+    #[inline]
     pub fn read_expression(
         &self,
         expression: &ArithmeticExpression<F>,
@@ -100,19 +114,19 @@ impl<F: Field> TraceWriter<F> {
         memory_slice.assign(&mut trace.view_mut(), 0, value, row_index);
     }
 
-    #[inline]
-    pub fn write_batch<T: RegisterSerializable>(
-        &self,
-        data_slice: &[T],
-        values: &[F],
-        row_index: usize,
-    ) {
-        let mut trace = self.0.trace.write().unwrap();
-        data_slice.iter().fold(0, |local_index, data| {
-            data.register()
-                .assign(&mut trace.view_mut(), local_index, values, row_index)
-        });
-    }
+    // #[inline]
+    // pub fn write_batch<T: RegisterSerializable>(
+    //     &self,
+    //     data_slice: &[T],
+    //     values: &[F],
+    //     row_index: usize,
+    // ) {
+    //     let mut trace = self.0.trace.write().unwrap();
+    //     data_slice.iter().fold(0, |local_index, data| {
+    //         data.register()
+    //             .assign(&mut trace.view_mut(), local_index, values, row_index)
+    //     });
+    // }
 
     #[inline]
     pub fn write<T: RegisterSerializable>(&self, data: &T, value: &[F], row_index: usize) {

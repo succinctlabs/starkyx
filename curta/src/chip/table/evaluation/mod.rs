@@ -19,6 +19,7 @@ pub struct Evaluation<F: Field, E: CubicParameters<F>> {
     alphas: ArrayRegister<ExtensionRegister<3>>,
     values: Vec<ElementRegister>,
     filter: ArithmeticExpression<F>,
+    accumulator: ExtensionRegister<3>,
     _marker: PhantomData<(F, E)>,
 }
 
@@ -27,12 +28,14 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         values: &[ElementRegister],
         filter: ArithmeticExpression<L::Field>,
-    ) {
+    ) -> ExtensionRegister<3> {
         // Get the running evaluation challenge
         let beta = self.alloc_challenge::<ExtensionRegister<3>>();
         let beta_powers = self.alloc::<ExtensionRegister<3>>();
         // get the row accumulation challenge
         let alphas = self.alloc_challenge_array::<ExtensionRegister<3>>(values.len());
+
+        let accumulator = self.alloc::<ExtensionRegister<3>>();
 
         let evaluation = Evaluation {
             beta,
@@ -40,10 +43,12 @@ impl<L: AirParameters> AirBuilder<L> {
             alphas,
             values: values.to_vec(),
             filter,
+            accumulator,
             _marker: PhantomData,
         };
         self.constraints
             .push(Constraint::evaluation(evaluation.clone()));
         self.evaluation_data.push(evaluation);
+        accumulator
     }
 }

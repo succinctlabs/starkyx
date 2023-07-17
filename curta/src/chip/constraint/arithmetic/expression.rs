@@ -22,7 +22,8 @@ use crate::math::prelude::*;
 #[derive(Clone, Debug)]
 pub struct ArithmeticExpression<F> {
     pub(crate) expression: ArithmeticExpressionSlice<F>,
-    pub(crate) size: usize,
+    pub size: usize,
+    // pub degree : usize,
 }
 
 impl<F: Field> ArithmeticExpression<F> {

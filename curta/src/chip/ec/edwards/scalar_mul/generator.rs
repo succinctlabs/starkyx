@@ -28,7 +28,7 @@ use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
 use crate::plonky2::stark::{Plonky2Stark, Starky};
 use crate::trace::generator::TraceGenerator;
 
-pub type EdDSAStark<F, E> = Starky<Chip<ScalarMulEd25519<F, E>>, { 2330 + 1504 }>;
+pub type EdDSAStark<F, E> = Starky<Chip<ScalarMulEd25519<F, E>>, { 2331 + 1504 }>;
 
 #[derive(Debug, Clone, Copy)]
 pub struct AffinePointTarget {
@@ -53,7 +53,7 @@ pub trait ScalarMulEd25519Gadget<F: RichField + Extendable<D>, const D: usize> {
         ArithmeticGenerator<ScalarMulEd25519<F, E>>: TraceGenerator<F, S::Air>,
         <ArithmeticGenerator<ScalarMulEd25519<F, E>> as TraceGenerator<F, S::Air>>::Error:
             Into<anyhow::Error>,
-        S: From<Starky<Chip<ScalarMulEd25519<F, E>>, { 2330 + 1504 }>>,
+        S: From<Starky<Chip<ScalarMulEd25519<F, E>>, { 2331 + 1504 }>>,
         [(); S::COLUMNS]:;
 }
 
@@ -76,12 +76,12 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
         ArithmeticGenerator<ScalarMulEd25519<F, E>>: TraceGenerator<F, S::Air>,
         <ArithmeticGenerator<ScalarMulEd25519<F, E>> as TraceGenerator<F, S::Air>>::Error:
             Into<anyhow::Error>,
-        S: From<Starky<Chip<ScalarMulEd25519<F, E>>, { 2330 + 1504 }>>,
+        S: From<Starky<Chip<ScalarMulEd25519<F, E>>, { 2331 + 1504 }>>,
         [(); S::COLUMNS]:,
     {
         let (air, gadget) = ScalarMulEd25519::<F, E>::air();
 
-        let stark = Starky::<_, { 2330 + 1504 }>::new(air); //TODO: MAKE SURE NUM_COLS FITS
+        let stark = Starky::<_, { 2331 + 1504 }>::new(air); //TODO: MAKE SURE NUM_COLS FITS
         let config =
             StarkyConfig::<F, C, D>::standard_fast_config(ScalarMulEd25519::<F, E>::num_rows());
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
@@ -126,7 +126,7 @@ pub struct SimpleScalarMulEd25519Generator<
     S,
     const D: usize,
 > {
-    gadget: EdScalarMulGadget<Ed25519>,
+    gadget: EdScalarMulGadget<F, Ed25519>,
     points: Vec<AffinePointTarget>,
     scalars: Vec<Vec<BoolTarget>>, // 32-byte limbs
     results: Vec<AffinePointTarget>,
@@ -150,7 +150,7 @@ impl<
     > SimpleScalarMulEd25519Generator<F, E, C, S, D>
 {
     pub fn new(
-        gadget: EdScalarMulGadget<Ed25519>,
+        gadget: EdScalarMulGadget<F, Ed25519>,
         points: Vec<AffinePointTarget>,
         scalars: Vec<Vec<BoolTarget>>,
         results: Vec<AffinePointTarget>,
@@ -237,12 +237,9 @@ where
         // Generate the trace
         let trace_generator = &self.generator.trace_generator;
 
-        let mut counter_val = F::ONE;
-        let counter_gen = F::primitive_root_of_unity(8);
         let writer = trace_generator.new_writer();
         for j in 0..(1 << 16) {
-            writer.write_value(&self.gadget.cyclic_counter, &counter_val, j);
-            counter_val *= counter_gen;
+            writer.write_instruction(&self.gadget.cycle, j);
         }
         let (tx, rx) = channel();
         for i in 0..256usize {

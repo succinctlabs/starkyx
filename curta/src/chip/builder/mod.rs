@@ -67,7 +67,7 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 
     /// Register an instrucgtion into the builder.
-    fn register_air_instruction_internal(
+    pub(crate) fn register_air_instruction_internal(
         &mut self,
         instruction: AirInstruction<L::Field, L::Instruction>,
     ) -> Result<()> {

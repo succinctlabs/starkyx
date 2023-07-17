@@ -8,8 +8,8 @@ use crate::chip::ec::gadget::EllipticCurveWriter;
 use crate::chip::ec::point::{AffinePoint, AffinePointRegister};
 use crate::chip::field::instruction::FromFieldInstruction;
 use crate::chip::field::register::FieldRegister;
+use crate::chip::instruction::cycle::Cycle;
 use crate::chip::register::bit::BitRegister;
-use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::utils::biguint_to_bits_le;
@@ -33,8 +33,8 @@ pub struct EdDoubleAndAddGadget<E: EdwardsParameters> {
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-pub struct EdScalarMulGadget<E: EdwardsParameters> {
-    pub cyclic_counter: ElementRegister,
+pub struct EdScalarMulGadget<F, E: EdwardsParameters> {
+    pub cycle: Cycle<F>,
     pub double_and_add_gadget: EdDoubleAndAddGadget<E>,
 }
 
@@ -84,18 +84,13 @@ impl<L: AirParameters> AirBuilder<L> {
         bit: &BitRegister,
         result: &AffinePointRegister<E>,
         temp: &AffinePointRegister<E>,
-    ) -> EdScalarMulGadget<E>
+    ) -> EdScalarMulGadget<L::Field, E>
     where
         L::Instruction: FromFieldInstruction<E::BaseField>,
     {
-        let cyclic_counter = self.alloc::<ElementRegister>();
+        // Create a cycle of size 256
+        let cycle = self.cycle(8);
         let double_and_add_gadget = self.ed_double_and_add(bit, result, temp);
-
-        // Generate a multiplicative subgroup of order 256 (i.e., 2^8).
-        let group = L::Field::two_adic_subgroup(8);
-        let generator = L::Field::primitive_root_of_unity(8);
-        let generator_inv = group[group.len() - 1];
-        debug_assert_eq!(generator, group[1]);
 
         // Copy over the result of the double and add step to the next row for every row but not for
         // every 256th row. By doing this trick, we can compute multiple scalar multiplications
@@ -107,30 +102,26 @@ impl<L: AirParameters> AirBuilder<L> {
 
         // Note that result and result_next live on the same row.
         // if log_generator(cursor[LOCAL]) % 2^8 == 0 then result[NEXT] <= result_next[LOCAL].
-        let result_x_copy_constraint = (cyclic_counter.expr() - generator_inv)
+
+        // (cyclic_counter.expr() - generator_inv)
+        let result_x_copy_constraint = (cycle.bit.next().expr() - L::Field::ONE)
             * (result.x.next().expr() - result_next.x.expr());
         self.assert_expression_zero(result_x_copy_constraint);
-        let result_y_copy_constraint = (cyclic_counter.expr() - generator_inv)
+        let result_y_copy_constraint = (cycle.bit.next().expr() - L::Field::ONE)
             * (result.y.next().expr() - result_next.y.expr());
         self.assert_expression_zero(result_y_copy_constraint);
 
         // Note that temp and temp_next live on the same row.
         // if log_generator(cursor[LOCAL]) % 2^8 == 0 then temp[NEXT] <= temp_next[LOCAL]
         let temp_x_copy_constraint =
-            (cyclic_counter.expr() - generator_inv) * (temp.x.next().expr() - temp_next.x.expr());
+            (cycle.bit.next().expr() - L::Field::ONE) * (temp.x.next().expr() - temp_next.x.expr());
         self.assert_expression_zero(temp_x_copy_constraint);
         let temp_y_copy_constraint =
-            (cyclic_counter.expr() - generator_inv) * (temp.y.next().expr() - temp_next.y.expr());
+            (cycle.bit.next().expr() - L::Field::ONE) * (temp.y.next().expr() - temp_next.y.expr());
         self.assert_expression_zero(temp_y_copy_constraint);
 
-        // cursor[NEXT] = cursor[LOCAL] * generator
-        self.assert_expressions_equal(
-            cyclic_counter.next().expr(),
-            cyclic_counter.expr() * generator,
-        );
-
         EdScalarMulGadget {
-            cyclic_counter,
+            cycle,
             double_and_add_gadget,
         }
     }
@@ -205,7 +196,7 @@ mod tests {
         type CubicParams = GoldilocksCubicParameters;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 1504;
-        const NUM_FREE_COLUMNS: usize = 2330;
+        const NUM_FREE_COLUMNS: usize = 2331;
         type Instruction = FpInstruction<Ed25519BaseField>;
 
         fn num_rows_bits() -> usize {
@@ -239,12 +230,9 @@ mod tests {
         let (tx, rx) = channel();
         let mut rng = thread_rng();
 
-        let mut counter_val = F::ONE;
-        let counter_gen = F::primitive_root_of_unity(8);
         let writer = generator.new_writer();
-        for j in 0..(1 << 16) {
-            writer.write_value(&scalar_mul_gadget.cyclic_counter, &counter_val, j);
-            counter_val *= counter_gen;
+        for j in 0..L::num_rows() {
+            writer.write_instruction(&scalar_mul_gadget.cycle, j);
         }
 
         timed!(timing, "generate trace", {
@@ -298,7 +286,7 @@ mod tests {
         let virtual_proof = builder.add_virtual_stark_proof(&stark, &config);
 
         builder.print_gate_counts(0);
-        let mut pw = PartialWitness::new();
+        let pw = PartialWitness::new();
         // Set public inputs.
         builder.verify_stark_proof(&config, &stark, virtual_proof.clone(), &[]);
 
