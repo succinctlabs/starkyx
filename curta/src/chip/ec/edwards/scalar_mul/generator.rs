@@ -315,12 +315,6 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        for scalar in scalars.iter() {
-            for bool in scalar.iter() {
-                builder.register_public_input(bool.target);
-            }
-        }
-
         let points = (0..256)
             .map(|_| {
                 let x = builder.add_virtual_target_arr();
@@ -328,11 +322,6 @@ mod tests {
                 AffinePointTarget { x, y }
             })
             .collect::<Vec<_>>();
-
-        for point in points.iter() {
-            builder.register_public_inputs(&point.x);
-            builder.register_public_inputs(&point.y);
-        }
 
         let expected_results = (0..256)
             .map(|_| {
@@ -342,50 +331,14 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        for point in expected_results.iter() {
-            builder.register_public_inputs(&point.x);
-            builder.register_public_inputs(&point.y);
-        }
-
         // The scalar multiplications
         let results = builder.ed_scalar_mul_batch::<S, E, C>(&points, &scalars);
 
-        // Get virtual targets for scalars,  points
-        let scalars_2 = (0..256)
-            .into_iter()
-            .map(|_| {
-                (0..256)
-                    .into_iter()
-                    .map(|_| builder.add_virtual_bool_target_unsafe())
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-
-        for scalar in scalars.iter() {
-            for bool in scalar.iter() {
-                builder.register_public_input(bool.target);
-            }
-        }
-
-        let points_2 = (0..256)
-            .map(|_| {
-                let x = builder.add_virtual_target_arr();
-                let y = builder.add_virtual_target_arr();
-                AffinePointTarget { x, y }
-            })
-            .collect::<Vec<_>>();
-
-        for point in points.iter() {
-            builder.register_public_inputs(&point.x);
-            builder.register_public_inputs(&point.y);
-        }
-        let results_2 = builder.ed_scalar_mul_batch::<S, E, C>(&points, &scalars);
-
-        // Compare the results to the expeced results
-        for (res, expected) in results.iter().zip(expected_results.iter()) {
-            for k in 0..16 {
-                builder.connect(res.x[k], expected.x[k]);
-                builder.connect(res.y[k], expected.y[k]);
+        // compare the results to the expected results
+        for (result, expected) in results.iter().zip(expected_results.iter()) {
+            for i in 0..16 {
+                builder.connect(result.x[i], expected.x[i]);
+                builder.connect(result.y[i], expected.y[i]);
             }
         }
 
@@ -398,11 +351,8 @@ mod tests {
 
         for i in 0..256 {
             let a = rng.gen_biguint(256);
-            let b = rng.gen_biguint(256);
             let point = &generator * a;
-            let point_b = &generator * b;
             let scalar = rng.gen_biguint(256);
-            let scalar_2 = rng.gen_biguint(256);
             let res = &point * &scalar;
 
             //Set the expected result
@@ -425,23 +375,6 @@ mod tests {
 
             pw.set_target_arr(points[i].x, point_limbs_x);
             pw.set_target_arr(points[i].y, point_limbs_y);
-
-            // Set the scalar target
-            let scalar_bits = biguint_to_bits_le(&scalar_2, nb_bits);
-            for (target, bit) in scalars_2[i].iter().zip(scalar_bits.iter()) {
-                pw.set_bool_target(*target, *bit);
-            }
-
-            // Set the point target
-            let point_limbs_2_x: [_; 16] = biguint_to_16_digits_field(&point_b.x, 16)
-                .try_into()
-                .unwrap();
-            let point_limbs_2_y: [_; 16] = biguint_to_16_digits_field(&point_b.y, 16)
-                .try_into()
-                .unwrap();
-
-            pw.set_target_arr(points_2[i].x, point_limbs_2_x);
-            pw.set_target_arr(points_2[i].y, point_limbs_2_y);
         }
 
         let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
