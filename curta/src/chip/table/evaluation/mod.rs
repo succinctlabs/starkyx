@@ -14,6 +14,15 @@ pub mod constraint;
 pub mod trace;
 
 #[derive(Debug, Clone)]
+pub enum Digest<F: Field, E: CubicParameters<F>> {
+    Array(ArrayRegister<ElementRegister>),
+    Extended(ExtensionRegister<3>),
+    Expression(ArithmeticExpression<F>),
+    None,
+    _Marker(PhantomData<E>),
+}
+
+#[derive(Debug, Clone)]
 pub struct Evaluation<F: Field, E: CubicParameters<F>> {
     pub beta: ExtensionRegister<3>,
     beta_powers: ExtensionRegister<3>,
@@ -21,11 +30,16 @@ pub struct Evaluation<F: Field, E: CubicParameters<F>> {
     pub values: Vec<ElementRegister>,
     pub filter: ArithmeticExpression<F>,
     accumulator: ExtensionRegister<3>,
+    row_accumulator: ExtensionRegister<3>,
     pub digest: ExtensionRegister<3>,
     _marker: PhantomData<(F, E)>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
+    pub fn alloc_digest_column(&mut self) -> Digest<L::Field, L::CubicParams> {
+        Digest::Extended(self.alloc_extended::<ExtensionRegister<3>>())
+    }
+
     pub fn evaluation<T: Register>(
         &mut self,
         values: &[T],
@@ -52,6 +66,7 @@ impl<L: AirParameters> AirBuilder<L> {
             panic!("Digest must be an extended register");
         }
 
+        let row_accumulator = self.alloc_extended::<ExtensionRegister<3>>();
         let accumulator = self.alloc_extended::<ExtensionRegister<3>>();
 
         let evaluation = Evaluation {
@@ -60,6 +75,7 @@ impl<L: AirParameters> AirBuilder<L> {
             alphas,
             values: elem_vals,
             filter,
+            row_accumulator,
             accumulator,
             digest,
             _marker: PhantomData,
@@ -68,6 +84,20 @@ impl<L: AirParameters> AirBuilder<L> {
             .push(Constraint::evaluation(evaluation.clone()));
         self.evaluation_data.push(evaluation.clone());
         evaluation
+    }
+}
+
+impl<F: Field, E: CubicParameters<F>> Digest<F, E> {
+    pub fn none() -> Self {
+        Digest::None
+    }
+
+    pub fn from_expression(expression: ArithmeticExpression<F>) -> Self {
+        Digest::Expression(expression)
+    }
+
+    pub fn from_array(array: ArrayRegister<ElementRegister>) -> Self {
+        Digest::Array(array)
     }
 }
 
@@ -85,10 +115,10 @@ mod tests {
         type Instruction = EmptyInstruction<GoldilocksField>;
         const NUM_ARITHMETIC_COLUMNS: usize = 2;
         const NUM_FREE_COLUMNS: usize = 2;
-        const EXTENDED_COLUMNS: usize = 20;
+        const EXTENDED_COLUMNS: usize = 23;
 
         fn num_rows_bits() -> usize {
-            4
+            8
         }
     }
 
@@ -106,7 +136,7 @@ mod tests {
 
         let acc = builder.alloc_extended::<ExtensionRegister<3>>();
 
-        let _eval = builder.evaluation(&[x_0, x_1], ArithmeticExpression::one(), acc);
+        let _eval = builder.evaluation(&[x_0, x_1], cycle.bit.expr(), acc);
 
         let (air, _) = builder.build();
 

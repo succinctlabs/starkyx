@@ -20,19 +20,23 @@ impl<F: PrimeField> TraceWriter<F> {
             .map(|x| x == F::ONE)
             .collect::<Vec<_>>();
 
-        let mut acc_values = (0..num_rows)
+        let acc_values = (0..num_rows)
             .into_par_iter()
-            .zip(filters.par_iter())
-            .filter(|(_, &filter)| filter)
-            .map(|(i, _)| {
-                evaluation_data
+            .map(|i| {
+                let value = evaluation_data
                     .values
                     .iter()
                     .zip(alphas.iter())
                     .map(|(v, a)| *a * self.read(v, i))
-                    .sum::<CubicExtension<F, E>>()
+                    .sum::<CubicExtension<F, E>>();
+                self.write(
+                    &evaluation_data.row_accumulator,
+                    &value.base_field_array(),
+                    i,
+                );
+                value
             })
-            .collect::<VecDeque<_>>();
+            .collect::<Vec<_>>();
 
         let mut beta_power = CubicExtension::<F, E>::ONE;
         let mut acc = CubicExtension::<F, E>::ZERO;
@@ -42,10 +46,11 @@ impl<F: PrimeField> TraceWriter<F> {
                 &beta_power.base_field_array(),
                 i,
             );
+
             self.write_value(&evaluation_data.accumulator, &acc.base_field_array(), i);
 
             if f {
-                let value = acc_values.pop_front().unwrap();
+                let value = acc_values[i];
                 acc += value * beta_power;
                 beta_power *= beta;
             }

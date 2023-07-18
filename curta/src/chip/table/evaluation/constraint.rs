@@ -4,13 +4,37 @@
 //!
 //!
 
-use super::Evaluation;
+use plonky2::field::types::Field;
+
+use super::{Digest, Evaluation};
 use crate::air::extension::cubic::CubicParser;
+use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::*;
 use crate::plonky2::field::cubic::element::CubicElement;
 use crate::plonky2::field::CubicParameters;
+
+impl<F: Field, E: CubicParameters<F>> Digest<F, E> {
+    fn eval_digest<AP: CubicParser<E, Field = F>>(
+        &self,
+        parser: &mut AP,
+        digest_val: CubicElement<<AP as AirParser>::Var>,
+        not_filter: CubicElement<<AP as AirParser>::Var>,
+        alphas: &[CubicElement<<AP as AirParser>::Var>],
+        beta: CubicElement<<AP as AirParser>::Var>,
+    ) {
+        match self {
+            Digest::None => {}
+            Digest::Extended(register) => {
+                let digest = register.eval_extension(parser);
+                let constraint = parser.sub_extension(digest, digest_val);
+                parser.constraint_extension_last_row(constraint);
+            }
+            _ => unimplemented!(),
+        }
+    }
+}
 
 impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
     for Evaluation<AP::Field, E>
@@ -19,7 +43,8 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
         let filter_vec = self.filter.eval(parser);
         assert_eq!(filter_vec.len(), 1);
         let filter_base = filter_vec[0];
-        let not_filter_base = parser.sub_const(filter_base, AP::Field::ONE);
+        let one = parser.one();
+        let not_filter_base = parser.sub(one, filter_base);
         let filter = parser.from_base_field(filter_base);
         let not_filter = parser.from_base_field(not_filter_base);
 
@@ -35,23 +60,21 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
         // (Beta_next - beta * beta_local) * filter
         let beta_powers_next = self.beta_powers.next().eval_extension(parser);
         let beta_powers_times_beta = parser.mul_extension(beta_powers, beta);
-        let beta_acc_transition_constraint_all =
-            parser.sub_extension(beta_powers_next, beta_powers_times_beta);
-        let beta_acc_constraint = parser.mul_extension(beta_acc_transition_constraint_all, filter);
+        let beta_powers_next_filter = parser.mul_extension(beta_powers_times_beta, filter);
 
-        let beta_same_all = parser.sub_extension(beta_powers_next, beta_powers);
-        let beta_same_constraint = parser.mul_extension(beta_same_all, not_filter);
+        let beta_powers_next_not_filter = parser.mul_extension(beta_powers, not_filter);
+        let beta_powers_next_value =
+            parser.add_extension(beta_powers_next_filter, beta_powers_next_not_filter);
 
-        let beta_constraint = parser.add_extension(beta_acc_constraint, beta_same_constraint);
-        parser.constraint_extension_transition(beta_constraint);
+        let beta_powers_next_constraint =
+            parser.sub_extension(beta_powers_next, beta_powers_next_value);
+        parser.constraint_extension_transition(beta_powers_next_constraint);
 
         // Constrain the accumulation
 
         // Constrain first row value
         let accumulator = self.accumulator.eval_extension(parser);
-        let zero = parser.zero_extension();
-        let acc_first = parser.sub_extension(accumulator, zero);
-        parser.constraint_extension_first_row(acc_first);
+        parser.constraint_extension_first_row(accumulator);
 
         // Calculate the accumulated value of the row
         // acc = beta_powers * (\sum_i alpha_i * value_i)
@@ -72,34 +95,26 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
             let alpha_times_value = parser.mul_extension(*alpha, val);
             row_acc = parser.add_extension(row_acc, alpha_times_value);
         }
-        let beta_power_row_acc = parser.mul_extension(row_acc, beta_powers);
+        // constrain row accumulator
+        let row_accumulator = self.row_accumulator.eval_extension(parser);
+        let row_acc_constraint = parser.sub_extension(row_accumulator, row_acc);
+        parser.constraint_extension(row_acc_constraint);
+
+        let beta_power_row_acc = parser.mul_extension(row_accumulator, beta_powers);
 
         // Constrain the transition
         let accumulator_next = self.accumulator.next().eval_extension(parser);
-        let expected_acc_next = parser.add_extension(accumulator, beta_power_row_acc);
-        let accumulator_constraint_trans_all =
-            parser.sub_extension(accumulator_next, expected_acc_next);
-        parser.constraint_extension_transition(accumulator_constraint_trans_all);
-        let accumulator_constraint_trans =
-            parser.mul_extension(accumulator_constraint_trans_all, filter);
+        let acc_next_filter_val = parser.add_extension(accumulator, beta_power_row_acc);
+        let acc_next_filter = parser.mul_extension(acc_next_filter_val, filter);
 
-        let accumulator_same_all = parser.sub_extension(accumulator_next, accumulator);
-        let accumulator_same_constraint = parser.mul_extension(accumulator_same_all, not_filter);
-
-        let accumulator_constraint =
-            parser.add_extension(accumulator_constraint_trans, accumulator_same_constraint);
-
+        let acc_next_not_filter = parser.mul_extension(accumulator, not_filter);
+        let accumulator_next_value = parser.add_extension(acc_next_filter, acc_next_not_filter);
+        let accumulator_constraint = parser.sub_extension(accumulator_next, accumulator_next_value);
         parser.constraint_extension_transition(accumulator_constraint);
 
         // last row constraint, digest
         let digest = self.digest.eval_extension(parser);
-        let digest_const_all = parser.sub_extension(digest, expected_acc_next);
-        let digest_acc_constraint = parser.mul_extension(digest_const_all, filter);
-
-        let digest_same = parser.sub_extension(digest, accumulator);
-        let digest_same_constraint = parser.mul_extension(digest_same, not_filter);
-
-        let digest_constraint = parser.add_extension(digest_acc_constraint, digest_same_constraint);
+        let digest_constraint = parser.sub_extension(digest, acc_next_not_filter);
         parser.constraint_extension_last_row(digest_constraint);
     }
 }
