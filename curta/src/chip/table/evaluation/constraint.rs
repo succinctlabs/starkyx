@@ -20,7 +20,6 @@ impl<F: Field, E: CubicParameters<F>> Digest<F, E> {
         &self,
         parser: &mut AP,
         digest_val: CubicElement<<AP as AirParser>::Var>,
-        not_filter: CubicElement<<AP as AirParser>::Var>,
         alphas: &[CubicElement<<AP as AirParser>::Var>],
         beta: CubicElement<<AP as AirParser>::Var>,
     ) {
@@ -30,6 +29,26 @@ impl<F: Field, E: CubicParameters<F>> Digest<F, E> {
                 let digest = register.eval_extension(parser);
                 let constraint = parser.sub_extension(digest, digest_val);
                 parser.constraint_extension_last_row(constraint);
+            }
+            Digest::Values(values) => {
+                let mut digest = parser.zero_extension();
+                let mut beta_powers = parser.one_extension();
+                for array in values {
+                    assert_eq!(array.len(), alphas.len());
+                    // calculate value
+                    let mut acc = parser.zero_extension();
+                    for (reg, alpha) in array.into_iter().zip(alphas.iter()) {
+                        let reg_val = reg.eval(parser);
+                        let reg_val_extension = parser.from_base_field(reg_val);
+                        let alpha_times_val = parser.mul_extension(*alpha, reg_val_extension);
+                        acc = parser.add_extension(acc, alpha_times_val);
+                    }
+                    let acc_times_beta = parser.mul_extension(acc, beta_powers);
+                    digest = parser.add_extension(digest, acc_times_beta);
+                    beta_powers = parser.mul_extension(beta_powers, beta);
+                }
+                let digest_constraint = parser.sub_extension(digest, digest_val);
+                parser.constraint_extension_last_row(digest_constraint);
             }
             _ => unimplemented!(),
         }
@@ -113,8 +132,8 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
         parser.constraint_extension_transition(accumulator_constraint);
 
         // last row constraint, digest
-        let digest = self.digest.eval_extension(parser);
-        let digest_constraint = parser.sub_extension(digest, acc_next_not_filter);
-        parser.constraint_extension_last_row(digest_constraint);
+        // let digest = self.digest.eval_extension(parser);
+        // let digest_constraint = parser.sub_extension(digest, acc_next_not_filter);
+        // parser.constraint_extension_last_row(digest_constraint);
     }
 }

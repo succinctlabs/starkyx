@@ -1,10 +1,30 @@
-use super::Evaluation;
+use super::{Evaluation, Digest};
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 use crate::plonky2::field::cubic::extension::CubicExtension;
 
 impl<F: PrimeField> TraceWriter<F> {
+
+    #[inline]
+    pub(crate) fn write_digest<E: CubicParameters<F>>(
+        &self,
+        num_rows: usize,
+        digest: &Digest<F, E>, 
+        value :  CubicExtension<F, E>,
+    ) {
+        match digest {
+            Digest::Extended(register) => {
+                self.write_value(
+                    register,
+                    &value.base_field_array(),
+                    num_rows - 1,
+                );
+            },
+            _ => unimplemented!(),
+        }
+    }
+
     pub(crate) fn write_evaluation<E: CubicParameters<F>>(
         &self,
         num_rows: usize,
@@ -54,10 +74,6 @@ impl<F: PrimeField> TraceWriter<F> {
             }
         }
         debug_assert_eq!(acc_values.len(), 0);
-        self.write_value(
-            &evaluation_data.digest,
-            &acc.base_field_array(),
-            num_rows - 1,
-        );
+        self.write_digest(num_rows, &evaluation_data.digest, acc);
     }
 }

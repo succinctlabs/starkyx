@@ -6,6 +6,7 @@ use crate::chip::constraint::Constraint;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::extension::ExtensionRegister;
+use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
@@ -15,7 +16,7 @@ pub mod trace;
 
 #[derive(Debug, Clone)]
 pub enum Digest<F: Field, E: CubicParameters<F>> {
-    Array(ArrayRegister<ElementRegister>),
+    Values(Vec<ArrayRegister<ElementRegister>>),
     Extended(ExtensionRegister<3>),
     Expression(ArithmeticExpression<F>),
     None,
@@ -31,7 +32,7 @@ pub struct Evaluation<F: Field, E: CubicParameters<F>> {
     pub filter: ArithmeticExpression<F>,
     accumulator: ExtensionRegister<3>,
     row_accumulator: ExtensionRegister<3>,
-    pub digest: ExtensionRegister<3>,
+    pub digest: Digest<F, E>,
     _marker: PhantomData<(F, E)>,
 }
 
@@ -44,7 +45,7 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         values: &[T],
         filter: ArithmeticExpression<L::Field>,
-        digest: ExtensionRegister<3>,
+        digest: Digest<L::Field, L::CubicParams>,
     ) -> Evaluation<L::Field, L::CubicParams> {
         // Get the running evaluation challenge
         let beta = self.alloc_challenge::<ExtensionRegister<3>>();
@@ -60,10 +61,6 @@ impl<L: AirParameters> AirBuilder<L> {
             for e in elem_array.into_iter() {
                 elem_vals.push(e);
             }
-        }
-
-        if !self.is_extended(&digest) {
-            panic!("Digest must be an extended register");
         }
 
         let row_accumulator = self.alloc_extended::<ExtensionRegister<3>>();
@@ -96,8 +93,8 @@ impl<F: Field, E: CubicParameters<F>> Digest<F, E> {
         Digest::Expression(expression)
     }
 
-    pub fn from_array(array: ArrayRegister<ElementRegister>) -> Self {
-        Digest::Array(array)
+    pub fn from_values(values: &[ArrayRegister<ElementRegister>]) -> Self {
+        Digest::Values(values.to_vec())
     }
 }
 
@@ -134,7 +131,7 @@ mod tests {
 
         let cycle = builder.cycle(4);
 
-        let acc = builder.alloc_extended::<ExtensionRegister<3>>();
+        let acc = builder.alloc_digest_column();
 
         let _eval = builder.evaluation(&[x_0, x_1], cycle.bit.expr(), acc);
 
