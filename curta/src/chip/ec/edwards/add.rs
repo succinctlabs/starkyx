@@ -131,7 +131,7 @@ mod tests {
         type CubicParams = GoldilocksCubicParameters;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 800;
-        const NUM_FREE_COLUMNS: usize = 1208;
+        const EXTENDED_COLUMNS: usize = 1208;
         type Instruction = FpInstruction<Ed25519BaseField>;
 
         fn num_rows_bits() -> usize {

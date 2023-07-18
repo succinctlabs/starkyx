@@ -1,8 +1,6 @@
 use std::collections::HashSet;
 
-use plonky2_maybe_rayon::IndexedParallelIterator;
-
-use super::set::{AirInstruction, InstructionSet};
+use super::set::AirInstruction;
 use super::Instruction;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
@@ -57,8 +55,8 @@ impl<AP: AirParser<Field = F>, F: Field> AirConstraint<AP> for Cycle<F> {
         // Impose compatibility of the bit and the group so that
         // bit = 1 => element = 1 and otherwise bit = 0
         let bit = self.bit.eval(parser);
-        let elem_minus_g = parser.sub_const(element, F::ONE);
-        let bit_constraint = parser.mul(bit, elem_minus_g);
+        let elem_minus_one = parser.sub_const(element, F::ONE);
+        let bit_constraint = parser.mul(bit, elem_minus_one);
         parser.constraint(bit_constraint);
     }
 }
@@ -90,7 +88,6 @@ impl<F: Field> Instruction<F> for Cycle<F> {
 #[cfg(test)]
 mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField;
-    use rand::thread_rng;
 
     use super::*;
     use crate::chip::builder::tests::*;
@@ -114,7 +111,6 @@ mod tests {
 
     #[test]
     fn test_cycle_instruction() {
-        type F = GoldilocksField;
         type L = CycleTest;
         type SC = PoseidonGoldilocksStarkConfig;
 

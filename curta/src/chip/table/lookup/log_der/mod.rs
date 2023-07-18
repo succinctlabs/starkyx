@@ -38,10 +38,10 @@ impl<L: AirParameters> AirBuilder<L> {
     ) {
         // Allocate memory for the lookup
         let challenge = self.alloc_challenge::<ExtensionRegister<3>>();
-        let multiplicities = self.alloc_array::<ElementRegister>(1);
-        let multiplicity_table_log = self.alloc::<ExtensionRegister<3>>();
-        let row_accumulators = self.alloc_array::<ExtensionRegister<3>>(values.len() / 2);
-        let log_lookup_accumulator = self.alloc::<ExtensionRegister<3>>();
+        let multiplicities = self.alloc_array_extended::<ElementRegister>(1);
+        let multiplicity_table_log = self.alloc_extended::<ExtensionRegister<3>>();
+        let row_accumulators = self.alloc_array_extended::<ExtensionRegister<3>>(values.len() / 2);
+        let log_lookup_accumulator = self.alloc_extended::<ExtensionRegister<3>>();
         let table = ArrayRegister::from_element(*table);
 
         let lookup_data = Lookup::LogDerivative(LogLookup {

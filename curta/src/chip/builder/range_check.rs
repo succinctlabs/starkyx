@@ -8,7 +8,7 @@ use crate::chip::AirParameters;
 
 impl<L: AirParameters> AirBuilder<L> {
     pub(crate) fn arithmetic_range_checks(&mut self) {
-        let table = self.alloc::<ElementRegister>();
+        let table = self.alloc_extended::<ElementRegister>();
 
         self.range_table = Some(table);
 
@@ -27,8 +27,6 @@ impl<L: AirParameters> AirBuilder<L> {
         let values = ArrayRegister::<ElementRegister>::from_register_unsafe(MemorySlice::Local(
             0,
             L::NUM_ARITHMETIC_COLUMNS,
-            // L::NUM_FREE_COLUMNS,
-            // L::NUM_ARITHMETIC_COLUMNS,
         ));
 
         self.lookup_log_derivative(&table, &values, Self::range_fn)

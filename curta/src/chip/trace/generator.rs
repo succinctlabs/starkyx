@@ -86,6 +86,20 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                         }
                     }
                 }
+
+                // Write evaluation proofs
+                for eval in air.evaluation_data.iter() {
+                    let (b_idx_0, b_idx_1) = eval.beta.register().get_range();
+                    let beta = CubicExtension::from_base_slice(&challenges[b_idx_0..b_idx_1]);
+                    let mut alphas = vec![];
+                    for alpha in eval.alphas.iter() {
+                        let (a_idx_0, a_idx_1) = alpha.register().get_range();
+                        let alpha = CubicExtension::from_base_slice(&challenges[a_idx_0..a_idx_1]);
+                        alphas.push(alpha);
+                    }
+                    self.writer.write_evaluation(num_rows, eval, beta, &alphas);
+                }
+
                 let trace = self.trace_clone();
                 let extended_trace_values = trace
                     .rows_par()

@@ -1,7 +1,5 @@
 use alloc::collections::VecDeque;
 
-use itertools::Itertools;
-
 use super::Evaluation;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
@@ -14,12 +12,12 @@ impl<F: PrimeField> TraceWriter<F> {
         num_rows: usize,
         evaluation_data: &Evaluation<F, E>,
         beta: CubicExtension<F, E>,
-        alphas: Vec<CubicExtension<F, E>>,
+        alphas: &[CubicExtension<F, E>],
     ) {
         let filters = (0..num_rows)
             .into_par_iter()
             .map(|i| self.read_expression(&evaluation_data.filter, i)[0])
-            .map(|x| x == F::ZERO)
+            .map(|x| x == F::ONE)
             .collect::<Vec<_>>();
 
         let mut acc_values = (0..num_rows)
@@ -39,17 +37,24 @@ impl<F: PrimeField> TraceWriter<F> {
         let mut beta_power = CubicExtension::<F, E>::ONE;
         let mut acc = CubicExtension::<F, E>::ZERO;
         for (i, &f) in filters.iter().enumerate() {
-            if f {
-                let value = acc_values.pop_front().unwrap();
-                acc += value * beta_power;
-                beta_power *= beta;
-            }
-            self.write_value(&evaluation_data.accumulator, &acc.base_field_array(), i);
             self.write_value(
                 &evaluation_data.beta_powers,
                 &beta_power.base_field_array(),
                 i,
             );
+            self.write_value(&evaluation_data.accumulator, &acc.base_field_array(), i);
+
+            if f {
+                let value = acc_values.pop_front().unwrap();
+                acc += value * beta_power;
+                beta_power *= beta;
+            }
         }
+        debug_assert_eq!(acc_values.len(), 0);
+        self.write_value(
+            &evaluation_data.digest,
+            &acc.base_field_array(),
+            num_rows - 1,
+        );
     }
 }

@@ -21,6 +21,7 @@ pub struct AirBuilder<L: AirParameters> {
     local_arithmetic_index: usize,
     next_arithmetic_index: usize,
     next_index: usize,
+    extended_index: usize,
     challenge_index: usize,
     public_inputs_index: usize,
     pub(crate) instructions: InstructionSet<L>,
@@ -37,6 +38,7 @@ impl<L: AirParameters> AirBuilder<L> {
             next_index: L::NUM_ARITHMETIC_COLUMNS,
             local_arithmetic_index: 0,
             next_arithmetic_index: 0,
+            extended_index: L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS,
             challenge_index: 0,
             public_inputs_index: 0,
             instructions: BTreeSet::new(),
@@ -75,16 +77,6 @@ impl<L: AirParameters> AirBuilder<L> {
         self.constraints
             .push(Constraint::from_instruction_set(instruction.clone()));
 
-        // // Add instruction to the instruction list
-        // self.instructions
-        //     .insert(instruction.clone())
-        //     .then_some(())
-        //     .ok_or_else(|| {
-        //         anyhow!(
-        //             "Instruction ID {:?} already exists in the instruction set",
-        //             instruction.id()
-        //         )
-        //     })
         Ok(())
     }
 
@@ -94,7 +86,6 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 
     pub fn build(mut self) -> (Chip<L>, InstructionSet<L>) {
-        let execution_trace_length = self.local_index;
         // Add the range checks
         if L::NUM_ARITHMETIC_COLUMNS > 0 {
             self.arithmetic_range_checks();
@@ -128,12 +119,29 @@ impl<L: AirParameters> AirBuilder<L> {
             );
         }
 
+        let num_extended_columns =
+            self.extended_index - L::NUM_ARITHMETIC_COLUMNS - L::NUM_FREE_COLUMNS;
+        if num_extended_columns > L::EXTENDED_COLUMNS {
+            panic!(
+                "Not enough extended columns. Expected {} extended columns, got {}.",
+                num_extended_columns,
+                L::EXTENDED_COLUMNS
+            );
+        } else if num_extended_columns < L::EXTENDED_COLUMNS {
+            println!(
+                "Warning: {} extended columns unused",
+                L::EXTENDED_COLUMNS - num_extended_columns
+            );
+        }
+
+        let execution_trace_length = self.local_index;
         (
             Chip {
                 constraints: self.constraints,
                 num_challenges: self.challenge_index,
                 execution_trace_length,
                 lookup_data: self.lookup_data,
+                evaluation_data: self.evaluation_data,
                 range_table: self.range_table,
             },
             self.instructions,
@@ -235,13 +243,13 @@ pub mod tests {
         // x1' <- x0 + x1
         let constr_2 = builder.set_to_expression_transition(&x_1.next(), x_0.expr() + x_1.expr());
 
-        let (air, _) = builder.build();
-
         let public_inputs = [
             F::ZERO,
             F::ONE,
             FibonacciAir::fibonacci(L::num_rows() - 1, F::ZERO, F::ONE),
         ];
+
+        let (air, _) = builder.build();
 
         let generator = ArithmeticGenerator::<L>::new(&public_inputs);
 
@@ -272,7 +280,7 @@ pub mod tests {
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = EmptyInstruction<GoldilocksField>;
         const NUM_ARITHMETIC_COLUMNS: usize = 2;
-        const NUM_FREE_COLUMNS: usize = 11;
+        const EXTENDED_COLUMNS: usize = 11;
 
         fn num_rows_bits() -> usize {
             16
