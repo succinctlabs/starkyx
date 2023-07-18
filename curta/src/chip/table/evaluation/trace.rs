@@ -1,5 +1,3 @@
-use alloc::collections::VecDeque;
-
 use super::Evaluation;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
