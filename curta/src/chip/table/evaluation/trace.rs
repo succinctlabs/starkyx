@@ -1,26 +1,21 @@
-use super::{Evaluation, Digest};
+use super::{Digest, Evaluation};
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 use crate::plonky2::field::cubic::extension::CubicExtension;
 
 impl<F: PrimeField> TraceWriter<F> {
-
     #[inline]
     pub(crate) fn write_digest<E: CubicParameters<F>>(
         &self,
         num_rows: usize,
-        digest: &Digest<F, E>, 
-        value :  CubicExtension<F, E>,
+        digest: &Digest<F, E>,
+        value: CubicExtension<F, E>,
     ) {
         match digest {
             Digest::Extended(register) => {
-                self.write_value(
-                    register,
-                    &value.base_field_array(),
-                    num_rows - 1,
-                );
-            },
+                self.write_value(register, &value.base_field_array(), num_rows - 1);
+            }
             _ => unimplemented!(),
         }
     }
@@ -47,11 +42,6 @@ impl<F: PrimeField> TraceWriter<F> {
                     .zip(alphas.iter())
                     .map(|(v, a)| *a * self.read(v, i))
                     .sum::<CubicExtension<F, E>>();
-                self.write(
-                    &evaluation_data.row_accumulator,
-                    &value.base_field_array(),
-                    i,
-                );
                 value
             })
             .collect::<Vec<_>>();
@@ -62,6 +52,12 @@ impl<F: PrimeField> TraceWriter<F> {
             self.write_value(
                 &evaluation_data.beta_powers,
                 &beta_power.base_field_array(),
+                i,
+            );
+            let row_acc_beta_val = acc_values[i] * beta_power;
+            self.write_value(
+                &evaluation_data.row_accumulator,
+                &row_acc_beta_val.base_field_array(),
                 i,
             );
 

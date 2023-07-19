@@ -115,7 +115,7 @@ mod tests {
         const EXTENDED_COLUMNS: usize = 23;
 
         fn num_rows_bits() -> usize {
-            8
+            16
         }
     }
 
@@ -129,7 +129,7 @@ mod tests {
         let x_0 = builder.alloc::<U16Register>();
         let x_1 = builder.alloc::<U16Register>();
 
-        let cycle = builder.cycle(4);
+        let cycle = builder.cycle(8);
 
         let acc = builder.alloc_digest_column();
 
@@ -145,7 +145,7 @@ mod tests {
             let handle = tx.clone();
             writer.write_instruction(&cycle, i);
             rayon::spawn(move || {
-                writer.write(&x_0, &[F::ZERO], i);
+                writer.write(&x_0, &[F::ONE], i);
                 writer.write(&x_1, &[F::from_canonical_usize(i)], i);
                 handle.send(1).unwrap();
             });

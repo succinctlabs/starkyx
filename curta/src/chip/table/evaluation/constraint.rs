@@ -115,15 +115,14 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
             row_acc = parser.add_extension(row_acc, alpha_times_value);
         }
         // constrain row accumulator
+        let row_beta_powers = parser.mul_extension(beta_powers, row_acc);
         let row_accumulator = self.row_accumulator.eval_extension(parser);
-        let row_acc_constraint = parser.sub_extension(row_accumulator, row_acc);
+        let row_acc_constraint = parser.sub_extension(row_accumulator, row_beta_powers);
         parser.constraint_extension(row_acc_constraint);
-
-        let beta_power_row_acc = parser.mul_extension(row_accumulator, beta_powers);
 
         // Constrain the transition
         let accumulator_next = self.accumulator.next().eval_extension(parser);
-        let acc_next_filter_val = parser.add_extension(accumulator, beta_power_row_acc);
+        let acc_next_filter_val = parser.add_extension(accumulator, row_accumulator);
         let acc_next_filter = parser.mul_extension(acc_next_filter_val, filter);
 
         let acc_next_not_filter = parser.mul_extension(accumulator, not_filter);
@@ -132,8 +131,12 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
         parser.constraint_extension_transition(accumulator_constraint);
 
         // last row constraint, digest
-        // let digest = self.digest.eval_extension(parser);
-        // let digest_constraint = parser.sub_extension(digest, acc_next_not_filter);
-        // parser.constraint_extension_last_row(digest_constraint);
+        if let Digest::Extended(digest) = self.digest {
+            let digest_val = digest.eval_extension(parser);
+            let digest_constraint = parser.sub_extension(digest_val, accumulator_next_value);
+            parser.constraint_extension_last_row(digest_constraint);
+        } else {
+            panic!("digest not implemented")
+        }
     }
 }
