@@ -6,7 +6,6 @@ use crate::chip::constraint::Constraint;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::extension::ExtensionRegister;
-use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
@@ -100,8 +99,10 @@ impl<F: Field, E: CubicParameters<F>> Digest<F, E> {
 
 #[cfg(test)]
 mod tests {
+    use rand::{thread_rng, Rng};
+
     use super::*;
-    use crate::chip::builder::tests::*;
+    use crate::chip::{builder::tests::*, register::bit::BitRegister};
 
     #[derive(Debug, Clone)]
     pub struct EvalTest;
@@ -111,7 +112,7 @@ mod tests {
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = EmptyInstruction<GoldilocksField>;
         const NUM_ARITHMETIC_COLUMNS: usize = 2;
-        const NUM_FREE_COLUMNS: usize = 2;
+        const NUM_FREE_COLUMNS: usize = 3;
         const EXTENDED_COLUMNS: usize = 23;
 
         fn num_rows_bits() -> usize {
@@ -129,11 +130,13 @@ mod tests {
         let x_0 = builder.alloc::<U16Register>();
         let x_1 = builder.alloc::<U16Register>();
 
-        let cycle = builder.cycle(8);
+        let cycle = builder.cycle(10);
+
+        let bit = builder.alloc::<BitRegister>();
 
         let acc = builder.alloc_digest_column();
 
-        let _eval = builder.evaluation(&[x_0, x_1], cycle.bit.expr(), acc);
+        let _eval = builder.evaluation(&[x_0, x_1], bit.expr(), acc);
 
         let (air, _) = builder.build();
 
@@ -145,6 +148,9 @@ mod tests {
             let handle = tx.clone();
             writer.write_instruction(&cycle, i);
             rayon::spawn(move || {
+                let mut rng = thread_rng();
+                let bit_val = rng.gen_bool(0.5);
+                writer.write(&bit, &[F::from_canonical_u32(bit_val as u32)], i);
                 writer.write(&x_0, &[F::ONE], i);
                 writer.write(&x_1, &[F::from_canonical_usize(i)], i);
                 handle.send(1).unwrap();
