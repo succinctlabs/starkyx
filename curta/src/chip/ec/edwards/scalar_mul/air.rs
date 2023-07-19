@@ -28,7 +28,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> const AirParameters for ScalarMulEd
     type CubicParams = E;
 
     const NUM_ARITHMETIC_COLUMNS: usize = 1504;
-    const NUM_FREE_COLUMNS: usize = 68;
+    const NUM_FREE_COLUMNS: usize = 70;
     const EXTENDED_COLUMNS: usize = 2291;
     type Instruction = FpInstruction<Ed25519BaseField>;
 
@@ -37,7 +37,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> const AirParameters for ScalarMulEd
     }
 }
 
-pub const ED_NUM_COLUMNS: usize = 1504 + 68 + 2291;
+pub const ED_NUM_COLUMNS: usize = 1504 + 70 + 2291;
 
 impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
     pub fn air() -> (
@@ -72,7 +72,8 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
             .collect::<Vec<_>>();
 
         let scalar_digest = Digest::from_values(scalars_bits);
-        let _ = builder.evaluation(&[scalar_bit], ArithmeticExpression::one(), scalar_digest);
+        let _scalars_evaluation =
+            builder.evaluation(&[scalar_bit], ArithmeticExpression::one(), scalar_digest);
 
         let input_point_values = input_points
             .iter()

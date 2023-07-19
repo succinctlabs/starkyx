@@ -334,7 +334,7 @@ mod tests {
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
 
     #[test]
-    fn test_scalar_gadget() {
+    fn test_scalar_generator() {
         type F = GoldilocksField;
         type E = GoldilocksCubicParameters;
         type C = PoseidonGoldilocksConfig;
