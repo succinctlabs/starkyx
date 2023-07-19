@@ -33,7 +33,7 @@ impl MemorySlice {
     }
 
     #[inline]
-    pub const fn get_range(&self) -> (usize, usize) {
+    pub fn get_range(&self) -> (usize, usize) {
         match self {
             MemorySlice::Local(index, length) => (*index, *index + length),
             MemorySlice::Next(index, length) => (*index, *index + length),
