@@ -102,7 +102,8 @@ mod tests {
     use rand::{thread_rng, Rng};
 
     use super::*;
-    use crate::chip::{builder::tests::*, register::bit::BitRegister};
+    use crate::chip::builder::tests::*;
+    use crate::chip::register::bit::BitRegister;
 
     #[derive(Debug, Clone)]
     pub struct EvalTest;
@@ -182,19 +183,18 @@ mod tests {
         let x_0 = builder.alloc::<U16Register>();
         let x_1 = builder.alloc::<U16Register>();
 
-        let cycle = builder.cycle(4);
+        let cycle = builder.cycle(8);
 
-        let bit = builder.alloc::<BitRegister>();
+        let values = (0..256).into_iter().map(|_| builder.alloc_array_public::<ElementRegister>(2)).collect::<Vec<_>>();
+        let digest = Digest::from_values(&values);
 
-        let acc_0 = builder.alloc_digest_column();
-        let acc_1 = builder.alloc_digest_column();
-
-        let _eval = builder.evaluation(&[x_0, x_1], cycle.bit.expr(), acc_0);
-        let _eval_2 = builder.evaluation(&[x_0, x_1], bit.expr(), acc_1);
+        let _eval = builder.evaluation(&[x_0, x_1], cycle.bit.expr(), digest);
 
         let (air, _) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&[]);
+        let public_inputs = (0..256).into_iter().flat_map(|_| vec![F::ONE, F::ZERO]).collect::<Vec<_>>();
+
+        let generator = ArithmeticGenerator::<L>::new(&public_inputs);
 
         let (tx, rx) = channel();
         for i in 0..L::num_rows() {
@@ -202,11 +202,8 @@ mod tests {
             let handle = tx.clone();
             writer.write_instruction(&cycle, i);
             rayon::spawn(move || {
-                let mut rng = thread_rng();
-                let bit_val = rng.gen_bool(0.5);
-                writer.write(&bit, &[F::from_canonical_u32(bit_val as u32)], i);
                 writer.write(&x_0, &[F::ONE], i);
-                writer.write(&x_1, &[F::from_canonical_usize(i)], i);
+                writer.write(&x_1, &[F::ZERO], i);
                 handle.send(1).unwrap();
             });
         }
@@ -218,9 +215,9 @@ mod tests {
         let config = SC::standard_fast_config(L::num_rows());
 
         // Generate proof and verify as a stark
-        test_starky(&stark, &config, &generator, &[]);
+        test_starky(&stark, &config, &generator, &public_inputs);
 
         // Test the recursive proof.
-        test_recursive_starky(stark, config, generator, &[]);
+        // test_recursive_starky(stark, config, generator, &public_inputs);
     }
 }

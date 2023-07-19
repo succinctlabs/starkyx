@@ -4,7 +4,6 @@
 //!
 //!
 
-
 use super::{Digest, Evaluation};
 use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::AirParser;
@@ -130,6 +129,7 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
         parser.constraint_extension_transition(accumulator_constraint);
 
         // last row constraint, digest
-        self.digest.eval_digest(parser, accumulator_next_value, &alphas, beta);
+        self.digest
+            .eval_digest(parser, accumulator_next_value, &alphas, beta);
     }
 }

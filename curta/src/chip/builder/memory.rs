@@ -145,6 +145,21 @@ impl<L: AirParameters> AirBuilder<L> {
         T::from_register(register)
     }
 
+    pub fn alloc_array_public<T: Register>(&mut self, length: usize) -> ArrayRegister<T> {
+        let size_of = T::size_of() * length;
+        let register = match T::CELL {
+            CellType::Element => self.get_public_memory(size_of),
+            CellType::U16 => unreachable!("Public U16 not implemented"),
+            CellType::Bit => {
+                let reg = self.get_public_memory(size_of);
+                let constraint = AirInstruction::bits(&reg);
+                self.register_air_instruction_internal(constraint).unwrap();
+                reg
+            }
+        };
+        ArrayRegister::<T>::from_register_unsafe(register)
+    }
+
     /// Allocates a new register on the next row according to type `T` which implements the Register
     /// trait and returns it.
     pub fn alloc_next<T: Register>(&mut self) -> T {

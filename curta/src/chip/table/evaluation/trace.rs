@@ -16,6 +16,7 @@ impl<F: PrimeField> TraceWriter<F> {
             Digest::Extended(register) => {
                 self.write_value(register, &value.base_field_array(), num_rows - 1);
             }
+            Digest::Values(_) => {}
             _ => unimplemented!(),
         }
     }
