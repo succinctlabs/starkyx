@@ -81,16 +81,40 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
         S: From<Starky<Chip<ScalarMulEd25519<F, E>>, ED_NUM_COLUMNS>>,
         [(); S::COLUMNS]:,
     {
-        let (air, gadget, scalars_input, points_input) = ScalarMulEd25519::<F, E>::air();
+        let (air, gadget, scalars_input, input_points, output_points) =
+            ScalarMulEd25519::<F, E>::air();
 
-        let mut public_input_target_option = vec![None as Option<Target>; 256 * (256 + 32)];
+        let mut public_input_target_option = vec![None as Option<Target>; 256 * (256 + 2 * 32)];
         for (scalar_register, scalar_target) in scalars_input.iter().zip_eq(scalars.iter()) {
             let (s_0, s_1) = scalar_register.register().get_range();
             let scalar_targets = scalar_target.iter().map(|x| Some(x.target)).collect_vec();
             public_input_target_option[s_0..s_1].copy_from_slice(&scalar_targets);
         }
 
-        for (point_register, point_target) in points_input.iter().zip(points.iter()) {
+        for (point_register, point_target) in input_points.iter().zip(points.iter()) {
+            let (p_x_0, p_x_1) = point_register.x.register().get_range();
+            let (p_y_0, p_y_1) = point_register.y.register().get_range();
+            assert_eq!(p_x_1, p_y_0, "x and y registers must be consecutive");
+            let point_targets = point_target
+                .x
+                .iter()
+                .chain(point_target.y.iter())
+                .map(|v| Some(*v))
+                .collect_vec();
+            public_input_target_option[p_x_0..p_y_1].copy_from_slice(&point_targets);
+        }
+
+        // Input results
+        let results = (0..256)
+            .into_iter()
+            .map(|_| {
+                let x = self.add_virtual_target_arr();
+                let y = self.add_virtual_target_arr();
+                AffinePointTarget { x, y }
+            })
+            .collect::<Vec<_>>();
+
+        for (point_register, point_target) in output_points.iter().zip(results.iter()) {
             let (p_x_0, p_x_1) = point_register.x.register().get_range();
             let (p_y_0, p_y_1) = point_register.y.register().get_range();
             assert_eq!(p_x_1, p_y_0, "x and y registers must be consecutive");
@@ -121,15 +145,6 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
             public_input_target,
             ArithmeticGenerator::<ScalarMulEd25519<F, E>>::new(&[]),
         );
-
-        let results = (0..256)
-            .into_iter()
-            .map(|_| {
-                let x = self.add_virtual_target_arr();
-                let y = self.add_virtual_target_arr();
-                AffinePointTarget { x, y }
-            })
-            .collect::<Vec<_>>();
 
         let generator = SimpleScalarMulEd25519Generator {
             gadget,

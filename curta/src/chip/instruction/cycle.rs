@@ -15,18 +15,21 @@ use crate::math::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct Cycle<F> {
-    pub bit: BitRegister,
+    pub start_bit: BitRegister,
+    pub end_bit: BitRegister,
     element: ElementRegister,
     group: Vec<F>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
     pub fn cycle(&mut self, length_log: usize) -> Cycle<L::Field> {
-        let bit = self.alloc::<BitRegister>();
+        let start_bit = self.alloc::<BitRegister>();
+        let end_bit = self.alloc::<BitRegister>();
         let element = self.alloc::<ElementRegister>();
         let group = L::Field::two_adic_subgroup(length_log);
         let cycle = Cycle {
-            bit,
+            start_bit,
+            end_bit,
             element,
             group,
         };
@@ -54,16 +57,27 @@ impl<AP: AirParser<Field = F>, F: Field> AirConstraint<AP> for Cycle<F> {
 
         // Impose compatibility of the bit and the group so that
         // bit = 1 => element = 1 and otherwise bit = 0
-        let bit = self.bit.eval(parser);
+        // TODO: ADD CONSTRAINTS CUREENTLY UNDERCONSTRAINTED
+        let start_bit = self.start_bit.eval(parser);
         let elem_minus_one = parser.sub_const(element, F::ONE);
-        let bit_constraint = parser.mul(bit, elem_minus_one);
-        parser.constraint(bit_constraint);
+        let start_bit_constraint = parser.mul(start_bit, elem_minus_one);
+        parser.constraint(start_bit_constraint);
+
+        let generator_inv = self.group.last().unwrap();
+        let end_bit = self.end_bit.eval(parser);
+        let elem_minus_one = parser.sub_const(element, *generator_inv);
+        let end_bit_constraint = parser.mul(end_bit, elem_minus_one);
+        parser.constraint(end_bit_constraint);
     }
 }
 
 impl<F: Field> Instruction<F> for Cycle<F> {
     fn trace_layout(&self) -> Vec<MemorySlice> {
-        vec![*self.bit.register(), *self.element.register()]
+        vec![
+            *self.start_bit.register(),
+            *self.end_bit.register(),
+            *self.element.register(),
+        ]
     }
 
     fn inputs(&self) -> HashSet<MemorySlice> {
@@ -78,9 +92,14 @@ impl<F: Field> Instruction<F> for Cycle<F> {
         let cycle = row_index % self.group.len();
         writer.write_value(&self.element, &self.group[cycle], row_index);
         if cycle == 0 {
-            writer.write_value(&self.bit, &F::ONE, row_index);
+            writer.write_value(&self.start_bit, &F::ONE, row_index);
         } else {
-            writer.write_value(&self.bit, &F::ZERO, row_index);
+            writer.write_value(&self.start_bit, &F::ZERO, row_index);
+        }
+        if cycle == self.group.len() - 1 {
+            writer.write_value(&self.end_bit, &F::ONE, row_index);
+        } else {
+            writer.write_value(&self.end_bit, &F::ZERO, row_index);
         }
     }
 }

@@ -28,8 +28,8 @@ impl<F: PrimeField64, E: CubicParameters<F>> const AirParameters for ScalarMulEd
     type CubicParams = E;
 
     const NUM_ARITHMETIC_COLUMNS: usize = 1504;
-    const NUM_FREE_COLUMNS: usize = 67;
-    const EXTENDED_COLUMNS: usize = 2282;
+    const NUM_FREE_COLUMNS: usize = 68;
+    const EXTENDED_COLUMNS: usize = 2291;
     type Instruction = FpInstruction<Ed25519BaseField>;
 
     fn num_rows_bits() -> usize {
@@ -37,13 +37,14 @@ impl<F: PrimeField64, E: CubicParameters<F>> const AirParameters for ScalarMulEd
     }
 }
 
-pub const ED_NUM_COLUMNS: usize = 1504 + 67 + 2282;
+pub const ED_NUM_COLUMNS: usize = 1504 + 68 + 2291;
 
 impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
     pub fn air() -> (
         Chip<Self>,
         EdScalarMulGadget<F, Ed25519>,
         Vec<ArrayRegister<BitRegister>>,
+        Vec<AffinePointRegister<Ed25519>>,
         Vec<AffinePointRegister<Ed25519>>,
     ) {
         let mut builder = AirBuilder::<Self>::new();
@@ -60,7 +61,12 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
 
         let scalars_bits = scalars.iter().map(|s| s.iter()).flatten();
 
-        let points = (0..256)
+        let input_points = (0..256)
+            .into_iter()
+            .map(|_| builder.alloc_public_ec_point())
+            .collect::<Vec<_>>();
+
+        let output_points = (0..256)
             .into_iter()
             .map(|_| builder.alloc_public_ec_point())
             .collect::<Vec<_>>();
@@ -68,7 +74,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
         let scalar_digest = Digest::from_values(scalars_bits);
         let _ = builder.evaluation(&[scalar_bit], ArithmeticExpression::one(), scalar_digest);
 
-        let point_values = points
+        let input_point_values = input_points
             .iter()
             .map(|p| {
                 let (x_reg_0, x_reg_1) = p.x.register().get_range();
@@ -77,17 +83,35 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
                 MemorySlice::Public(x_reg_0, y_reg_1 - x_reg_0)
             })
             .collect::<Vec<_>>();
-        let point_register = scalar_mul_gadget.temp();
+        let input_point_register = scalar_mul_gadget.temp();
 
-        let point_digest = Digest::from_values(point_values);
+        let input_point_digest = Digest::from_values(input_point_values);
         let _inputs_evaluation = builder.evaluation(
-            &[point_register.x, point_register.y],
-            scalar_mul_gadget.cycle.bit.expr(),
-            point_digest,
+            &[input_point_register.x, input_point_register.y],
+            scalar_mul_gadget.cycle.start_bit.expr(),
+            input_point_digest,
+        );
+
+        let output_point_values = output_points
+            .iter()
+            .map(|p| {
+                let (x_reg_0, x_reg_1) = p.x.register().get_range();
+                let (y_reg_0, y_reg_1) = p.y.register().get_range();
+                assert_eq!(x_reg_1, y_reg_0);
+                MemorySlice::Public(x_reg_0, y_reg_1 - x_reg_0)
+            })
+            .collect::<Vec<_>>();
+        let output_point_register = scalar_mul_gadget.result();
+
+        let output_point_digest = Digest::from_values(output_point_values);
+        let _outputs_evaluation = builder.evaluation(
+            &[output_point_register.x, output_point_register.y],
+            scalar_mul_gadget.cycle.end_bit.expr(),
+            output_point_digest,
         );
 
         let (air, _) = builder.build();
 
-        (air, scalar_mul_gadget, scalars, points)
+        (air, scalar_mul_gadget, scalars, input_points, output_points)
     }
 }

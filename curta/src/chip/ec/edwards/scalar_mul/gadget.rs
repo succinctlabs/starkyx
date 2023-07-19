@@ -40,7 +40,7 @@ pub struct EdScalarMulGadget<F, E: EdwardsParameters> {
 
 impl<F, E: EdwardsParameters> EdScalarMulGadget<F, E> {
     pub fn result(&self) -> AffinePointRegister<E> {
-        self.double_and_add_gadget.result.clone()
+        self.double_and_add_gadget.result_next.clone()
     }
 
     pub fn temp(&self) -> AffinePointRegister<E> {
@@ -114,20 +114,20 @@ impl<L: AirParameters> AirBuilder<L> {
         // if log_generator(cursor[LOCAL]) % 2^8 == 0 then result[NEXT] <= result_next[LOCAL].
 
         // (cyclic_counter.expr() - generator_inv)
-        let result_x_copy_constraint = (cycle.bit.next().expr() - L::Field::ONE)
+        let result_x_copy_constraint = (cycle.start_bit.next().expr() - L::Field::ONE)
             * (result.x.next().expr() - result_next.x.expr());
         self.assert_expression_zero(result_x_copy_constraint);
-        let result_y_copy_constraint = (cycle.bit.next().expr() - L::Field::ONE)
+        let result_y_copy_constraint = (cycle.start_bit.next().expr() - L::Field::ONE)
             * (result.y.next().expr() - result_next.y.expr());
         self.assert_expression_zero(result_y_copy_constraint);
 
         // Note that temp and temp_next live on the same row.
         // if log_generator(cursor[LOCAL]) % 2^8 == 0 then temp[NEXT] <= temp_next[LOCAL]
-        let temp_x_copy_constraint =
-            (cycle.bit.next().expr() - L::Field::ONE) * (temp.x.next().expr() - temp_next.x.expr());
+        let temp_x_copy_constraint = (cycle.start_bit.next().expr() - L::Field::ONE)
+            * (temp.x.next().expr() - temp_next.x.expr());
         self.assert_expression_zero(temp_x_copy_constraint);
-        let temp_y_copy_constraint =
-            (cycle.bit.next().expr() - L::Field::ONE) * (temp.y.next().expr() - temp_next.y.expr());
+        let temp_y_copy_constraint = (cycle.start_bit.next().expr() - L::Field::ONE)
+            * (temp.y.next().expr() - temp_next.y.expr());
         self.assert_expression_zero(temp_y_copy_constraint);
 
         EdScalarMulGadget {
@@ -206,7 +206,7 @@ mod tests {
         type CubicParams = GoldilocksCubicParameters;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 1504;
-        const NUM_FREE_COLUMNS: usize = 67;
+        const NUM_FREE_COLUMNS: usize = 68;
         const EXTENDED_COLUMNS: usize = 2264;
         type Instruction = FpInstruction<Ed25519BaseField>;
 

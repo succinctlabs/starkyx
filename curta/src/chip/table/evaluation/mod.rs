@@ -151,7 +151,7 @@ mod tests {
         let acc_0 = builder.alloc_digest_column();
         let acc_1 = builder.alloc_digest_column();
 
-        let _eval = builder.evaluation(&[x_0, x_1], cycle.bit.expr(), acc_0);
+        let _eval = builder.evaluation(&[x_0, x_1], cycle.start_bit.expr(), acc_0);
         let _eval_2 = builder.evaluation(&[x_0, x_1], bit.expr(), acc_1);
 
         let (air, _) = builder.build();
@@ -204,7 +204,7 @@ mod tests {
             .collect::<Vec<_>>();
         let digest = Digest::from_values::<ArrayRegister<ElementRegister>, _>(values);
 
-        let _eval = builder.evaluation(&[x_0, x_1], cycle.bit.expr(), digest);
+        let _eval = builder.evaluation(&[x_0, x_1], cycle.start_bit.expr(), digest);
 
         let (air, _) = builder.build();
 
