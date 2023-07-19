@@ -1,3 +1,4 @@
+use core::borrow::Borrow;
 use core::marker::PhantomData;
 
 use crate::chip::builder::AirBuilder;
@@ -6,7 +7,7 @@ use crate::chip::constraint::Constraint;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::extension::ExtensionRegister;
-use crate::chip::register::{Register, RegisterSerializable};
+use crate::chip::register::RegisterSerializable;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
@@ -40,7 +41,7 @@ impl<L: AirParameters> AirBuilder<L> {
         Digest::Extended(self.alloc_extended::<ExtensionRegister<3>>())
     }
 
-    pub fn evaluation<T: Register>(
+    pub fn evaluation<T: RegisterSerializable>(
         &mut self,
         values: &[T],
         filter: ArithmeticExpression<L::Field>,
@@ -49,9 +50,10 @@ impl<L: AirParameters> AirBuilder<L> {
         // Get the running evaluation challenge
         let beta = self.alloc_challenge::<ExtensionRegister<3>>();
         let beta_powers = self.alloc_extended::<ExtensionRegister<3>>();
+
+        let num_alphas: usize = values.iter().map(|v| v.register().len()).sum();
         // get the row accumulation challenge
-        let alphas =
-            self.alloc_challenge_array::<ExtensionRegister<3>>(values.len() * T::size_of());
+        let alphas = self.alloc_challenge_array::<ExtensionRegister<3>>(num_alphas);
 
         let mut elem_vals = vec![];
         for val in values {
@@ -92,8 +94,18 @@ impl<F: Field, E: CubicParameters<F>> Digest<F, E> {
         Digest::Expression(expression)
     }
 
-    pub fn from_values(values: &[ArrayRegister<ElementRegister>]) -> Self {
-        Digest::Values(values.to_vec())
+    pub fn from_values<T: RegisterSerializable, I: IntoIterator>(values: I) -> Self
+    where
+        I::Item: Borrow<T>,
+    {
+        Digest::Values(
+            values
+                .into_iter()
+                .map(|v| {
+                    ArrayRegister::<ElementRegister>::from_register_unsafe(*(v.borrow().register()))
+                })
+                .collect(),
+        )
     }
 }
 
@@ -104,6 +116,7 @@ mod tests {
     use super::*;
     use crate::chip::builder::tests::*;
     use crate::chip::register::bit::BitRegister;
+    use crate::chip::register::Register;
 
     #[derive(Debug, Clone)]
     pub struct EvalTest;
@@ -189,7 +202,7 @@ mod tests {
             .into_iter()
             .map(|_| builder.alloc_array_public::<ElementRegister>(2))
             .collect::<Vec<_>>();
-        let digest = Digest::from_values(&values);
+        let digest = Digest::from_values::<ArrayRegister<ElementRegister>, _>(values);
 
         let _eval = builder.evaluation(&[x_0, x_1], cycle.bit.expr(), digest);
 

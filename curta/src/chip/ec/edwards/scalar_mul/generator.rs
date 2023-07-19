@@ -1,6 +1,7 @@
 use core::fmt::Debug;
 use std::sync::mpsc::channel;
 
+use itertools::Itertools;
 use num::BigUint;
 use plonky2::field::extension::Extendable;
 use plonky2::field::packable::Packable;
@@ -11,11 +12,12 @@ use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 
-use super::air::ScalarMulEd25519;
+use super::air::{ScalarMulEd25519, ED_NUM_COLUMNS};
 use super::gadget::EdScalarMulGadget;
 use crate::air::RAir;
 use crate::chip::ec::edwards::ed25519::Ed25519;
 use crate::chip::ec::point::AffinePoint;
+use crate::chip::register::RegisterSerializable;
 use crate::chip::trace::generator::ArithmeticGenerator;
 use crate::chip::utils::{biguint_to_16_digits_field, field_limbs_to_biguint};
 use crate::chip::{AirParameters, Chip};
@@ -28,7 +30,7 @@ use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
 use crate::plonky2::stark::{Plonky2Stark, Starky};
 use crate::trace::generator::TraceGenerator;
 
-pub type EdDSAStark<F, E> = Starky<Chip<ScalarMulEd25519<F, E>>, { 2331 + 1504 }>;
+pub type EdDSAStark<F, E> = Starky<Chip<ScalarMulEd25519<F, E>>, ED_NUM_COLUMNS>;
 
 #[derive(Debug, Clone, Copy)]
 pub struct AffinePointTarget {
@@ -53,7 +55,7 @@ pub trait ScalarMulEd25519Gadget<F: RichField + Extendable<D>, const D: usize> {
         ArithmeticGenerator<ScalarMulEd25519<F, E>>: TraceGenerator<F, S::Air>,
         <ArithmeticGenerator<ScalarMulEd25519<F, E>> as TraceGenerator<F, S::Air>>::Error:
             Into<anyhow::Error>,
-        S: From<Starky<Chip<ScalarMulEd25519<F, E>>, { 2331 + 1504 }>>,
+        S: From<Starky<Chip<ScalarMulEd25519<F, E>>, ED_NUM_COLUMNS>>,
         [(); S::COLUMNS]:;
 }
 
@@ -76,22 +78,47 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
         ArithmeticGenerator<ScalarMulEd25519<F, E>>: TraceGenerator<F, S::Air>,
         <ArithmeticGenerator<ScalarMulEd25519<F, E>> as TraceGenerator<F, S::Air>>::Error:
             Into<anyhow::Error>,
-        S: From<Starky<Chip<ScalarMulEd25519<F, E>>, { 2331 + 1504 }>>,
+        S: From<Starky<Chip<ScalarMulEd25519<F, E>>, ED_NUM_COLUMNS>>,
         [(); S::COLUMNS]:,
     {
-        let (air, gadget) = ScalarMulEd25519::<F, E>::air();
+        let (air, gadget, scalars_input, points_input) = ScalarMulEd25519::<F, E>::air();
 
-        let stark = Starky::<_, { 2331 + 1504 }>::new(air); //TODO: MAKE SURE NUM_COLS FITS
+        let mut public_input_target_option = vec![None as Option<Target>; 256 * (256 + 32)];
+        for (scalar_register, scalar_target) in scalars_input.iter().zip_eq(scalars.iter()) {
+            let (s_0, s_1) = scalar_register.register().get_range();
+            let scalar_targets = scalar_target.iter().map(|x| Some(x.target)).collect_vec();
+            public_input_target_option[s_0..s_1].copy_from_slice(&scalar_targets);
+        }
+
+        for (point_register, point_target) in points_input.iter().zip(points.iter()) {
+            let (p_x_0, p_x_1) = point_register.x.register().get_range();
+            let (p_y_0, p_y_1) = point_register.y.register().get_range();
+            assert_eq!(p_x_1, p_y_0, "x and y registers must be consecutive");
+            let point_targets = point_target
+                .x
+                .iter()
+                .chain(point_target.y.iter())
+                .map(|v| Some(*v))
+                .collect_vec();
+            public_input_target_option[p_x_0..p_y_1].copy_from_slice(&point_targets);
+        }
+
+        let public_input_target = public_input_target_option
+            .into_iter()
+            .map(|x| x.unwrap())
+            .collect_vec();
+
+        let stark = Starky::<_, ED_NUM_COLUMNS>::new(air); //TODO: MAKE SURE NUM_COLS FITS
         let config =
             StarkyConfig::<F, C, D>::standard_fast_config(ScalarMulEd25519::<F, E>::num_rows());
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
-        self.verify_stark_proof(&config, &stark, virtual_proof.clone(), &[]);
+        self.verify_stark_proof(&config, &stark, virtual_proof.clone(), &public_input_target);
 
         let stark_generator = SimpleStarkWitnessGenerator::new(
             config,
             stark.into(),
             virtual_proof,
-            vec![],
+            public_input_target,
             ArithmeticGenerator::<ScalarMulEd25519<F, E>>::new(&[]),
         );
 
@@ -205,7 +232,7 @@ where
     fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
         let scalars = self
             .scalars
-            .iter()
+            .par_iter()
             .map(|x| {
                 x.iter()
                     .map(|bool| witness.get_target(bool.target))
@@ -225,7 +252,7 @@ where
 
         let points = self
             .points
-            .iter()
+            .par_iter()
             .map(|point| {
                 let x = field_limbs_to_biguint(&witness.get_targets(&point.x));
                 let y = field_limbs_to_biguint(&witness.get_targets(&point.y));

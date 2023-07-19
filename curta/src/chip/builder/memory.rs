@@ -134,13 +134,8 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn alloc_public<T: Register>(&mut self) -> T {
         let register = match T::CELL {
             CellType::Element => self.get_public_memory(T::size_of()),
-            CellType::U16 => unimplemented!("Public U16 not implemented"),
-            CellType::Bit => {
-                let reg = self.get_public_memory(T::size_of());
-                let constraint = AirInstruction::bits(&reg);
-                self.register_air_instruction_internal(constraint).unwrap();
-                reg
-            }
+            CellType::U16 => self.get_public_memory(T::size_of()),
+            CellType::Bit => self.get_public_memory(T::size_of()),
         };
         T::from_register(register)
     }
@@ -149,13 +144,8 @@ impl<L: AirParameters> AirBuilder<L> {
         let size_of = T::size_of() * length;
         let register = match T::CELL {
             CellType::Element => self.get_public_memory(size_of),
-            CellType::U16 => unreachable!("Public U16 not implemented"),
-            CellType::Bit => {
-                let reg = self.get_public_memory(size_of);
-                let constraint = AirInstruction::bits(&reg);
-                self.register_air_instruction_internal(constraint).unwrap();
-                reg
-            }
+            CellType::U16 => self.get_public_memory(size_of),
+            CellType::Bit => self.get_public_memory(size_of),
         };
         ArrayRegister::<T>::from_register_unsafe(register)
     }

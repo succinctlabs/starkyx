@@ -38,6 +38,12 @@ pub struct EdScalarMulGadget<F, E: EdwardsParameters> {
     pub double_and_add_gadget: EdDoubleAndAddGadget<E>,
 }
 
+impl<F, E: EdwardsParameters> EdScalarMulGadget<F, E> {
+    pub fn result(&self) -> AffinePointRegister<E> {
+        self.double_and_add_gadget.result.clone()
+    }
+}
+
 impl<L: AirParameters> AirBuilder<L> {
     /// Computes one step of the double-and-add algorithm for scalar multiplication over elliptic
     /// curves. The algorithm the computes the function f(bit, result, temp):

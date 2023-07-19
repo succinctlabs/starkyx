@@ -20,6 +20,8 @@ pub trait EllipticCurveGadget<E: EllipticCurveParameters> {
     fn alloc_ec_point(&mut self) -> AffinePointRegister<E> {
         self.alloc_local_ec_point()
     }
+
+    fn alloc_public_ec_point(&mut self) -> AffinePointRegister<E>;
 }
 
 pub trait EllipticCurveWriter<E: EllipticCurveParameters> {
@@ -54,6 +56,12 @@ impl<L: AirParameters, E: EllipticCurveParameters> EllipticCurveGadget<E> for Ai
     fn alloc_next_ec_point(&mut self) -> AffinePointRegister<E> {
         let x = self.alloc_next::<FieldRegister<E::BaseField>>();
         let y = self.alloc_next::<FieldRegister<E::BaseField>>();
+        AffinePointRegister::new(x, y)
+    }
+
+    fn alloc_public_ec_point(&mut self) -> AffinePointRegister<E> {
+        let x = self.alloc_public::<FieldRegister<E::BaseField>>();
+        let y = self.alloc_public::<FieldRegister<E::BaseField>>();
         AffinePointRegister::new(x, y)
     }
 }
