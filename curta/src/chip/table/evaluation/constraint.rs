@@ -130,12 +130,6 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
         parser.constraint_extension_transition(accumulator_constraint);
 
         // last row constraint, digest
-        if let Digest::Extended(digest) = self.digest {
-            let digest_val = digest.eval_extension(parser);
-            let digest_constraint = parser.sub_extension(digest_val, accumulator_next_value);
-            parser.constraint_extension_last_row(digest_constraint);
-        } else {
-            panic!("digest not implemented")
-        }
+        self.digest.eval_digest(parser, accumulator_next_value, &alphas, beta);
     }
 }

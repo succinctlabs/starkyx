@@ -113,7 +113,7 @@ mod tests {
         type Instruction = EmptyInstruction<GoldilocksField>;
         const NUM_ARITHMETIC_COLUMNS: usize = 2;
         const NUM_FREE_COLUMNS: usize = 3;
-        const EXTENDED_COLUMNS: usize = 23;
+        const EXTENDED_COLUMNS: usize = 35;
 
         fn num_rows_bits() -> usize {
             16
@@ -134,9 +134,63 @@ mod tests {
 
         let bit = builder.alloc::<BitRegister>();
 
-        let acc = builder.alloc_digest_column();
+        let acc_0 = builder.alloc_digest_column();
+        let acc_1 = builder.alloc_digest_column();
 
-        let _eval = builder.evaluation(&[x_0, x_1], bit.expr(), acc);
+        let _eval = builder.evaluation(&[x_0, x_1], cycle.bit.expr(), acc_0);
+        let _eval_2 = builder.evaluation(&[x_0, x_1], bit.expr(), acc_1);
+
+        let (air, _) = builder.build();
+
+        let generator = ArithmeticGenerator::<L>::new(&[]);
+
+        let (tx, rx) = channel();
+        for i in 0..L::num_rows() {
+            let writer = generator.new_writer();
+            let handle = tx.clone();
+            writer.write_instruction(&cycle, i);
+            rayon::spawn(move || {
+                let mut rng = thread_rng();
+                let bit_val = rng.gen_bool(0.5);
+                writer.write(&bit, &[F::from_canonical_u32(bit_val as u32)], i);
+                writer.write(&x_0, &[F::ONE], i);
+                writer.write(&x_1, &[F::from_canonical_usize(i)], i);
+                handle.send(1).unwrap();
+            });
+        }
+        drop(tx);
+        for msg in rx.iter() {
+            assert!(msg == 1);
+        }
+        let stark = Starky::<_, { L::num_columns() }>::new(air);
+        let config = SC::standard_fast_config(L::num_rows());
+
+        // Generate proof and verify as a stark
+        test_starky(&stark, &config, &generator, &[]);
+
+        // Test the recursive proof.
+        test_recursive_starky(stark, config, generator, &[]);
+    }
+
+    #[test]
+    fn test_public_outsputs_evaluation() {
+        type F = GoldilocksField;
+        type L = EvalTest;
+        type SC = PoseidonGoldilocksStarkConfig;
+
+        let mut builder = AirBuilder::<L>::new();
+        let x_0 = builder.alloc::<U16Register>();
+        let x_1 = builder.alloc::<U16Register>();
+
+        let cycle = builder.cycle(4);
+
+        let bit = builder.alloc::<BitRegister>();
+
+        let acc_0 = builder.alloc_digest_column();
+        let acc_1 = builder.alloc_digest_column();
+
+        let _eval = builder.evaluation(&[x_0, x_1], cycle.bit.expr(), acc_0);
+        let _eval_2 = builder.evaluation(&[x_0, x_1], bit.expr(), acc_1);
 
         let (air, _) = builder.build();
 
