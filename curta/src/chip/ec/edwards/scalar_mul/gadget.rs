@@ -42,6 +42,10 @@ impl<F, E: EdwardsParameters> EdScalarMulGadget<F, E> {
     pub fn result(&self) -> AffinePointRegister<E> {
         self.double_and_add_gadget.result.clone()
     }
+
+    pub fn temp(&self) -> AffinePointRegister<E> {
+        self.double_and_add_gadget.temp.clone()
+    }
 }
 
 impl<L: AirParameters> AirBuilder<L> {

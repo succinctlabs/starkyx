@@ -9,7 +9,8 @@ use crate::chip::ec::point::AffinePointRegister;
 use crate::chip::field::instruction::FpInstruction;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
-use crate::chip::register::Register;
+use crate::chip::register::memory::MemorySlice;
+use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::table::evaluation::Digest;
 use crate::chip::{AirParameters, Chip};
 use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
@@ -67,15 +68,23 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
         let scalar_digest = Digest::from_values(scalars_bits);
         let _ = builder.evaluation(&[scalar_bit], ArithmeticExpression::one(), scalar_digest);
 
-        let point_values = points.iter().map(|p| [p.x, p.y]);
-        let point_register = scalar_mul_gadget.result();
+        let point_values = points
+            .iter()
+            .map(|p| {
+                let (x_reg_0, x_reg_1) = p.x.register().get_range();
+                let (y_reg_0, y_reg_1) = p.y.register().get_range();
+                assert_eq!(x_reg_1, y_reg_0);
+                MemorySlice::Public(x_reg_0, y_reg_1 - x_reg_0)
+            })
+            .collect::<Vec<_>>();
+        let point_register = scalar_mul_gadget.temp();
 
-        // // let point_digest = Digest::from_values(point_values);
-        // let _inputs_evaluation = builder.evaluation(
-        //     &[point_register.x, point_register.y],
-        //     scalar_mul_gadget.cycle.bit.expr(),
-        //     point_digest,
-        // );
+        let point_digest = Digest::from_values(point_values);
+        let _inputs_evaluation = builder.evaluation(
+            &[point_register.x, point_register.y],
+            scalar_mul_gadget.cycle.bit.expr(),
+            point_digest,
+        );
 
         let (air, _) = builder.build();
 
