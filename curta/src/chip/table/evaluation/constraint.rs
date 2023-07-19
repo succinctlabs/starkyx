@@ -4,7 +4,6 @@
 //!
 //!
 
-use plonky2::field::types::Field;
 
 use super::{Digest, Evaluation};
 use crate::air::extension::cubic::CubicParser;
