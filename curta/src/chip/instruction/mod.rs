@@ -14,7 +14,6 @@ pub mod node;
 pub mod set;
 pub mod write;
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum InstructionId {
     CustomInstruction(Vec<MemorySlice>),
@@ -58,4 +57,3 @@ impl<F: Field, C: ConstraintInstruction> Instruction<F> for C {
 
     fn write(&self, _writer: &TraceWriter<F>, _row_index: usize) {}
 }
-
