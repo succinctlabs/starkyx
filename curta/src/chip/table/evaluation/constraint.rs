@@ -37,7 +37,7 @@ impl<F: Field, E: CubicParameters<F>> Digest<F, E> {
                     let mut acc = parser.zero_extension();
                     for (reg, alpha) in array.into_iter().zip(alphas.iter()) {
                         let reg_val = reg.eval(parser);
-                        let reg_val_extension = parser.from_base_field(reg_val);
+                        let reg_val_extension = parser.element_from_base_field(reg_val);
                         let alpha_times_val = parser.mul_extension(*alpha, reg_val_extension);
                         acc = parser.add_extension(acc, alpha_times_val);
                     }
@@ -62,8 +62,8 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
         let filter_base = filter_vec[0];
         let one = parser.one();
         let not_filter_base = parser.sub(one, filter_base);
-        let filter = parser.from_base_field(filter_base);
-        let not_filter = parser.from_base_field(not_filter_base);
+        let filter = parser.element_from_base_field(filter_base);
+        let not_filter = parser.element_from_base_field(not_filter_base);
 
         // Constrain the running evaluation powers
         let beta = self.beta.eval_extension(parser);
@@ -99,7 +99,7 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
             .alphas
             .eval_vec(parser)
             .into_iter()
-            .map(|x| CubicElement(x))
+            .map(CubicElement)
             .collect::<Vec<_>>();
         assert_eq!(
             alphas.len(),
@@ -108,7 +108,7 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
         );
         let mut row_acc = parser.zero_extension();
         for (alpha, value) in alphas.iter().zip(self.values.iter()) {
-            let val = parser.from_base_field(value.eval(parser));
+            let val = parser.element_from_base_field(value.eval(parser));
             let alpha_times_value = parser.mul_extension(*alpha, val);
             row_acc = parser.add_extension(row_acc, alpha_times_value);
         }

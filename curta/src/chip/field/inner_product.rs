@@ -167,7 +167,7 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpInnerProductInstr
 
         // Row must match layout of instruction.
         writer.write_unsafe_batch_raw(
-            &vec![
+            &[
                 *self.result.register(),
                 *self.carry.register(),
                 *self.witness_low.register(),

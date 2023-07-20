@@ -3,6 +3,7 @@ pub mod memory;
 pub mod range_check;
 
 use alloc::collections::BTreeSet;
+use core::cmp::Ordering;
 
 use anyhow::Result;
 
@@ -54,8 +55,7 @@ impl<L: AirParameters> AirBuilder<L> {
     /// Registers a write instruction into the builder
     pub fn write_data<T: Register>(&mut self, data: &T) {
         let instruction = AirInstruction::write(data.register());
-        self.register_air_instruction_internal(instruction.into())
-            .unwrap();
+        self.register_air_instruction_internal(instruction).unwrap();
     }
 
     /// Registers an custom instruction with the builder.
@@ -75,7 +75,7 @@ impl<L: AirParameters> AirBuilder<L> {
     ) -> Result<()> {
         // Add the constraints
         self.constraints
-            .push(Constraint::from_instruction_set(instruction.clone()));
+            .push(Constraint::from_instruction_set(instruction));
 
         Ok(())
     }
@@ -92,46 +92,56 @@ impl<L: AirParameters> AirBuilder<L> {
         }
 
         // Check the number of columns in comparison to config
-        let num_free_columns = self.local_index - L::NUM_ARITHMETIC_COLUMNS; //self.local_index;
-        if num_free_columns > L::NUM_FREE_COLUMNS {
-            panic!(
+        let num_free_columns = self.local_index - L::NUM_ARITHMETIC_COLUMNS;
+
+        match num_free_columns.cmp(&L::NUM_FREE_COLUMNS) {
+            Ordering::Greater => panic!(
                 "Not enough free columns. Expected {} free columns, got {}.",
                 num_free_columns,
                 L::NUM_FREE_COLUMNS
-            );
-        } else if num_free_columns < L::NUM_FREE_COLUMNS {
-            println!(
-                "Warning: {} free columns unused",
-                L::NUM_FREE_COLUMNS - num_free_columns
-            );
+            ),
+            Ordering::Less => {
+                println!(
+                    "Warning: {} free columns unused",
+                    L::NUM_FREE_COLUMNS - num_free_columns
+                );
+            }
+            Ordering::Equal => {}
         }
+
         let num_arithmetic_columns = self.local_arithmetic_index;
-        if num_arithmetic_columns > L::NUM_ARITHMETIC_COLUMNS {
-            panic!(
+
+        match num_arithmetic_columns.cmp(&L::NUM_ARITHMETIC_COLUMNS) {
+            Ordering::Greater => panic!(
                 "Not enough arithmetic columns. Expected {} arithmetic columns, got {}.",
                 num_arithmetic_columns,
                 L::NUM_ARITHMETIC_COLUMNS
-            );
-        } else if num_arithmetic_columns < L::NUM_ARITHMETIC_COLUMNS {
-            println!(
-                "Warning: {} arithmetic columns unused",
-                L::NUM_ARITHMETIC_COLUMNS - num_arithmetic_columns
-            );
+            ),
+            Ordering::Less => {
+                println!(
+                    "Warning: {} arithmetic columns unused",
+                    L::NUM_ARITHMETIC_COLUMNS - num_arithmetic_columns
+                );
+            }
+            Ordering::Equal => {}
         }
 
         let num_extended_columns =
             self.extended_index - L::NUM_ARITHMETIC_COLUMNS - L::NUM_FREE_COLUMNS;
-        if num_extended_columns > L::EXTENDED_COLUMNS {
-            panic!(
+
+        match num_extended_columns.cmp(&L::EXTENDED_COLUMNS) {
+            Ordering::Greater => panic!(
                 "Not enough extended columns. Expected {} extended columns, got {}.",
                 num_extended_columns,
                 L::EXTENDED_COLUMNS
-            );
-        } else if num_extended_columns < L::EXTENDED_COLUMNS {
-            println!(
-                "Warning: {} extended columns unused",
-                L::EXTENDED_COLUMNS - num_extended_columns
-            );
+            ),
+            Ordering::Less => {
+                println!(
+                    "Warning: {} extended columns unused",
+                    L::EXTENDED_COLUMNS - num_extended_columns
+                );
+            }
+            Ordering::Equal => {}
         }
 
         let execution_trace_length = self.local_index;

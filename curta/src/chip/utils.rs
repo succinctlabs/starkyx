@@ -10,8 +10,7 @@ pub fn bigint_into_u16_digits(x: &BigUint, num_digits: usize) -> Vec<u16> {
         .collect::<Vec<_>>();
     assert!(
         x_limbs.len() <= num_digits,
-        "Number too large to fit in {} digits",
-        num_digits
+        "Number too large to fit in {num_digits} digits"
     );
     x_limbs.resize(num_digits, 0);
     x_limbs
@@ -116,8 +115,7 @@ pub fn biguint_to_bits_le(integer: &BigUint, num_bits: usize) -> Vec<bool> {
     }
     debug_assert!(
         bits.len() <= num_bits,
-        "Number too large to fit in {} digits",
-        num_bits
+        "Number too large to fit in {num_bits} digits"
     );
     bits.resize(num_bits, false);
     bits

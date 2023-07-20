@@ -54,6 +54,6 @@ impl ExtensionRegister<3> {
     where
         E: CubicParameters<AP::Field>,
     {
-        parser.from_base_slice(&self.eval(parser))
+        parser.element_from_base_slice(&self.eval(parser))
     }
 }

@@ -113,8 +113,8 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpDenInstruction<P>
         let p_a = writer.read(&self.a, row_index);
         let p_b = writer.read(&self.b, row_index);
 
-        let a = field_limbs_to_biguint(&p_a.coefficients());
-        let b = field_limbs_to_biguint(&p_b.coefficients());
+        let a = field_limbs_to_biguint(p_a.coefficients());
+        let b = field_limbs_to_biguint(p_b.coefficients());
 
         let p = P::modulus();
         let minus_b_int = &p - &b;
@@ -162,7 +162,7 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpDenInstruction<P>
 
         // Row must match layout of instruction.
         writer.write_unsafe_batch_raw(
-            &vec![
+            &[
                 *self.result.register(),
                 *self.carry.register(),
                 *self.witness_low.register(),

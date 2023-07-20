@@ -100,7 +100,7 @@ impl<L: AirParameters> AirBuilder<L> {
         data: &T,
         expression: ArithmeticExpression<L::Field>,
     ) {
-        let instr = AssignInstruction::new(expression.clone(), *data.register(), AssignType::All);
+        let instr = AssignInstruction::new(expression, *data.register(), AssignType::All);
         self.register_air_instruction_internal(AirInstruction::Assign(instr))
             .unwrap();
     }
@@ -111,7 +111,7 @@ impl<L: AirParameters> AirBuilder<L> {
         data: &T,
         expression: ArithmeticExpression<L::Field>,
     ) {
-        let instr = AssignInstruction::new(expression.clone(), *data.register(), AssignType::First);
+        let instr = AssignInstruction::new(expression, *data.register(), AssignType::First);
         self.register_air_instruction_internal(AirInstruction::Assign(instr))
             .unwrap();
     }
@@ -122,7 +122,7 @@ impl<L: AirParameters> AirBuilder<L> {
         data: &T,
         expression: ArithmeticExpression<L::Field>,
     ) {
-        let instr = AssignInstruction::new(expression.clone(), *data.register(), AssignType::Last);
+        let instr = AssignInstruction::new(expression, *data.register(), AssignType::Last);
         self.register_air_instruction_internal(AirInstruction::Assign(instr))
             .unwrap();
     }
@@ -134,7 +134,7 @@ impl<L: AirParameters> AirBuilder<L> {
         expression: ArithmeticExpression<L::Field>,
     ) -> AirInstruction<L::Field, L::Instruction> {
         let instr = AirInstruction::Assign(AssignInstruction::new(
-            expression.clone(),
+            expression,
             *data.register(),
             AssignType::Transition,
         ));

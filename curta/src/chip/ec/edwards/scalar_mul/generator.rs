@@ -106,7 +106,6 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
 
         // Input results
         let results = (0..256)
-            .into_iter()
             .map(|_| {
                 let x = self.add_virtual_target_arr();
                 let y = self.add_virtual_target_arr();
@@ -243,7 +242,7 @@ where
             .chain(
                 self.scalars
                     .iter()
-                    .flat_map(|scalar| scalar.into_iter().map(|x| x.target)),
+                    .flat_map(|scalar| scalar.iter().map(|x| x.target)),
             )
             .collect()
     }
@@ -316,12 +315,12 @@ where
         SimpleGenerator::<F>::run_once(&self.generator, witness, out_buffer)
     }
 
-    fn serialize(&self, dst: &mut Vec<u8>) -> plonky2::util::serialization::IoResult<()> {
+    fn serialize(&self, _dst: &mut Vec<u8>) -> plonky2::util::serialization::IoResult<()> {
         unimplemented!("SimpleScalarMulEd25519Generator::serialize")
     }
 
     fn deserialize(
-        src: &mut plonky2::util::serialization::Buffer,
+        _src: &mut plonky2::util::serialization::Buffer,
     ) -> plonky2::util::serialization::IoResult<Self> {
         unimplemented!("SimpleScalarMulEd25519Generator::deserialize")
     }

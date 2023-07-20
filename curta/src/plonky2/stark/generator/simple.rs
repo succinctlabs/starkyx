@@ -9,7 +9,6 @@ use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness};
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2::util::serialization::IoResult;
-use serde::Serialize;
 
 use super::super::config::StarkyConfig;
 use super::super::proof::StarkProofTarget;
@@ -86,11 +85,11 @@ where
         set_stark_proof_target(out_buffer, &self.proof_target, &proof);
     }
 
-    fn serialize(&self, dst: &mut Vec<u8>) -> IoResult<()> {
+    fn serialize(&self, _dst: &mut Vec<u8>) -> IoResult<()> {
         unimplemented!("SimpleStarkWitnessGenerator::serialize")
     }
 
-    fn deserialize(src: &mut plonky2::util::serialization::Buffer) -> IoResult<Self>
+    fn deserialize(_src: &mut plonky2::util::serialization::Buffer) -> IoResult<Self>
     where
         Self: Sized,
     {

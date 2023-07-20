@@ -137,8 +137,7 @@ impl<'a, F: Field> AirParser for TraceWindowParser<'a, F> {
             assert_eq!(
                 constraint,
                 F::ZERO,
-                "Nonzero constraint at first row: {:?}",
-                constraint
+                "Nonzero constraint at first row: {constraint:?}"
             );
         }
     }
@@ -148,8 +147,7 @@ impl<'a, F: Field> AirParser for TraceWindowParser<'a, F> {
             assert_eq!(
                 constraint,
                 F::ZERO,
-                "Nonzero constraint at last row: {:?}",
-                constraint
+                "Nonzero constraint at last row: {constraint:?}"
             );
         }
     }

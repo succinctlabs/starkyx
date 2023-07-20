@@ -85,10 +85,10 @@ impl PartialOrd for InstructionId {
             }
             (InstructionId::Write(a), InstructionId::Write(b)) => a.partial_cmp(b),
             (InstructionId::CustomInstruction(a), InstructionId::Write(b)) => {
-                a.as_slice().partial_cmp(&slice::from_ref(b))
+                a.as_slice().partial_cmp(slice::from_ref(b))
             }
             (InstructionId::Write(b), InstructionId::CustomInstruction(a)) => {
-                a.as_slice().partial_cmp(&slice::from_ref(b))
+                a.as_slice().partial_cmp(slice::from_ref(b))
             }
         }
     }
@@ -100,10 +100,10 @@ impl Ord for InstructionId {
             (InstructionId::CustomInstruction(a), InstructionId::CustomInstruction(b)) => a.cmp(b),
             (InstructionId::Write(a), InstructionId::Write(b)) => a.cmp(b),
             (InstructionId::CustomInstruction(a), InstructionId::Write(b)) => {
-                a.as_slice().cmp(&slice::from_ref(b))
+                a.as_slice().cmp(slice::from_ref(b))
             }
             (InstructionId::Write(b), InstructionId::CustomInstruction(a)) => {
-                a.as_slice().cmp(&slice::from_ref(b))
+                a.as_slice().cmp(slice::from_ref(b))
             }
         }
     }

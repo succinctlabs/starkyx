@@ -40,6 +40,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> const AirParameters for ScalarMulEd
 pub const ED_NUM_COLUMNS: usize = 1504 + 70 + 2291;
 
 impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
+    #[allow(clippy::type_complexity)]
     pub fn air() -> (
         Chip<Self>,
         EdScalarMulGadget<F, Ed25519>,
@@ -55,19 +56,16 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
         let scalar_mul_gadget = builder.ed_scalar_mul::<Ed25519>(&scalar_bit, &res, &temp);
 
         let scalars = (0..256)
-            .into_iter()
             .map(|_| builder.alloc_array_public::<BitRegister>(256))
             .collect::<Vec<_>>();
 
-        let scalars_bits = scalars.iter().map(|s| s.iter()).flatten();
+        let scalars_bits = scalars.iter().flat_map(|s| s.iter());
 
         let input_points = (0..256)
-            .into_iter()
             .map(|_| builder.alloc_public_ec_point())
             .collect::<Vec<_>>();
 
         let output_points = (0..256)
-            .into_iter()
             .map(|_| builder.alloc_public_ec_point())
             .collect::<Vec<_>>();
 

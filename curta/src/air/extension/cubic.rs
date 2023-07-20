@@ -4,11 +4,11 @@ use crate::plonky2::field::cubic::element::CubicElement;
 use crate::plonky2::field::cubic::extension::CubicExtension;
 
 pub trait CubicParser<E: CubicParameters<Self::Field>>: AirParser {
-    fn from_base_field(&mut self, value: Self::Var) -> CubicElement<Self::Var> {
+    fn element_from_base_field(&mut self, value: Self::Var) -> CubicElement<Self::Var> {
         CubicElement([value, self.zero(), self.zero()])
     }
 
-    fn from_base_slice(&self, values: &[Self::Var]) -> CubicElement<Self::Var> {
+    fn element_from_base_slice(&self, values: &[Self::Var]) -> CubicElement<Self::Var> {
         assert!(values.len() == 3);
         CubicElement([values[0], values[1], values[2]])
     }

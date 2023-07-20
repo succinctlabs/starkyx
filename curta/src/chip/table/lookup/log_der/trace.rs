@@ -28,7 +28,7 @@ impl SplitData {
         )
     }
 
-    pub(crate) fn split_data<F: Field, E: CubicParameters<F>>(
+    pub(crate) fn split_log_data<F: Field, E: CubicParameters<F>>(
         log_data: &LogLookup<F, E, 1>,
     ) -> Self {
         let values_idx = log_data.values.register().get_range();
@@ -37,9 +37,7 @@ impl SplitData {
             values_idx.0 < acc_idx.0,
             "Illegal memory pattern, expected values indices \
         to be to the right of accumulator indices, \
-        instead got: values_idx: {:?}, acc_idx: {:?}",
-            values_idx,
-            acc_idx
+        instead got: values_idx: {values_idx:?}, acc_idx: {acc_idx:?}"
         );
         SplitData::new(
             values_idx.1,
@@ -95,7 +93,7 @@ impl<F: PrimeField> TraceWriter<F> {
 
         // Log accumulator
         let mut value = CubicExtension::ZERO;
-        let split_data = SplitData::split_data(lookup_data);
+        let split_data = SplitData::split_log_data(lookup_data);
         let accumulators = self
             .write_trace()
             .unwrap()
