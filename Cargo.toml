@@ -1,10 +1,8 @@
 [workspace]
-members = ["evm", "field", "maybe_rayon", "plonky2", "starky", "util"]
+members = ["curta"]
 
 [profile.release]
 opt-level = 3
-#lto = "fat"
-#codegen-units = 1
 
-[profile.bench]
-opt-level = 3
+#[profile.bench]
+#opt-level = 3
