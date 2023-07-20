@@ -235,7 +235,7 @@ pub(crate) mod tests {
         .unwrap();
 
         // Verify the proof as a stark
-        StarkyVerifier::verify(&config, stark, proof, &public_inputs).unwrap();
+        StarkyVerifier::verify(config, stark, proof, public_inputs).unwrap();
     }
 
     /// Generate a Stark proof and a recursive proof using the witness generator
@@ -300,7 +300,7 @@ pub(crate) mod tests {
         type F = GoldilocksField;
         type SC = PoseidonGoldilocksStarkConfig;
 
-        let num_rows = 1 << 5 as usize;
+        let num_rows = 1 << 5usize;
         let air = FibonacciAir::new();
         let stark = Starky::<FibonacciAir, 2>::new(air);
 

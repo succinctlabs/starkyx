@@ -5,6 +5,7 @@
 #![feature(test)]
 #![feature(const_trait_impl)]
 #![feature(specialization)]
+#![allow(clippy::new_without_default)]
 
 extern crate alloc;
 

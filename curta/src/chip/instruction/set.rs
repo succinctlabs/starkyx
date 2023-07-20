@@ -1,4 +1,3 @@
-use alloc::collections::BTreeSet;
 use core::hash::{Hash, Hasher};
 use std::collections::HashSet;
 
@@ -11,7 +10,6 @@ use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
-use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone)]
@@ -22,9 +20,6 @@ pub enum AirInstruction<F, I> {
     Assign(AssignInstruction<F>),
     Cycle(Cycle<F>),
 }
-
-pub type InstructionSet<L> =
-    BTreeSet<AirInstruction<<L as AirParameters>::Field, <L as AirParameters>::Instruction>>;
 
 impl<F: Field, AP: AirParser<Field = F>, I: AirConstraint<AP>> AirConstraint<AP>
     for AirInstruction<F, I>
@@ -113,26 +108,6 @@ impl<F, I> AirInstruction<F, I> {
 
     pub fn cycle(cycle: Cycle<F>) -> Self {
         AirInstruction::Cycle(cycle)
-    }
-}
-
-impl<F: Field, I: Instruction<F>> PartialEq for AirInstruction<F, I> {
-    fn eq(&self, other: &Self) -> bool {
-        self.id() == other.id()
-    }
-}
-
-impl<F: Field, I: Instruction<F>> Eq for AirInstruction<F, I> {}
-
-impl<F: Field, I: Instruction<F>> PartialOrd for AirInstruction<F, I> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.id().partial_cmp(&other.id())
-    }
-}
-
-impl<F: Field, I: Instruction<F>> Ord for AirInstruction<F, I> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.id().cmp(&other.id())
     }
 }
 

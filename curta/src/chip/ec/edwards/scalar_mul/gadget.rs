@@ -38,13 +38,14 @@ pub struct EdScalarMulGadget<F, E: EdwardsParameters> {
     pub double_and_add_gadget: EdDoubleAndAddGadget<E>,
 }
 
+#[allow(clippy::misnamed_getters)]
 impl<F, E: EdwardsParameters> EdScalarMulGadget<F, E> {
     pub fn result(&self) -> AffinePointRegister<E> {
-        self.double_and_add_gadget.result_next.clone()
+        self.double_and_add_gadget.result_next
     }
 
     pub fn temp(&self) -> AffinePointRegister<E> {
-        self.double_and_add_gadget.temp.clone()
+        self.double_and_add_gadget.temp
     }
 }
 
@@ -235,7 +236,7 @@ mod tests {
         let scalar_bit = builder.alloc::<BitRegister>();
         let scalar_mul_gadget = builder.ed_scalar_mul::<E>(&scalar_bit, &res, &temp);
 
-        let (air, _) = builder.build();
+        let air = builder.build();
         let generator = ArithmeticGenerator::<L>::new(&[]);
 
         let (tx, rx) = channel();

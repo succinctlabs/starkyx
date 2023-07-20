@@ -16,12 +16,12 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>, const N: usize> AirConst
         let multiplicities: [_; N] = self
             .multiplicities
             .eval_array(parser)
-            .map(|e| parser.from_base_field(e));
+            .map(|e| parser.element_from_base_field(e));
 
         let table: [_; N] = self
             .table
             .eval_array(parser)
-            .map(|e| parser.from_base_field(e));
+            .map(|e| parser.element_from_base_field(e));
 
         let multiplicities_table_log = self.multiplicity_table_log.eval_extension(parser);
         let beta_minus_table: [_; N] = array::from_fn(|i| parser.sub_extension(beta, table[i]));
@@ -59,8 +59,8 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>, const N: usize> AirConst
             .map(|k| {
                 let a_base = self.values.get(k).eval(parser);
                 let b_base = self.values.get(k + 1).eval(parser);
-                let a = parser.from_base_field(a_base);
-                let b = parser.from_base_field(b_base);
+                let a = parser.element_from_base_field(a_base);
+                let b = parser.element_from_base_field(b_base);
                 (a, b)
             })
             .collect::<Vec<_>>()

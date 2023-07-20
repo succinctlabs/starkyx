@@ -53,10 +53,8 @@ fn main() {
 
     // Get virtual targets for scalars
     let scalars = (0..256)
-        .into_iter()
         .map(|_| {
             (0..256)
-                .into_iter()
                 .map(|_| builder.add_virtual_bool_target_unsafe())
                 .collect::<Vec<_>>()
         })

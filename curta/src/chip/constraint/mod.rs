@@ -14,7 +14,7 @@ pub enum Constraint<L: AirParameters> {
     Instruction(AirInstruction<L::Field, L::Instruction>),
     MulInstruction(ArithmeticExpression<L::Field>, L::Instruction),
     Arithmetic(ArithmeticConstraint<L::Field>),
-    Lookup(Lookup<L::Field, L::CubicParams, 1>),
+    Lookup(Box<Lookup<L::Field, L::CubicParams, 1>>),
     Evaluation(Evaluation<L::Field, L::CubicParams>),
 }
 
@@ -33,7 +33,7 @@ impl<L: AirParameters> Constraint<L> {
     }
 
     pub fn lookup(lookup: Lookup<L::Field, L::CubicParams, 1>) -> Self {
-        Self::Lookup(lookup)
+        Self::Lookup(Box::new(lookup))
     }
 
     pub fn evaluation(evalutaion: Evaluation<L::Field, L::CubicParams>) -> Self {

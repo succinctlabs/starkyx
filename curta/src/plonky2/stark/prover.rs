@@ -67,7 +67,7 @@ where
         let mut num_rows = 0;
         for r in 0..stark.air().num_rounds() {
             let round_trace = trace_generator
-                .generate_round(stark.air(), r, &challenges, &public_inputs)
+                .generate_round(stark.air(), r, &challenges, public_inputs)
                 .map_err(|e| e.into())?;
 
             let trace_cols = round_trace

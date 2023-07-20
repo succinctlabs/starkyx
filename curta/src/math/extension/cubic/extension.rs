@@ -183,6 +183,7 @@ impl<F: Field, P: CubicParameters<F>> SubAssign for CubicExtension<F, P> {
 impl<F: Field, P: CubicParameters<F>> Div for CubicExtension<F, P> {
     type Output = Self;
 
+    #[allow(clippy::suspicious_arithmetic_impl)]
     fn div(self, rhs: Self) -> Self::Output {
         self * rhs.inverse()
     }

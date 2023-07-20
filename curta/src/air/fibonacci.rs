@@ -23,11 +23,10 @@ impl FibonacciAir {
                 acc[1] = tmp[0] + tmp[1];
                 Some(tmp)
             })
-            .flat_map(|arr| arr)
+            .flatten()
             .collect::<Vec<_>>();
         assert!(trace_rows.len() == num_rows * 2);
-        let trace = AirTrace::from_rows(trace_rows, 2);
-        trace
+        AirTrace::from_rows(trace_rows, 2)
     }
 }
 
@@ -88,7 +87,7 @@ mod tests {
     fn test_fibonacci_air() {
         type F = GoldilocksField;
 
-        let num_rows = 1 << 5 as usize;
+        let num_rows = 1 << 5usize;
         let air = FibonacciAir::new();
 
         let public_inputs = [

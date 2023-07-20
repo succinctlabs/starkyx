@@ -14,9 +14,7 @@ pub mod node;
 pub mod set;
 pub mod write;
 
-use core::slice;
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum InstructionId {
     CustomInstruction(Vec<MemorySlice>),
     Write(MemorySlice),
@@ -58,62 +56,4 @@ impl<F: Field, C: ConstraintInstruction> Instruction<F> for C {
     }
 
     fn write(&self, _writer: &TraceWriter<F>, _row_index: usize) {}
-}
-
-impl PartialEq for InstructionId {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (InstructionId::CustomInstruction(a), InstructionId::CustomInstruction(b)) => a == b,
-            (InstructionId::Write(a), InstructionId::Write(b)) => a == b,
-            (InstructionId::CustomInstruction(a), InstructionId::Write(b)) => {
-                a.as_slice() == slice::from_ref(b)
-            }
-            (InstructionId::Write(b), InstructionId::CustomInstruction(a)) => {
-                a.as_slice() == slice::from_ref(b)
-            }
-        }
-    }
-}
-
-impl Eq for InstructionId {}
-
-impl PartialOrd for InstructionId {
-    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        match (self, other) {
-            (InstructionId::CustomInstruction(a), InstructionId::CustomInstruction(b)) => {
-                a.partial_cmp(b)
-            }
-            (InstructionId::Write(a), InstructionId::Write(b)) => a.partial_cmp(b),
-            (InstructionId::CustomInstruction(a), InstructionId::Write(b)) => {
-                a.as_slice().partial_cmp(&slice::from_ref(b))
-            }
-            (InstructionId::Write(b), InstructionId::CustomInstruction(a)) => {
-                a.as_slice().partial_cmp(&slice::from_ref(b))
-            }
-        }
-    }
-}
-
-impl Ord for InstructionId {
-    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        match (self, other) {
-            (InstructionId::CustomInstruction(a), InstructionId::CustomInstruction(b)) => a.cmp(b),
-            (InstructionId::Write(a), InstructionId::Write(b)) => a.cmp(b),
-            (InstructionId::CustomInstruction(a), InstructionId::Write(b)) => {
-                a.as_slice().cmp(&slice::from_ref(b))
-            }
-            (InstructionId::Write(b), InstructionId::CustomInstruction(a)) => {
-                a.as_slice().cmp(&slice::from_ref(b))
-            }
-        }
-    }
-}
-
-impl Hash for InstructionId {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        match self {
-            InstructionId::CustomInstruction(a) => a.as_slice().hash(state),
-            InstructionId::Write(a) => slice::from_ref(a).hash(state),
-        }
-    }
 }

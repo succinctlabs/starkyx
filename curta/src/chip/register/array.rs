@@ -88,7 +88,7 @@ impl<T: Register> ArrayRegister<T> {
     #[inline]
     pub fn eval_vec<AP: AirParser>(&self, parser: &AP) -> Vec<T::Value<AP::Var>> {
         let elem_fn = |i| self.get(i).eval(parser);
-        (0..self.len()).into_iter().map(elem_fn).collect()
+        (0..self.len()).map(elem_fn).collect()
     }
 
     #[inline]

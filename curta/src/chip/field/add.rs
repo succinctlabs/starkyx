@@ -69,15 +69,15 @@ impl<L: AirParameters> AirBuilder<L> {
         let carry = self.alloc::<FieldRegister<P>>();
         let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
         let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
-        let instr = FpAddInstruction {
+
+        FpAddInstruction {
             a: *a,
             b: *b,
             result,
             carry,
             witness_low,
             witness_high,
-        };
-        instr
+        }
     }
 }
 
@@ -174,7 +174,7 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpAddInstruction<P>
 
         // Row must match layout of instruction.
         writer.write_unsafe_batch_raw(
-            &vec![
+            &[
                 *self.result.register(),
                 *self.carry.register(),
                 *self.witness_low.register(),
@@ -228,7 +228,7 @@ mod tests {
         let b = builder.alloc::<FieldRegister<P>>();
         let add_insr = builder.fp_add(&a, &b);
 
-        let (air, _) = builder.build();
+        let air = builder.build();
 
         let generator = ArithmeticGenerator::<L>::new(&[]);
 

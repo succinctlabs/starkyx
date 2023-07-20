@@ -2,12 +2,12 @@ pub mod arithmetic;
 pub mod memory;
 pub mod range_check;
 
-use alloc::collections::BTreeSet;
+use core::cmp::Ordering;
 
 use anyhow::Result;
 
 use super::constraint::Constraint;
-use super::instruction::set::{AirInstruction, InstructionSet};
+use super::instruction::set::AirInstruction;
 use super::register::element::ElementRegister;
 use super::register::Register;
 use super::table::evaluation::Evaluation;
@@ -24,7 +24,6 @@ pub struct AirBuilder<L: AirParameters> {
     extended_index: usize,
     challenge_index: usize,
     public_inputs_index: usize,
-    pub(crate) instructions: InstructionSet<L>,
     pub(crate) constraints: Vec<Constraint<L>>,
     pub(crate) lookup_data: Vec<Lookup<L::Field, L::CubicParams, 1>>,
     pub(crate) evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
@@ -41,7 +40,6 @@ impl<L: AirParameters> AirBuilder<L> {
             extended_index: L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS,
             challenge_index: 0,
             public_inputs_index: 0,
-            instructions: BTreeSet::new(),
             constraints: Vec::new(),
             lookup_data: Vec::new(),
             evaluation_data: Vec::new(),
@@ -54,8 +52,7 @@ impl<L: AirParameters> AirBuilder<L> {
     /// Registers a write instruction into the builder
     pub fn write_data<T: Register>(&mut self, data: &T) {
         let instruction = AirInstruction::write(data.register());
-        self.register_air_instruction_internal(instruction.into())
-            .unwrap();
+        self.register_air_instruction_internal(instruction).unwrap();
     }
 
     /// Registers an custom instruction with the builder.
@@ -75,7 +72,7 @@ impl<L: AirParameters> AirBuilder<L> {
     ) -> Result<()> {
         // Add the constraints
         self.constraints
-            .push(Constraint::from_instruction_set(instruction.clone()));
+            .push(Constraint::from_instruction_set(instruction));
 
         Ok(())
     }
@@ -85,67 +82,74 @@ impl<L: AirParameters> AirBuilder<L> {
         element.as_canonical_u64() as usize
     }
 
-    pub fn build(mut self) -> (Chip<L>, InstructionSet<L>) {
+    pub fn build(mut self) -> Chip<L> {
         // Add the range checks
         if L::NUM_ARITHMETIC_COLUMNS > 0 {
             self.arithmetic_range_checks();
         }
 
         // Check the number of columns in comparison to config
-        let num_free_columns = self.local_index - L::NUM_ARITHMETIC_COLUMNS; //self.local_index;
-        if num_free_columns > L::NUM_FREE_COLUMNS {
-            panic!(
+        let num_free_columns = self.local_index - L::NUM_ARITHMETIC_COLUMNS;
+
+        match num_free_columns.cmp(&L::NUM_FREE_COLUMNS) {
+            Ordering::Greater => panic!(
                 "Not enough free columns. Expected {} free columns, got {}.",
                 num_free_columns,
                 L::NUM_FREE_COLUMNS
-            );
-        } else if num_free_columns < L::NUM_FREE_COLUMNS {
-            println!(
-                "Warning: {} free columns unused",
-                L::NUM_FREE_COLUMNS - num_free_columns
-            );
+            ),
+            Ordering::Less => {
+                println!(
+                    "Warning: {} free columns unused",
+                    L::NUM_FREE_COLUMNS - num_free_columns
+                );
+            }
+            Ordering::Equal => {}
         }
+
         let num_arithmetic_columns = self.local_arithmetic_index;
-        if num_arithmetic_columns > L::NUM_ARITHMETIC_COLUMNS {
-            panic!(
+
+        match num_arithmetic_columns.cmp(&L::NUM_ARITHMETIC_COLUMNS) {
+            Ordering::Greater => panic!(
                 "Not enough arithmetic columns. Expected {} arithmetic columns, got {}.",
                 num_arithmetic_columns,
                 L::NUM_ARITHMETIC_COLUMNS
-            );
-        } else if num_arithmetic_columns < L::NUM_ARITHMETIC_COLUMNS {
-            println!(
-                "Warning: {} arithmetic columns unused",
-                L::NUM_ARITHMETIC_COLUMNS - num_arithmetic_columns
-            );
+            ),
+            Ordering::Less => {
+                println!(
+                    "Warning: {} arithmetic columns unused",
+                    L::NUM_ARITHMETIC_COLUMNS - num_arithmetic_columns
+                );
+            }
+            Ordering::Equal => {}
         }
 
         let num_extended_columns =
             self.extended_index - L::NUM_ARITHMETIC_COLUMNS - L::NUM_FREE_COLUMNS;
-        if num_extended_columns > L::EXTENDED_COLUMNS {
-            panic!(
+
+        match num_extended_columns.cmp(&L::EXTENDED_COLUMNS) {
+            Ordering::Greater => panic!(
                 "Not enough extended columns. Expected {} extended columns, got {}.",
                 num_extended_columns,
                 L::EXTENDED_COLUMNS
-            );
-        } else if num_extended_columns < L::EXTENDED_COLUMNS {
-            println!(
-                "Warning: {} extended columns unused",
-                L::EXTENDED_COLUMNS - num_extended_columns
-            );
+            ),
+            Ordering::Less => {
+                println!(
+                    "Warning: {} extended columns unused",
+                    L::EXTENDED_COLUMNS - num_extended_columns
+                );
+            }
+            Ordering::Equal => {}
         }
 
         let execution_trace_length = self.local_index;
-        (
-            Chip {
-                constraints: self.constraints,
-                num_challenges: self.challenge_index,
-                execution_trace_length,
-                lookup_data: self.lookup_data,
-                evaluation_data: self.evaluation_data,
-                range_table: self.range_table,
-            },
-            self.instructions,
-        )
+        Chip {
+            constraints: self.constraints,
+            num_challenges: self.challenge_index,
+            execution_trace_length,
+            lookup_data: self.lookup_data,
+            evaluation_data: self.evaluation_data,
+            range_table: self.range_table,
+        }
     }
 }
 
@@ -199,7 +203,7 @@ pub mod tests {
         // x1' <- x0 + x1
         let constr_2 = builder.set_to_expression_transition(&x_1.next(), x_0.expr() + x_1.expr());
 
-        let (air, _) = builder.build();
+        let air = builder.build();
 
         let public_inputs = [
             F::ZERO,
@@ -249,7 +253,7 @@ pub mod tests {
             FibonacciAir::fibonacci(L::num_rows() - 1, F::ZERO, F::ONE),
         ];
 
-        let (air, _) = builder.build();
+        let air = builder.build();
 
         let generator = ArithmeticGenerator::<L>::new(&public_inputs);
 
@@ -297,7 +301,7 @@ pub mod tests {
         let x_0 = builder.alloc::<U16Register>();
         let x_1 = builder.alloc::<U16Register>();
 
-        let (air, _) = builder.build();
+        let air = builder.build();
 
         let generator = ArithmeticGenerator::<L>::new(&[]);
 

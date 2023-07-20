@@ -148,7 +148,7 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpInnerProductInstr
         let p_carry = to_u16_le_limbs_polynomial::<F, P>(carry);
 
         // Compute the vanishing polynomial.
-        let p_inner_product = p_a_vec.into_iter().zip(p_b_vec.into_iter()).fold(
+        let p_inner_product = p_a_vec.into_iter().zip(p_b_vec).fold(
             Polynomial::<F>::from_coefficients(vec![F::ZERO]),
             |acc, (c, d)| acc + &c * &d,
         );
@@ -167,7 +167,7 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpInnerProductInstr
 
         // Row must match layout of instruction.
         writer.write_unsafe_batch_raw(
-            &vec![
+            &[
                 *self.result.register(),
                 *self.carry.register(),
                 *self.witness_low.register(),
@@ -223,7 +223,7 @@ mod tests {
         let d = builder.alloc::<Fp>();
         let quad = builder.fp_inner_product(&vec![a, b], &vec![c, d]);
 
-        let (air, _) = builder.build();
+        let air = builder.build();
 
         let generator = ArithmeticGenerator::<L>::new(&[]);
 

@@ -150,7 +150,7 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpMulConstInstructi
 
         // Row must match layout of instruction.
         writer.write_unsafe_batch_raw(
-            &vec![
+            &[
                 *self.result.register(),
                 *self.carry.register(),
                 *self.witness_low.register(),
@@ -209,7 +209,7 @@ mod tests {
 
         let mul_const_insr = builder.fp_mul_const(&a, c);
 
-        let (air, _) = builder.build();
+        let air = builder.build();
 
         let generator = ArithmeticGenerator::<L>::new(&[]);
 
