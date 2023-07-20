@@ -199,7 +199,6 @@ mod tests {
         let cycle = builder.cycle(8);
 
         let values = (0..256)
-            .into_iter()
             .map(|_| builder.alloc_array_public::<ElementRegister>(2))
             .collect::<Vec<_>>();
         let digest = Digest::from_values::<ArrayRegister<ElementRegister>, _>(values);
@@ -209,7 +208,6 @@ mod tests {
         let (air, _) = builder.build();
 
         let public_inputs = (0..256)
-            .into_iter()
             .flat_map(|i| vec![F::ONE, F::from_canonical_usize(256 * i)])
             .collect::<Vec<_>>();
 

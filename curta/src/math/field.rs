@@ -185,9 +185,9 @@ pub mod tests {
         let zero = F::ZERO;
 
         // Test that a + 0 = a
-        assert_eq!(a.clone() + zero.clone(), a.clone());
+        assert_eq!(a.clone() + zero.clone(), a);
         // Test that a * 1 = a
-        assert_eq!(a.clone() * one.clone(), a.clone());
+        assert_eq!(a.clone() * one.clone(), a);
         // Test additive commutativity
         assert_eq!(a.clone() + b.clone(), b.clone() + a.clone());
         // Test additive associativity
@@ -196,7 +196,7 @@ pub mod tests {
             a.clone() + (b.clone() + c.clone())
         );
         // Test additive identity
-        assert_eq!(a.clone() + (-a.clone()), zero.clone());
+        assert_eq!(a.clone() + (-a.clone()), zero);
         // Test multiplicative commutativity
         assert_eq!(a.clone() * b.clone(), b.clone() * a.clone());
         // Test multiplicative associativity
@@ -205,7 +205,7 @@ pub mod tests {
             a.clone() * (b.clone() * c.clone())
         );
         // Test multiplicative identity
-        assert_eq!(a.clone() * one.clone(), a.clone());
+        assert_eq!(a.clone() * one, a);
         // Test distributivity
         assert_eq!(a.clone() * (b.clone() + c.clone()), a.clone() * b + a * c);
     }
@@ -223,7 +223,7 @@ pub mod tests {
         // Test that a * 1 = a
         assert_eq!(a * one, a);
         // Test additive commutativity
-        assert_eq!(a + b, b + a);
+        assert_eq!(a.add(b), b.add(a));
         // Test additive associativity
         assert_eq!((a + b) + c, a + (b + c));
         // Test additive identity
@@ -242,21 +242,4 @@ pub mod tests {
             assert_eq!(a * a.inverse(), one);
         }
     }
-
-    // pub fn modular_reduction_test<F: PrimeField64>() {
-    //     // let order = F::ORDER_U64;
-
-    //     let a = rand::random::<u64>();
-    //     let b = rand::random::<u64>();
-
-    //     let f_a = F::from_canonical_u64(a % order);
-    //     let f_b = F::from_canonical_u64(b % order);
-
-    //     // Test addition
-    //     assert_eq!((a + b) % order, (f_a + f_b).as_canonical_u64());
-    //     // Test subtraction
-    //     assert_eq!((a - b) % order, (f_a - f_b).as_canonical_u64());
-    //     // Test multiplication
-    //     assert_eq!((a * b) % order, (f_a * f_b).as_canonical_u64());
-    // }
 }

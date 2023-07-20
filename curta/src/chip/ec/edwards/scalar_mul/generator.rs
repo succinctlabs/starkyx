@@ -361,10 +361,8 @@ mod tests {
 
         // Get virtual targets for scalars,  points
         let scalars = (0..256)
-            .into_iter()
             .map(|_| {
                 (0..256)
-                    .into_iter()
                     .map(|_| builder.add_virtual_bool_target_unsafe())
                     .collect::<Vec<_>>()
             })

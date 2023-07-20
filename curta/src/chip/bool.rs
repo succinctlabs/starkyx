@@ -136,7 +136,7 @@ mod tests {
             let handle = tx.clone();
             let x_i = F::from_canonical_u16(0u16);
             let y_i = F::from_canonical_u16(1u16);
-            let bit_i = if i % 2 == 0 { true } else { false };
+            let bit_i = i % 2 == 0;
             let fbit = if bit_i { F::ONE } else { F::ZERO };
             rayon::spawn(move || {
                 writer.write_value(&bit, &fbit, i);
