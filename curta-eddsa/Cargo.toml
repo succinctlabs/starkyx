@@ -1,0 +1,17 @@
+[package]
+name = "curta-eddsa"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = ["std", "parallel", "timing"]
+parallel = ["curta/parallel", "plonky2/parallel", "plonky2_maybe_rayon/parallel"]
+std = ["curta/std", "plonky2/std"]
+timing = ["plonky2/timing"]
+
+[dependencies]
+curta = {path = "../curta", version = "0.1.0", default-features = false}
+plonky2_maybe_rayon = { version = "0.1.0", default-features = false }
+plonky2 = { version = "0.1", default-features = false}
