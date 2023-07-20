@@ -200,7 +200,7 @@ mod tests {
         let b = builder.alloc::<FieldRegister<P>>();
         let mul_insr = builder.fp_mul(&a, &b);
 
-        let (air, _) = builder.build();
+        let air = builder.build();
 
         let generator = ArithmeticGenerator::<L>::new(&[]);
 

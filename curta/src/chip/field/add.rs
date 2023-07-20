@@ -228,7 +228,7 @@ mod tests {
         let b = builder.alloc::<FieldRegister<P>>();
         let add_insr = builder.fp_add(&a, &b);
 
-        let (air, _) = builder.build();
+        let air = builder.build();
 
         let generator = ArithmeticGenerator::<L>::new(&[]);
 

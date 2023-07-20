@@ -154,7 +154,7 @@ mod tests {
         let _eval = builder.evaluation(&[x_0, x_1], cycle.start_bit.expr(), acc_0);
         let _eval_2 = builder.evaluation(&[x_0, x_1], bit.expr(), acc_1);
 
-        let (air, _) = builder.build();
+        let air = builder.build();
 
         let generator = ArithmeticGenerator::<L>::new(&[]);
 
@@ -205,7 +205,7 @@ mod tests {
 
         let _eval = builder.evaluation(&[x_0, x_1], cycle.start_bit.expr(), digest);
 
-        let (air, _) = builder.build();
+        let air = builder.build();
 
         let public_inputs = (0..256)
             .flat_map(|i| vec![F::ONE, F::from_canonical_usize(256 * i)])

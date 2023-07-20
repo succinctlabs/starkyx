@@ -114,7 +114,7 @@ impl<F: PrimeField> TraceWriter<F> {
         let log_lookup_next = lookup_data.log_lookup_accumulator.next();
         for (i, (acc, mult_table)) in accumulators
             .into_iter()
-            .zip(mult_table_log_entries.into_iter())
+            .zip(mult_table_log_entries)
             .enumerate()
             .filter(|(i, _)| *i != num_rows - 1)
         {

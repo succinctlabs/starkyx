@@ -109,7 +109,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
             output_point_digest,
         );
 
-        let (air, _) = builder.build();
+        let air = builder.build();
 
         (air, scalar_mul_gadget, scalars, input_points, output_points)
     }

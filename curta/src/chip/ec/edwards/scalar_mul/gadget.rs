@@ -236,7 +236,7 @@ mod tests {
         let scalar_bit = builder.alloc::<BitRegister>();
         let scalar_mul_gadget = builder.ed_scalar_mul::<E>(&scalar_bit, &res, &temp);
 
-        let (air, _) = builder.build();
+        let air = builder.build();
         let generator = ArithmeticGenerator::<L>::new(&[]);
 
         let (tx, rx) = channel();

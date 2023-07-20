@@ -209,7 +209,7 @@ mod tests {
 
         let mul_const_insr = builder.fp_mul_const(&a, c);
 
-        let (air, _) = builder.build();
+        let air = builder.build();
 
         let generator = ArithmeticGenerator::<L>::new(&[]);
 

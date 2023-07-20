@@ -218,7 +218,7 @@ mod tests {
         let sign = false;
         let den_ins = builder.fp_den(&a, &b, sign);
 
-        let (air, _) = builder.build();
+        let air = builder.build();
         let generator = ArithmeticGenerator::<L>::new(&[]);
 
         let (tx, rx) = channel();

@@ -126,7 +126,7 @@ mod tests {
 
         let sel = builder.select(&bit, &x, &y);
 
-        let (air, _) = builder.build();
+        let air = builder.build();
 
         let generator = ArithmeticGenerator::<L>::new(&[]);
 
