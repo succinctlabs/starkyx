@@ -1,5 +1,5 @@
 [workspace]
-members = ["curta", "curta-eddsa"]
+members = ["curta"]
 
 [profile.release]
 opt-level = 3

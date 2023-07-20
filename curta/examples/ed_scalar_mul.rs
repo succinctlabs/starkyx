@@ -129,8 +129,8 @@ fn main() {
         //Set the expected result
         let res_limbs_x: [_; 16] = biguint_to_16_digits_field(&res.x, 16).try_into().unwrap();
         let res_limbs_y: [_; 16] = biguint_to_16_digits_field(&res.y, 16).try_into().unwrap();
-        pw.set_target_arr(expected_results[i].x, res_limbs_x);
-        pw.set_target_arr(expected_results[i].y, res_limbs_y);
+        pw.set_target_arr(&expected_results[i].x, &res_limbs_x);
+        pw.set_target_arr(&expected_results[i].y, &res_limbs_y);
 
         // Set the scalar target
         let scalar_bits = biguint_to_bits_le(&scalar, nb_bits);
@@ -142,8 +142,8 @@ fn main() {
         let point_limbs_x: [_; 16] = biguint_to_16_digits_field(&point.x, 16).try_into().unwrap();
         let point_limbs_y: [_; 16] = biguint_to_16_digits_field(&point.y, 16).try_into().unwrap();
 
-        pw.set_target_arr(points[i].x, point_limbs_x);
-        pw.set_target_arr(points[i].y, point_limbs_y);
+        pw.set_target_arr(&points[i].x, &point_limbs_x);
+        pw.set_target_arr(&points[i].y, &point_limbs_y);
     }
 
     let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);

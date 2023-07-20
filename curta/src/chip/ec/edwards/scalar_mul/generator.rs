@@ -232,6 +232,10 @@ where
         Into<anyhow::Error>,
     [(); S::COLUMNS]:,
 {
+    fn id(&self) -> String {
+        unimplemented!("TODO")
+    }
+
     fn dependencies(&self) -> Vec<Target> {
         self.points
             .iter()
@@ -304,12 +308,22 @@ where
         for (i, res) in rx.iter() {
             let res_limbs_x: [_; 16] = biguint_to_16_digits_field(&res.x, 16).try_into().unwrap();
             let res_limbs_y: [_; 16] = biguint_to_16_digits_field(&res.y, 16).try_into().unwrap();
-            out_buffer.set_target_arr(self.results[i].x, res_limbs_x);
-            out_buffer.set_target_arr(self.results[i].y, res_limbs_y);
+            out_buffer.set_target_arr(&self.results[i].x, &res_limbs_x);
+            out_buffer.set_target_arr(&self.results[i].y, &res_limbs_y);
         }
 
         // Generate the stark proof
         SimpleGenerator::<F>::run_once(&self.generator, witness, out_buffer)
+    }
+
+    fn serialize(&self, dst: &mut Vec<u8>) -> plonky2::util::serialization::IoResult<()> {
+        unimplemented!("SimpleScalarMulEd25519Generator::serialize")
+    }
+
+    fn deserialize(
+        src: &mut plonky2::util::serialization::Buffer,
+    ) -> plonky2::util::serialization::IoResult<Self> {
+        unimplemented!("SimpleScalarMulEd25519Generator::deserialize")
     }
 }
 
@@ -400,8 +414,8 @@ mod tests {
             //Set the expected result
             let res_limbs_x: [_; 16] = biguint_to_16_digits_field(&res.x, 16).try_into().unwrap();
             let res_limbs_y: [_; 16] = biguint_to_16_digits_field(&res.y, 16).try_into().unwrap();
-            pw.set_target_arr(expected_results[i].x, res_limbs_x);
-            pw.set_target_arr(expected_results[i].y, res_limbs_y);
+            pw.set_target_arr(&expected_results[i].x, &res_limbs_x);
+            pw.set_target_arr(&expected_results[i].y, &res_limbs_y);
 
             // Set the scalar target
             let scalar_bits = biguint_to_bits_le(&scalar, nb_bits);
@@ -415,8 +429,8 @@ mod tests {
             let point_limbs_y: [_; 16] =
                 biguint_to_16_digits_field(&point.y, 16).try_into().unwrap();
 
-            pw.set_target_arr(points[i].x, point_limbs_x);
-            pw.set_target_arr(points[i].y, point_limbs_y);
+            pw.set_target_arr(&points[i].x, &point_limbs_x);
+            pw.set_target_arr(&points[i].y, &point_limbs_y);
         }
 
         let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
