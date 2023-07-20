@@ -114,20 +114,6 @@ impl<F: Field> TraceWriter<F> {
         memory_slice.assign(&mut trace.view_mut(), 0, value, row_index);
     }
 
-    // #[inline]
-    // pub fn write_batch<T: RegisterSerializable>(
-    //     &self,
-    //     data_slice: &[T],
-    //     values: &[F],
-    //     row_index: usize,
-    // ) {
-    //     let mut trace = self.0.trace.write().unwrap();
-    //     data_slice.iter().fold(0, |local_index, data| {
-    //         data.register()
-    //             .assign(&mut trace.view_mut(), local_index, values, row_index)
-    //     });
-    // }
-
     #[inline]
     pub fn write<T: RegisterSerializable>(&self, data: &T, value: &[F], row_index: usize) {
         let mut trace = self.0.trace.write().unwrap();
