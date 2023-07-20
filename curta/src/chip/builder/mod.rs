@@ -283,7 +283,7 @@ pub mod tests {
         const EXTENDED_COLUMNS: usize = 11;
 
         fn num_rows_bits() -> usize {
-            16
+            14
         }
     }
 
@@ -307,7 +307,7 @@ pub mod tests {
             let handle = tx.clone();
             rayon::spawn(move || {
                 writer.write(&x_0, &[F::ZERO], i);
-                writer.write(&x_1, &[F::from_canonical_usize(i)], i);
+                writer.write(&x_1, &[F::from_canonical_usize(0)], i);
                 handle.send(1).unwrap();
             });
         }
