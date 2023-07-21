@@ -4,10 +4,13 @@ use core::marker::PhantomData;
 use crate::chip::builder::AirBuilder;
 use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::chip::constraint::Constraint;
+use crate::chip::instruction::cycle::Cycle;
+use crate::chip::instruction::set::AirInstruction;
 use crate::chip::register::array::ArrayRegister;
+use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::extension::ExtensionRegister;
-use crate::chip::register::RegisterSerializable;
+use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
@@ -21,6 +24,13 @@ pub enum Digest<F: Field, E: CubicParameters<F>> {
     Expression(ArithmeticExpression<F>),
     None,
     _Marker(PhantomData<E>),
+}
+
+#[derive(Debug, Clone)]
+pub struct BitEvaluation<F: Field> {
+    pub bit: BitRegister,
+    pub u32_acc: ElementRegister,
+    pub cycle: Cycle<F>,
 }
 
 #[derive(Debug, Clone)]
@@ -46,7 +56,7 @@ impl<L: AirParameters> AirBuilder<L> {
         values: &[T],
         filter: ArithmeticExpression<L::Field>,
         digest: Digest<L::Field, L::CubicParams>,
-    ) -> Evaluation<L::Field, L::CubicParams> {
+    ) {
         // Get the running evaluation challenge
         let beta = self.alloc_challenge::<ExtensionRegister<3>>();
         let beta_powers = self.alloc_extended::<ExtensionRegister<3>>();
@@ -80,8 +90,47 @@ impl<L: AirParameters> AirBuilder<L> {
         };
         self.constraints
             .push(Constraint::evaluation(evaluation.clone()));
-        self.evaluation_data.push(evaluation.clone());
-        evaluation
+        self.evaluation_data.push(evaluation);
+    }
+
+    #[allow(clippy::type_complexity)]
+    pub fn bit_evaluation(
+        &mut self,
+        bit: &BitRegister,
+        digest: Digest<L::Field, L::CubicParams>,
+    ) -> (
+        BitEvaluation<L::Field>,
+        AirInstruction<L::Field, L::Instruction>,
+        AirInstruction<L::Field, L::Instruction>,
+    ) {
+        let u32_acc = self.alloc_extended::<ElementRegister>();
+        let cycle = self.cycle(5);
+
+        let one = ArithmeticExpression::one();
+        let two = ArithmeticExpression::from_constant(L::Field::ONE + L::Field::ONE);
+
+        let u32_acc_next = u32_acc.next();
+        let end_bit = cycle.end_bit.expr();
+        let bit_expr = bit.expr();
+
+        let set_last = self.set_to_expression_last_row(&u32_acc, bit_expr.clone());
+
+        let set_bit = self.set_to_expression_transition(
+            &u32_acc,
+            end_bit.clone() * bit_expr.clone()
+                + (one - end_bit) * (u32_acc_next.expr() * two + bit_expr),
+        );
+
+        self.evaluation(&[u32_acc], cycle.start_bit.expr(), digest);
+        (
+            BitEvaluation {
+                bit: *bit,
+                cycle,
+                u32_acc,
+            },
+            set_last,
+            set_bit,
+        )
     }
 }
 
@@ -151,8 +200,8 @@ mod tests {
         let acc_0 = builder.alloc_digest_column();
         let acc_1 = builder.alloc_digest_column();
 
-        let _eval = builder.evaluation(&[x_0, x_1], cycle.start_bit.expr(), acc_0);
-        let _eval_2 = builder.evaluation(&[x_0, x_1], bit.expr(), acc_1);
+        builder.evaluation(&[x_0, x_1], cycle.start_bit.expr(), acc_0);
+        builder.evaluation(&[x_0, x_1], bit.expr(), acc_1);
 
         let air = builder.build();
 
@@ -203,7 +252,7 @@ mod tests {
             .collect::<Vec<_>>();
         let digest = Digest::from_values::<ArrayRegister<ElementRegister>, _>(values);
 
-        let _eval = builder.evaluation(&[x_0, x_1], cycle.start_bit.expr(), digest);
+        builder.evaluation(&[x_0, x_1], cycle.start_bit.expr(), digest);
 
         let air = builder.build();
 

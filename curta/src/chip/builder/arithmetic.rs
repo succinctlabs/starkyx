@@ -110,10 +110,11 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         data: &T,
         expression: ArithmeticExpression<L::Field>,
-    ) {
+    ) -> AirInstruction<L::Field, L::Instruction> {
         let instr = AssignInstruction::new(expression, *data.register(), AssignType::First);
-        self.register_air_instruction_internal(AirInstruction::Assign(instr))
+        self.register_air_instruction_internal(AirInstruction::Assign(instr.clone()))
             .unwrap();
+        AirInstruction::Assign(instr)
     }
 
     #[inline]
@@ -121,10 +122,11 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         data: &T,
         expression: ArithmeticExpression<L::Field>,
-    ) {
+    ) -> AirInstruction<L::Field, L::Instruction> {
         let instr = AssignInstruction::new(expression, *data.register(), AssignType::Last);
-        self.register_air_instruction_internal(AirInstruction::Assign(instr))
+        self.register_air_instruction_internal(AirInstruction::Assign(instr.clone()))
             .unwrap();
+        AirInstruction::Assign(instr)
     }
 
     #[inline]

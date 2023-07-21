@@ -22,10 +22,11 @@ use curta::chip::ec::edwards::scalar_mul::generator::{
     AffinePointTarget, EdDSAStark, ScalarMulEd25519Gadget,
 };
 use curta::chip::ec::edwards::EdwardsParameters;
-use curta::chip::utils::{biguint_to_16_digits_field, biguint_to_bits_le};
+use curta::chip::utils::biguint_to_16_digits_field;
 use curta::math::goldilocks::cubic::GoldilocksCubicParameters;
 use num::bigint::RandBigInt;
 use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::field::types::Field;
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CircuitConfig;
@@ -52,17 +53,17 @@ fn main() {
     // Allocate targets for elliptic curve points and scalar
 
     // Get virtual targets for scalars
-    let scalars = (0..256)
+    let scalars_limbs = (0..256)
         .map(|_| {
-            (0..256)
-                .map(|_| builder.add_virtual_bool_target_unsafe())
+            (0..8)
+                .map(|_| builder.add_virtual_target())
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
 
-    for scalar in scalars.iter() {
-        for bool in scalar.iter() {
-            builder.register_public_input(bool.target);
+    for scalar in scalars_limbs.iter() {
+        for limb in scalar.iter() {
+            builder.register_public_input(*limb);
         }
     }
 
@@ -81,7 +82,7 @@ fn main() {
     }
 
     // Get the results of the scalar multiplication
-    let results = builder.ed_scalar_mul_batch::<S, E, C>(&points, &scalars);
+    let results = builder.ed_scalar_mul_batch::<S, E, C>(&points, &scalars_limbs);
 
     // These results will be allocated automatically into the trace once `points` and
     // `scalars` are written into the trace.
@@ -117,7 +118,6 @@ fn main() {
     // Assigning the public inputs: points, scalars, and expected results
     let mut rng = thread_rng();
     let generator = Ed25519::generator();
-    let nb_bits = Ed25519::nb_scalar_bits();
     for i in 0..256 {
         let a = rng.gen_biguint(256);
         let point = &generator * a;
@@ -131,9 +131,9 @@ fn main() {
         pw.set_target_arr(&expected_results[i].y, &res_limbs_y);
 
         // Set the scalar target
-        let scalar_bits = biguint_to_bits_le(&scalar, nb_bits);
-        for (target, bit) in scalars[i].iter().zip(scalar_bits.iter()) {
-            pw.set_bool_target(*target, *bit);
+        let scalar_limbs = scalar.iter_u32_digits().map(F::from_canonical_u32);
+        for (target, limb) in scalars_limbs[i].iter().zip(scalar_limbs) {
+            pw.set_target(*target, limb);
         }
 
         // Set the point target
