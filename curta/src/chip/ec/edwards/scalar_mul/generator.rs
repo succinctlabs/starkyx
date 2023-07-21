@@ -206,6 +206,7 @@ impl<
         const D: usize,
     > SimpleScalarMulEd25519Generator<F, E, C, S, D>
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         gadget: EdScalarMulGadget<F, Ed25519>,
         points: Vec<AffinePointTarget>,
@@ -264,7 +265,7 @@ where
             .chain(
                 self.scalars
                     .iter()
-                    .flat_map(|scalar| scalar.iter().map(|x| *x)),
+                    .flat_map(|scalar| scalar.iter().copied()),
             )
             .collect()
     }
@@ -279,16 +280,7 @@ where
                     .map(|x| F::as_canonical_u64(&x) as u32)
                     .collect::<Vec<_>>()
             })
-            .map(|limbs| {
-                // let mut x_out = BigUint::from(0u32);
-                // for (i, bit) in limbs.into_iter().enumerate() {
-                //     if bit == F::ONE {
-                //         x_out += BigUint::from(1u32) << i;
-                //     }
-                // }
-                // x_out
-                BigUint::new(limbs)
-            })
+            .map(BigUint::new)
             .collect::<Vec<_>>();
         assert_eq!(scalars.len(), 256);
 
@@ -440,7 +432,7 @@ mod tests {
             pw.set_target_arr(&expected_results[i].y, &res_limbs_y);
 
             // Set the scalar target
-            let scalar_limbs_iter = scalar.iter_u32_digits().map(|x| F::from_canonical_u32(x));
+            let scalar_limbs_iter = scalar.iter_u32_digits().map(F::from_canonical_u32);
             for (target, limb) in scalars_limbs[i].iter().zip(scalar_limbs_iter) {
                 pw.set_target(*target, limb);
             }

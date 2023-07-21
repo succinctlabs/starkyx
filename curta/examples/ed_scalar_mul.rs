@@ -131,7 +131,7 @@ fn main() {
         pw.set_target_arr(&expected_results[i].y, &res_limbs_y);
 
         // Set the scalar target
-        let scalar_limbs = scalar.iter_u32_digits().map(|x| F::from_canonical_u32(x));
+        let scalar_limbs = scalar.iter_u32_digits().map(F::from_canonical_u32);
         for (target, limb) in scalars_limbs[i].iter().zip(scalar_limbs) {
             pw.set_target(*target, limb);
         }

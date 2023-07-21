@@ -93,6 +93,7 @@ impl<L: AirParameters> AirBuilder<L> {
         self.evaluation_data.push(evaluation);
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn bit_evaluation(
         &mut self,
         bit: &BitRegister,
@@ -199,8 +200,8 @@ mod tests {
         let acc_0 = builder.alloc_digest_column();
         let acc_1 = builder.alloc_digest_column();
 
-        let _eval = builder.evaluation(&[x_0, x_1], cycle.start_bit.expr(), acc_0);
-        let _eval_2 = builder.evaluation(&[x_0, x_1], bit.expr(), acc_1);
+        builder.evaluation(&[x_0, x_1], cycle.start_bit.expr(), acc_0);
+        builder.evaluation(&[x_0, x_1], bit.expr(), acc_1);
 
         let air = builder.build();
 
@@ -251,7 +252,7 @@ mod tests {
             .collect::<Vec<_>>();
         let digest = Digest::from_values::<ArrayRegister<ElementRegister>, _>(values);
 
-        let _eval = builder.evaluation(&[x_0, x_1], cycle.start_bit.expr(), digest);
+        builder.evaluation(&[x_0, x_1], cycle.start_bit.expr(), digest);
 
         let air = builder.build();
 
