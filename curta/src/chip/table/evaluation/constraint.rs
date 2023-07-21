@@ -133,3 +133,33 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
             .eval_digest(parser, accumulator_next_value, &alphas, beta);
     }
 }
+
+// impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
+//     for BitEvaluation<AP::Field, E>
+// {
+//     fn eval(&self, parser: &mut AP) {
+//         // Constrain the running evaluation powers and cycle
+//         self.cycle.eval(parser);
+//         self.evaluation.eval(parser);
+
+//         // Constrain the u32 bit accumulation
+//         let bit = self.bit.eval(parser);
+//         let u32_acc = self.u32_acc.eval(parser);
+//         let u32_acc_next = self.u32_acc.next().eval(parser);
+//         let end_bit = self.cycle.end_bit.eval(parser);
+//         let one = parser.one();
+//         let one_minus_end_bit = parser.sub(one, end_bit);
+
+//         // When end_bit = 0, u32_acc_next = 2 * bit + u32_acc
+//         // When end_bit = 1, u32_acc_next = 0
+//         let two_bit = parser.mul_const(bit, AP::Field::from_canonical_u8(2));
+//         let two_bit_plus_acc = parser.add(two_bit, u32_acc);
+//         let bit_0_constraint_val = parser.sub(u32_acc_next, two_bit_plus_acc);
+//         let bit_0_constraint = parser.mul(bit_0_constraint_val, one_minus_end_bit);
+
+//         let bit_1_constraint = parser.mul(u32_acc_next, end_bit);
+
+//         let bit_constraint = parser.add(bit_0_constraint, bit_1_constraint);
+//         parser.constraint_transition(bit_constraint);
+//     }
+// }

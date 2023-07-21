@@ -7,7 +7,7 @@ use plonky2::field::extension::Extendable;
 use plonky2::field::packable::Packable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::generator::{GeneratedValues, SimpleGenerator};
-use plonky2::iop::target::{BoolTarget, Target};
+use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
@@ -15,12 +15,16 @@ use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use super::air::{ScalarMulEd25519, ED_NUM_COLUMNS};
 use super::gadget::EdScalarMulGadget;
 use crate::air::RAir;
-use crate::chip::ec::edwards::ed25519::Ed25519;
+use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
 use crate::chip::ec::point::AffinePoint;
+use crate::chip::field::instruction::FpInstruction;
+use crate::chip::instruction::set::AirInstruction;
 use crate::chip::register::RegisterSerializable;
+use crate::chip::table::evaluation::BitEvaluation;
 use crate::chip::trace::generator::ArithmeticGenerator;
 use crate::chip::utils::{biguint_to_16_digits_field, field_limbs_to_biguint};
 use crate::chip::{AirParameters, Chip};
+use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 use crate::plonky2::field::CubicParameters;
 use crate::plonky2::parser::{RecursiveStarkParser, StarkParser};
@@ -46,7 +50,7 @@ pub trait ScalarMulEd25519Gadget<F: RichField + Extendable<D>, const D: usize> {
     >(
         &mut self,
         points: &[AffinePointTarget],
-        scalars: &[Vec<BoolTarget>],
+        scalars: &[Vec<Target>],
     ) -> Vec<AffinePointTarget>
     where
         C::Hasher: AlgebraicHasher<F>,
@@ -69,7 +73,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
     >(
         &mut self,
         points: &[AffinePointTarget],
-        scalars: &[Vec<BoolTarget>],
+        scalars: &[Vec<Target>],
     ) -> Vec<AffinePointTarget>
     where
         C::Hasher: AlgebraicHasher<F>,
@@ -81,13 +85,19 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
         S: From<Starky<Chip<ScalarMulEd25519<F, E>>, ED_NUM_COLUMNS>>,
         [(); S::COLUMNS]:,
     {
-        let (air, gadget, scalars_input, input_points, output_points) =
-            ScalarMulEd25519::<F, E>::air();
+        let (
+            air,
+            gadget,
+            scalars_limbs_input,
+            input_points,
+            output_points,
+            (bit_eval, set_last, set_bit),
+        ) = ScalarMulEd25519::<F, E>::air();
 
-        let mut public_input_target_option = vec![None as Option<Target>; 256 * (256 + 2 * 32)];
-        for (scalar_register, scalar_target) in scalars_input.iter().zip_eq(scalars.iter()) {
+        let mut public_input_target_option = vec![None as Option<Target>; 256 * (8 + 2 * 32)];
+        for (scalar_register, scalar_target) in scalars_limbs_input.iter().zip_eq(scalars.iter()) {
             let (s_0, s_1) = scalar_register.register().get_range();
-            let scalar_targets = scalar_target.iter().map(|x| Some(x.target)).collect_vec();
+            let scalar_targets = scalar_target.iter().map(|x| Some(*x)).collect_vec();
             public_input_target_option[s_0..s_1].copy_from_slice(&scalar_targets);
         }
 
@@ -151,6 +161,9 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
             scalars: scalars.to_vec(),
             generator: stark_generator,
             results: results.clone(),
+            bit_eval,
+            set_last,
+            set_bit,
             _marker: core::marker::PhantomData,
         };
 
@@ -169,8 +182,11 @@ pub struct SimpleScalarMulEd25519Generator<
 > {
     gadget: EdScalarMulGadget<F, Ed25519>,
     points: Vec<AffinePointTarget>,
-    scalars: Vec<Vec<BoolTarget>>, // 32-byte limbs
+    scalars: Vec<Vec<Target>>, // 32-byte limbs
     results: Vec<AffinePointTarget>,
+    bit_eval: BitEvaluation<F>,
+    set_last: AirInstruction<F, FpInstruction<Ed25519BaseField>>,
+    set_bit: AirInstruction<F, FpInstruction<Ed25519BaseField>>,
     generator: SimpleStarkWitnessGenerator<
         S,
         ArithmeticGenerator<ScalarMulEd25519<F, E>>,
@@ -193,8 +209,11 @@ impl<
     pub fn new(
         gadget: EdScalarMulGadget<F, Ed25519>,
         points: Vec<AffinePointTarget>,
-        scalars: Vec<Vec<BoolTarget>>,
+        scalars: Vec<Vec<Target>>,
         results: Vec<AffinePointTarget>,
+        bit_eval: BitEvaluation<F>,
+        set_last: AirInstruction<F, FpInstruction<Ed25519BaseField>>,
+        set_bit: AirInstruction<F, FpInstruction<Ed25519BaseField>>,
         generator: SimpleStarkWitnessGenerator<
             S,
             ArithmeticGenerator<ScalarMulEd25519<F, E>>,
@@ -209,6 +228,9 @@ impl<
             points,
             scalars,
             results,
+            bit_eval,
+            set_last,
+            set_bit,
             generator,
             _marker: core::marker::PhantomData,
         }
@@ -242,7 +264,7 @@ where
             .chain(
                 self.scalars
                     .iter()
-                    .flat_map(|scalar| scalar.iter().map(|x| x.target)),
+                    .flat_map(|scalar| scalar.iter().map(|x| *x)),
             )
             .collect()
     }
@@ -253,17 +275,19 @@ where
             .par_iter()
             .map(|x| {
                 x.iter()
-                    .map(|bool| witness.get_target(bool.target))
+                    .map(|limb| witness.get_target(*limb))
+                    .map(|x| F::as_canonical_u64(&x) as u32)
                     .collect::<Vec<_>>()
             })
-            .map(|bits| {
-                let mut x_out = BigUint::from(0u32);
-                for (i, bit) in bits.into_iter().enumerate() {
-                    if bit == F::ONE {
-                        x_out += BigUint::from(1u32) << i;
-                    }
-                }
-                x_out
+            .map(|limbs| {
+                // let mut x_out = BigUint::from(0u32);
+                // for (i, bit) in limbs.into_iter().enumerate() {
+                //     if bit == F::ONE {
+                //         x_out += BigUint::from(1u32) << i;
+                //     }
+                // }
+                // x_out
+                BigUint::new(limbs)
             })
             .collect::<Vec<_>>();
         assert_eq!(scalars.len(), 256);
@@ -285,6 +309,7 @@ where
         let writer = trace_generator.new_writer();
         for j in 0..(1 << 16) {
             writer.write_instruction(&self.gadget.cycle, j);
+            writer.write_instruction(&self.bit_eval.cycle, j);
         }
         let (tx, rx) = channel();
         for i in 0..256usize {
@@ -310,7 +335,10 @@ where
             out_buffer.set_target_arr(&self.results[i].x, &res_limbs_x);
             out_buffer.set_target_arr(&self.results[i].y, &res_limbs_y);
         }
-
+        for j in (0..(1 << 16)).rev() {
+            writer.write_instruction(&self.set_last, j);
+            writer.write_instruction(&self.set_bit, j);
+        }
         // Generate the stark proof
         SimpleGenerator::<F>::run_once(&self.generator, witness, out_buffer)
     }
@@ -343,7 +371,6 @@ mod tests {
         AffinePointTarget, ScalarMulEd25519Gadget,
     };
     use crate::chip::ec::edwards::EdwardsParameters;
-    use crate::chip::utils::biguint_to_bits_le;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
 
     #[test]
@@ -360,10 +387,10 @@ mod tests {
         let mut builder = CircuitBuilder::<F, D>::new(config);
 
         // Get virtual targets for scalars,  points
-        let scalars = (0..256)
+        let scalars_limbs = (0..256)
             .map(|_| {
-                (0..256)
-                    .map(|_| builder.add_virtual_bool_target_unsafe())
+                (0..8)
+                    .map(|_| builder.add_virtual_target())
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
@@ -385,7 +412,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // The scalar multiplications
-        let results = builder.ed_scalar_mul_batch::<S, E, C>(&points, &scalars);
+        let results = builder.ed_scalar_mul_batch::<S, E, C>(&points, &scalars_limbs);
 
         // compare the results to the expected results
         for (result, expected) in results.iter().zip(expected_results.iter()) {
@@ -400,8 +427,6 @@ mod tests {
 
         let mut rng = thread_rng();
         let generator = Ed25519::generator();
-        let nb_bits = Ed25519::nb_scalar_bits();
-
         for i in 0..256 {
             let a = rng.gen_biguint(256);
             let point = &generator * a;
@@ -415,9 +440,9 @@ mod tests {
             pw.set_target_arr(&expected_results[i].y, &res_limbs_y);
 
             // Set the scalar target
-            let scalar_bits = biguint_to_bits_le(&scalar, nb_bits);
-            for (target, bit) in scalars[i].iter().zip(scalar_bits.iter()) {
-                pw.set_bool_target(*target, *bit);
+            let scalar_limbs_iter = scalar.iter_u32_digits().map(|x| F::from_canonical_u32(x));
+            for (target, limb) in scalars_limbs[i].iter().zip(scalar_limbs_iter) {
+                pw.set_target(*target, limb);
             }
 
             // Set the point target
