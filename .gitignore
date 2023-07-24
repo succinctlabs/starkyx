@@ -1,6 +1,5 @@
 # Cargo build
 /target
-Cargo.lock
 
 # Profile-guided optimization
 /tmp

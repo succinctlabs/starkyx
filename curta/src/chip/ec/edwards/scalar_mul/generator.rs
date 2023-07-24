@@ -10,6 +10,7 @@ use plonky2::iop::generator::{GeneratedValues, SimpleGenerator};
 use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
+use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 
 use super::air::{ScalarMulEd25519, ED_NUM_COLUMNS};
@@ -244,7 +245,7 @@ impl<
         C: GenericConfig<D, F = F, FE = F::Extension> + 'static,
         S: Plonky2Stark<F, D> + 'static + Send + Sync + Debug,
         const D: usize,
-    > SimpleGenerator<F> for SimpleScalarMulEd25519Generator<F, E, C, S, D>
+    > SimpleGenerator<F, D> for SimpleScalarMulEd25519Generator<F, E, C, S, D>
 where
     C::Hasher: AlgebraicHasher<F>,
     S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
@@ -332,15 +333,20 @@ where
             writer.write_instruction(&self.set_bit, j);
         }
         // Generate the stark proof
-        SimpleGenerator::<F>::run_once(&self.generator, witness, out_buffer)
+        SimpleGenerator::<F, D>::run_once(&self.generator, witness, out_buffer)
     }
 
-    fn serialize(&self, _dst: &mut Vec<u8>) -> plonky2::util::serialization::IoResult<()> {
+    fn serialize(
+        &self,
+        _dst: &mut Vec<u8>,
+        _common_data: &CommonCircuitData<F, D>,
+    ) -> plonky2::util::serialization::IoResult<()> {
         unimplemented!("SimpleScalarMulEd25519Generator::serialize")
     }
 
     fn deserialize(
         _src: &mut plonky2::util::serialization::Buffer,
+        _common_data: &CommonCircuitData<F, D>,
     ) -> plonky2::util::serialization::IoResult<Self> {
         unimplemented!("SimpleScalarMulEd25519Generator::deserialize")
     }
