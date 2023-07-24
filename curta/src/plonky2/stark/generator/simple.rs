@@ -7,6 +7,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::generator::{GeneratedValues, SimpleGenerator};
 use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness};
+use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2::util::serialization::IoResult;
 
@@ -50,7 +51,7 @@ impl<S, T, F: RichField, C, const D: usize>
     }
 }
 
-impl<S, T, F, C, P, const D: usize> SimpleGenerator<F>
+impl<S, T, F, C, P, const D: usize> SimpleGenerator<F, D>
     for SimpleStarkWitnessGenerator<S, T, F, C, P, D>
 where
     F: RichField + Extendable<D>,
@@ -85,11 +86,18 @@ where
         set_stark_proof_target(out_buffer, &self.proof_target, &proof);
     }
 
-    fn serialize(&self, _dst: &mut Vec<u8>) -> IoResult<()> {
+    fn serialize(
+        &self,
+        _dst: &mut Vec<u8>,
+        _common_data: &CommonCircuitData<F, D>,
+    ) -> IoResult<()> {
         unimplemented!("SimpleStarkWitnessGenerator::serialize")
     }
 
-    fn deserialize(_src: &mut plonky2::util::serialization::Buffer) -> IoResult<Self>
+    fn deserialize(
+        _src: &mut plonky2::util::serialization::Buffer,
+        _common_data: &CommonCircuitData<F, D>,
+    ) -> IoResult<Self>
     where
         Self: Sized,
     {
