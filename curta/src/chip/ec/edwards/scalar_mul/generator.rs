@@ -63,7 +63,7 @@ pub trait ScalarMulEd25519Gadget<F: RichField + Extendable<D>, const D: usize> {
         S: From<Starky<Chip<ScalarMulEd25519<F, E>>, ED_NUM_COLUMNS>>,
         [(); S::COLUMNS]:;
 
-    fn ed_scalar_mul_batch_hint<E: CubicParameters<F>>(
+    fn ed_scalar_mul_batch_hint(
         &mut self,
         points: &[AffinePointTarget],
         scalars: &[Vec<Target>],
@@ -178,7 +178,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
         results
     }
 
-    fn ed_scalar_mul_batch_hint<E: CubicParameters<F>>(
+    fn ed_scalar_mul_batch_hint(
         &mut self,
         points: &[AffinePointTarget],
         scalars: &[Vec<Target>],
@@ -634,7 +634,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // The scalar multiplications
-        let results = builder.ed_scalar_mul_batch_hint::<E>(&points, &scalars_limbs);
+        let results = builder.ed_scalar_mul_batch_hint(&points, &scalars_limbs);
 
         // compare the results to the expected results
         for (result, expected) in results.iter().zip(expected_results.iter()) {
