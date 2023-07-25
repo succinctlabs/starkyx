@@ -154,7 +154,7 @@ impl<L: AirParameters> AirBuilder<L> {
 }
 
 #[cfg(test)]
-pub mod tests {
+pub(crate) mod tests {
     pub use std::sync::mpsc::channel;
 
     pub use plonky2::field::goldilocks_field::GoldilocksField;

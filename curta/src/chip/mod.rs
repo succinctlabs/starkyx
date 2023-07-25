@@ -12,10 +12,12 @@ pub mod builder;
 pub mod constraint;
 pub mod ec;
 pub mod field;
+pub mod hash;
 pub mod instruction;
 pub mod register;
 pub mod table;
 pub mod trace;
+pub mod u32;
 pub mod utils;
 
 #[const_trait]
