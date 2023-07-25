@@ -599,7 +599,6 @@ mod tests {
     #[test]
     fn test_scalar_hint_generator() {
         type F = GoldilocksField;
-        type E = GoldilocksCubicParameters;
         type C = PoseidonGoldilocksConfig;
         const D: usize = 2;
 
