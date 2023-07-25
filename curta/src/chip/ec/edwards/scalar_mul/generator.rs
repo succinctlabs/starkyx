@@ -62,6 +62,12 @@ pub trait ScalarMulEd25519Gadget<F: RichField + Extendable<D>, const D: usize> {
             Into<anyhow::Error>,
         S: From<Starky<Chip<ScalarMulEd25519<F, E>>, ED_NUM_COLUMNS>>,
         [(); S::COLUMNS]:;
+
+    fn ed_scalar_mul_batch_hint<E: CubicParameters<F>>(
+        &mut self,
+        points: &[AffinePointTarget],
+        scalars: &[Vec<Target>],
+    ) -> Vec<AffinePointTarget>;
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
@@ -165,6 +171,30 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
             bit_eval,
             set_last,
             set_bit,
+            _marker: core::marker::PhantomData,
+        };
+
+        self.add_simple_generator(generator);
+        results
+    }
+
+    fn ed_scalar_mul_batch_hint<E: CubicParameters<F>>(
+        &mut self,
+        points: &[AffinePointTarget],
+        scalars: &[Vec<Target>],
+    ) -> Vec<AffinePointTarget> {
+        let results = (0..256)
+            .map(|_| {
+                let x = self.add_virtual_target_arr();
+                let y = self.add_virtual_target_arr();
+                AffinePointTarget { x, y }
+            })
+            .collect::<Vec<_>>();
+
+        let generator = SimpleScalarMulEd25519HintGenerator::<F, D> {
+            points: points.to_vec(),
+            scalars: scalars.to_vec(),
+            results: results.clone(),
             _marker: core::marker::PhantomData,
         };
 
@@ -352,6 +382,108 @@ where
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct SimpleScalarMulEd25519HintGenerator<F: RichField + Extendable<D>, const D: usize> {
+    points: Vec<AffinePointTarget>,
+    scalars: Vec<Vec<Target>>, // 32-byte limbs
+    results: Vec<AffinePointTarget>,
+    _marker: core::marker::PhantomData<F>,
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> SimpleScalarMulEd25519HintGenerator<F, D> {
+    pub fn new(
+        points: Vec<AffinePointTarget>,
+        scalars: Vec<Vec<Target>>,
+        results: Vec<AffinePointTarget>,
+    ) -> Self {
+        Self {
+            points,
+            scalars,
+            results,
+            _marker: core::marker::PhantomData,
+        }
+    }
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
+    for SimpleScalarMulEd25519HintGenerator<F, D>
+{
+    fn id(&self) -> String {
+        unimplemented!("TODO")
+    }
+
+    fn dependencies(&self) -> Vec<Target> {
+        self.points
+            .iter()
+            .flat_map(|point| [point.x.to_vec(), point.y.to_vec()].into_iter().flatten())
+            .chain(
+                self.scalars
+                    .iter()
+                    .flat_map(|scalar| scalar.iter().copied()),
+            )
+            .collect()
+    }
+
+    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
+        let scalars = self
+            .scalars
+            .par_iter()
+            .map(|x| {
+                x.iter()
+                    .map(|limb| witness.get_target(*limb))
+                    .map(|x| F::as_canonical_u64(&x) as u32)
+                    .collect::<Vec<_>>()
+            })
+            .map(BigUint::new)
+            .collect::<Vec<_>>();
+        assert_eq!(scalars.len(), 256);
+
+        let points = self
+            .points
+            .par_iter()
+            .map(|point| {
+                let x = field_limbs_to_biguint(&witness.get_targets(&point.x));
+                let y = field_limbs_to_biguint(&witness.get_targets(&point.y));
+                AffinePoint::<Ed25519>::new(x, y)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(points.len(), 256);
+
+        let (tx, rx) = channel();
+        for i in 0..256usize {
+            let tx = tx.clone();
+            let point = points[i].clone();
+            let scalar = scalars[i].clone();
+            rayon::spawn(move || {
+                let res = point * scalar;
+                tx.send((i, res)).unwrap();
+            });
+        }
+        drop(tx);
+        for (i, res) in rx.iter() {
+            let res_limbs_x: [_; 16] = biguint_to_16_digits_field(&res.x, 16).try_into().unwrap();
+            let res_limbs_y: [_; 16] = biguint_to_16_digits_field(&res.y, 16).try_into().unwrap();
+            out_buffer.set_target_arr(&self.results[i].x, &res_limbs_x);
+            out_buffer.set_target_arr(&self.results[i].y, &res_limbs_y);
+        }
+    }
+
+    fn serialize(
+        &self,
+        _dst: &mut Vec<u8>,
+        _common_data: &CommonCircuitData<F, D>,
+    ) -> plonky2::util::serialization::IoResult<()> {
+        unimplemented!("SimpleScalarMulEd25519HintGenerator::serialize")
+    }
+
+    fn deserialize(
+        _src: &mut plonky2::util::serialization::Buffer,
+        _common_data: &CommonCircuitData<F, D>,
+    ) -> plonky2::util::serialization::IoResult<Self> {
+        unimplemented!("SimpleScalarMulEd25519HintGenerator::deserialize")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
@@ -411,6 +543,98 @@ mod tests {
 
         // The scalar multiplications
         let results = builder.ed_scalar_mul_batch::<S, E, C>(&points, &scalars_limbs);
+
+        // compare the results to the expected results
+        for (result, expected) in results.iter().zip(expected_results.iter()) {
+            for i in 0..16 {
+                builder.connect(result.x[i], expected.x[i]);
+                builder.connect(result.y[i], expected.y[i]);
+            }
+        }
+
+        let data = builder.build::<C>();
+        let mut pw = PartialWitness::new();
+
+        let mut rng = thread_rng();
+        let generator = Ed25519::generator();
+        for i in 0..256 {
+            let a = rng.gen_biguint(256);
+            let point = &generator * a;
+            let scalar = rng.gen_biguint(256);
+            let res = &point * &scalar;
+
+            //Set the expected result
+            let res_limbs_x: [_; 16] = biguint_to_16_digits_field(&res.x, 16).try_into().unwrap();
+            let res_limbs_y: [_; 16] = biguint_to_16_digits_field(&res.y, 16).try_into().unwrap();
+            pw.set_target_arr(&expected_results[i].x, &res_limbs_x);
+            pw.set_target_arr(&expected_results[i].y, &res_limbs_y);
+
+            // Set the scalar target
+            let scalar_limbs_iter = scalar.iter_u32_digits().map(F::from_canonical_u32);
+            for (target, limb) in scalars_limbs[i].iter().zip(scalar_limbs_iter) {
+                pw.set_target(*target, limb);
+            }
+
+            // Set the point target
+            let point_limbs_x: [_; 16] =
+                biguint_to_16_digits_field(&point.x, 16).try_into().unwrap();
+            let point_limbs_y: [_; 16] =
+                biguint_to_16_digits_field(&point.y, 16).try_into().unwrap();
+
+            pw.set_target_arr(&points[i].x, &point_limbs_x);
+            pw.set_target_arr(&points[i].y, &point_limbs_y);
+        }
+
+        let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
+        let recursive_proof = timed!(
+            timing,
+            "Generate proof",
+            plonky2::plonk::prover::prove(&data.prover_only, &data.common, pw, &mut timing)
+        )
+        .unwrap();
+        timing.print();
+        data.verify(recursive_proof).unwrap();
+    }
+
+    #[test]
+    fn test_scalar_hint_generator() {
+        type F = GoldilocksField;
+        type E = GoldilocksCubicParameters;
+        type C = PoseidonGoldilocksConfig;
+        const D: usize = 2;
+
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let config = CircuitConfig::standard_recursion_config();
+        let mut builder = CircuitBuilder::<F, D>::new(config);
+
+        // Get virtual targets for scalars,  points
+        let scalars_limbs = (0..256)
+            .map(|_| {
+                (0..8)
+                    .map(|_| builder.add_virtual_target())
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        let points = (0..256)
+            .map(|_| {
+                let x = builder.add_virtual_target_arr();
+                let y = builder.add_virtual_target_arr();
+                AffinePointTarget { x, y }
+            })
+            .collect::<Vec<_>>();
+
+        let expected_results = (0..256)
+            .map(|_| {
+                let x = builder.add_virtual_target_arr();
+                let y = builder.add_virtual_target_arr();
+                AffinePointTarget { x, y }
+            })
+            .collect::<Vec<_>>();
+
+        // The scalar multiplications
+        let results = builder.ed_scalar_mul_batch_hint::<E>(&points, &scalars_limbs);
 
         // compare the results to the expected results
         for (result, expected) in results.iter().zip(expected_results.iter()) {
