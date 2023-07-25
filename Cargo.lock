@@ -766,7 +766,7 @@ dependencies = [
 [[package]]
 name = "plonky2"
 version = "0.1.3"
-source = "git+https://github.com/succinctlabs/plonky2.git#84c6a46f0934d7756c72999ca39caab9d5888dfb"
+source = "git+https://github.com/mir-protocol/plonky2.git#bfa7ab369eebdd2284def26d830dfcfcdcd58c1b"
 dependencies = [
  "ahash",
  "anyhow",
