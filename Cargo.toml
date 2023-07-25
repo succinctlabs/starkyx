@@ -1,8 +1,13 @@
 [workspace]
 members = ["curta"]
+resolver = "2"
 
 [profile.release]
 opt-level = 3
 
 #[profile.bench]
 #opt-level = 3
+
+
+[patch.crates-io]
+curta = {path = "curta"}
