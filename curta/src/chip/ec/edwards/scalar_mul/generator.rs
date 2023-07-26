@@ -37,10 +37,12 @@ use crate::trace::generator::TraceGenerator;
 
 pub type EdDSAStark<F, E> = Starky<Chip<ScalarMulEd25519<F, E>>, ED_NUM_COLUMNS>;
 
+const AFFINE_POINT_TARGET_NUM_LIMBS: usize = 16;
+
 #[derive(Debug, Clone, Copy)]
 pub struct AffinePointTarget {
-    pub x: [Target; 16],
-    pub y: [Target; 16],
+    pub x: [Target; AFFINE_POINT_TARGET_NUM_LIMBS],
+    pub y: [Target; AFFINE_POINT_TARGET_NUM_LIMBS],
 }
 
 pub trait ScalarMulEd25519Gadget<F: RichField + Extendable<D>, const D: usize> {
@@ -68,6 +70,8 @@ pub trait ScalarMulEd25519Gadget<F: RichField + Extendable<D>, const D: usize> {
         points: &[AffinePointTarget],
         scalars: &[Vec<Target>],
     ) -> Vec<AffinePointTarget>;
+
+    fn connect_affine_point(&mut self, lhs: &AffinePointTarget, rhs: &AffinePointTarget);
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
@@ -200,6 +204,13 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
 
         self.add_simple_generator(generator);
         results
+    }
+
+    fn connect_affine_point(&mut self, lhs: &AffinePointTarget, rhs: &AffinePointTarget) {
+        for i in 0..AFFINE_POINT_TARGET_NUM_LIMBS {
+            self.connect(lhs.x[i], rhs.x[i]);
+            self.connect(lhs.y[i], rhs.y[i]);
+        }
     }
 }
 
