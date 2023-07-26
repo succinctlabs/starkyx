@@ -1,4 +1,5 @@
 use alloc::sync::Arc;
+use core::borrow::Borrow;
 use core::ops::Deref;
 use std::sync::{LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
@@ -84,6 +85,16 @@ impl<F: Field> TraceWriter<F> {
     }
 
     #[inline]
+    pub fn read_array<R: Register, const N: usize>(
+        &self,
+        array: &ArrayRegister<R>,
+        row_index: usize,
+    ) -> [R::Value<F>; N] {
+        let elem_fn = |i| self.read(&array.get(i), row_index);
+        core::array::from_fn(elem_fn)
+    }
+
+    #[inline]
     pub fn read_expression(
         &self,
         expression: &ArithmeticExpression<F>,
@@ -115,15 +126,26 @@ impl<F: Field> TraceWriter<F> {
     }
 
     #[inline]
-    pub fn write<T: RegisterSerializable>(&self, data: &T, value: &[F], row_index: usize) {
+    pub fn write_slice<T: RegisterSerializable>(&self, data: &T, value: &[F], row_index: usize) {
         let mut trace = self.0.trace.write().unwrap();
         data.register()
             .assign(&mut trace.view_mut(), 0, value, row_index);
     }
 
     #[inline]
-    pub fn write_value<T: Register>(&self, data: &T, value: &T::Value<F>, row_index: usize) {
-        self.write(data, T::align(value), row_index)
+    pub fn write_array<T: Register, I>(&self, array: &ArrayRegister<T>, values: I, row_index: usize)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<T::Value<F>>,
+    {
+        for (data, value) in array.into_iter().zip(values) {
+            self.write(&data, value.borrow(), row_index);
+        }
+    }
+
+    #[inline]
+    pub fn write<T: Register>(&self, data: &T, value: &T::Value<F>, row_index: usize) {
+        self.write_slice(data, T::align(value), row_index)
     }
 
     #[inline]

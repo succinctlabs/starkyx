@@ -244,10 +244,10 @@ mod tests {
                 let p_c = Polynomial::<F>::from_biguint_field(&c_int, 16, 16);
                 let p_d = Polynomial::<F>::from_biguint_field(&d_int, 16, 16);
 
-                writer.write(&a, p_a.coefficients(), i);
-                writer.write(&b, p_b.coefficients(), i);
-                writer.write(&c, p_c.coefficients(), i);
-                writer.write(&d, p_d.coefficients(), i);
+                writer.write(&a, &p_a, i);
+                writer.write(&b, &p_b, i);
+                writer.write(&c, &p_c, i);
+                writer.write(&d, &p_d, i);
 
                 writer.write_instruction(&quad, i);
 

@@ -244,8 +244,8 @@ mod tests {
                 let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
                 let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
 
-                writer.write(&a, p_a.coefficients(), i);
-                writer.write(&b, p_b.coefficients(), i);
+                writer.write_slice(&a, p_a.coefficients(), i);
+                writer.write_slice(&b, p_b.coefficients(), i);
                 writer.write_instruction(&add_insr, i);
 
                 handle.send(1).unwrap();

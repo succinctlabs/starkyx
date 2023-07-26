@@ -222,7 +222,7 @@ mod tests {
             let a_int: BigUint = rng.gen_biguint(256) % &p;
             rayon::spawn(move || {
                 let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
-                writer.write(&a, p_a.coefficients(), i);
+                writer.write(&a, &p_a, i);
                 writer.write_instruction(&mul_const_insr, i);
 
                 handle.send(1).unwrap();

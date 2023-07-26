@@ -71,7 +71,7 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                 if let Some(table) = &air.range_table {
                     for i in 0..num_rows {
                         self.writer
-                            .write(table, &[L::Field::from_canonical_usize(i)], i);
+                            .write(table, &L::Field::from_canonical_usize(i), i);
                     }
                 }
 

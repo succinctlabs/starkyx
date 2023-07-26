@@ -215,8 +215,8 @@ pub(crate) mod tests {
 
         let writer = generator.new_writer();
 
-        writer.write(&x_0, &[F::ZERO], 0);
-        writer.write(&x_1, &[F::ONE], 0);
+        writer.write(&x_0, &F::ZERO, 0);
+        writer.write(&x_1, &F::ONE, 0);
 
         for i in 0..L::num_rows() {
             writer.write_instruction(&constr_1, i);
@@ -259,8 +259,8 @@ pub(crate) mod tests {
 
         let writer = generator.new_writer();
 
-        writer.write(&x_0, &[F::ZERO], 0);
-        writer.write(&x_1, &[F::ONE], 0);
+        writer.write(&x_0, &F::ZERO, 0);
+        writer.write(&x_1, &F::ONE, 0);
 
         for i in 0..L::num_rows() {
             writer.write_instruction(&constr_1, i);
@@ -310,8 +310,8 @@ pub(crate) mod tests {
             let writer = generator.new_writer();
             let handle = tx.clone();
             rayon::spawn(move || {
-                writer.write(&x_0, &[F::ZERO], i);
-                writer.write(&x_1, &[F::from_canonical_usize(0)], i);
+                writer.write(&x_0, &F::ZERO, i);
+                writer.write(&x_1, &F::from_canonical_usize(0), i);
                 handle.send(1).unwrap();
             });
         }

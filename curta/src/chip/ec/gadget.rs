@@ -85,7 +85,7 @@ impl<F: PrimeField64, E: EllipticCurveParameters> EllipticCurveWriter<E> for Tra
     ) {
         let value_x = to_u16_le_limbs_polynomial::<F, E::BaseField>(&value.x);
         let value_y = to_u16_le_limbs_polynomial::<F, E::BaseField>(&value.y);
-        self.write_value(&data.x, &value_x, row_index);
-        self.write_value(&data.y, &value_y, row_index);
+        self.write(&data.x, &value_x, row_index);
+        self.write(&data.y, &value_y, row_index);
     }
 }

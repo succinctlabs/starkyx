@@ -3,6 +3,9 @@ use core::marker::PhantomData;
 use super::memory::MemorySlice;
 use super::{CellType, Register, RegisterSerializable};
 use crate::air::parser::AirParser;
+use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
+use crate::chip::constraint::arithmetic::expression_slice::ArithmeticExpressionSlice;
+use crate::math::field::Field;
 
 /// A helper struct for representing an array of registers. In particular, it makes it easier
 /// to access the memory slice as well as converting from a memory slice to the struct.
@@ -71,8 +74,16 @@ impl<T: Register> ArrayRegister<T> {
         }
     }
 
+    #[inline]
     pub fn iter(&self) -> ArrayIterator<T> {
         self.into_iter()
+    }
+
+    pub fn expr<F: Field>(&self) -> ArithmeticExpression<F> {
+        ArithmeticExpression {
+            expression: ArithmeticExpressionSlice::from_raw_register(*self.register()),
+            size: self.len() * T::size_of(),
+        }
     }
 
     #[inline]

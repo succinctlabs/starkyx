@@ -73,7 +73,7 @@ impl<F: PrimeField> TraceWriter<F> {
         // Write multiplicities into the trace
         let multiplicity = lookup_data.multiplicities.get(0);
         for (i, mult) in multiplicities.iter().enumerate() {
-            self.write(&multiplicity, &[*mult], i);
+            self.write(&multiplicity, mult, i);
         }
 
         // Write multiplicity inverse constraint
@@ -88,7 +88,7 @@ impl<F: PrimeField> TraceWriter<F> {
 
         let mult_table_log = lookup_data.multiplicity_table_log;
         for (i, value) in mult_table_log_entries.iter().enumerate() {
-            self.write(&mult_table_log, value.as_base_slice(), i);
+            self.write_slice(&mult_table_log, value.as_base_slice(), i);
         }
 
         // Log accumulator
@@ -119,7 +119,7 @@ impl<F: PrimeField> TraceWriter<F> {
             .filter(|(i, _)| *i != num_rows - 1)
         {
             value += acc - mult_table;
-            self.write(&log_lookup_next, value.as_base_slice(), i);
+            self.write_slice(&log_lookup_next, value.as_base_slice(), i);
         }
     }
 }

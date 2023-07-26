@@ -215,9 +215,9 @@ mod tests {
             rayon::spawn(move || {
                 let mut rng = thread_rng();
                 let bit_val = rng.gen_bool(0.5);
-                writer.write(&bit, &[F::from_canonical_u32(bit_val as u32)], i);
-                writer.write(&x_0, &[F::ONE], i);
-                writer.write(&x_1, &[F::from_canonical_usize(i)], i);
+                writer.write(&bit, &F::from_canonical_u32(bit_val as u32), i);
+                writer.write(&x_0, &F::ONE, i);
+                writer.write(&x_1, &F::from_canonical_usize(i), i);
                 handle.send(1).unwrap();
             });
         }
@@ -268,8 +268,8 @@ mod tests {
             let handle = tx.clone();
             writer.write_instruction(&cycle, i);
             rayon::spawn(move || {
-                writer.write(&x_0, &[F::ONE], i);
-                writer.write(&x_1, &[F::from_canonical_usize(i)], i);
+                writer.write(&x_0, &F::ONE, i);
+                writer.write(&x_1, &F::from_canonical_usize(i), i);
                 handle.send(1).unwrap();
             });
         }

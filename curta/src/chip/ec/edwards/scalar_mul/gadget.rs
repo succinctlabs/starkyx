@@ -156,7 +156,7 @@ impl<F: PrimeField64> TraceWriter<F> {
 
         for (i, bit) in scalar_bits.iter().enumerate() {
             let f_bit = F::from_canonical_u8(*bit as u8);
-            self.write_value(&gadget.bit, &f_bit, starting_row + i);
+            self.write(&gadget.bit, &f_bit, starting_row + i);
             let result_plus_temp = &res + &temp;
             self.write_ed_add(&gadget.add_gadget, starting_row + i);
             temp = &temp + &temp;

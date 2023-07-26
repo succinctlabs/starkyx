@@ -84,9 +84,9 @@ impl<F: Field, T: Register + Debug> Instruction<F> for SelectInstruction<T> {
         let false_value = writer.read(&self.false_value, row_index);
 
         if bit == F::ONE {
-            writer.write_value(&self.result, &true_value, row_index);
+            writer.write(&self.result, &true_value, row_index);
         } else {
-            writer.write_value(&self.result, &false_value, row_index);
+            writer.write(&self.result, &false_value, row_index);
         }
     }
 }
@@ -139,9 +139,9 @@ mod tests {
             let bit_i = i % 2 == 0;
             let fbit = if bit_i { F::ONE } else { F::ZERO };
             rayon::spawn(move || {
-                writer.write_value(&bit, &fbit, i);
-                writer.write_value(&x, &x_i, i);
-                writer.write_value(&y, &y_i, i);
+                writer.write(&bit, &fbit, i);
+                writer.write(&x, &x_i, i);
+                writer.write(&y, &y_i, i);
                 writer.write_instruction(&sel, i);
 
                 handle.send(1).unwrap();
