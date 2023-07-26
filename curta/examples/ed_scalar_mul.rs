@@ -103,10 +103,7 @@ fn main() {
 
     // Compare the results to the expeced results
     for (res, expected) in results.iter().zip(expected_results.iter()) {
-        for k in 0..16 {
-            builder.connect(res.x[k], expected.x[k]);
-            builder.connect(res.y[k], expected.y[k]);
-        }
+        builder.connect_affine_point(res, expected);
     }
 
     // Build the circuit
