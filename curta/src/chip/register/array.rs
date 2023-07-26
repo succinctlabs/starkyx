@@ -65,8 +65,8 @@ impl<T: Register> ArrayRegister<T> {
             MemorySlice::Next(col, _) => {
                 T::from_register(MemorySlice::Next(col + offset, T::size_of()))
             }
-            MemorySlice::Public(col, _) => {
-                T::from_register(MemorySlice::Public(col + offset, T::size_of()))
+            MemorySlice::Global(col, _) => {
+                T::from_register(MemorySlice::Global(col + offset, T::size_of()))
             }
             MemorySlice::Challenge(col, _) => {
                 T::from_register(MemorySlice::Challenge(col + offset, T::size_of()))

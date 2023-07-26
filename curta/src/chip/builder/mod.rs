@@ -1,11 +1,13 @@
 pub mod arithmetic;
 pub mod memory;
 pub mod range_check;
+pub mod shared_memory;
 
 use core::cmp::Ordering;
 
 use anyhow::Result;
 
+use self::shared_memory::SharedMemory;
 use super::constraint::Constraint;
 use super::instruction::set::AirInstruction;
 use super::register::element::ElementRegister;
@@ -22,8 +24,7 @@ pub struct AirBuilder<L: AirParameters> {
     next_arithmetic_index: usize,
     next_index: usize,
     extended_index: usize,
-    challenge_index: usize,
-    public_inputs_index: usize,
+    shared_memory: SharedMemory,
     pub(crate) constraints: Vec<Constraint<L>>,
     pub(crate) lookup_data: Vec<Lookup<L::Field, L::CubicParams, 1>>,
     pub(crate) evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
@@ -31,15 +32,18 @@ pub struct AirBuilder<L: AirParameters> {
 }
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
+        Self::new_with_shared_memory(SharedMemory::new())
+    }
+
+    pub const fn new_with_shared_memory(shared_memory: SharedMemory) -> Self {
         Self {
             local_index: L::NUM_ARITHMETIC_COLUMNS,
             next_index: L::NUM_ARITHMETIC_COLUMNS,
             local_arithmetic_index: 0,
             next_arithmetic_index: 0,
             extended_index: L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS,
-            challenge_index: 0,
-            public_inputs_index: 0,
+            shared_memory,
             constraints: Vec::new(),
             lookup_data: Vec::new(),
             evaluation_data: Vec::new(),
@@ -144,7 +148,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let execution_trace_length = self.local_index;
         Chip {
             constraints: self.constraints,
-            num_challenges: self.challenge_index,
+            num_challenges: self.shared_memory.challenge_index(),
             execution_trace_length,
             lookup_data: self.lookup_data,
             evaluation_data: self.evaluation_data,
