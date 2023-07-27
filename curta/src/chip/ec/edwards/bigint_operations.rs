@@ -121,7 +121,7 @@ mod tests {
 
             let x_base = &base * &x;
             let zero = BigUint::zero();
-            assert_eq!(&x_base * zero, E::neutral() );
+            assert_eq!(&x_base * zero, E::neutral());
             let y_x_base = &x_base * &y;
             let xy = &x * &y;
             let xy_base = &base * &xy;

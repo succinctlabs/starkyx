@@ -171,12 +171,14 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
             public_input_target,
             ArithmeticGenerator::<ScalarMulEd25519<F, E>>::new(&[]),
         );
+        let trace_generator = stark_generator.trace_generator.clone();
 
-        let generator = SimpleScalarMulEd25519Generator {
+        let generator = SimpleScalarMulEd25519Generator::<F, E, C, D> {
             gadget,
             points: points.to_vec(),
             scalars: scalars.to_vec(),
-            generator: stark_generator.clone(),
+            // generator: stark_generator.clone(),
+            trace_generator,
             results: results.clone(),
             bit_eval,
             set_last,
@@ -251,7 +253,7 @@ pub struct SimpleScalarMulEd25519Generator<
     F: RichField + Extendable<D>,
     E: CubicParameters<F>,
     C: GenericConfig<D, F = F>,
-    S,
+    // S,
     const D: usize,
 > {
     gadget: EdScalarMulGadget<F, Ed25519>,
@@ -261,14 +263,7 @@ pub struct SimpleScalarMulEd25519Generator<
     bit_eval: BitEvaluation<F>,
     set_last: AirInstruction<F, FpInstruction<Ed25519BaseField>>,
     set_bit: AirInstruction<F, FpInstruction<Ed25519BaseField>>,
-    generator: SimpleStarkWitnessGenerator<
-        S,
-        ArithmeticGenerator<ScalarMulEd25519<F, E>>,
-        F,
-        C,
-        <F as Packable>::Packing,
-        D,
-    >,
+    trace_generator: ArithmeticGenerator<ScalarMulEd25519<F, E>>,
     _marker: core::marker::PhantomData<(F, C, E)>,
 }
 
@@ -276,9 +271,9 @@ impl<
         F: RichField + Extendable<D>,
         E: CubicParameters<F>,
         C: GenericConfig<D, F = F>,
-        S,
+        // S,
         const D: usize,
-    > SimpleScalarMulEd25519Generator<F, E, C, S, D>
+    > SimpleScalarMulEd25519Generator<F, E, C, D>
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -289,14 +284,7 @@ impl<
         bit_eval: BitEvaluation<F>,
         set_last: AirInstruction<F, FpInstruction<Ed25519BaseField>>,
         set_bit: AirInstruction<F, FpInstruction<Ed25519BaseField>>,
-        generator: SimpleStarkWitnessGenerator<
-            S,
-            ArithmeticGenerator<ScalarMulEd25519<F, E>>,
-            F,
-            C,
-            <F as Packable>::Packing,
-            D,
-        >,
+        trace_generator: ArithmeticGenerator<ScalarMulEd25519<F, E>>,
     ) -> Self {
         Self {
             gadget,
@@ -306,7 +294,8 @@ impl<
             bit_eval,
             set_last,
             set_bit,
-            generator,
+            trace_generator,
+            // generator,
             _marker: core::marker::PhantomData,
         }
     }
@@ -316,17 +305,11 @@ impl<
         F: RichField + Extendable<D>,
         E: CubicParameters<F>,
         C: GenericConfig<D, F = F, FE = F::Extension> + 'static,
-        S: Plonky2Stark<F, D> + 'static + Send + Sync + Debug,
+        // S: Plonky2Stark<F, D> + 'static + Send + Sync + Debug,
         const D: usize,
-    > SimpleGenerator<F, D> for SimpleScalarMulEd25519Generator<F, E, C, S, D>
+    > SimpleGenerator<F, D> for SimpleScalarMulEd25519Generator<F, E, C, D>
 where
     C::Hasher: AlgebraicHasher<F>,
-    S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
-        + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
-    ArithmeticGenerator<ScalarMulEd25519<F, E>>: TraceGenerator<F, S::Air>,
-    <ArithmeticGenerator<ScalarMulEd25519<F, E>> as TraceGenerator<F, S::Air>>::Error:
-        Into<anyhow::Error>,
-    [(); S::COLUMNS]:,
 {
     fn id(&self) -> String {
         unimplemented!("TODO")
@@ -370,9 +353,10 @@ where
         assert_eq!(points.len(), 256);
 
         // Generate the trace
-        let trace_generator = &self.generator.trace_generator;
+        let trace_generator = &self.trace_generator;
 
         let writer = trace_generator.new_writer();
+        // let writer = self.writer.clone();
         for j in 0..(1 << 16) {
             writer.write_instruction(&self.gadget.cycle, j);
             writer.write_instruction(&self.bit_eval.cycle, j);
