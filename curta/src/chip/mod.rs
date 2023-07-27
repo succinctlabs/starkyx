@@ -1,6 +1,7 @@
 use self::constraint::Constraint;
 use self::instruction::Instruction;
 use self::register::element::ElementRegister;
+use self::table::accumulator::Accumulator;
 use self::table::evaluation::Evaluation;
 use self::table::lookup::Lookup;
 use crate::math::extension::cubic::parameters::CubicParameters;
@@ -56,6 +57,7 @@ pub struct Chip<L: AirParameters> {
     constraints: Vec<Constraint<L>>,
     execution_trace_length: usize,
     num_challenges: usize,
+    accumulators: Vec<Accumulator<L::CubicParams>>,
     lookup_data: Vec<Lookup<L::Field, L::CubicParams, 1>>,
     evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
     range_table: Option<ElementRegister>,

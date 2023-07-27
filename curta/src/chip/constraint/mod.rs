@@ -1,6 +1,7 @@
 use self::arithmetic::expression::ArithmeticExpression;
 use self::arithmetic::ArithmeticConstraint;
 use super::instruction::set::AirInstruction;
+use super::table::accumulator::Accumulator;
 use super::table::evaluation::Evaluation;
 use super::table::lookup::Lookup;
 use super::AirParameters;
@@ -14,6 +15,7 @@ pub enum Constraint<L: AirParameters> {
     Instruction(AirInstruction<L::Field, L::Instruction>),
     MulInstruction(ArithmeticExpression<L::Field>, L::Instruction),
     Arithmetic(ArithmeticConstraint<L::Field>),
+    Accumulator(Accumulator<L::CubicParams>),
     Lookup(Box<Lookup<L::Field, L::CubicParams, 1>>),
     Evaluation(Evaluation<L::Field, L::CubicParams>),
 }
@@ -56,6 +58,7 @@ where
                 instruction.eval(&mut mul_parser);
             }
             Constraint::Arithmetic(constraint) => constraint.eval(parser),
+            Constraint::Accumulator(accumulator) => accumulator.eval(parser),
             Constraint::Lookup(lookup) => lookup.eval(parser),
             Constraint::Evaluation(evaluation) => evaluation.eval(parser),
         }
@@ -65,5 +68,12 @@ where
 impl<L: AirParameters> From<ArithmeticConstraint<L::Field>> for Constraint<L> {
     fn from(constraint: ArithmeticConstraint<L::Field>) -> Self {
         Self::Arithmetic(constraint)
+    }
+}
+
+
+impl<L: AirParameters> From<Accumulator<L::CubicParams>> for Constraint<L> {
+    fn from(accumulator: Accumulator<L::CubicParams>) -> Self {
+        Self::Accumulator(accumulator)
     }
 }

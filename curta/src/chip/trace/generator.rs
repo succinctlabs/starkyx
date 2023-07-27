@@ -75,6 +75,17 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                     }
                 }
 
+                // Write accumulations
+                for acc in air.accumulators.iter() {
+                    let mut alphas = vec![];
+                    for alpha in acc.challenges.iter() {
+                        let (a_idx_0, a_idx_1) = alpha.register().get_range();
+                        let alpha = CubicExtension::from_base_slice(&challenges[a_idx_0..a_idx_1]);
+                        alphas.push(alpha);
+                    }
+                    self.writer.write_accumulation(num_rows, acc, &alphas);
+                }
+
                 // Write lookup proofs
                 for data in air.lookup_data.iter() {
                     match data {

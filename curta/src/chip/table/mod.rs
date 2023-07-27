@@ -13,5 +13,6 @@
 //!
 //!
 
+pub mod accumulator;
 pub mod evaluation;
 pub mod lookup;
