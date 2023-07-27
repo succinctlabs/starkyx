@@ -1,4 +1,3 @@
-
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::register::array::ArrayRegister;

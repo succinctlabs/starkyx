@@ -248,7 +248,7 @@ mod tests {
         let cycle = builder.cycle(8);
 
         let values = (0..256)
-            .map(|_| builder.alloc_array_public::<ElementRegister>(2))
+            .map(|_| builder.alloc_array_global::<ElementRegister>(2))
             .collect::<Vec<_>>();
         let digest = Digest::from_values::<ArrayRegister<ElementRegister>, _>(values);
 
