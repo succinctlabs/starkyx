@@ -22,5 +22,5 @@ pub struct U32BitOperation {
     pub output: ElementRegister,
     pub digest: CubicRegister,
     pub digest_challenges: ArrayRegister<CubicRegister>,
-    operation: BitOperation<32>,
+    pub operation: BitOperation<32>,
 }

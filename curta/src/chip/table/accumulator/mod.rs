@@ -31,7 +31,7 @@ impl<L: AirParameters> AirBuilder<L> {
         values: &[T],
     ) -> CubicRegister {
         let values = values
-            .into_iter()
+            .iter()
             .map(|data| *data.register())
             .collect::<Vec<_>>();
         let total_length = values.iter().map(|data| data.len()).sum::<usize>();

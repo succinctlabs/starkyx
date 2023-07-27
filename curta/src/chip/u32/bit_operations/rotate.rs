@@ -1,13 +1,8 @@
-use std::collections::HashSet;
 
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
-use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
-use crate::chip::register::memory::MemorySlice;
-use crate::chip::register::RegisterSerializable;
-use crate::chip::trace::writer::TraceWriter;
 pub use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Copy)]
@@ -22,9 +17,9 @@ impl<AP: AirParser, const NUM_BITS: usize> AirConstraint<AP> for RightRotate<NUM
         debug_assert_eq!(self.a.len(), NUM_BITS);
         debug_assert_eq!(self.b.len(), NUM_BITS);
         debug_assert_eq!(self.result.len(), NUM_BITS);
-        let a = self.a.eval_array::<_, NUM_BITS>(parser);
-        let b = self.b.eval_array::<_, NUM_BITS>(parser);
-        let result = self.result.eval_array::<_, NUM_BITS>(parser);
+        let _a = self.a.eval_array::<_, NUM_BITS>(parser);
+        let _b = self.b.eval_array::<_, NUM_BITS>(parser);
+        let _result = self.result.eval_array::<_, NUM_BITS>(parser);
 
         todo!()
     }

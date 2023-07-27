@@ -13,8 +13,7 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP> for Ac
         let values_array = self
             .values
             .iter()
-            .map(|x| ArrayRegister::<ElementRegister>::from_register_unsafe(*x))
-            .flatten();
+            .flat_map(|x| ArrayRegister::<ElementRegister>::from_register_unsafe(*x));
 
         let acc = values_array.zip(self.challenges).fold(
             parser.zero_extension(),
