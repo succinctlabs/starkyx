@@ -14,7 +14,7 @@ impl<F: PrimeField> TraceWriter<F> {
     ) {
         match digest {
             Digest::Extended(register) => {
-                self.write(register, &value.base_field_array(), num_rows - 1);
+                self.write(register, &value.0, num_rows - 1);
             }
             Digest::Values(_) => {}
             _ => unimplemented!(),
@@ -50,19 +50,11 @@ impl<F: PrimeField> TraceWriter<F> {
         let mut beta_power = CubicExtension::<F, E>::ONE;
         let mut acc = CubicExtension::<F, E>::ZERO;
         for (i, &f) in filters.iter().enumerate() {
-            self.write(
-                &evaluation_data.beta_powers,
-                &beta_power.base_field_array(),
-                i,
-            );
+            self.write(&evaluation_data.beta_powers, &beta_power.0, i);
             let row_acc_beta_val = acc_values[i] * beta_power;
-            self.write(
-                &evaluation_data.row_accumulator,
-                &row_acc_beta_val.base_field_array(),
-                i,
-            );
+            self.write(&evaluation_data.row_accumulator, &row_acc_beta_val.0, i);
 
-            self.write(&evaluation_data.accumulator, &acc.base_field_array(), i);
+            self.write(&evaluation_data.accumulator, &acc.0, i);
 
             if f {
                 let value = acc_values[i];

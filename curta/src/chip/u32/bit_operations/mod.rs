@@ -7,8 +7,8 @@ pub mod xor;
 use and::And;
 
 use crate::chip::register::array::ArrayRegister;
+use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::element::ElementRegister;
-use crate::chip::register::extension::ExtensionRegister;
 
 #[derive(Debug, Clone, Copy)]
 pub enum BitOperation<const NUM_BITS: usize> {
@@ -20,7 +20,7 @@ pub struct U32BitOperation {
     pub a: ElementRegister,
     pub b: ElementRegister,
     pub output: ElementRegister,
-    pub digest: ExtensionRegister<3>,
-    pub digest_challenges: ArrayRegister<ExtensionRegister<3>>,
+    pub digest: CubicRegister,
+    pub digest_challenges: ArrayRegister<CubicRegister>,
     operation: BitOperation<32>,
 }

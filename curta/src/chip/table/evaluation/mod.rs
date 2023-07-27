@@ -8,8 +8,8 @@ use crate::chip::instruction::cycle::Cycle;
 use crate::chip::instruction::set::AirInstruction;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
+use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::element::ElementRegister;
-use crate::chip::register::extension::ExtensionRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
@@ -20,7 +20,7 @@ pub mod trace;
 #[derive(Debug, Clone)]
 pub enum Digest<F: Field, E: CubicParameters<F>> {
     Values(Vec<ArrayRegister<ElementRegister>>),
-    Extended(ExtensionRegister<3>),
+    Extended(CubicRegister),
     Expression(ArithmeticExpression<F>),
     None,
     _Marker(PhantomData<E>),
@@ -35,20 +35,20 @@ pub struct BitEvaluation<F: Field> {
 
 #[derive(Debug, Clone)]
 pub struct Evaluation<F: Field, E: CubicParameters<F>> {
-    pub beta: ExtensionRegister<3>,
-    beta_powers: ExtensionRegister<3>,
-    pub alphas: ArrayRegister<ExtensionRegister<3>>,
+    pub beta: CubicRegister,
+    beta_powers: CubicRegister,
+    pub alphas: ArrayRegister<CubicRegister>,
     pub values: Vec<ElementRegister>,
     pub filter: ArithmeticExpression<F>,
-    accumulator: ExtensionRegister<3>,
-    row_accumulator: ExtensionRegister<3>,
+    accumulator: CubicRegister,
+    row_accumulator: CubicRegister,
     pub digest: Digest<F, E>,
     _marker: PhantomData<(F, E)>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
     pub fn alloc_digest_column(&mut self) -> Digest<L::Field, L::CubicParams> {
-        Digest::Extended(self.alloc_extended::<ExtensionRegister<3>>())
+        Digest::Extended(self.alloc_extended::<CubicRegister>())
     }
 
     pub fn evaluation<T: RegisterSerializable>(
@@ -58,12 +58,12 @@ impl<L: AirParameters> AirBuilder<L> {
         digest: Digest<L::Field, L::CubicParams>,
     ) {
         // Get the running evaluation challenge
-        let beta = self.alloc_challenge::<ExtensionRegister<3>>();
-        let beta_powers = self.alloc_extended::<ExtensionRegister<3>>();
+        let beta = self.alloc_challenge::<CubicRegister>();
+        let beta_powers = self.alloc_extended::<CubicRegister>();
 
         let num_alphas: usize = values.iter().map(|v| v.register().len()).sum();
         // get the row accumulation challenge
-        let alphas = self.alloc_challenge_array::<ExtensionRegister<3>>(num_alphas);
+        let alphas = self.alloc_challenge_array::<CubicRegister>(num_alphas);
 
         let mut elem_vals = vec![];
         for val in values {
@@ -74,8 +74,8 @@ impl<L: AirParameters> AirBuilder<L> {
             }
         }
 
-        let row_accumulator = self.alloc_extended::<ExtensionRegister<3>>();
-        let accumulator = self.alloc_extended::<ExtensionRegister<3>>();
+        let row_accumulator = self.alloc_extended::<CubicRegister>();
+        let accumulator = self.alloc_extended::<CubicRegister>();
 
         let evaluation = Evaluation {
             beta,

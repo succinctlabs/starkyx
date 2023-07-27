@@ -11,7 +11,7 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>, const N: usize> AirConst
     for LogLookup<AP::Field, E, N>
 {
     fn eval(&self, parser: &mut AP) {
-        let beta = self.challenge.eval_extension(parser);
+        let beta = self.challenge.eval(parser);
 
         let multiplicities: [_; N] = self
             .multiplicities
@@ -23,7 +23,7 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>, const N: usize> AirConst
             .eval_array(parser)
             .map(|e| parser.element_from_base_field(e));
 
-        let multiplicities_table_log = self.multiplicity_table_log.eval_extension(parser);
+        let multiplicities_table_log = self.multiplicity_table_log.eval(parser);
         let beta_minus_table: [_; N] = array::from_fn(|i| parser.sub_extension(beta, table[i]));
 
         // Constrain multiplicities_table_log = sum(mult_i * log(beta - table_i))
@@ -51,7 +51,7 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>, const N: usize> AirConst
         let mut row_acc_queue = self
             .row_accumulators
             .iter()
-            .map(|x| x.eval_extension(parser))
+            .map(|x| x.eval(parser))
             .collect::<VecDeque<_>>();
 
         let mut range_pairs = (0..self.values.len())
@@ -90,8 +90,8 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>, const N: usize> AirConst
             prev = *acc;
         }
 
-        let log_lookup_accumulator = self.log_lookup_accumulator.eval_extension(parser);
-        let log_lookup_accumulator_next = self.log_lookup_accumulator.next().eval_extension(parser);
+        let log_lookup_accumulator = self.log_lookup_accumulator.eval(parser);
+        let log_lookup_accumulator_next = self.log_lookup_accumulator.next().eval(parser);
 
         let mut acc_transition_constraint =
             parser.sub_extension(log_lookup_accumulator_next, log_lookup_accumulator);

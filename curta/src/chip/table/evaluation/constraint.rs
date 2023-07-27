@@ -24,7 +24,7 @@ impl<F: Field, E: CubicParameters<F>> Digest<F, E> {
         match self {
             Digest::None => {}
             Digest::Extended(register) => {
-                let digest = register.eval_extension(parser);
+                let digest = register.eval(parser);
                 let constraint = parser.sub_extension(digest, digest_val);
                 parser.constraint_extension_last_row(constraint);
             }
@@ -66,8 +66,8 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
         let not_filter = parser.element_from_base_field(not_filter_base);
 
         // Constrain the running evaluation powers
-        let beta = self.beta.eval_extension(parser);
-        let beta_powers = self.beta_powers.eval_extension(parser);
+        let beta = self.beta.eval(parser);
+        let beta_powers = self.beta_powers.eval(parser);
 
         let one = parser.one_extension();
         let powers_minus_one = parser.sub_extension(beta_powers, one);
@@ -75,7 +75,7 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
 
         // Constraint
         // (Beta_next - beta * beta_local) * filter
-        let beta_powers_next = self.beta_powers.next().eval_extension(parser);
+        let beta_powers_next = self.beta_powers.next().eval(parser);
         let beta_powers_times_beta = parser.mul_extension(beta_powers, beta);
         let beta_powers_next_filter = parser.mul_extension(beta_powers_times_beta, filter);
 
@@ -90,17 +90,12 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
         // Constrain the accumulation
 
         // Constrain first row value
-        let accumulator = self.accumulator.eval_extension(parser);
+        let accumulator = self.accumulator.eval(parser);
         parser.constraint_extension_first_row(accumulator);
 
         // Calculate the accumulated value of the row
         // acc = beta_powers * (\sum_i alpha_i * value_i)
-        let alphas = self
-            .alphas
-            .eval_vec(parser)
-            .into_iter()
-            .map(CubicElement)
-            .collect::<Vec<_>>();
+        let alphas = self.alphas.eval_vec(parser).into_iter().collect::<Vec<_>>();
         assert_eq!(
             alphas.len(),
             self.values.len(),
@@ -114,12 +109,12 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
         }
         // constrain row accumulator
         let row_beta_powers = parser.mul_extension(beta_powers, row_acc);
-        let row_accumulator = self.row_accumulator.eval_extension(parser);
+        let row_accumulator = self.row_accumulator.eval(parser);
         let row_acc_constraint = parser.sub_extension(row_accumulator, row_beta_powers);
         parser.constraint_extension(row_acc_constraint);
 
         // Constrain the transition
-        let accumulator_next = self.accumulator.next().eval_extension(parser);
+        let accumulator_next = self.accumulator.next().eval(parser);
         let acc_next_filter_val = parser.add_extension(accumulator, row_accumulator);
         let acc_next_filter = parser.mul_extension(acc_next_filter_val, filter);
 

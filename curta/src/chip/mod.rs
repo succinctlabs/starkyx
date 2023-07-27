@@ -6,6 +6,7 @@ use self::table::evaluation::Evaluation;
 use self::table::lookup::Lookup;
 use crate::math::extension::cubic::parameters::CubicParameters;
 use crate::math::prelude::*;
+use crate::plonky2::stark::Starky;
 
 pub mod air;
 pub mod bool;
@@ -61,4 +62,10 @@ pub struct Chip<L: AirParameters> {
     lookup_data: Vec<Lookup<L::Field, L::CubicParams, 1>>,
     evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
     range_table: Option<ElementRegister>,
+}
+
+impl<L: ~const AirParameters> Starky<Chip<L>, { L::num_columns() }> {
+    pub fn from_chip(chip: Chip<L>) -> Self {
+        Self::new(chip)
+    }
 }

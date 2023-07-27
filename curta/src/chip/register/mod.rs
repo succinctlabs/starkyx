@@ -8,8 +8,8 @@ use crate::math::prelude::*;
 pub mod array;
 pub mod bit;
 pub mod cell;
+pub mod cubic;
 pub mod element;
-pub mod extension;
 pub mod memory;
 pub mod u16;
 

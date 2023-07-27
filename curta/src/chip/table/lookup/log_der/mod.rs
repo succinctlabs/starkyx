@@ -5,8 +5,8 @@
 use crate::chip::builder::AirBuilder;
 use crate::chip::constraint::Constraint;
 use crate::chip::register::array::ArrayRegister;
+use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::element::ElementRegister;
-use crate::chip::register::extension::ExtensionRegister;
 use crate::chip::table::lookup::Lookup;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
@@ -17,13 +17,13 @@ pub mod trace;
 /// Currently, only supports an even number of values
 #[derive(Debug, Clone)]
 pub struct LogLookup<F: Field, E: CubicParameters<F>, const N: usize> {
-    pub(crate) challenge: ExtensionRegister<3>,
+    pub(crate) challenge: CubicRegister,
     pub(crate) table: ArrayRegister<ElementRegister>,
     pub(crate) values: ArrayRegister<ElementRegister>,
     pub(crate) multiplicities: ArrayRegister<ElementRegister>,
-    pub(crate) multiplicity_table_log: ExtensionRegister<3>,
-    pub(crate) row_accumulators: ArrayRegister<ExtensionRegister<3>>,
-    pub(crate) log_lookup_accumulator: ExtensionRegister<3>,
+    pub(crate) multiplicity_table_log: CubicRegister,
+    pub(crate) row_accumulators: ArrayRegister<CubicRegister>,
+    pub(crate) log_lookup_accumulator: CubicRegister,
     table_index: fn(F) -> usize,
     _marker: core::marker::PhantomData<(F, E)>,
 }
@@ -37,11 +37,11 @@ impl<L: AirParameters> AirBuilder<L> {
         table_index: fn(L::Field) -> usize,
     ) {
         // Allocate memory for the lookup
-        let challenge = self.alloc_challenge::<ExtensionRegister<3>>();
+        let challenge = self.alloc_challenge::<CubicRegister>();
         let multiplicities = self.alloc_array_extended::<ElementRegister>(1);
-        let multiplicity_table_log = self.alloc_extended::<ExtensionRegister<3>>();
-        let row_accumulators = self.alloc_array_extended::<ExtensionRegister<3>>(values.len() / 2);
-        let log_lookup_accumulator = self.alloc_extended::<ExtensionRegister<3>>();
+        let multiplicity_table_log = self.alloc_extended::<CubicRegister>();
+        let row_accumulators = self.alloc_array_extended::<CubicRegister>(values.len() / 2);
+        let log_lookup_accumulator = self.alloc_extended::<CubicRegister>();
         let table = ArrayRegister::from_element(*table);
 
         let lookup_data = Lookup::LogDerivative(LogLookup {
