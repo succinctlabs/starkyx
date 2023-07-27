@@ -545,13 +545,13 @@ mod tests {
         // The scalar multiplications
         let results = builder.ed_scalar_mul_batch::<S, E, C>(&points, &scalars_limbs);
 
-        // // compare the results to the expected results
-        // for (result, expected) in results.iter().zip(expected_results.iter()) {
-        //     for i in 0..16 {
-        //         builder.connect(result.x[i], expected.x[i]);
-        //         builder.connect(result.y[i], expected.y[i]);
-        //     }
-        // }
+        // compare the results to the expected results
+        for (result, expected) in results.iter().zip(expected_results.iter()) {
+            for i in 0..16 {
+                builder.connect(result.x[i], expected.x[i]);
+                builder.connect(result.y[i], expected.y[i]);
+            }
+        }
 
         let data = builder.build::<C>();
         let mut pw = PartialWitness::new();
