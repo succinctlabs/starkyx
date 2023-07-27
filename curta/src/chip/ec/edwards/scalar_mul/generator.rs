@@ -4,7 +4,6 @@ use std::sync::mpsc::channel;
 use itertools::Itertools;
 use num::BigUint;
 use plonky2::field::extension::Extendable;
-use plonky2::field::packable::Packable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::generator::{GeneratedValues, SimpleGenerator};
 use plonky2::iop::target::Target;
@@ -15,7 +14,6 @@ use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 
 use super::air::{ScalarMulEd25519, ED_NUM_COLUMNS};
 use super::gadget::EdScalarMulGadget;
-use crate::air::RAir;
 use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
 use crate::chip::ec::point::AffinePoint;
 use crate::chip::ec::EllipticCurveParameters;
@@ -29,12 +27,10 @@ use crate::chip::{AirParameters, Chip};
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 use crate::plonky2::field::CubicParameters;
-use crate::plonky2::parser::{RecursiveStarkParser, StarkParser};
 use crate::plonky2::stark::config::StarkyConfig;
 use crate::plonky2::stark::gadget::StarkGadget;
 use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
-use crate::plonky2::stark::{Plonky2Stark, Starky};
-use crate::trace::generator::TraceGenerator;
+use crate::plonky2::stark::Starky;
 
 pub type EdDSAStark<F, E> = Starky<Chip<ScalarMulEd25519<F, E>>, ED_NUM_COLUMNS>;
 
@@ -48,7 +44,6 @@ pub struct AffinePointTarget {
 
 pub trait ScalarMulEd25519Gadget<F: RichField + Extendable<D>, const D: usize> {
     fn ed_scalar_mul_batch<
-        S: Plonky2Stark<F, D> + 'static + Send + Sync + Debug + Clone,
         E: CubicParameters<F>,
         C: GenericConfig<D, F = F, FE = F::Extension> + 'static,
     >(
@@ -57,14 +52,7 @@ pub trait ScalarMulEd25519Gadget<F: RichField + Extendable<D>, const D: usize> {
         scalars: &[Vec<Target>],
     ) -> Vec<AffinePointTarget>
     where
-        C::Hasher: AlgebraicHasher<F>,
-        S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
-            + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
-        ArithmeticGenerator<ScalarMulEd25519<F, E>>: TraceGenerator<F, S::Air>,
-        <ArithmeticGenerator<ScalarMulEd25519<F, E>> as TraceGenerator<F, S::Air>>::Error:
-            Into<anyhow::Error>,
-        S: From<Starky<Chip<ScalarMulEd25519<F, E>>, ED_NUM_COLUMNS>>,
-        [(); S::COLUMNS]:;
+        C::Hasher: AlgebraicHasher<F>;
 
     fn ed_scalar_mul_batch_hint(
         &mut self,
@@ -84,7 +72,6 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
     for CircuitBuilder<F, D>
 {
     fn ed_scalar_mul_batch<
-        S: Plonky2Stark<F, D> + 'static + Send + Sync + Debug + Clone,
         E: CubicParameters<F>,
         C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone,
     >(
@@ -94,13 +81,6 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
     ) -> Vec<AffinePointTarget>
     where
         C::Hasher: AlgebraicHasher<F>,
-        S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
-            + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
-        ArithmeticGenerator<ScalarMulEd25519<F, E>>: TraceGenerator<F, S::Air> + Clone,
-        <ArithmeticGenerator<ScalarMulEd25519<F, E>> as TraceGenerator<F, S::Air>>::Error:
-            Into<anyhow::Error>,
-        S: From<Starky<Chip<ScalarMulEd25519<F, E>>, ED_NUM_COLUMNS>>,
-        [(); S::COLUMNS]:,
     {
         let (
             air,
@@ -158,7 +138,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
             .map(|x| x.unwrap())
             .collect_vec();
 
-        let stark = Starky::<_, ED_NUM_COLUMNS>::new(air); //TODO: MAKE SURE NUM_COLS FITS
+        let stark = Starky::<_, ED_NUM_COLUMNS>::new(air);
         let config =
             StarkyConfig::<F, C, D>::standard_fast_config(ScalarMulEd25519::<F, E>::num_rows());
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
@@ -169,7 +149,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
 
         let stark_generator = SimpleStarkWitnessGenerator::new(
             config,
-            stark.into(),
+            stark,
             virtual_proof,
             public_input_target,
             trace_generator.clone(),
@@ -531,7 +511,6 @@ mod tests {
         type F = GoldilocksField;
         type E = GoldilocksCubicParameters;
         type C = PoseidonGoldilocksConfig;
-        type S = EdDSAStark<F, E>;
         const D: usize = 2;
 
         let _ = env_logger::builder().is_test(true).try_init();
@@ -565,7 +544,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // The scalar multiplications
-        let results = builder.ed_scalar_mul_batch::<S, E, C>(&points, &scalars_limbs);
+        let results = builder.ed_scalar_mul_batch::<E, C>(&points, &scalars_limbs);
 
         // compare the results to the expected results
         for (result, expected) in results.iter().zip(expected_results.iter()) {

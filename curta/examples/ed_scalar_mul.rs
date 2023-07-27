@@ -18,9 +18,7 @@
 //! ```
 
 use curta::chip::ec::edwards::ed25519::Ed25519;
-use curta::chip::ec::edwards::scalar_mul::generator::{
-    AffinePointTarget, EdDSAStark, ScalarMulEd25519Gadget,
-};
+use curta::chip::ec::edwards::scalar_mul::generator::{AffinePointTarget, ScalarMulEd25519Gadget};
 use curta::chip::ec::edwards::EdwardsParameters;
 use curta::chip::utils::biguint_to_16_digits_field;
 use curta::math::goldilocks::cubic::GoldilocksCubicParameters;
@@ -40,7 +38,6 @@ fn main() {
     type F = GoldilocksField;
     type E = GoldilocksCubicParameters;
     type C = PoseidonGoldilocksConfig;
-    type S = EdDSAStark<F, E>;
     const D: usize = 2;
 
     // env-logger for timing information
@@ -84,7 +81,7 @@ fn main() {
     }
 
     // Get the results of the scalar multiplication
-    let results = builder.ed_scalar_mul_batch::<S, E, C>(&points, &scalars_limbs);
+    let results = builder.ed_scalar_mul_batch::<E, C>(&points, &scalars_limbs);
 
     // These results will be allocated automatically into the trace once `points` and
     // `scalars` are written into the trace.

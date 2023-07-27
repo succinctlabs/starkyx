@@ -1,5 +1,6 @@
 //! Prover
 
+use core::fmt::Debug;
 use core::iter::once;
 
 use anyhow::{self, ensure, Result};
@@ -15,7 +16,7 @@ use plonky2::util::timing::TimingTree;
 use plonky2::util::{log2_ceil, transpose};
 
 use super::config::StarkyConfig;
-use super::Plonky2Stark;
+use super::Starky;
 use crate::air::RAir;
 use crate::maybe_rayon::*;
 use crate::plonky2::challenger::Plonky2Challenger;
@@ -39,18 +40,16 @@ where
         Self(core::marker::PhantomData)
     }
 
-    pub fn prove<S, T>(
+    pub fn prove<A, T, const COLUMNS: usize>(
         config: &StarkyConfig<F, C, D>,
-        stark: &S,
+        stark: &Starky<A, COLUMNS>,
         trace_generator: &T,
         public_inputs: &[F],
     ) -> Result<StarkProof<F, C, D>>
     where
-        S: Plonky2Stark<F, D>,
-        S::Air: for<'a> RAir<StarkParser<'a, F, F, P, D, 1>>,
-        T: TraceGenerator<F, S::Air>,
+        A: 'static + Debug + Send + Sync + for<'a> RAir<StarkParser<'a, F, F, P, D, 1>>,
+        T: TraceGenerator<F, A>,
         T::Error: Into<anyhow::Error>,
-        [(); S::COLUMNS]:,
     {
         let mut challenger = Plonky2Challenger::<F, C::Hasher>::new();
 
@@ -186,19 +185,17 @@ where
         })
     }
 
-    fn quotient_polys<S>(
+    fn quotient_polys<A, const COLUMNS: usize>(
         degree_bits: usize,
         config: &StarkyConfig<F, C, D>,
-        stark: &S,
+        stark: &Starky<A, COLUMNS>,
         trace_data: &[PolynomialBatch<F, C, D>],
         challenges_vars: &[P],
         public_inputs_vars: &[P],
         challenger: &mut Plonky2Challenger<F, C::Hasher>,
     ) -> Vec<PolynomialCoeffs<F>>
     where
-        S: Plonky2Stark<F, D>,
-        S::Air: for<'a> RAir<StarkParser<'a, F, F, P, D, 1>>,
-        [(); S::COLUMNS]:,
+        A: 'static + Debug + Send + Sync + for<'a> RAir<StarkParser<'a, F, F, P, D, 1>>,
     {
         let alphas = challenger.0.get_n_challenges(config.num_challenges);
         let degree = 1 << degree_bits;
@@ -223,14 +220,14 @@ where
         let z_h_on_coset = ZeroPolyOnCoset::<F>::new(degree_bits, quotient_degree_bits);
 
         // Retrieve the LDE values at index `i`.
-        let get_trace_values_packed = |i_start| -> [P; S::COLUMNS] {
+        let get_trace_values_packed = |i_start| -> [P; COLUMNS] {
             let trace = trace_data
                 .iter()
                 .flat_map(|commitment| commitment.get_lde_values_packed(i_start, step))
                 .collect::<Vec<_>>();
             // .try_into()
             // .expect("Invalid number of trace columns")
-            assert_eq!(trace.len(), S::COLUMNS);
+            assert_eq!(trace.len(), COLUMNS);
             trace.try_into().unwrap()
         };
         // Last element of the subgroup.

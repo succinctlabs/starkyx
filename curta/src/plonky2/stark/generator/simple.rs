@@ -15,27 +15,27 @@ use super::super::config::StarkyConfig;
 use super::super::proof::StarkProofTarget;
 use super::super::prover::StarkyProver;
 use super::super::verifier::set_stark_proof_target;
-use super::super::Plonky2Stark;
 use crate::air::RAir;
 use crate::plonky2::parser::StarkParser;
+use crate::plonky2::stark::Starky;
 use crate::trace::generator::TraceGenerator;
 
 #[derive(Debug, Clone)]
-pub struct SimpleStarkWitnessGenerator<S, T: Clone, F, C, P, const D: usize> {
+pub struct SimpleStarkWitnessGenerator<A, T: Clone, F, C, P, const D: usize, const COLUMNS: usize> {
     config: StarkyConfig<F, C, D>,
-    pub stark: S,
+    pub stark: Starky<A, COLUMNS>,
     pub proof_target: StarkProofTarget<D>,
     pub public_input_targets: Vec<Target>,
     pub trace_generator: T,
     _marker: core::marker::PhantomData<P>,
 }
 
-impl<S, T: Clone, F: RichField, C, const D: usize>
-    SimpleStarkWitnessGenerator<S, T, F, C, <F as Packable>::Packing, D>
+impl<A, T: Clone, F: RichField, C, const D: usize, const COLUMNS: usize>
+    SimpleStarkWitnessGenerator<A, T, F, C, <F as Packable>::Packing, D, COLUMNS>
 {
     pub fn new(
         config: StarkyConfig<F, C, D>,
-        stark: S,
+        stark: Starky<A, COLUMNS>,
         proof_target: StarkProofTarget<D>,
         public_input_targets: Vec<Target>,
         trace_generator: T,
@@ -51,18 +51,16 @@ impl<S, T: Clone, F: RichField, C, const D: usize>
     }
 }
 
-impl<S, T: Clone, F, C, P, const D: usize> SimpleGenerator<F, D>
-    for SimpleStarkWitnessGenerator<S, T, F, C, P, D>
+impl<A: 'static + Debug + Send + Sync, T: Clone, F, C, P, const D: usize, const COLUMNS: usize>
+    SimpleGenerator<F, D> for SimpleStarkWitnessGenerator<A, T, F, C, P, D, COLUMNS>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F> + 'static,
     C::Hasher: AlgebraicHasher<F>,
     P: PackedField<Scalar = F>,
-    S: Plonky2Stark<F, D> + Debug + Send + 'static,
-    S::Air: for<'a> RAir<StarkParser<'a, F, F, P, D, 1>>,
-    T: Debug + Send + Sync + 'static + TraceGenerator<F, S::Air>,
+    A: for<'a> RAir<StarkParser<'a, F, F, P, D, 1>>,
+    T: Debug + Send + Sync + 'static + TraceGenerator<F, A>,
     T::Error: Into<anyhow::Error>,
-    [(); S::COLUMNS]:,
 {
     fn id(&self) -> String {
         "SimpleStarkWitnessGenerator".to_string()
