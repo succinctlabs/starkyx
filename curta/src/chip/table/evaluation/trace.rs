@@ -25,9 +25,9 @@ impl<F: PrimeField> TraceWriter<F> {
         &self,
         num_rows: usize,
         evaluation_data: &Evaluation<F, E>,
-        beta: CubicExtension<F, E>,
-        alphas: &[CubicExtension<F, E>],
     ) {
+        let beta = CubicExtension::<F,E>::from(self.read(&evaluation_data.beta, 0));
+        let alphas = self.read_vec(&evaluation_data.alphas, 0);
         let filters = (0..num_rows)
             .into_par_iter()
             .map(|i| self.read_expression(&evaluation_data.filter, i)[0])
@@ -41,7 +41,7 @@ impl<F: PrimeField> TraceWriter<F> {
                     .values
                     .iter()
                     .zip(alphas.iter())
-                    .map(|(v, a)| *a * self.read(v, i))
+                    .map(|(v, a)| CubicExtension::from(*a) * self.read(v, i))
                     .sum::<CubicExtension<F, E>>();
                 value
             })

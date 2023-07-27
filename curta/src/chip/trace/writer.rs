@@ -15,7 +15,8 @@ use crate::trace::AirTrace;
 #[derive(Debug)]
 pub struct WriterData<T> {
     trace: RwLock<AirTrace<T>>,
-    public_inputs: Vec<T>,
+    pub(crate) global_inputs: RwLock<Vec<T>>,
+    pub(crate) challenges : RwLock<Vec<T>>,
     height: usize,
 }
 
@@ -24,24 +25,26 @@ pub struct TraceWriter<T>(pub Arc<WriterData<T>>);
 
 impl<T> TraceWriter<T> {
     #[inline]
-    pub fn new(width: usize, num_rows: usize, public_inputs: Vec<T>) -> Self {
+    pub fn new(width: usize, num_rows: usize, global_inputs: Vec<T>) -> Self {
         let height = num_rows;
         Self(Arc::new(WriterData {
             trace: RwLock::new(AirTrace::new_with_capacity(width, num_rows)),
-            public_inputs,
+            global_inputs : RwLock::new(global_inputs),
+            challenges : RwLock::new(Vec::new()),
             height,
         }))
     }
 
     #[inline]
-    pub fn new_with_value(width: usize, num_rows: usize, value: T, public_inputs: Vec<T>) -> Self
+    pub fn new_with_value(width: usize, num_rows: usize, value: T, global_inputs: Vec<T>) -> Self
     where
         T: Copy,
     {
         let height = num_rows;
         Self(Arc::new(WriterData {
             trace: RwLock::new(AirTrace::new_with_value(width, num_rows, value)),
-            public_inputs,
+            global_inputs : RwLock::new(global_inputs),
+            challenges : RwLock::new(Vec::new()),
             height,
         }))
     }
@@ -68,9 +71,14 @@ impl<F: Field> TraceWriter<F> {
     pub fn read<R: Register>(&self, register: &R, row_index: usize) -> R::Value<F> {
         let trace = self.0.trace.read().unwrap();
         let window = trace.window(row_index);
-        let parser = TraceWindowParser::new(window, &[], &self.public_inputs);
+        let global_inputs = self.0.global_inputs.read().unwrap();
+        let challenges = self.0.challenges.read().unwrap();
+        let parser = TraceWindowParser::new(window, &challenges, &global_inputs);
         register.eval(&parser)
     }
+
+    // #[inline]
+    // pub fn read_challenge
 
     #[inline]
     pub fn read_vec<R: Register>(
@@ -102,7 +110,9 @@ impl<F: Field> TraceWriter<F> {
     ) -> Vec<F> {
         let trace = self.0.trace.read().unwrap();
         let window = trace.window(row_index);
-        let mut parser = TraceWindowParser::new(window, &[], &self.public_inputs);
+        let global_inputs = self.global_inputs.read().unwrap();
+        let challenges = self.0.challenges.read().unwrap();
+        let mut parser = TraceWindowParser::new(window, &challenges, &global_inputs);
         expression.eval(&mut parser)
     }
 

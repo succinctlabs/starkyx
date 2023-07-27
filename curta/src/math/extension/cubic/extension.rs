@@ -70,6 +70,12 @@ impl<F: Field, P: CubicParameters<F>> From<[F; 3]> for CubicExtension<F, P> {
     }
 }
 
+impl<F: Field, P: CubicParameters<F>> From<CubicElement<F>> for CubicExtension<F, P> {
+    fn from(value: CubicElement<F>) -> Self {
+        Self(value, PhantomData)
+    }
+}
+
 impl<F: Field, P: CubicParameters<F>> From<F> for CubicExtension<F, P> {
     fn from(value: F) -> Self {
         Self::from([value, F::ZERO, F::ZERO])

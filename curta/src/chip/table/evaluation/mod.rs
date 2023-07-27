@@ -236,7 +236,7 @@ mod tests {
     }
 
     #[test]
-    fn test_public_outsputs_evaluation() {
+    fn test_public_outputs_evaluation() {
         type F = GoldilocksField;
         type L = EvalTest;
         type SC = PoseidonGoldilocksStarkConfig;

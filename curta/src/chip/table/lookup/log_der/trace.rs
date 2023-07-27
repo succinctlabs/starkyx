@@ -52,8 +52,8 @@ impl<F: PrimeField> TraceWriter<F> {
         &self,
         num_rows: usize,
         lookup_data: &LogLookup<F, E, 1>,
-        beta: CubicExtension<F, E>,
     ) {
+        let beta = CubicExtension::<F, E>::from(self.read(&lookup_data.challenge, 0));
         let table_index = lookup_data.table_index;
         let values_idx = lookup_data.values.register().get_range();
 

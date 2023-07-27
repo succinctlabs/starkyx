@@ -3,12 +3,10 @@ use alloc::sync::Arc;
 use anyhow::{Error, Result};
 
 use super::writer::TraceWriter;
-use crate::chip::register::RegisterSerializable;
 use crate::chip::table::lookup::Lookup;
 use crate::chip::{AirParameters, Chip};
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
-use crate::plonky2::field::cubic::extension::CubicExtension;
 use crate::trace::generator::TraceGenerator;
 use crate::trace::AirTrace;
 
@@ -67,6 +65,12 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
             1 => {
                 let num_rows = L::num_rows();
 
+                // Insert the challenges into the generator
+                let writer = self.new_writer();
+                let mut challenges_write = writer.challenges.write().unwrap();
+                challenges_write.extend_from_slice(challenges);
+                drop(challenges_write);
+
                 // Write the range check table
                 if let Some(table) = &air.range_table {
                     for i in 0..num_rows {
@@ -77,38 +81,21 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
 
                 // Write accumulations
                 for acc in air.accumulators.iter() {
-                    let mut alphas = vec![];
-                    for alpha in acc.challenges.iter() {
-                        let (a_idx_0, a_idx_1) = alpha.register().get_range();
-                        let alpha = CubicExtension::from_base_slice(&challenges[a_idx_0..a_idx_1]);
-                        alphas.push(alpha);
-                    }
-                    self.writer.write_accumulation(num_rows, acc, &alphas);
+                    self.writer.write_accumulation(num_rows, acc);
                 }
 
                 // Write lookup proofs
                 for data in air.lookup_data.iter() {
                     match data {
                         Lookup::LogDerivative(data) => {
-                            let (b_idx_0, b_idx_1) = data.challenge.register().get_range();
-                            let beta =
-                                CubicExtension::from_base_slice(&challenges[b_idx_0..b_idx_1]);
-                            self.writer.write_log_lookup(num_rows, data, beta);
+                            self.writer.write_log_lookup(num_rows, data);
                         }
                     }
                 }
 
                 // Write evaluation proofs
                 for eval in air.evaluation_data.iter() {
-                    let (b_idx_0, b_idx_1) = eval.beta.register().get_range();
-                    let beta = CubicExtension::from_base_slice(&challenges[b_idx_0..b_idx_1]);
-                    let mut alphas = vec![];
-                    for alpha in eval.alphas.iter() {
-                        let (a_idx_0, a_idx_1) = alpha.register().get_range();
-                        let alpha = CubicExtension::from_base_slice(&challenges[a_idx_0..a_idx_1]);
-                        alphas.push(alpha);
-                    }
-                    self.writer.write_evaluation(num_rows, eval, beta, &alphas);
+                    self.writer.write_evaluation(num_rows, eval);
                 }
 
                 let trace = self.trace_clone();
