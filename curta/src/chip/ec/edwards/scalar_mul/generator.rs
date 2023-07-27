@@ -18,6 +18,7 @@ use super::gadget::EdScalarMulGadget;
 use crate::air::RAir;
 use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
 use crate::chip::ec::point::AffinePoint;
+use crate::chip::ec::EllipticCurveParameters;
 use crate::chip::field::instruction::FpInstruction;
 use crate::chip::instruction::set::AirInstruction;
 use crate::chip::register::RegisterSerializable;
@@ -37,15 +38,17 @@ use crate::trace::generator::TraceGenerator;
 
 pub type EdDSAStark<F, E> = Starky<Chip<ScalarMulEd25519<F, E>>, ED_NUM_COLUMNS>;
 
+const AFFINE_POINT_TARGET_NUM_LIMBS: usize = 16;
+
 #[derive(Debug, Clone, Copy)]
 pub struct AffinePointTarget {
-    pub x: [Target; 16],
-    pub y: [Target; 16],
+    pub x: [Target; AFFINE_POINT_TARGET_NUM_LIMBS],
+    pub y: [Target; AFFINE_POINT_TARGET_NUM_LIMBS],
 }
 
 pub trait ScalarMulEd25519Gadget<F: RichField + Extendable<D>, const D: usize> {
     fn ed_scalar_mul_batch<
-        S: Plonky2Stark<F, D> + 'static + Send + Sync + Debug,
+        S: Plonky2Stark<F, D> + 'static + Send + Sync + Debug + Clone,
         E: CubicParameters<F>,
         C: GenericConfig<D, F = F, FE = F::Extension> + 'static,
     >(
@@ -68,15 +71,22 @@ pub trait ScalarMulEd25519Gadget<F: RichField + Extendable<D>, const D: usize> {
         points: &[AffinePointTarget],
         scalars: &[Vec<Target>],
     ) -> Vec<AffinePointTarget>;
+
+    fn connect_affine_point(&mut self, lhs: &AffinePointTarget, rhs: &AffinePointTarget);
+
+    fn constant_affine_point<EP: EllipticCurveParameters>(
+        &mut self,
+        point: AffinePoint<EP>,
+    ) -> AffinePointTarget;
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
     for CircuitBuilder<F, D>
 {
     fn ed_scalar_mul_batch<
-        S: Plonky2Stark<F, D> + 'static + Send + Sync + Debug,
+        S: Plonky2Stark<F, D> + 'static + Send + Sync + Debug + Clone,
         E: CubicParameters<F>,
-        C: GenericConfig<D, F = F, FE = F::Extension> + 'static,
+        C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone,
     >(
         &mut self,
         points: &[AffinePointTarget],
@@ -86,7 +96,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
         C::Hasher: AlgebraicHasher<F>,
         S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
             + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
-        ArithmeticGenerator<ScalarMulEd25519<F, E>>: TraceGenerator<F, S::Air>,
+        ArithmeticGenerator<ScalarMulEd25519<F, E>>: TraceGenerator<F, S::Air> + Clone,
         <ArithmeticGenerator<ScalarMulEd25519<F, E>> as TraceGenerator<F, S::Air>>::Error:
             Into<anyhow::Error>,
         S: From<Starky<Chip<ScalarMulEd25519<F, E>>, ED_NUM_COLUMNS>>,
@@ -152,6 +162,9 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
         let config =
             StarkyConfig::<F, C, D>::standard_fast_config(ScalarMulEd25519::<F, E>::num_rows());
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
+
+        let trace_generator = ArithmeticGenerator::<ScalarMulEd25519<F, E>>::new(&[]);
+
         self.verify_stark_proof(&config, &stark, virtual_proof.clone(), &public_input_target);
 
         let stark_generator = SimpleStarkWitnessGenerator::new(
@@ -159,14 +172,14 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
             stark.into(),
             virtual_proof,
             public_input_target,
-            ArithmeticGenerator::<ScalarMulEd25519<F, E>>::new(&[]),
+            trace_generator.clone(),
         );
 
-        let generator = SimpleScalarMulEd25519Generator {
+        let generator = SimpleScalarMulEd25519Generator::<F, E, C, D> {
             gadget,
             points: points.to_vec(),
             scalars: scalars.to_vec(),
-            generator: stark_generator,
+            trace_generator,
             results: results.clone(),
             bit_eval,
             set_last,
@@ -175,6 +188,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
         };
 
         self.add_simple_generator(generator);
+        self.add_simple_generator(stark_generator);
         results
     }
 
@@ -201,6 +215,38 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
         self.add_simple_generator(generator);
         results
     }
+
+    fn connect_affine_point(&mut self, lhs: &AffinePointTarget, rhs: &AffinePointTarget) {
+        for i in 0..AFFINE_POINT_TARGET_NUM_LIMBS {
+            self.connect(lhs.x[i], rhs.x[i]);
+            self.connect(lhs.y[i], rhs.y[i]);
+        }
+    }
+
+    fn constant_affine_point<EP: EllipticCurveParameters>(
+        &mut self,
+        point: AffinePoint<EP>,
+    ) -> AffinePointTarget {
+        let x_limbs: [_; AFFINE_POINT_TARGET_NUM_LIMBS] =
+            biguint_to_16_digits_field::<F>(&point.x, 16)
+                .iter()
+                .map(|x| self.constant(*x))
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap();
+        let y_limbs: [_; AFFINE_POINT_TARGET_NUM_LIMBS] =
+            biguint_to_16_digits_field::<F>(&point.y, 16)
+                .iter()
+                .map(|x| self.constant(*x))
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap();
+
+        AffinePointTarget {
+            x: x_limbs,
+            y: y_limbs,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -208,7 +254,7 @@ pub struct SimpleScalarMulEd25519Generator<
     F: RichField + Extendable<D>,
     E: CubicParameters<F>,
     C: GenericConfig<D, F = F>,
-    S,
+    // S,
     const D: usize,
 > {
     gadget: EdScalarMulGadget<F, Ed25519>,
@@ -218,14 +264,7 @@ pub struct SimpleScalarMulEd25519Generator<
     bit_eval: BitEvaluation<F>,
     set_last: AirInstruction<F, FpInstruction<Ed25519BaseField>>,
     set_bit: AirInstruction<F, FpInstruction<Ed25519BaseField>>,
-    generator: SimpleStarkWitnessGenerator<
-        S,
-        ArithmeticGenerator<ScalarMulEd25519<F, E>>,
-        F,
-        C,
-        <F as Packable>::Packing,
-        D,
-    >,
+    trace_generator: ArithmeticGenerator<ScalarMulEd25519<F, E>>,
     _marker: core::marker::PhantomData<(F, C, E)>,
 }
 
@@ -233,9 +272,9 @@ impl<
         F: RichField + Extendable<D>,
         E: CubicParameters<F>,
         C: GenericConfig<D, F = F>,
-        S,
+        // S,
         const D: usize,
-    > SimpleScalarMulEd25519Generator<F, E, C, S, D>
+    > SimpleScalarMulEd25519Generator<F, E, C, D>
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -246,14 +285,7 @@ impl<
         bit_eval: BitEvaluation<F>,
         set_last: AirInstruction<F, FpInstruction<Ed25519BaseField>>,
         set_bit: AirInstruction<F, FpInstruction<Ed25519BaseField>>,
-        generator: SimpleStarkWitnessGenerator<
-            S,
-            ArithmeticGenerator<ScalarMulEd25519<F, E>>,
-            F,
-            C,
-            <F as Packable>::Packing,
-            D,
-        >,
+        trace_generator: ArithmeticGenerator<ScalarMulEd25519<F, E>>,
     ) -> Self {
         Self {
             gadget,
@@ -263,7 +295,7 @@ impl<
             bit_eval,
             set_last,
             set_bit,
-            generator,
+            trace_generator,
             _marker: core::marker::PhantomData,
         }
     }
@@ -273,17 +305,10 @@ impl<
         F: RichField + Extendable<D>,
         E: CubicParameters<F>,
         C: GenericConfig<D, F = F, FE = F::Extension> + 'static,
-        S: Plonky2Stark<F, D> + 'static + Send + Sync + Debug,
         const D: usize,
-    > SimpleGenerator<F, D> for SimpleScalarMulEd25519Generator<F, E, C, S, D>
+    > SimpleGenerator<F, D> for SimpleScalarMulEd25519Generator<F, E, C, D>
 where
     C::Hasher: AlgebraicHasher<F>,
-    S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
-        + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
-    ArithmeticGenerator<ScalarMulEd25519<F, E>>: TraceGenerator<F, S::Air>,
-    <ArithmeticGenerator<ScalarMulEd25519<F, E>> as TraceGenerator<F, S::Air>>::Error:
-        Into<anyhow::Error>,
-    [(); S::COLUMNS]:,
 {
     fn id(&self) -> String {
         unimplemented!("TODO")
@@ -327,7 +352,7 @@ where
         assert_eq!(points.len(), 256);
 
         // Generate the trace
-        let trace_generator = &self.generator.trace_generator;
+        let trace_generator = &self.trace_generator;
 
         let writer = trace_generator.new_writer();
         for j in 0..(1 << 16) {
@@ -362,8 +387,6 @@ where
             writer.write_instruction(&self.set_last, j);
             writer.write_instruction(&self.set_bit, j);
         }
-        // Generate the stark proof
-        SimpleGenerator::<F, D>::run_once(&self.generator, witness, out_buffer)
     }
 
     fn serialize(

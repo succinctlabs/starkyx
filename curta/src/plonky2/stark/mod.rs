@@ -255,7 +255,7 @@ pub(crate) mod tests {
         C::Hasher: AlgebraicHasher<F>,
         S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
             + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
-        T: Debug + Send + Sync + 'static + TraceGenerator<F, S::Air>,
+        T: Clone + Debug + Send + Sync + 'static + TraceGenerator<F, S::Air>,
         T::Error: Into<anyhow::Error>,
         [(); S::COLUMNS]:,
     {
