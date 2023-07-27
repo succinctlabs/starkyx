@@ -15,4 +15,3 @@
 
 pub mod evaluation;
 pub mod lookup;
-pub mod permutation;
