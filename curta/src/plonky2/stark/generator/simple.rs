@@ -73,12 +73,7 @@ where
     }
 
     fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
-        let mut public_inputs = Vec::new();
-        for target in self.public_input_targets.iter() {
-            let value = witness.try_get_target(*target).expect("tried getting target!");
-            public_inputs.push(value);
-        }
-        // let public_inputs = witness.get_targets(&self.public_input_targets);
+        let public_inputs = witness.get_targets(&self.public_input_targets);
 
         let proof = StarkyProver::<F, C, F, P, D, 1>::prove(
             &self.config,

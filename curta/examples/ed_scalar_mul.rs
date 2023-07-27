@@ -24,7 +24,6 @@ use curta::chip::ec::edwards::scalar_mul::generator::{
 use curta::chip::ec::edwards::EdwardsParameters;
 use curta::chip::utils::biguint_to_16_digits_field;
 use curta::math::goldilocks::cubic::GoldilocksCubicParameters;
-use num::{BigUint, Zero};
 use num::bigint::RandBigInt;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::Field;
@@ -122,7 +121,7 @@ fn main() {
     for i in 0..256 {
         let a = rng.gen_biguint(256);
         let point = &generator * a;
-        let scalar = BigUint::zero(); 
+        let scalar = rng.gen_biguint(256);
         let res = &point * &scalar;
 
         //Set the expected result
