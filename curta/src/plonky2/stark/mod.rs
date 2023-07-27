@@ -26,32 +26,51 @@ pub mod proof;
 pub mod prover;
 pub mod verifier;
 
-pub trait Plonky2Stark<F: RichField + Extendable<D>, const D: usize>: 'static + Sync {
-    const COLUMNS: usize;
+#[derive(Debug, Clone)]
+pub struct Starky<A, const COLUMNS: usize> {
+    air: A,
+}
 
-    type Air;
+impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
+    pub fn new(air: A) -> Self {
+        Self { air }
+    }
+}
 
-    fn air(&self) -> &Self::Air;
+impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
+    fn air(&self) -> &A {
+        &self.air
+    }
 
-    fn num_quotient_polys<AP: AirParser, C: GenericConfig<D, F = F>>(
+    fn num_quotient_polys<
+        AP: AirParser,
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+        const D: usize,
+    >(
         &self,
         config: &StarkyConfig<F, C, D>,
     ) -> usize
     where
-        Self::Air: RAir<AP>,
+        A: RAir<AP>,
     {
         self.air().quotient_degree_factor() * config.num_challenges
     }
 
     /// Computes the FRI instance used to prove this Stark.
-    fn fri_instance<AP: AirParser, C: GenericConfig<D, F = F>>(
+    fn fri_instance<
+        AP: AirParser,
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+        const D: usize,
+    >(
         &self,
         zeta: F::Extension,
         g: F,
         config: &StarkyConfig<F, C, D>,
     ) -> FriInstanceInfo<F, D>
     where
-        Self::Air: RAir<AP>,
+        A: RAir<AP>,
     {
         let mut oracles = vec![];
         let mut trace_info: Vec<FriPolynomialInfo> = vec![];
@@ -86,7 +105,12 @@ pub trait Plonky2Stark<F: RichField + Extendable<D>, const D: usize>: 'static + 
     }
 
     /// Computes the FRI instance used to prove this Stark.
-    fn fri_instance_target<AP: AirParser, C: GenericConfig<D, F = F>>(
+    fn fri_instance_target<
+        AP: AirParser,
+        C: GenericConfig<D, F = F>,
+        F: RichField + Extendable<D>,
+        const D: usize,
+    >(
         &self,
         builder: &mut CircuitBuilder<F, D>,
         zeta: ExtensionTarget<D>,
@@ -94,7 +118,7 @@ pub trait Plonky2Stark<F: RichField + Extendable<D>, const D: usize>: 'static + 
         config: &StarkyConfig<F, C, D>,
     ) -> FriInstanceInfoTarget<D>
     where
-        Self::Air: RAir<AP>,
+        A: RAir<AP>,
     {
         let mut oracles = vec![];
         let mut trace_info: Vec<FriPolynomialInfo> = vec![];
@@ -131,57 +155,40 @@ pub trait Plonky2Stark<F: RichField + Extendable<D>, const D: usize>: 'static + 
     }
 }
 
-impl<'a, T, F, C: GenericConfig<D, F = F>, FE, P, const D: usize, const D2: usize>
-    Stark<StarkParser<'a, F, FE, P, D, D2>, StarkyConfig<F, C, D>> for T
+impl<
+        'a,
+        A,
+        F,
+        C: GenericConfig<D, F = F>,
+        FE,
+        P,
+        const D: usize,
+        const D2: usize,
+        const COLUMNS: usize,
+    > Stark<StarkParser<'a, F, FE, P, D, D2>, StarkyConfig<F, C, D>> for Starky<A, COLUMNS>
 where
     F: RichField + Extendable<D>,
     FE: FieldExtension<D2, BaseField = F>,
     P: PackedField<Scalar = FE>,
-    T: Plonky2Stark<F, D>,
-    T::Air: RAir<StarkParser<'a, F, FE, P, D, D2>>,
+    A: RAir<StarkParser<'a, F, FE, P, D, D2>>,
 {
-    type Air = T::Air;
-
-    fn air(&self) -> &Self::Air {
-        self.air()
-    }
-}
-
-impl<'a, T, F, C: GenericConfig<D, F = F>, const D: usize>
-    Stark<RecursiveStarkParser<'a, F, D>, StarkyConfig<F, C, D>> for T
-where
-    F: RichField + Extendable<D>,
-    T: Plonky2Stark<F, D>,
-    T::Air: RAir<RecursiveStarkParser<'a, F, D>>,
-{
-    type Air = T::Air;
-
-    fn air(&self) -> &Self::Air {
-        self.air()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Starky<A, const COLUMNS: usize> {
-    air: A,
-}
-
-impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
-    pub fn new(air: A) -> Self {
-        Self { air }
-    }
-}
-
-impl<F, A: Sync + 'static, const D: usize, const COLUMNS: usize> Plonky2Stark<F, D>
-    for Starky<A, COLUMNS>
-where
-    F: RichField + Extendable<D>,
-{
-    const COLUMNS: usize = COLUMNS;
     type Air = A;
 
     fn air(&self) -> &Self::Air {
-        &self.air
+        self.air()
+    }
+}
+
+impl<'a, A, F, C: GenericConfig<D, F = F>, const D: usize, const COLUMNS: usize>
+    Stark<RecursiveStarkParser<'a, F, D>, StarkyConfig<F, C, D>> for Starky<A, COLUMNS>
+where
+    F: RichField + Extendable<D>,
+    A: RAir<RecursiveStarkParser<'a, F, D>>,
+{
+    type Air = A;
+
+    fn air(&self) -> &Self::Air {
+        self.air()
     }
 }
 
@@ -208,23 +215,22 @@ pub(crate) mod tests {
 
     /// Generate the proof and verify as a stark
     pub(crate) fn test_starky<
-        S,
+        A: 'static + Debug + Send + Sync,
         T,
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F, FE = F::Extension>,
         const D: usize,
+        const COLUMNS: usize,
     >(
-        stark: &S,
+        stark: &Starky<A, COLUMNS>,
         config: &StarkyConfig<F, C, D>,
         trace_generator: &T,
         public_inputs: &[F],
     ) where
-        S: Plonky2Stark<F, D>,
-        S::Air: for<'a> RAir<StarkParser<'a, F, C::FE, C::FE, D, D>>
+        A: for<'a> RAir<StarkParser<'a, F, C::FE, C::FE, D, D>>
             + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
-        T: TraceGenerator<F, S::Air>,
+        T: TraceGenerator<F, A>,
         T::Error: Into<anyhow::Error>,
-        [(); S::COLUMNS]:,
     {
         let proof = StarkyProver::<F, C, F, <F as Packable>::Packing, D, 1>::prove(
             config,
@@ -240,24 +246,23 @@ pub(crate) mod tests {
 
     /// Generate a Stark proof and a recursive proof using the witness generator
     pub(crate) fn test_recursive_starky<
-        S,
+        A: 'static + Debug + Send + Sync,
         T,
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F, FE = F::Extension> + 'static,
         const D: usize,
+        const COLUMNS: usize,
     >(
-        stark: S,
+        stark: Starky<A, COLUMNS>,
         config: StarkyConfig<F, C, D>,
         trace_generator: T,
         public_inputs: &[F],
     ) where
-        S: Plonky2Stark<F, D> + Debug + Send + Sync,
         C::Hasher: AlgebraicHasher<F>,
-        S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
+        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
             + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
-        T: Clone + Debug + Send + Sync + 'static + TraceGenerator<F, S::Air>,
+        T: Clone + Debug + Send + Sync + 'static + TraceGenerator<F, A>,
         T::Error: Into<anyhow::Error>,
-        [(); S::COLUMNS]:,
     {
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut builder = CircuitBuilder::<F, D>::new(config_rec);

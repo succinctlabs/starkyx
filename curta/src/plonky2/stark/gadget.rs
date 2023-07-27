@@ -7,7 +7,7 @@ use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use super::config::StarkyConfig;
 use super::proof::StarkProofTarget;
 use super::verifier::{add_virtual_stark_proof, StarkyVerifier};
-use super::Plonky2Stark;
+use super::Starky;
 use crate::air::RAir;
 use crate::plonky2::parser::RecursiveStarkParser;
 
@@ -17,24 +17,24 @@ pub trait StarkGadget<
     const D: usize,
 >
 {
-    fn add_virtual_stark_proof<S: Plonky2Stark<F, D>>(
+    fn add_virtual_stark_proof<A, const COLUMNS: usize>(
         &mut self,
-        stark: &S,
+        stark: &Starky<A, COLUMNS>,
         config: &StarkyConfig<F, C, D>,
     ) -> StarkProofTarget<D>
     where
         C::Hasher: AlgebraicHasher<F>,
-        S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>;
+        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>;
 
-    fn verify_stark_proof<S: Plonky2Stark<F, D>>(
+    fn verify_stark_proof<A, const COLUMNS: usize>(
         &mut self,
         config: &StarkyConfig<F, C, D>,
-        stark: &S,
+        stark: &Starky<A, COLUMNS>,
         proof: StarkProofTarget<D>,
         public_inputs: &[Target],
     ) where
         C::Hasher: AlgebraicHasher<F>,
-        S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>;
+        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>;
 }
 
 impl<
@@ -43,27 +43,27 @@ impl<
         const D: usize,
     > StarkGadget<F, C, D> for CircuitBuilder<F, D>
 {
-    fn add_virtual_stark_proof<S: Plonky2Stark<F, D>>(
+    fn add_virtual_stark_proof<A, const COLUMNS: usize>(
         &mut self,
-        stark: &S,
+        stark: &Starky<A, COLUMNS>,
         config: &StarkyConfig<F, C, D>,
     ) -> StarkProofTarget<D>
     where
         C::Hasher: AlgebraicHasher<F>,
-        S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
+        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
     {
         add_virtual_stark_proof(self, stark, config)
     }
 
-    fn verify_stark_proof<S: Plonky2Stark<F, D>>(
+    fn verify_stark_proof<A, const COLUMNS: usize>(
         &mut self,
         config: &StarkyConfig<F, C, D>,
-        stark: &S,
+        stark: &Starky<A, COLUMNS>,
         proof: StarkProofTarget<D>,
         public_inputs: &[Target],
     ) where
         C::Hasher: AlgebraicHasher<F>,
-        S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
+        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
     {
         StarkyVerifier::verify_circuit(self, config, stark, proof, public_inputs)
     }
