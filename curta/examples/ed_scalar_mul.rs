@@ -50,6 +50,8 @@ fn main() {
     let config = CircuitConfig::standard_recursion_config();
     let mut builder = CircuitBuilder::<F, D>::new(config);
 
+    let mut timing = TimingTree::new("Ed25519 Scalar mul", log::Level::Debug);
+
     // Allocate targets for elliptic curve points and scalar
 
     // Get virtual targets for scalars
@@ -115,33 +117,42 @@ fn main() {
     // Assigning the public inputs: points, scalars, and expected results
     let mut rng = thread_rng();
     let generator = Ed25519::generator();
-    for i in 0..256 {
-        let a = rng.gen_biguint(256);
-        let point = &generator * a;
-        let scalar = rng.gen_biguint(256);
-        let res = &point * &scalar;
+    timed!(
+        timing,
+        "assigning inputs",
+        for i in 0..256 {
+            let a = rng.gen_biguint(256);
+            let point = &generator * a;
+            let scalar = rng.gen_biguint(256);
+            let res = &point * &scalar;
 
-        //Set the expected result
-        let res_limbs_x: [_; 16] = biguint_to_16_digits_field(&res.x, 16).try_into().unwrap();
-        let res_limbs_y: [_; 16] = biguint_to_16_digits_field(&res.y, 16).try_into().unwrap();
-        pw.set_target_arr(&expected_results[i].x, &res_limbs_x);
-        pw.set_target_arr(&expected_results[i].y, &res_limbs_y);
+            //Set the expected result
+            let res_limbs_x: [_; 16] = biguint_to_16_digits_field(&res.x, 16).try_into().unwrap();
+            let res_limbs_y: [_; 16] = biguint_to_16_digits_field(&res.y, 16).try_into().unwrap();
+            pw.set_target_arr(&expected_results[i].x, &res_limbs_x);
+            pw.set_target_arr(&expected_results[i].y, &res_limbs_y);
 
-        // Set the scalar target
-        let scalar_limbs = scalar.iter_u32_digits().map(F::from_canonical_u32);
-        for (target, limb) in scalars_limbs[i].iter().zip(scalar_limbs) {
-            pw.set_target(*target, limb);
+            // Set the scalar target
+            let mut scalar_limbs = scalar
+                .iter_u32_digits()
+                .map(F::from_canonical_u32)
+                .collect::<Vec<_>>();
+            scalar_limbs.resize(8, F::ZERO);
+            for (target, limb) in scalars_limbs[i].iter().zip(scalar_limbs) {
+                pw.set_target(*target, limb);
+            }
+
+            // Set the point target
+            let point_limbs_x: [_; 16] =
+                biguint_to_16_digits_field(&point.x, 16).try_into().unwrap();
+            let point_limbs_y: [_; 16] =
+                biguint_to_16_digits_field(&point.y, 16).try_into().unwrap();
+
+            pw.set_target_arr(&points[i].x, &point_limbs_x);
+            pw.set_target_arr(&points[i].y, &point_limbs_y);
         }
+    );
 
-        // Set the point target
-        let point_limbs_x: [_; 16] = biguint_to_16_digits_field(&point.x, 16).try_into().unwrap();
-        let point_limbs_y: [_; 16] = biguint_to_16_digits_field(&point.y, 16).try_into().unwrap();
-
-        pw.set_target_arr(&points[i].x, &point_limbs_x);
-        pw.set_target_arr(&points[i].y, &point_limbs_y);
-    }
-
-    let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
     let recursive_proof = timed!(
         timing,
         "Generate proof",
