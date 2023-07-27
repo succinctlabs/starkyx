@@ -87,7 +87,7 @@ impl<E: EdwardsParameters> Mul<BigUint> for AffinePoint<E> {
 mod tests {
 
     use num::bigint::RandBigInt;
-    use num::BigUint;
+    use num::{BigUint, Zero};
     use rand::thread_rng;
 
     use super::{EdwardsParameters, *};
@@ -120,6 +120,8 @@ mod tests {
             let y = rng.gen_biguint(25);
 
             let x_base = &base * &x;
+            let zero = BigUint::zero();
+            assert_eq!(&x_base * zero, E::neutral() );
             let y_x_base = &x_base * &y;
             let xy = &x * &y;
             let xy_base = &base * &xy;

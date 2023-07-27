@@ -21,7 +21,7 @@ use crate::plonky2::parser::StarkParser;
 use crate::trace::generator::TraceGenerator;
 
 #[derive(Debug, Clone)]
-pub struct SimpleStarkWitnessGenerator<S, T, F, C, P, const D: usize> {
+pub struct SimpleStarkWitnessGenerator<S, T : Clone, F, C, P, const D: usize> {
     config: StarkyConfig<F, C, D>,
     pub stark: S,
     pub proof_target: StarkProofTarget<D>,
@@ -30,7 +30,7 @@ pub struct SimpleStarkWitnessGenerator<S, T, F, C, P, const D: usize> {
     _marker: core::marker::PhantomData<P>,
 }
 
-impl<S, T, F: RichField, C, const D: usize>
+impl<S, T : Clone, F: RichField, C, const D: usize>
     SimpleStarkWitnessGenerator<S, T, F, C, <F as Packable>::Packing, D>
 {
     pub fn new(
@@ -51,7 +51,7 @@ impl<S, T, F: RichField, C, const D: usize>
     }
 }
 
-impl<S, T, F, C, P, const D: usize> SimpleGenerator<F, D>
+impl<S, T : Clone, F, C, P, const D: usize> SimpleGenerator<F, D>
     for SimpleStarkWitnessGenerator<S, T, F, C, P, D>
 where
     F: RichField + Extendable<D>,
@@ -73,7 +73,12 @@ where
     }
 
     fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
-        let public_inputs = witness.get_targets(&self.public_input_targets);
+        let mut public_inputs = Vec::new();
+        for target in self.public_input_targets.iter() {
+            let value = witness.try_get_target(*target).expect("tried getting target!");
+            public_inputs.push(value);
+        }
+        // let public_inputs = witness.get_targets(&self.public_input_targets);
 
         let proof = StarkyProver::<F, C, F, P, D, 1>::prove(
             &self.config,
