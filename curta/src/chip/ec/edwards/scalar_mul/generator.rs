@@ -18,6 +18,7 @@ use super::gadget::EdScalarMulGadget;
 use crate::air::RAir;
 use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
 use crate::chip::ec::point::AffinePoint;
+use crate::chip::ec::EllipticCurveParameters;
 use crate::chip::field::instruction::FpInstruction;
 use crate::chip::instruction::set::AirInstruction;
 use crate::chip::register::RegisterSerializable;
@@ -37,10 +38,12 @@ use crate::trace::generator::TraceGenerator;
 
 pub type EdDSAStark<F, E> = Starky<Chip<ScalarMulEd25519<F, E>>, ED_NUM_COLUMNS>;
 
+const AFFINE_POINT_TARGET_NUM_LIMBS: usize = 16;
+
 #[derive(Debug, Clone, Copy)]
 pub struct AffinePointTarget {
-    pub x: [Target; 16],
-    pub y: [Target; 16],
+    pub x: [Target; AFFINE_POINT_TARGET_NUM_LIMBS],
+    pub y: [Target; AFFINE_POINT_TARGET_NUM_LIMBS],
 }
 
 pub trait ScalarMulEd25519Gadget<F: RichField + Extendable<D>, const D: usize> {
@@ -68,6 +71,13 @@ pub trait ScalarMulEd25519Gadget<F: RichField + Extendable<D>, const D: usize> {
         points: &[AffinePointTarget],
         scalars: &[Vec<Target>],
     ) -> Vec<AffinePointTarget>;
+
+    fn connect_affine_point(&mut self, lhs: &AffinePointTarget, rhs: &AffinePointTarget);
+
+    fn constant_affine_point<EP: EllipticCurveParameters>(
+        &mut self,
+        point: AffinePoint<EP>,
+    ) -> AffinePointTarget;
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
@@ -201,6 +211,38 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
 
         self.add_simple_generator(generator);
         results
+    }
+
+    fn connect_affine_point(&mut self, lhs: &AffinePointTarget, rhs: &AffinePointTarget) {
+        for i in 0..AFFINE_POINT_TARGET_NUM_LIMBS {
+            self.connect(lhs.x[i], rhs.x[i]);
+            self.connect(lhs.y[i], rhs.y[i]);
+        }
+    }
+
+    fn constant_affine_point<EP: EllipticCurveParameters>(
+        &mut self,
+        point: AffinePoint<EP>,
+    ) -> AffinePointTarget {
+        let x_limbs: [_; AFFINE_POINT_TARGET_NUM_LIMBS] =
+            biguint_to_16_digits_field::<F>(&point.x, 16)
+                .iter()
+                .map(|x| self.constant(*x))
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap();
+        let y_limbs: [_; AFFINE_POINT_TARGET_NUM_LIMBS] =
+            biguint_to_16_digits_field::<F>(&point.y, 16)
+                .iter()
+                .map(|x| self.constant(*x))
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap();
+
+        AffinePointTarget {
+            x: x_limbs,
+            y: y_limbs,
+        }
     }
 }
 
