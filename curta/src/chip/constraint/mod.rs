@@ -71,7 +71,6 @@ impl<L: AirParameters> From<ArithmeticConstraint<L::Field>> for Constraint<L> {
     }
 }
 
-
 impl<L: AirParameters> From<Accumulator<L::CubicParams>> for Constraint<L> {
     fn from(accumulator: Accumulator<L::CubicParams>) -> Self {
         Self::Accumulator(accumulator)

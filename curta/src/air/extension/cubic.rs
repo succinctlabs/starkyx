@@ -118,4 +118,36 @@ pub trait CubicParser<E: CubicParameters<Self::Field>>: AirParser {
             self.constraint_last_row(a);
         }
     }
+
+    fn assert_eq_extension(&mut self, a: CubicElement<Self::Var>, b: CubicElement<Self::Var>) {
+        let c = self.sub_extension(a, b);
+        self.constraint_extension(c);
+    }
+
+    fn assert_eq_extension_first_row(
+        &mut self,
+        a: CubicElement<Self::Var>,
+        b: CubicElement<Self::Var>,
+    ) {
+        let c = self.sub_extension(a, b);
+        self.constraint_extension_first_row(c);
+    }
+
+    fn assert_eq_extension_last_row(
+        &mut self,
+        a: CubicElement<Self::Var>,
+        b: CubicElement<Self::Var>,
+    ) {
+        let c = self.sub_extension(a, b);
+        self.constraint_extension_last_row(c);
+    }
+
+    fn assert_eq_extension_transition(
+        &mut self,
+        a: CubicElement<Self::Var>,
+        b: CubicElement<Self::Var>,
+    ) {
+        let c = self.sub_extension(a, b);
+        self.constraint_extension_transition(c);
+    }
 }
