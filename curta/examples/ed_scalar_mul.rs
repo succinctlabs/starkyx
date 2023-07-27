@@ -51,6 +51,8 @@ fn main() {
     let config = CircuitConfig::standard_recursion_config();
     let mut builder = CircuitBuilder::<F, D>::new(config);
 
+    let mut timing = TimingTree::new("Ed25519 Scalar mul", log::Level::Debug);
+
     // Allocate targets for elliptic curve points and scalar
 
     // Get virtual targets for scalars
@@ -116,6 +118,7 @@ fn main() {
     // Assigning the public inputs: points, scalars, and expected results
     let mut rng = thread_rng();
     let generator = Ed25519::generator();
+    timed!(timing, "assigning inputs", 
     for i in 0..256 {
         let a = rng.gen_biguint(256);
         let point = &generator * a;
@@ -141,9 +144,8 @@ fn main() {
 
         pw.set_target_arr(&points[i].x, &point_limbs_x);
         pw.set_target_arr(&points[i].y, &point_limbs_y);
-    }
+    });
 
-    let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
     let recursive_proof = timed!(
         timing,
         "Generate proof",
