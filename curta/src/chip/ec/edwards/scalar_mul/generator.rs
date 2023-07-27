@@ -162,6 +162,9 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
         let config =
             StarkyConfig::<F, C, D>::standard_fast_config(ScalarMulEd25519::<F, E>::num_rows());
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
+
+        let trace_generator = ArithmeticGenerator::<ScalarMulEd25519<F, E>>::new(&[]);
+
         self.verify_stark_proof(&config, &stark, virtual_proof.clone(), &public_input_target);
 
         let stark_generator = SimpleStarkWitnessGenerator::new(
@@ -169,15 +172,13 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
             stark.into(),
             virtual_proof,
             public_input_target,
-            ArithmeticGenerator::<ScalarMulEd25519<F, E>>::new(&[]),
+            trace_generator.clone(),
         );
-        let trace_generator = stark_generator.trace_generator.clone();
 
         let generator = SimpleScalarMulEd25519Generator::<F, E, C, D> {
             gadget,
             points: points.to_vec(),
             scalars: scalars.to_vec(),
-            // generator: stark_generator.clone(),
             trace_generator,
             results: results.clone(),
             bit_eval,
@@ -295,7 +296,6 @@ impl<
             set_last,
             set_bit,
             trace_generator,
-            // generator,
             _marker: core::marker::PhantomData,
         }
     }
@@ -305,7 +305,6 @@ impl<
         F: RichField + Extendable<D>,
         E: CubicParameters<F>,
         C: GenericConfig<D, F = F, FE = F::Extension> + 'static,
-        // S: Plonky2Stark<F, D> + 'static + Send + Sync + Debug,
         const D: usize,
     > SimpleGenerator<F, D> for SimpleScalarMulEd25519Generator<F, E, C, D>
 where
@@ -356,7 +355,6 @@ where
         let trace_generator = &self.trace_generator;
 
         let writer = trace_generator.new_writer();
-        // let writer = self.writer.clone();
         for j in 0..(1 << 16) {
             writer.write_instruction(&self.gadget.cycle, j);
             writer.write_instruction(&self.bit_eval.cycle, j);
@@ -389,8 +387,6 @@ where
             writer.write_instruction(&self.set_last, j);
             writer.write_instruction(&self.set_bit, j);
         }
-        // Generate the stark proof
-        // SimpleGenerator::<F, D>::run_once(&self.generator, witness, out_buffer)
     }
 
     fn serialize(
