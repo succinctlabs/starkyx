@@ -13,7 +13,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::GenericConfig;
 
 use super::config::StarkyConfig;
-use super::Plonky2Stark;
+use super::Starky;
 use crate::air::parser::AirParser;
 use crate::air::RAir;
 use crate::maybe_rayon::*;
@@ -44,16 +44,13 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> S
         lde_bits - config.fri_config.rate_bits
     }
 
-    pub(crate) fn get_challenges<AP: AirParser, S: Plonky2Stark<F, D>>(
+    pub(crate) fn get_challenges<AP: AirParser, A: RAir<AP>, const COLUMNS: usize>(
         &self,
         config: &StarkyConfig<F, C, D>,
-        stark: &S,
+        stark: &Starky<A, COLUMNS>,
         public_inputs: &[F],
         degree_bits: usize,
-    ) -> StarkProofChallenges<F, D>
-    where
-        S::Air: RAir<AP>,
-    {
+    ) -> StarkProofChallenges<F, D> {
         let StarkProof {
             trace_caps,
             quotient_polys_cap,
@@ -128,18 +125,16 @@ impl<const D: usize> StarkProofTarget<D> {
 
     pub fn get_challenges_target<
         F: RichField + Extendable<D>,
-        S: Plonky2Stark<F, D>,
+        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
         C: GenericConfig<D, F = F>,
+        const COLUMNS: usize,
     >(
         &self,
         builder: &mut CircuitBuilder<F, D>,
         config: &StarkyConfig<F, C, D>,
         public_inputs: &[Target],
-        stark: &S,
-    ) -> StarkProofChallengesTarget<D>
-    where
-        S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
-    {
+        stark: &Starky<A, COLUMNS>,
+    ) -> StarkProofChallengesTarget<D> {
         let StarkProofTarget {
             trace_caps,
             quotient_polys_cap,
@@ -191,22 +186,6 @@ impl<const D: usize> StarkProofTarget<D> {
         }
     }
 }
-
-// #[derive(Debug, Clone)]
-// pub struct StarkProofWithPublicInputs<
-//     F: RichField + Extendable<D>,
-//     C: GenericConfig<D, F = F>,
-//     const D: usize,
-// > {
-//     pub proof: StarkProof<F, C, D>,
-//     // TODO: Maybe make it generic over a `S: Stark` and replace with `[F; S::PUBLIC_INPUTS]`.
-//     pub public_inputs: Vec<F>,
-// }
-
-// pub struct StarkProofWithPublicInputsTarget<const D: usize, const R: usize> {
-//     pub proof: StarkProofTarget<D, R>,
-//     pub public_inputs: Vec<Target>,
-// }
 
 pub(crate) struct StarkProofChallenges<F: RichField + Extendable<D>, const D: usize> {
     /// Random values used to combine STARK constraints.

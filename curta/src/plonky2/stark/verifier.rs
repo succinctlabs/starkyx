@@ -17,7 +17,7 @@ use plonky2::util::reducing::ReducingFactorTarget;
 
 use super::config::StarkyConfig;
 use super::proof::{StarkOpeningSet, StarkOpeningSetTarget, StarkProof, StarkProofTarget};
-use super::Plonky2Stark;
+use super::Starky;
 use crate::air::parser::AirParser;
 use crate::air::RAir;
 use crate::plonky2::parser::consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
@@ -31,14 +31,14 @@ where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F, FE = F::Extension>,
 {
-    pub fn verify<S: Plonky2Stark<F, D>>(
+    pub fn verify<A, const COLUMNS: usize>(
         config: &StarkyConfig<F, C, D>,
-        stark: &S,
+        stark: &Starky<A, COLUMNS>,
         proof: StarkProof<F, C, D>,
         public_inputs: &[F],
     ) -> Result<()>
     where
-        S::Air: for<'a> RAir<StarkParser<'a, F, C::FE, C::FE, D, D>>,
+        A: for<'a> RAir<StarkParser<'a, F, C::FE, C::FE, D, D>>,
     {
         let degree_bits = proof.recover_degree_bits(config);
         let challenges = proof.get_challenges(config, stark, public_inputs, degree_bits);
@@ -125,14 +125,11 @@ where
         Ok(())
     }
 
-    pub fn validate_proof_shape<AP: AirParser, S: Plonky2Stark<F, D>>(
+    pub fn validate_proof_shape<AP: AirParser, A: RAir<AP>, const COLUMNS: usize>(
         config: &StarkyConfig<F, C, D>,
-        stark: &S,
+        stark: &Starky<A, COLUMNS>,
         proof: &StarkProof<F, C, D>,
-    ) -> Result<()>
-    where
-        S::Air: RAir<AP>,
-    {
+    ) -> Result<()> {
         let fri_params = config.fri_params();
         let cap_height = fri_params.config.cap_height;
 
@@ -156,8 +153,8 @@ where
         }
         ensure!(quotient_polys_cap.height() == cap_height);
 
-        ensure!(local_values.len() == S::COLUMNS);
-        ensure!(next_values.len() == S::COLUMNS);
+        ensure!(local_values.len() == COLUMNS);
+        ensure!(next_values.len() == COLUMNS);
         ensure!(quotient_polys.len() == stark.num_quotient_polys(config));
 
         Ok(())
@@ -175,15 +172,15 @@ where
         (z_x * invs[0], z_x * invs[1])
     }
 
-    pub fn verify_circuit<S: Plonky2Stark<F, D>>(
+    pub fn verify_circuit<A, const COLUMNS: usize>(
         builder: &mut CircuitBuilder<F, D>,
         config: &StarkyConfig<F, C, D>,
-        stark: &S,
+        stark: &Starky<A, COLUMNS>,
         proof: StarkProofTarget<D>,
         public_inputs: &[Target],
     ) where
         C::Hasher: AlgebraicHasher<F>,
-        S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
+        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
     {
         let StarkOpeningSetTarget {
             local_values,
@@ -293,17 +290,17 @@ where
 
 pub fn add_virtual_stark_proof<
     F: RichField + Extendable<D>,
-    S: Plonky2Stark<F, D>,
+    A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
     C: GenericConfig<D, F = F>,
     const D: usize,
+    const COLUMNS: usize,
 >(
     builder: &mut CircuitBuilder<F, D>,
-    stark: &S,
+    stark: &Starky<A, COLUMNS>,
     config: &StarkyConfig<F, C, D>,
 ) -> StarkProofTarget<D>
 where
     C::Hasher: AlgebraicHasher<F>,
-    S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
 {
     let fri_params = config.fri_params();
     let cap_height = fri_params.config.cap_height;
@@ -324,29 +321,29 @@ where
     StarkProofTarget {
         trace_caps,
         quotient_polys_cap: builder.add_virtual_cap(cap_height),
-        openings: add_stark_opening_set_target::<F, S, C, D>(builder, stark, config),
+        openings: add_stark_opening_set_target(builder, stark, config),
         opening_proof: builder.add_virtual_fri_proof(&num_leaves_per_oracle, &fri_params),
     }
 }
 
 pub(crate) fn add_stark_opening_set_target<
     F: RichField + Extendable<D>,
-    S: Plonky2Stark<F, D>,
+    A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
     C: GenericConfig<D, F = F>,
     const D: usize,
+    const COLUMNS: usize,
 >(
     builder: &mut CircuitBuilder<F, D>,
-    stark: &S,
+    stark: &Starky<A, COLUMNS>,
     config: &StarkyConfig<F, C, D>,
 ) -> StarkOpeningSetTarget<D>
 where
     C::Hasher: AlgebraicHasher<F>,
-    S::Air: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
 {
     let num_challenges = config.num_challenges;
     StarkOpeningSetTarget {
-        local_values: builder.add_virtual_extension_targets(S::COLUMNS),
-        next_values: builder.add_virtual_extension_targets(S::COLUMNS),
+        local_values: builder.add_virtual_extension_targets(COLUMNS),
+        next_values: builder.add_virtual_extension_targets(COLUMNS),
         quotient_polys: builder
             .add_virtual_extension_targets(stark.air().quotient_degree_factor() * num_challenges),
     }
