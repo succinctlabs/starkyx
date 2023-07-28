@@ -3,7 +3,6 @@ use super::cell::CellType;
 use super::element::ElementRegister;
 use super::memory::MemorySlice;
 use super::{Register, RegisterSerializable, RegisterSized};
-use crate::air::parser::AirParser;
 use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::math::prelude::*;
 use crate::plonky2::field::cubic::element::CubicElement;
@@ -33,12 +32,10 @@ impl RegisterSized for CubicRegister {
 impl Register for CubicRegister {
     type Value<T> = CubicElement<T>;
 
-    fn eval<AP: AirParser>(&self, parser: &AP) -> Self::Value<AP::Var> {
-        let slice = self.register().eval_slice(parser);
+    fn value_from_slice<T: Copy>(slice: &[T]) -> Self::Value<T> {
         debug_assert!(
             slice.len() == 3,
-            "Slice length mismatch for register {:?} (expected 3, got {})",
-            self,
+            "Slice length mismatch for cubic register (expected 3, got {})",
             slice.len()
         );
         CubicElement(core::array::from_fn(|i| slice[i]))

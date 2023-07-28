@@ -1,7 +1,6 @@
 use core::marker::PhantomData;
 
 use super::parameters::FieldParameters;
-use crate::air::parser::AirParser;
 use crate::chip::register::cell::CellType;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
@@ -39,8 +38,8 @@ impl<P: FieldParameters> RegisterSized for FieldRegister<P> {
 impl<P: FieldParameters> Register for FieldRegister<P> {
     type Value<T> = Polynomial<T>;
 
-    fn eval<AP: AirParser>(&self, parser: &AP) -> Self::Value<AP::Var> {
-        Polynomial::from_coefficients_slice(self.register().eval_slice(parser))
+    fn value_from_slice<T: Clone>(slice: &[T]) -> Self::Value<T> {
+        Polynomial::from_coefficients_slice(slice)
     }
 
     fn align<T>(value: &Self::Value<T>) -> &[T] {

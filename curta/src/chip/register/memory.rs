@@ -88,8 +88,24 @@ impl MemorySlice {
             MemorySlice::Next(index, length) => {
                 &trace_view.row(row_index + 1)[*index..*index + length]
             }
-            MemorySlice::Global(_, _) => unimplemented!("Cannot assign to global inputs"),
-            MemorySlice::Challenge(_, _) => unimplemented!("Cannot assign to challenges"),
+            MemorySlice::Global(_, _) => {
+                unreachable!("Cannot read from global inputs with this method")
+            }
+            MemorySlice::Challenge(_, _) => {
+                unreachable!("Cannot read from challenges with this method")
+            }
+        }
+    }
+
+    #[inline]
+    pub fn read_from_slice<'a, T: Copy>(&self, slice: &'a [T]) -> &'a [T] {
+        match self {
+            MemorySlice::Local(index, length) => &slice[*index..*index + length],
+            MemorySlice::Next(_, _) => {
+                unreachable!("Cannot read from next row with this method")
+            }
+            MemorySlice::Global(index, length) => &slice[*index..*index + length],
+            MemorySlice::Challenge(index, length) => &slice[*index..*index + length],
         }
     }
 
@@ -119,14 +135,14 @@ impl MemorySlice {
     }
 
     #[inline]
-    pub fn assign_to_row<T: Copy>(&self, row: &mut [T], value: &[T]) {
+    pub fn assign_to_raw_slice<T: Copy>(&self, row: &mut [T], value: &[T]) {
         match self {
             MemorySlice::Local(index, length) => {
                 row[*index..*index + length].copy_from_slice(value);
             }
             MemorySlice::Next(_, _) => unreachable!("Cannot assign to next row with this method"),
-            MemorySlice::Global(_, _) => {
-                unreachable!("Cannot assign to global inputs, use `assign_global` instead")
+            MemorySlice::Global(index, length) => {
+                row[*index..*index + length].copy_from_slice(value);
             }
             MemorySlice::Challenge(_, _) => unreachable!("Cannot assign to challenges"),
         }

@@ -17,7 +17,7 @@ pub struct Bus<E> {
     _marker: PhantomData<E>,
 }
 
-impl<E> Bus<E> {
+impl<E: Clone> Bus<E> {
     pub fn new_channel<L: AirParameters<CubicParams = E>>(
         &mut self,
         builder: &mut AirBuilder<L>,
@@ -25,6 +25,9 @@ impl<E> Bus<E> {
         let out_channel = builder.alloc_global::<CubicRegister>();
         self.channels.push(out_channel);
         let accumulator = builder.alloc_extended::<CubicRegister>();
-        BusChannel::new(self.challenge, out_channel, accumulator)
+        let channel = BusChannel::new(self.challenge, out_channel, accumulator);
+        builder.bus_channels.push(channel.clone());
+        builder.constraints.push(channel.clone().into());
+        channel
     }
 }

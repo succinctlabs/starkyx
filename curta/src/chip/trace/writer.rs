@@ -16,7 +16,7 @@ use crate::trace::AirTrace;
 #[derive(Debug)]
 pub struct WriterData<T> {
     trace: RwLock<AirTrace<T>>,
-    pub(crate) global_inputs: RwLock<Vec<T>>,
+    pub(crate) global: RwLock<Vec<T>>,
     pub(crate) challenges: RwLock<Vec<T>>,
     height: usize,
 }
@@ -26,25 +26,25 @@ pub struct TraceWriter<T>(pub Arc<WriterData<T>>);
 
 impl<T> TraceWriter<T> {
     #[inline]
-    pub fn new(width: usize, num_rows: usize, global_inputs: Vec<T>) -> Self {
+    pub fn new(width: usize, num_rows: usize, global: Vec<T>) -> Self {
         let height = num_rows;
         Self(Arc::new(WriterData {
             trace: RwLock::new(AirTrace::new_with_capacity(width, num_rows)),
-            global_inputs: RwLock::new(global_inputs),
+            global: RwLock::new(global),
             challenges: RwLock::new(Vec::new()),
             height,
         }))
     }
 
     #[inline]
-    pub fn new_with_value(width: usize, num_rows: usize, value: T, global_inputs: Vec<T>) -> Self
+    pub fn new_with_value(width: usize, num_rows: usize, value: T, global: Vec<T>) -> Self
     where
         T: Copy,
     {
         let height = num_rows;
         Self(Arc::new(WriterData {
             trace: RwLock::new(AirTrace::new_with_value(width, num_rows, value)),
-            global_inputs: RwLock::new(global_inputs),
+            global: RwLock::new(global),
             challenges: RwLock::new(Vec::new()),
             height,
         }))
@@ -64,6 +64,10 @@ impl<T> TraceWriter<T> {
 
     pub fn write_trace(&self) -> LockResult<RwLockWriteGuard<'_, AirTrace<T>>> {
         self.0.trace.write()
+    }
+
+    pub fn global_mut(&self) -> LockResult<RwLockWriteGuard<'_, Vec<T>>> {
+        self.0.global.write()
     }
 }
 
@@ -88,7 +92,7 @@ impl<F: Field> TraceWriter<F> {
 
     #[inline]
     fn read_from_global<R: Register>(&self, register: &R, _row_index: usize) -> R::Value<F> {
-        let global_inputs = self.0.global_inputs.read().unwrap();
+        let global_inputs = self.0.global.read().unwrap();
         let window = TraceWindow::empty();
         let parser = TraceWindowParser::new(window, &[], &global_inputs);
         register.eval(&parser)
@@ -132,7 +136,7 @@ impl<F: Field> TraceWriter<F> {
     ) -> Vec<F> {
         let trace = self.0.trace.read().unwrap();
         let window = trace.window(row_index);
-        let global_inputs = self.global_inputs.read().unwrap();
+        let global_inputs = self.global.read().unwrap();
         let challenges = self.0.challenges.read().unwrap();
         let mut parser = TraceWindowParser::new(window, &challenges, &global_inputs);
         expression.eval(&mut parser)
@@ -178,6 +182,17 @@ impl<F: Field> TraceWriter<F> {
     #[inline]
     pub fn write<T: Register>(&self, data: &T, value: &T::Value<F>, row_index: usize) {
         self.write_slice(data, T::align(value), row_index)
+    }
+
+    #[inline]
+    pub fn write_global<T: Register>(&self, data: &T, value: &T::Value<F>) {
+        match data.register() {
+            MemorySlice::Global(_, _) => {
+                let mut global = self.global_mut().unwrap();
+                data.assign_to_raw_slice(&mut global, value);
+            }
+            _ => panic!("Expected global register"),
+        }
     }
 
     #[inline]
