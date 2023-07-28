@@ -9,6 +9,7 @@ use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::*;
+use crate::trace::window::TraceWindow;
 use crate::trace::window_parser::TraceWindowParser;
 use crate::trace::AirTrace;
 
@@ -69,12 +70,12 @@ impl<T> TraceWriter<T> {
 impl<F: Field> TraceWriter<F> {
     #[inline]
     pub fn read<R: Register>(&self, register: &R, row_index: usize) -> R::Value<F> {
-        let trace = self.0.trace.read().unwrap();
-        let window = trace.window(row_index);
-        let global_inputs = self.0.global_inputs.read().unwrap();
-        let challenges = self.0.challenges.read().unwrap();
-        let parser = TraceWindowParser::new(window, &challenges, &global_inputs);
-        register.eval(&parser)
+        match register.register() {
+            MemorySlice::Local(_, _) => self.read_from_trace(register, row_index),
+            MemorySlice::Next(_, _) => self.read_from_trace(register, row_index),
+            MemorySlice::Global(_, _) => self.read_from_global(register, row_index),
+            MemorySlice::Challenge(_, _) => self.read_from_challenge(register, row_index),
+        }
     }
 
     #[inline]
@@ -85,22 +86,21 @@ impl<F: Field> TraceWriter<F> {
         register.eval(&parser)
     }
 
-    // #[inline]
-    // fn read_from_global<R: Register>(&self, register: &R, _row_index: usize) -> R::Value<F> {
-    //     let global_inputs = self.0.global_inputs.read().unwrap();
-    //     let parser = TraceWindowParser::new(window, &[], &global_inputs);
-    //     register.eval(&parser)
-    // }
+    #[inline]
+    fn read_from_global<R: Register>(&self, register: &R, _row_index: usize) -> R::Value<F> {
+        let global_inputs = self.0.global_inputs.read().unwrap();
+        let window = TraceWindow::empty();
+        let parser = TraceWindowParser::new(window, &[], &global_inputs);
+        register.eval(&parser)
+    }
 
-    // #[inline]
-    // fn read_from_challenge<R: Register>(&self, register: &R, row_index: usize) -> R::Value<F> {
-    //     let challenges = self.0.challenges.read().unwrap();
-    //     let parser = TraceWindowParser::new(window, &challenges, &[]);
-    //     register.eval(&parser)
-    // }
-
-    // #[inline]
-    // pub fn read_challenge
+    #[inline]
+    fn read_from_challenge<R: Register>(&self, register: &R, _row_index: usize) -> R::Value<F> {
+        let challenges = self.0.challenges.read().unwrap();
+        let window = TraceWindow::empty();
+        let parser = TraceWindowParser::new(window, &challenges, &[]);
+        register.eval(&parser)
+    }
 
     #[inline]
     pub fn read_vec<R: Register>(

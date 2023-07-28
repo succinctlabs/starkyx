@@ -1,6 +1,5 @@
 use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::chip::register::cubic::CubicRegister;
-use crate::math::prelude::*;
 
 #[derive(Debug, Clone)]
 pub enum Entry<F> {
