@@ -1,30 +1,30 @@
 pub mod constraint;
+pub mod entry;
 pub mod trace;
 
 use core::marker::PhantomData;
 
+use self::entry::Entry;
 use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::chip::register::cubic::CubicRegister;
 use crate::math::prelude::*;
-
-#[derive(Debug, Clone)]
-pub enum Entry<F> {
-    Input(CubicRegister, ArithmeticExpression<F>),
-    Output(CubicRegister, ArithmeticExpression<F>),
-}
 
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
 pub struct BusChannel<F, E> {
     pub out_channel: CubicRegister,
     table_accumulator: CubicRegister,
-    challenge : CubicRegister,
+    challenge: CubicRegister,
     entries: Vec<Entry<F>>,
     _marker: PhantomData<E>,
 }
 
 impl<F: Field, E> BusChannel<F, E> {
-    pub fn new(challenge : CubicRegister, out_channel: CubicRegister, table_accumulator: CubicRegister) -> Self {
+    pub fn new(
+        challenge: CubicRegister,
+        out_channel: CubicRegister,
+        table_accumulator: CubicRegister,
+    ) -> Self {
         Self {
             challenge,
             out_channel,

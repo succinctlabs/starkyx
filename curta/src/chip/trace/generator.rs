@@ -84,6 +84,10 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                     self.writer.write_accumulation(num_rows, acc);
                 }
 
+                for channel in air.bus_channels.iter() {
+                    self.writer.write_bus_channel(num_rows, channel);
+                }
+
                 // Write lookup proofs
                 for data in air.lookup_data.iter() {
                     match data {

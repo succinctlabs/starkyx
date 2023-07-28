@@ -13,7 +13,7 @@ pub struct Bus<E> {
     /// The channels of the bus
     channels: Vec<CubicRegister>,
     // The challenge used
-    challenge : CubicRegister,
+    challenge: CubicRegister,
     _marker: PhantomData<E>,
 }
 

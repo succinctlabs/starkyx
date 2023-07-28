@@ -16,7 +16,7 @@ use crate::trace::AirTrace;
 pub struct WriterData<T> {
     trace: RwLock<AirTrace<T>>,
     pub(crate) global_inputs: RwLock<Vec<T>>,
-    pub(crate) challenges : RwLock<Vec<T>>,
+    pub(crate) challenges: RwLock<Vec<T>>,
     height: usize,
 }
 
@@ -29,8 +29,8 @@ impl<T> TraceWriter<T> {
         let height = num_rows;
         Self(Arc::new(WriterData {
             trace: RwLock::new(AirTrace::new_with_capacity(width, num_rows)),
-            global_inputs : RwLock::new(global_inputs),
-            challenges : RwLock::new(Vec::new()),
+            global_inputs: RwLock::new(global_inputs),
+            challenges: RwLock::new(Vec::new()),
             height,
         }))
     }
@@ -43,8 +43,8 @@ impl<T> TraceWriter<T> {
         let height = num_rows;
         Self(Arc::new(WriterData {
             trace: RwLock::new(AirTrace::new_with_value(width, num_rows, value)),
-            global_inputs : RwLock::new(global_inputs),
-            challenges : RwLock::new(Vec::new()),
+            global_inputs: RwLock::new(global_inputs),
+            challenges: RwLock::new(Vec::new()),
             height,
         }))
     }

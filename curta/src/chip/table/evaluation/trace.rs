@@ -26,7 +26,7 @@ impl<F: PrimeField> TraceWriter<F> {
         num_rows: usize,
         evaluation_data: &Evaluation<F, E>,
     ) {
-        let beta = CubicExtension::<F,E>::from(self.read(&evaluation_data.beta, 0));
+        let beta = CubicExtension::<F, E>::from(self.read(&evaluation_data.beta, 0));
         let alphas = self.read_vec(&evaluation_data.alphas, 0);
         let filters = (0..num_rows)
             .into_par_iter()
