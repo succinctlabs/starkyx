@@ -50,6 +50,9 @@ pub trait Register:
 
     fn eval<AP: AirParser>(&self, parser: &AP) -> Self::Value<AP::Var>;
 
+    // Determins the layout of Value<T> as a slice that can be assigned to the trace.
+    fn align<T>(value: &Self::Value<T>) -> &[T];
+
     /// Initializes the register given a memory slice with checks on length.
     fn from_register(register: MemorySlice) -> Self {
         if register.len() != Self::size_of() {
@@ -58,14 +61,16 @@ pub trait Register:
         Self::from_register_unsafe(register)
     }
 
+    fn assign_to_row<T: Copy>(&self, row: &mut [T], value: &Self::Value<T>) {
+        self.register().assign_to_row(row, Self::align(value))
+    }
+
     fn expr<F: Field>(&self) -> ArithmeticExpression<F> {
         ArithmeticExpression {
             expression: ArithmeticExpressionSlice::from_raw_register(*self.register()),
             size: Self::size_of(),
         }
     }
-
-    fn align<T>(value: &Self::Value<T>) -> &[T];
 }
 
 impl RegisterSerializable for MemorySlice {

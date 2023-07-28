@@ -176,6 +176,7 @@ mod tests {
 
     use super::*;
     use crate::chip::builder::tests::*;
+    use crate::trace::window_parser::TraceWindowParser;
 
     #[derive(Clone, Debug)]
     pub struct CycleTest;

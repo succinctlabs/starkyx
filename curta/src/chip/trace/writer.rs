@@ -3,13 +3,13 @@ use core::borrow::Borrow;
 use core::ops::Deref;
 use std::sync::{LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-use crate::air::parser::TraceWindowParser;
 use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::*;
+use crate::trace::window_parser::TraceWindowParser;
 use crate::trace::AirTrace;
 
 #[derive(Debug)]
@@ -76,6 +76,28 @@ impl<F: Field> TraceWriter<F> {
         let parser = TraceWindowParser::new(window, &challenges, &global_inputs);
         register.eval(&parser)
     }
+
+    #[inline]
+    fn read_from_trace<R: Register>(&self, register: &R, row_index: usize) -> R::Value<F> {
+        let trace = self.0.trace.read().unwrap();
+        let window = trace.window(row_index);
+        let parser = TraceWindowParser::new(window, &[], &[]);
+        register.eval(&parser)
+    }
+
+    // #[inline]
+    // fn read_from_global<R: Register>(&self, register: &R, _row_index: usize) -> R::Value<F> {
+    //     let global_inputs = self.0.global_inputs.read().unwrap();
+    //     let parser = TraceWindowParser::new(window, &[], &global_inputs);
+    //     register.eval(&parser)
+    // }
+
+    // #[inline]
+    // fn read_from_challenge<R: Register>(&self, register: &R, row_index: usize) -> R::Value<F> {
+    //     let challenges = self.0.challenges.read().unwrap();
+    //     let parser = TraceWindowParser::new(window, &challenges, &[]);
+    //     register.eval(&parser)
+    // }
 
     // #[inline]
     // pub fn read_challenge

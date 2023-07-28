@@ -1,7 +1,7 @@
 use core::hash::Hash;
 
 use crate::air::parser::AirParser;
-use crate::trace::{TraceView, TraceViewMut};
+use crate::trace::view::{TraceView, TraceViewMut};
 
 /// A contiguous chunk of memory in the trace and Stark data.
 /// Corresponds to a slice in vars.local_values, vars.next_values, vars.public_inputs,
@@ -112,10 +112,24 @@ impl MemorySlice {
             MemorySlice::Next(index, length) => {
                 trace_view.row_mut(row_index + 1)[*index..*index + length].copy_from_slice(value);
             }
-            MemorySlice::Global(_, _) => unreachable!("Cannot assign to public inputs"),
+            MemorySlice::Global(_, _) => unreachable!("Cannot assign to global inputs, "),
             MemorySlice::Challenge(_, _) => unreachable!("Cannot assign to challenges"),
         }
         local_index + self.len()
+    }
+
+    #[inline]
+    pub fn assign_to_row<T: Copy>(&self, row: &mut [T], value: &[T]) {
+        match self {
+            MemorySlice::Local(index, length) => {
+                row[*index..*index + length].copy_from_slice(value);
+            }
+            MemorySlice::Next(_, _) => unreachable!("Cannot assign to next row with this method"),
+            MemorySlice::Global(_, _) => {
+                unreachable!("Cannot assign to global inputs, use `assign_global` instead")
+            }
+            MemorySlice::Challenge(_, _) => unreachable!("Cannot assign to challenges"),
+        }
     }
 }
 

@@ -81,7 +81,7 @@ mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField;
 
     use super::*;
-    use crate::air::parser::TraceWindowParser;
+    use crate::trace::window_parser::TraceWindowParser;
 
     #[test]
     fn test_fibonacci_air() {

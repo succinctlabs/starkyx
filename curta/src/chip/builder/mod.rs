@@ -50,7 +50,7 @@ impl<L: AirParameters> AirBuilder<L> {
             shared_memory,
             constraints: Vec::new(),
             accumulators: Vec::new(),
-            bus_channels : Vec::new(),
+            bus_channels: Vec::new(),
             lookup_data: Vec::new(),
             evaluation_data: Vec::new(),
             range_table: None,
@@ -157,7 +157,7 @@ impl<L: AirParameters> AirBuilder<L> {
             num_challenges: self.shared_memory.challenge_index(),
             execution_trace_length,
             accumulators: self.accumulators,
-            bus_channels : self.bus_channels,
+            bus_channels: self.bus_channels,
             lookup_data: self.lookup_data,
             evaluation_data: self.evaluation_data,
             range_table: self.range_table,
@@ -173,7 +173,7 @@ pub(crate) mod tests {
 
     use super::*;
     use crate::air::fibonacci::FibonacciAir;
-    pub use crate::air::parser::{AirParser, TraceWindowParser};
+    pub use crate::air::parser::AirParser;
     pub use crate::air::RAir;
     pub use crate::chip::instruction::empty::EmptyInstruction;
     pub use crate::chip::register::element::ElementRegister;
@@ -185,6 +185,7 @@ pub(crate) mod tests {
     pub use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
     pub(crate) use crate::plonky2::stark::tests::{test_recursive_starky, test_starky};
     pub use crate::plonky2::stark::Starky;
+    pub use crate::trace::window_parser::TraceWindowParser;
 
     #[derive(Debug, Clone)]
     pub struct FibonacciParameters;
