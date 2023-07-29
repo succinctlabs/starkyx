@@ -188,7 +188,7 @@ impl<F: Field> TraceWriter<F> {
     pub fn write_global<T: Register>(&self, data: &T, value: &T::Value<F>) {
         match data.register() {
             MemorySlice::Global(_, _) => {
-                let mut global = self.global_mut().unwrap();
+                let mut global = self.0.global.write().unwrap();
                 data.assign_to_raw_slice(&mut global, value);
             }
             _ => panic!("Expected global register"),

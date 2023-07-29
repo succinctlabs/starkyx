@@ -58,13 +58,13 @@ where
 
         let mut challenges = vec![];
         let mut global_values = public_inputs.to_vec();
+        global_values.resize(stark.air().num_global_values(), F::ZERO);
 
         let mut trace_commitments = Vec::new();
         let mut timing = TimingTree::default();
         let mut num_rows = 0;
         for (r, round) in stark.air().round_data().iter().enumerate() {
             let (id_0, id_1) = round.global_values_range;
-            challenger.0.observe_elements(&global_values[id_0..id_1]);
             let round_trace = trace_generator
                 .generate_round(stark.air(), r, &challenges, &mut global_values[..id_1])
                 .map_err(|e| e.into())?;
@@ -87,6 +87,7 @@ where
                 &mut timing,
                 None,
             );
+            challenger.0.observe_elements(&global_values[id_0..id_1]);
             let cap = commitment.merkle_tree.cap.clone();
             challenger.0.observe_cap(&cap);
             trace_commitments.push(commitment);

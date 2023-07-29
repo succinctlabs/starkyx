@@ -80,7 +80,7 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> S
 
         let mut challenges = vec![];
 
-        for (round, cap) in stark.air().round_data().iter().zip(trace_caps.iter()) {
+        for (round, cap) in stark.air().round_data().iter().zip_eq(trace_caps.iter()) {
             let (id_0, id_1) = round.global_values_range;
             challenger
                 .0

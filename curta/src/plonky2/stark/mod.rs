@@ -28,7 +28,7 @@ pub mod verifier;
 
 #[derive(Debug, Clone)]
 pub struct Starky<A, const COLUMNS: usize> {
-    air: A,
+    pub air: A,
 }
 
 impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {

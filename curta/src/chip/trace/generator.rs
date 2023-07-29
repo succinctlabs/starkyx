@@ -27,6 +27,18 @@ impl<L: ~const AirParameters> ArithmeticGenerator<L> {
         }
     }
 
+    pub fn new_from_air(air : &Chip<L>) -> Self {
+        let num_global_values = air.num_global_values;
+        Self {
+            writer: TraceWriter::new_with_value(
+                L::num_columns(),
+                L::num_rows(),
+                L::Field::ZERO,
+                vec![L::Field::ZERO ; num_global_values],
+            ),
+        }
+    }
+
     pub fn new_writer(&self) -> TraceWriter<L::Field> {
         self.writer.clone()
     }
@@ -52,8 +64,9 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
     ) -> Result<AirTrace<L::Field>> {
         match round {
             0 => {
+                let (id_0, id_1) = (0, air.num_public_inputs);
                 let mut global_write = self.writer.0.global.write().unwrap();
-                global_write.extend_from_slice(global_values);
+                global_write[id_0..id_1].copy_from_slice(&global_values[id_0..id_1]);
                 drop(global_write);
                 let trace = self.trace_clone();
                 let execution_trace_values = trace

@@ -173,7 +173,7 @@ mod tests {
 
         let air = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&[F::ZERO; 3]);
+        let generator = ArithmeticGenerator::<L>::new_from_air(&air);
         let writer = generator.new_writer();
         for i in 0..L::num_rows() {
             let a = CubicElement([GoldilocksField::rand(); 3]);
@@ -186,9 +186,9 @@ mod tests {
         let config = SC::standard_fast_config(L::num_rows());
 
         // Generate proof and verify as a stark
-        test_starky(&stark, &config, &generator, &[F::ONE, F::ZERO, F::ZERO]);
+        test_starky(&stark, &config, &generator, &[]);
 
         // Test the recursive proof.
-        // test_recursive_starky(stark, config, generator, &[]);
+        test_recursive_starky(stark, config, generator, &[]);
     }
 }

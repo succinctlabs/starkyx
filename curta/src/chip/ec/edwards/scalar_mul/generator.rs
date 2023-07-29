@@ -143,7 +143,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
             StarkyConfig::<F, C, D>::standard_fast_config(ScalarMulEd25519::<F, E>::num_rows());
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
 
-        let trace_generator = ArithmeticGenerator::<ScalarMulEd25519<F, E>>::new(&[]);
+        let trace_generator = ArithmeticGenerator::<ScalarMulEd25519<F, E>>::new_from_air(&stark.air);
 
         self.verify_stark_proof(&config, &stark, virtual_proof.clone(), &public_input_target);
 
