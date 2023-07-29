@@ -59,6 +59,8 @@ pub struct Chip<L: AirParameters> {
     constraints: Vec<Constraint<L>>,
     execution_trace_length: usize,
     num_challenges: usize,
+    num_public_inputs: usize,
+    num_global_values: usize,
     accumulators: Vec<Accumulator<L::CubicParams>>,
     lookup_data: Vec<Lookup<L::Field, L::CubicParams, 1>>,
     bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,

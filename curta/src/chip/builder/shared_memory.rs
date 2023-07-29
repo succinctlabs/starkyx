@@ -6,6 +6,7 @@ use crate::chip::register::memory::MemorySlice;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SharedMemeoryCore {
     pub global_index: usize,
+    pub public_index: usize,
     pub challenge_index: usize,
 }
 
@@ -17,6 +18,16 @@ impl SharedMemory {
     pub fn new() -> Self {
         Self(Arc::new(Mutex::new(SharedMemeoryCore {
             global_index: 0,
+            public_index: 0,
+            challenge_index: 0,
+        })))
+    }
+
+    #[inline]
+    pub fn new_with_public_inputs(num_public_inputs: usize) -> Self {
+        Self(Arc::new(Mutex::new(SharedMemeoryCore {
+            global_index: num_public_inputs,
+            public_index: 0,
             challenge_index: 0,
         })))
     }
@@ -36,6 +47,14 @@ impl SharedMemory {
         let mut core = self.0.lock().unwrap();
         let register = MemorySlice::Global(core.global_index, size);
         core.global_index += size;
+        register
+    }
+
+    #[inline]
+    pub fn get_public_memory(&self, size: usize) -> MemorySlice {
+        let mut core = self.0.lock().unwrap();
+        let register = MemorySlice::Global(core.public_index, size);
+        core.public_index += size;
         register
     }
 

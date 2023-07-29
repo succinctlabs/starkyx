@@ -35,6 +35,10 @@ impl<L: AirParameters> AirBuilder<L> {
         self.shared_memory.get_global_memory(size)
     }
 
+    fn get_public_memory(&mut self, size: usize) -> MemorySlice {
+        self.shared_memory.get_public_memory(size)
+    }
+
     /// Allocates `size` cells/columns worth of memory and returns it as a `MemorySlice`. Each
     /// cell will be range checked using the lookup table to be in the range `[0, 2^16]`.
     fn get_local_u16_memory(&mut self, size: usize) -> MemorySlice {
@@ -142,6 +146,27 @@ impl<L: AirParameters> AirBuilder<L> {
             CellType::Element => self.get_global_memory(size_of),
             CellType::U16 => self.get_global_memory(size_of),
             CellType::Bit => self.get_global_memory(size_of),
+        };
+        ArrayRegister::<T>::from_register_unsafe(register)
+    }
+
+    /// Allocates a new local register according to type `T` which implements the Register trait
+    /// and returns it.
+    pub fn alloc_public<T: Register>(&mut self) -> T {
+        let register = match T::CELL {
+            CellType::Element => self.get_public_memory(T::size_of()),
+            CellType::U16 => self.get_public_memory(T::size_of()),
+            CellType::Bit => self.get_public_memory(T::size_of()),
+        };
+        T::from_register(register)
+    }
+
+    pub fn alloc_array_public<T: Register>(&mut self, length: usize) -> ArrayRegister<T> {
+        let size_of = T::size_of() * length;
+        let register = match T::CELL {
+            CellType::Element => self.get_public_memory(size_of),
+            CellType::U16 => self.get_public_memory(size_of),
+            CellType::Bit => self.get_public_memory(size_of),
         };
         ArrayRegister::<T>::from_register_unsafe(register)
     }

@@ -72,7 +72,7 @@ impl MemorySlice {
         match self {
             MemorySlice::Local(index, length) => &parser.local_slice()[*index..*index + length],
             MemorySlice::Next(index, length) => &parser.next_slice()[*index..*index + length],
-            MemorySlice::Global(index, length) => &parser.public_slice()[*index..*index + length],
+            MemorySlice::Global(index, length) => &parser.global_slice()[*index..*index + length],
             MemorySlice::Challenge(index, length) => {
                 &parser.challenge_slice()[*index..*index + length]
             }

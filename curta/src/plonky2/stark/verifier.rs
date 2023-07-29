@@ -51,7 +51,8 @@ where
             quotient_polys,
         } = &proof.openings;
 
-        let public_inputs_ext = public_inputs
+        let global_values_ext = proof
+            .global_values
             .iter()
             .map(|x| F::Extension::from_basefield(*x))
             .collect::<Vec<_>>();
@@ -78,7 +79,7 @@ where
         let mut parser = StarkParser {
             local_vars: local_values,
             next_vars: next_values,
-            public_inputs: &public_inputs_ext,
+            global_vars: &global_values_ext,
             challenges: &challenges_ext,
             consumer: &mut consumer,
         };
@@ -137,6 +138,7 @@ where
             trace_caps,
             quotient_polys_cap,
             openings,
+            global_values,
             // The shape of the opening proof will be checked in the FRI verifier (see
             // validate_fri_proof_shape), so we ignore it here.
             opening_proof: _,
@@ -152,7 +154,7 @@ where
             ensure!(cap.height() == cap_height);
         }
         ensure!(quotient_polys_cap.height() == cap_height);
-
+        ensure!(global_values.len() == stark.air().num_global_values());
         ensure!(local_values.len() == COLUMNS);
         ensure!(next_values.len() == COLUMNS);
         ensure!(quotient_polys.len() == stark.num_quotient_polys(config));
@@ -214,7 +216,8 @@ where
             l_last,
         );
 
-        let public_inputs_ext = public_inputs
+        let global_vals_ext = proof
+            .global_values
             .iter()
             .map(|x| builder.convert_to_ext(*x))
             .collect::<Vec<_>>();
@@ -228,7 +231,7 @@ where
             builder,
             local_vars: local_values,
             next_vars: next_values,
-            public_inputs: &public_inputs_ext,
+            global_vars: &global_vals_ext,
             challenges: &challenges_ext,
             consumer: &mut consumer,
         };
@@ -307,14 +310,17 @@ where
 
     let num_leaves_per_oracle = stark
         .air()
-        .round_lengths()
+        .round_data()
         .into_iter()
+        .map(|x| x.num_columns)
         .chain(once(
             stark.air().quotient_degree_factor() * config.num_challenges,
         ))
         .collect_vec();
 
     let num_rounds = stark.air().num_rounds();
+    let num_global_values = stark.air().num_global_values();
+    let global_values_target = builder.add_virtual_targets(num_global_values);
     let trace_caps = (0..num_rounds)
         .map(|_| builder.add_virtual_cap(cap_height))
         .collect_vec();
@@ -322,6 +328,7 @@ where
         trace_caps,
         quotient_polys_cap: builder.add_virtual_cap(cap_height),
         openings: add_stark_opening_set_target(builder, stark, config),
+        global_values: global_values_target,
         opening_proof: builder.add_virtual_fri_proof(&num_leaves_per_oracle, &fri_params),
     }
 }
@@ -366,6 +373,14 @@ pub fn set_stark_proof_target<F, C: GenericConfig<D, F = F>, W, const D: usize>(
         witness.set_cap_target(target_cap, cap);
     }
     witness.set_cap_target(&proof_target.quotient_polys_cap, &proof.quotient_polys_cap);
+
+    for (target, value) in proof_target
+        .global_values
+        .iter()
+        .zip_eq(proof.global_values.iter())
+    {
+        witness.set_target(*target, *value);
+    }
 
     witness.set_fri_openings(
         &proof_target.openings.to_fri_openings(),

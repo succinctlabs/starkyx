@@ -48,10 +48,13 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
         air: &Chip<L>,
         round: usize,
         challenges: &[L::Field],
-        _public_inputs: &[L::Field],
+        global_values: &mut [L::Field],
     ) -> Result<AirTrace<L::Field>> {
         match round {
             0 => {
+                let mut global_write = self.writer.0.global.write().unwrap();
+                global_write.extend_from_slice(global_values);
+                drop(global_write);
                 let trace = self.trace_clone();
                 let execution_trace_values = trace
                     .rows_par()
@@ -107,6 +110,11 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                     .rows_par()
                     .flat_map(|row| row[air.execution_trace_length..].to_vec())
                     .collect::<Vec<_>>();
+
+                let new_global = self.writer.0.global.read().unwrap();
+                let (id_0, id_1) = (air.num_public_inputs, air.num_global_values);
+                global_values[id_0..id_1].copy_from_slice(&new_global[id_0..id_1]);
+                drop(new_global);
                 Ok(AirTrace {
                     values: extended_trace_values,
                     width: L::num_columns() - air.execution_trace_length,

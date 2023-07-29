@@ -75,7 +75,8 @@ impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
         let mut oracles = vec![];
         let mut trace_info: Vec<FriPolynomialInfo> = vec![];
 
-        for length in self.air().round_lengths() {
+        for round in self.air().round_data() {
+            let length = round.num_columns;
             let round_info = FriPolynomialInfo::from_range(oracles.len(), 0..length);
             trace_info.extend(round_info);
             oracles.push(FriOracleInfo {
@@ -123,7 +124,8 @@ impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
         let mut oracles = vec![];
         let mut trace_info: Vec<FriPolynomialInfo> = vec![];
 
-        for length in self.air().round_lengths() {
+        for round in self.air().round_data() {
+            let length = round.num_columns;
             let round_info = FriPolynomialInfo::from_range(oracles.len(), 0..length);
             trace_info.extend(round_info);
             oracles.push(FriOracleInfo {

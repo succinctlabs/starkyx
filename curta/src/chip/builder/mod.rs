@@ -27,6 +27,7 @@ pub struct AirBuilder<L: AirParameters> {
     next_index: usize,
     extended_index: usize,
     shared_memory: SharedMemory,
+    num_public_inputs: usize,
     pub(crate) constraints: Vec<Constraint<L>>,
     pub(crate) accumulators: Vec<Accumulator<L::CubicParams>>,
     pub(crate) bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
@@ -40,13 +41,18 @@ impl<L: AirParameters> AirBuilder<L> {
         Self::new_with_shared_memory(SharedMemory::new())
     }
 
-    pub const fn new_with_shared_memory(shared_memory: SharedMemory) -> Self {
+    pub fn new_with_public_inputs(num_public_inputs: usize) -> Self {
+        Self::new_with_shared_memory(SharedMemory::new_with_public_inputs(num_public_inputs))
+    }
+
+    pub fn new_with_shared_memory(shared_memory: SharedMemory) -> Self {
         Self {
             local_index: L::NUM_ARITHMETIC_COLUMNS,
             next_index: L::NUM_ARITHMETIC_COLUMNS,
             local_arithmetic_index: 0,
             next_arithmetic_index: 0,
             extended_index: L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS,
+            num_public_inputs: shared_memory.global_index(),
             shared_memory,
             constraints: Vec::new(),
             accumulators: Vec::new(),
@@ -156,6 +162,8 @@ impl<L: AirParameters> AirBuilder<L> {
             constraints: self.constraints,
             num_challenges: self.shared_memory.challenge_index(),
             execution_trace_length,
+            num_public_inputs: self.num_public_inputs,
+            num_global_values: self.shared_memory.global_index(),
             accumulators: self.accumulators,
             bus_channels: self.bus_channels,
             lookup_data: self.lookup_data,
@@ -207,7 +215,7 @@ pub(crate) mod tests {
         type F = GoldilocksField;
         type L = FibonacciParameters;
 
-        let mut builder = AirBuilder::<L>::new();
+        let mut builder = AirBuilder::<L>::new_with_public_inputs(3);
         let x_0 = builder.alloc::<ElementRegister>();
         let x_1 = builder.alloc::<ElementRegister>();
 
@@ -251,7 +259,7 @@ pub(crate) mod tests {
         type L = FibonacciParameters;
         type SC = PoseidonGoldilocksStarkConfig;
 
-        let mut builder = AirBuilder::<L>::new();
+        let mut builder = AirBuilder::<L>::new_with_public_inputs(3);
         let x_0 = builder.alloc::<ElementRegister>();
         let x_1 = builder.alloc::<ElementRegister>();
 
@@ -315,7 +323,6 @@ pub(crate) mod tests {
         let x_1 = builder.alloc::<U16Register>();
 
         let air = builder.build();
-
         let generator = ArithmeticGenerator::<L>::new(&[]);
 
         let (tx, rx) = channel();

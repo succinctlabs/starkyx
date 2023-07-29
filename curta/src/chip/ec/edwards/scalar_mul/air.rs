@@ -54,7 +54,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
             AirInstruction<F, FpInstruction<Ed25519BaseField>>,
         ),
     ) {
-        let mut builder = AirBuilder::<Self>::new();
+        let mut builder = AirBuilder::<Self>::new_with_public_inputs(18432);
 
         let res = builder.alloc_unchecked_ec_point();
         let temp = builder.alloc_unchecked_ec_point();
@@ -62,17 +62,17 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
         let scalar_mul_gadget = builder.ed_scalar_mul::<Ed25519>(&scalar_bit, &res, &temp);
 
         let scalars_limbs = (0..256)
-            .map(|_| builder.alloc_array_global::<ElementRegister>(8))
+            .map(|_| builder.alloc_array_public::<ElementRegister>(8))
             .collect::<Vec<_>>();
 
         let scalars_u32 = scalars_limbs.iter().flat_map(|s| s.iter());
 
         let input_points = (0..256)
-            .map(|_| builder.alloc_global_ec_point())
+            .map(|_| builder.alloc_public_ec_point())
             .collect::<Vec<_>>();
 
         let output_points = (0..256)
-            .map(|_| builder.alloc_global_ec_point())
+            .map(|_| builder.alloc_public_ec_point())
             .collect::<Vec<_>>();
 
         let scalar_digest = Digest::from_values(scalars_u32);

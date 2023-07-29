@@ -8,19 +8,19 @@ use crate::polynomial::parser::PolynomialParser;
 pub struct TraceWindowParser<'a, T> {
     window: TraceWindow<'a, T>,
     challenge_slice: &'a [T],
-    public_slice: &'a [T],
+    global_slice: &'a [T],
 }
 
 impl<'a, T> TraceWindowParser<'a, T> {
     pub fn new(
         window: TraceWindow<'a, T>,
         challenge_slice: &'a [T],
-        public_slice: &'a [T],
+        global_slice: &'a [T],
     ) -> Self {
         Self {
             window,
             challenge_slice,
-            public_slice,
+            global_slice,
         }
     }
 }
@@ -42,8 +42,8 @@ impl<'a, F: Field> AirParser for TraceWindowParser<'a, F> {
         self.challenge_slice
     }
 
-    fn public_slice(&self) -> &[Self::Var] {
-        self.public_slice
+    fn global_slice(&self) -> &[Self::Var] {
+        self.global_slice
     }
 
     fn constraint(&mut self, constraint: Self::Var) {

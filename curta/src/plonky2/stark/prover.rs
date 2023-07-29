@@ -53,20 +53,20 @@ where
     {
         let mut challenger = Plonky2Challenger::<F, C::Hasher>::new();
 
-        // Obsetrve public inputs
-        challenger.0.observe_elements(public_inputs);
-
         let rate_bits = config.fri_config.rate_bits;
         let cap_height = config.fri_config.cap_height;
 
         let mut challenges = vec![];
+        let mut global_values = public_inputs.to_vec();
 
         let mut trace_commitments = Vec::new();
         let mut timing = TimingTree::default();
         let mut num_rows = 0;
-        for r in 0..stark.air().num_rounds() {
+        for (r, round) in stark.air().round_data().iter().enumerate() {
+            let (id_0, id_1) = round.global_values_range;
+            challenger.0.observe_elements(&global_values[id_0..id_1]);
             let round_trace = trace_generator
-                .generate_round(stark.air(), r, &challenges, public_inputs)
+                .generate_round(stark.air(), r, &challenges, &mut global_values[..id_1])
                 .map_err(|e| e.into())?;
 
             let trace_cols = round_trace
@@ -92,7 +92,7 @@ where
             trace_commitments.push(commitment);
 
             // Get the challenges for next round
-            let round_challenges = challenger.0.get_n_challenges(stark.air().num_challenges(r));
+            let round_challenges = challenger.0.get_n_challenges(round.num_challenges);
             challenges.extend(round_challenges);
         }
 
@@ -105,7 +105,7 @@ where
         );
 
         let challenge_vars = challenges.into_iter().map(P::from).collect::<Vec<_>>();
-        let public_input_vars = public_inputs
+        let global_vars = global_values
             .iter()
             .map(|x| P::from(*x))
             .collect::<Vec<_>>();
@@ -115,7 +115,7 @@ where
             stark,
             &trace_commitments,
             &challenge_vars,
-            &public_input_vars,
+            &global_vars,
             &mut challenger,
         );
         let quotient_degree_factor = stark.air().quotient_degree_factor();
@@ -174,12 +174,13 @@ where
             .map(|c| c.merkle_tree.cap)
             .collect::<Vec<_>>();
         ensure!(
-            trace_caps.len() == stark.air().round_lengths().len(),
+            trace_caps.len() == stark.air().round_data().len(),
             "Number of trace commitments does not match"
         );
         Ok(StarkProof {
             trace_caps,
             quotient_polys_cap,
+            global_values,
             openings,
             opening_proof,
         })
@@ -191,7 +192,7 @@ where
         stark: &Starky<A, COLUMNS>,
         trace_data: &[PolynomialBatch<F, C, D>],
         challenges_vars: &[P],
-        public_inputs_vars: &[P],
+        global_vars: &[P],
         challenger: &mut Plonky2Challenger<F, C::Hasher>,
     ) -> Vec<PolynomialCoeffs<F>>
     where
@@ -262,7 +263,7 @@ where
                 let mut parser = StarkParser {
                     local_vars: &get_trace_values_packed(i_start),
                     next_vars: &get_trace_values_packed(i_next_start),
-                    public_inputs: public_inputs_vars,
+                    global_vars: global_vars,
                     challenges: challenges_vars,
                     consumer: &mut consumer,
                 };

@@ -10,7 +10,7 @@ pub trait TraceGenerator<F, A> {
         air: &A,
         round: usize,
         challenges: &[F],
-        public_inputs: &[F],
+        global_values: &mut [F],
     ) -> Result<AirTrace<F>, Self::Error>;
 }
 
@@ -33,7 +33,7 @@ impl<F: Field, A> TraceGenerator<F, A> for ConstantGenerator<F> {
         _air: &A,
         round: usize,
         _challenges: &[F],
-        _public_inputs: &[F],
+        _global_values: &mut [F],
     ) -> Result<AirTrace<F>, Self::Error> {
         match round {
             0 => Ok(self.trace.clone()),
