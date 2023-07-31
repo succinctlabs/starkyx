@@ -326,9 +326,9 @@ pub(crate) mod tests {
             let writer = generator.new_writer();
             let handle = tx.clone();
             // rayon::spawn(move || {
-                writer.write(&x_0, &F::ZERO, i);
-                writer.write(&x_1, &F::from_canonical_usize(0), i);
-                handle.send(1).unwrap();
+            writer.write(&x_0, &F::ZERO, i);
+            writer.write(&x_1, &F::from_canonical_usize(0), i);
+            handle.send(1).unwrap();
             // });
         }
         drop(tx);

@@ -177,7 +177,7 @@ mod tests {
         let writer = generator.new_writer();
         for i in 0..L::num_rows() {
             let a = CubicElement([GoldilocksField::rand(); 3]);
-            writer.write(&x_1, &a, i);
+            writer.write(&x_1, &a, L::num_rows() - 1 - i);
             writer.write(&x_2, &a, i);
         }
 

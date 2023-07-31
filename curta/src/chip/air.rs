@@ -33,16 +33,8 @@ where
             )];
         }
         vec![
-            RoundDatum::new(
-                execution_trace_length,
-                (0, 0),
-                self.num_challenges,
-            ),
-            RoundDatum::new(
-                extended_trace_length,
-                (0, self.num_global_values),
-                0,
-            ),
+            RoundDatum::new(execution_trace_length, (0, 0), self.num_challenges),
+            RoundDatum::new(extended_trace_length, (0, self.num_global_values), 0),
         ]
     }
 

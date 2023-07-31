@@ -3,6 +3,7 @@ use self::arithmetic::ArithmeticConstraint;
 use super::instruction::set::AirInstruction;
 use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
+use super::table::bus::global::Bus;
 use super::table::evaluation::Evaluation;
 use super::table::lookup::Lookup;
 use super::AirParameters;
@@ -18,6 +19,7 @@ pub enum Constraint<L: AirParameters> {
     Arithmetic(ArithmeticConstraint<L::Field>),
     Accumulator(Accumulator<L::CubicParams>),
     BusChannel(BusChannel<L::Field, L::CubicParams>),
+    Bus(Bus<L::CubicParams>),
     Lookup(Box<Lookup<L::Field, L::CubicParams, 1>>),
     Evaluation(Evaluation<L::Field, L::CubicParams>),
 }
@@ -62,6 +64,7 @@ where
             Constraint::Arithmetic(constraint) => constraint.eval(parser),
             Constraint::Accumulator(accumulator) => accumulator.eval(parser),
             Constraint::BusChannel(bus_channel) => bus_channel.eval(parser),
+            Constraint::Bus(bus) => bus.eval(parser),
             Constraint::Lookup(lookup) => lookup.eval(parser),
             Constraint::Evaluation(evaluation) => evaluation.eval(parser),
         }
@@ -83,5 +86,11 @@ impl<L: AirParameters> From<Accumulator<L::CubicParams>> for Constraint<L> {
 impl<L: AirParameters> From<BusChannel<L::Field, L::CubicParams>> for Constraint<L> {
     fn from(bus_channel: BusChannel<L::Field, L::CubicParams>) -> Self {
         Self::BusChannel(bus_channel)
+    }
+}
+
+impl<L: AirParameters> From<Bus<L::CubicParams>> for Constraint<L> {
+    fn from(bus: Bus<L::CubicParams>) -> Self {
+        Self::Bus(bus)
     }
 }
