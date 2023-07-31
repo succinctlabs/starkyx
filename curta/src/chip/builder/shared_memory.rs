@@ -24,15 +24,6 @@ impl SharedMemory {
     }
 
     #[inline]
-    pub fn new_with_public_inputs(num_public_inputs: usize) -> Self {
-        Self(Arc::new(Mutex::new(SharedMemeoryCore {
-            global_index: num_public_inputs,
-            public_index: 0,
-            challenge_index: 0,
-        })))
-    }
-
-    #[inline]
     pub fn global_index(&self) -> usize {
         self.0.lock().unwrap().global_index
     }
@@ -40,6 +31,11 @@ impl SharedMemory {
     #[inline]
     pub fn challenge_index(&self) -> usize {
         self.0.lock().unwrap().challenge_index
+    }
+
+    #[inline]
+    pub fn public_index(&self) -> usize {
+        self.0.lock().unwrap().public_index
     }
 
     #[inline]
@@ -53,7 +49,7 @@ impl SharedMemory {
     #[inline]
     pub fn get_public_memory(&self, size: usize) -> MemorySlice {
         let mut core = self.0.lock().unwrap();
-        let register = MemorySlice::Global(core.public_index, size);
+        let register = MemorySlice::Public(core.public_index, size);
         core.public_index += size;
         register
     }

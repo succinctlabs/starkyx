@@ -16,25 +16,22 @@ pub struct ArithmeticGenerator<L: AirParameters> {
 }
 
 impl<L: ~const AirParameters> ArithmeticGenerator<L> {
-    pub fn new(public_inputs: &[L::Field]) -> Self {
-        Self {
-            writer: TraceWriter::new_with_value(
-                L::num_columns(),
-                L::num_rows(),
-                L::Field::ZERO,
-                public_inputs.to_vec(),
-            ),
-        }
-    }
+    // pub fn new(public_inputs: &[L::Field]) -> Self {
+    //     Self {
+    //         writer: TraceWriter::new(L::num_columns(), L::num_rows()),
+    //     }
+    // }
 
-    pub fn new_from_air(air : &Chip<L>) -> Self {
+    pub fn new(air: &Chip<L>) -> Self {
+        let num_public_inputs = air.num_public_inputs;
         let num_global_values = air.num_global_values;
         Self {
             writer: TraceWriter::new_with_value(
+                L::Field::ZERO,
                 L::num_columns(),
                 L::num_rows(),
-                L::Field::ZERO,
-                vec![L::Field::ZERO ; num_global_values],
+                num_public_inputs,
+                num_global_values,
             ),
         }
     }
@@ -61,13 +58,14 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
         round: usize,
         challenges: &[L::Field],
         global_values: &mut [L::Field],
+        public_inputs: &[L::Field],
     ) -> Result<AirTrace<L::Field>> {
         match round {
             0 => {
                 let (id_0, id_1) = (0, air.num_public_inputs);
-                let mut global_write = self.writer.0.global.write().unwrap();
-                global_write[id_0..id_1].copy_from_slice(&global_values[id_0..id_1]);
-                drop(global_write);
+                let mut public_write = self.writer.0.public.write().unwrap();
+                public_write[id_0..id_1].copy_from_slice(&public_inputs[id_0..id_1]);
+                drop(public_write);
                 let trace = self.trace_clone();
                 let execution_trace_values = trace
                     .rows_par()
@@ -125,7 +123,7 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                     .collect::<Vec<_>>();
 
                 let new_global = self.writer.0.global.read().unwrap();
-                let (id_0, id_1) = (air.num_public_inputs, air.num_global_values);
+                let (id_0, id_1) = (0, air.num_global_values);
                 global_values[id_0..id_1].copy_from_slice(&new_global[id_0..id_1]);
                 drop(new_global);
                 Ok(AirTrace {

@@ -11,7 +11,7 @@ use parser::AirParser;
 pub struct RoundDatum {
     /// The number of columns generated in this round
     pub num_columns: usize,
-    /// The number of global values generated in this round
+    /// The range of global values generated in this round
     pub global_values_range: (usize, usize),
     /// The number of validator challenges needed after this round
     pub num_challenges: usize,
@@ -33,6 +33,8 @@ pub trait RAir<AP: AirParser> {
 
     /// The data needed for each round
     fn round_data(&self) -> Vec<RoundDatum>;
+
+    fn num_public_inputs(&self) -> usize;
 
     fn num_rounds(&self) -> usize {
         self.round_data().len()

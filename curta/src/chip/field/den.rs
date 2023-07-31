@@ -219,7 +219,7 @@ mod tests {
         let den_ins = builder.fp_den(&a, &b, sign);
 
         let air = builder.build();
-        let generator = ArithmeticGenerator::<L>::new(&[]);
+        let generator = ArithmeticGenerator::<L>::new(&air);
 
         let (tx, rx) = channel();
         let mut rng = thread_rng();

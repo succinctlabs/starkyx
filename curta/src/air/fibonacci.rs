@@ -41,8 +41,8 @@ impl<AP: AirParser> RAir<AP> for FibonacciAir {
     fn eval(&self, parser: &mut AP) {
         // Check public inputs.
         let pis_constraints = [
-            parser.sub(parser.local_slice()[0], parser.global_slice()[0]),
-            parser.sub(parser.local_slice()[1], parser.global_slice()[1]),
+            parser.sub(parser.local_slice()[0], parser.public_slice()[0]),
+            parser.sub(parser.local_slice()[1], parser.public_slice()[1]),
             // parser.sub(parser.local_slice()[1], parser.global_slice()[2]),
         ];
         parser.constraint_first_row(pis_constraints[0]);
@@ -71,6 +71,10 @@ impl<AP: AirParser> RAir<AP> for FibonacciAir {
     fn round_data(&self) -> Vec<RoundDatum> {
         vec![RoundDatum::new(RAir::<AP>::width(self), (0, 3), 0)]
     }
+
+    fn num_public_inputs(&self) -> usize {
+        3
+    }
 }
 
 #[cfg(test)]
@@ -96,7 +100,7 @@ mod tests {
 
         for window in trace.windows_iter() {
             assert_eq!(window.local_slice.len(), 2);
-            let mut window_parser = TraceWindowParser::new(window, &[], &public_inputs);
+            let mut window_parser = TraceWindowParser::new(window, &[], &[], &public_inputs);
             assert_eq!(window_parser.local_slice().len(), 2);
             air.eval(&mut window_parser);
         }

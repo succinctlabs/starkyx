@@ -205,7 +205,7 @@ mod tests {
 
         let air = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&[]);
+        let generator = ArithmeticGenerator::<L>::new(&air);
 
         let (tx, rx) = channel();
         for i in 0..L::num_rows() {
@@ -241,14 +241,14 @@ mod tests {
         type L = EvalTest;
         type SC = PoseidonGoldilocksStarkConfig;
 
-        let mut builder = AirBuilder::<L>::new();
+        let mut builder = AirBuilder::<L>::new(); //(256 * 2);
         let x_0 = builder.alloc::<U16Register>();
         let x_1 = builder.alloc::<U16Register>();
 
         let cycle = builder.cycle(8);
 
         let values = (0..256)
-            .map(|_| builder.alloc_array_global::<ElementRegister>(2))
+            .map(|_| builder.alloc_array_public::<ElementRegister>(2))
             .collect::<Vec<_>>();
         let digest = Digest::from_values::<ArrayRegister<ElementRegister>, _>(values);
 
@@ -260,7 +260,7 @@ mod tests {
             .flat_map(|i| vec![F::ONE, F::from_canonical_usize(256 * i)])
             .collect::<Vec<_>>();
 
-        let generator = ArithmeticGenerator::<L>::new(&public_inputs);
+        let generator = ArithmeticGenerator::<L>::new(&air);
 
         let (tx, rx) = channel();
         for i in 0..L::num_rows() {

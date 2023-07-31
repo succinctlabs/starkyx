@@ -12,6 +12,7 @@ pub trait AirParser: Sized {
     fn next_slice(&self) -> &[Self::Var];
     fn challenge_slice(&self) -> &[Self::Var];
     fn global_slice(&self) -> &[Self::Var];
+    fn public_slice(&self) -> &[Self::Var];
 
     fn constraint(&mut self, constraint: Self::Var);
     fn constraint_transition(&mut self, constraint: Self::Var);
@@ -96,6 +97,10 @@ impl<'a, AP: AirParser> AirParser for MulParser<'a, AP> {
 
     fn global_slice(&self) -> &[Self::Var] {
         self.parser.global_slice()
+    }
+
+    fn public_slice(&self) -> &[Self::Var] {
+        self.parser.public_slice()
     }
 
     fn constraint(&mut self, constraint: Self::Var) {

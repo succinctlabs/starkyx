@@ -54,7 +54,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
             AirInstruction<F, FpInstruction<Ed25519BaseField>>,
         ),
     ) {
-        let mut builder = AirBuilder::<Self>::new_with_public_inputs(18432);
+        let mut builder = AirBuilder::<Self>::new();
 
         let res = builder.alloc_unchecked_ec_point();
         let temp = builder.alloc_unchecked_ec_point();
@@ -85,7 +85,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
                 let (x_reg_0, x_reg_1) = p.x.register().get_range();
                 let (y_reg_0, y_reg_1) = p.y.register().get_range();
                 assert_eq!(x_reg_1, y_reg_0);
-                MemorySlice::Global(x_reg_0, y_reg_1 - x_reg_0)
+                MemorySlice::Public(x_reg_0, y_reg_1 - x_reg_0)
             })
             .collect::<Vec<_>>();
         let input_point_register = scalar_mul_gadget.temp();
@@ -103,7 +103,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
                 let (x_reg_0, x_reg_1) = p.x.register().get_range();
                 let (y_reg_0, y_reg_1) = p.y.register().get_range();
                 assert_eq!(x_reg_1, y_reg_0);
-                MemorySlice::Global(x_reg_0, y_reg_1 - x_reg_0)
+                MemorySlice::Public(x_reg_0, y_reg_1 - x_reg_0)
             })
             .collect::<Vec<_>>();
         let output_point_register = scalar_mul_gadget.result();

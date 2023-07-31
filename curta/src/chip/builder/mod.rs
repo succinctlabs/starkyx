@@ -27,7 +27,6 @@ pub struct AirBuilder<L: AirParameters> {
     next_index: usize,
     extended_index: usize,
     shared_memory: SharedMemory,
-    num_public_inputs: usize,
     pub(crate) constraints: Vec<Constraint<L>>,
     pub(crate) accumulators: Vec<Accumulator<L::CubicParams>>,
     pub(crate) bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
@@ -41,10 +40,6 @@ impl<L: AirParameters> AirBuilder<L> {
         Self::new_with_shared_memory(SharedMemory::new())
     }
 
-    pub fn new_with_public_inputs(num_public_inputs: usize) -> Self {
-        Self::new_with_shared_memory(SharedMemory::new_with_public_inputs(num_public_inputs))
-    }
-
     pub fn new_with_shared_memory(shared_memory: SharedMemory) -> Self {
         Self {
             local_index: L::NUM_ARITHMETIC_COLUMNS,
@@ -52,7 +47,6 @@ impl<L: AirParameters> AirBuilder<L> {
             local_arithmetic_index: 0,
             next_arithmetic_index: 0,
             extended_index: L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS,
-            num_public_inputs: shared_memory.global_index(),
             shared_memory,
             constraints: Vec::new(),
             accumulators: Vec::new(),
@@ -162,7 +156,7 @@ impl<L: AirParameters> AirBuilder<L> {
             constraints: self.constraints,
             num_challenges: self.shared_memory.challenge_index(),
             execution_trace_length,
-            num_public_inputs: self.num_public_inputs,
+            num_public_inputs: self.shared_memory.public_index(),
             num_global_values: self.shared_memory.global_index(),
             accumulators: self.accumulators,
             bus_channels: self.bus_channels,
@@ -215,7 +209,7 @@ pub(crate) mod tests {
         type F = GoldilocksField;
         type L = FibonacciParameters;
 
-        let mut builder = AirBuilder::<L>::new_with_public_inputs(3);
+        let mut builder = AirBuilder::<L>::new();
         let x_0 = builder.alloc::<ElementRegister>();
         let x_1 = builder.alloc::<ElementRegister>();
 
@@ -224,7 +218,8 @@ pub(crate) mod tests {
         // x1' <- x0 + x1
         let constr_2 = builder.set_to_expression_transition(&x_1.next(), x_0.expr() + x_1.expr());
 
-        let air = builder.build();
+        let mut air = builder.build();
+        air.num_public_inputs = 3;
 
         let public_inputs = [
             F::ZERO,
@@ -232,7 +227,7 @@ pub(crate) mod tests {
             FibonacciAir::fibonacci(L::num_rows() - 1, F::ZERO, F::ONE),
         ];
 
-        let generator = ArithmeticGenerator::<L>::new(&public_inputs);
+        let generator = ArithmeticGenerator::<L>::new(&air);
 
         let writer = generator.new_writer();
 
@@ -247,7 +242,7 @@ pub(crate) mod tests {
 
         for window in trace.windows_iter() {
             assert_eq!(window.local_slice.len(), 2);
-            let mut window_parser = TraceWindowParser::new(window, &[], &public_inputs);
+            let mut window_parser = TraceWindowParser::new(window, &[], &[], &public_inputs);
             assert_eq!(window_parser.local_slice().len(), 2);
             air.eval(&mut window_parser);
         }
@@ -259,7 +254,7 @@ pub(crate) mod tests {
         type L = FibonacciParameters;
         type SC = PoseidonGoldilocksStarkConfig;
 
-        let mut builder = AirBuilder::<L>::new_with_public_inputs(3);
+        let mut builder = AirBuilder::<L>::new();
         let x_0 = builder.alloc::<ElementRegister>();
         let x_1 = builder.alloc::<ElementRegister>();
 
@@ -274,9 +269,10 @@ pub(crate) mod tests {
             FibonacciAir::fibonacci(L::num_rows() - 1, F::ZERO, F::ONE),
         ];
 
-        let air = builder.build();
+        let mut air = builder.build();
+        air.num_public_inputs = 3;
 
-        let generator = ArithmeticGenerator::<L>::new(&public_inputs);
+        let generator = ArithmeticGenerator::<L>::new(&air);
 
         let writer = generator.new_writer();
 
@@ -323,17 +319,17 @@ pub(crate) mod tests {
         let x_1 = builder.alloc::<U16Register>();
 
         let air = builder.build();
-        let generator = ArithmeticGenerator::<L>::new(&[]);
+        let generator = ArithmeticGenerator::<L>::new(&air);
 
         let (tx, rx) = channel();
         for i in 0..L::num_rows() {
             let writer = generator.new_writer();
             let handle = tx.clone();
-            rayon::spawn(move || {
+            // rayon::spawn(move || {
                 writer.write(&x_0, &F::ZERO, i);
                 writer.write(&x_1, &F::from_canonical_usize(0), i);
                 handle.send(1).unwrap();
-            });
+            // });
         }
         drop(tx);
         for msg in rx.iter() {

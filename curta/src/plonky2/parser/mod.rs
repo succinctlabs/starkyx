@@ -21,6 +21,7 @@ where
     pub(crate) local_vars: &'a [P],
     pub(crate) next_vars: &'a [P],
     pub(crate) global_vars: &'a [P],
+    pub(crate) public_vars: &'a [P],
     pub(crate) challenges: &'a [P],
     pub(crate) consumer: &'a mut ConstraintConsumer<P>,
 }
@@ -30,6 +31,7 @@ pub struct RecursiveStarkParser<'a, F: RichField + Extendable<D>, const D: usize
     pub(crate) local_vars: &'a [ExtensionTarget<D>],
     pub(crate) next_vars: &'a [ExtensionTarget<D>],
     pub(crate) global_vars: &'a [ExtensionTarget<D>],
+    pub(crate) public_vars: &'a [ExtensionTarget<D>],
     pub(crate) challenges: &'a [ExtensionTarget<D>],
     pub(crate) consumer: &'a mut RecursiveConstraintConsumer<F, D>,
 }
@@ -57,6 +59,10 @@ where
 
     fn global_slice(&self) -> &[Self::Var] {
         self.global_vars
+    }
+
+    fn public_slice(&self) -> &[Self::Var] {
+        self.public_vars
     }
 
     fn constant(&mut self, value: Self::Field) -> Self::Var {
@@ -153,6 +159,10 @@ impl<'a, F: RichField + Extendable<D>, const D: usize> AirParser
 
     fn global_slice(&self) -> &[Self::Var] {
         self.global_vars
+    }
+
+    fn public_slice(&self) -> &[Self::Var] {
+        self.public_vars
     }
 
     fn constraint(&mut self, constraint: Self::Var) {

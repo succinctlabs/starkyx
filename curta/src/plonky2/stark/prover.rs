@@ -53,12 +53,14 @@ where
     {
         let mut challenger = Plonky2Challenger::<F, C::Hasher>::new();
 
+        // Oberve public inputs
+        challenger.0.observe_elements(&public_inputs);
+
         let rate_bits = config.fri_config.rate_bits;
         let cap_height = config.fri_config.cap_height;
 
         let mut challenges = vec![];
-        let mut global_values = public_inputs.to_vec();
-        global_values.resize(stark.air().num_global_values(), F::ZERO);
+        let mut global_values = vec![F::ZERO; stark.air().num_global_values()];
 
         let mut trace_commitments = Vec::new();
         let mut timing = TimingTree::default();
@@ -66,7 +68,13 @@ where
         for (r, round) in stark.air().round_data().iter().enumerate() {
             let (id_0, id_1) = round.global_values_range;
             let round_trace = trace_generator
-                .generate_round(stark.air(), r, &challenges, &mut global_values[..id_1])
+                .generate_round(
+                    stark.air(),
+                    r,
+                    &challenges,
+                    &mut global_values[..id_1],
+                    &public_inputs,
+                )
                 .map_err(|e| e.into())?;
 
             let trace_cols = round_trace
@@ -110,6 +118,10 @@ where
             .iter()
             .map(|x| P::from(*x))
             .collect::<Vec<_>>();
+        let public_vars = public_inputs
+            .iter()
+            .map(|x| P::from(*x))
+            .collect::<Vec<_>>();
         let quotient_polys = Self::quotient_polys(
             degree_bits,
             config,
@@ -117,6 +129,7 @@ where
             &trace_commitments,
             &challenge_vars,
             &global_vars,
+            &public_vars,
             &mut challenger,
         );
         let quotient_degree_factor = stark.air().quotient_degree_factor();
@@ -194,6 +207,7 @@ where
         trace_data: &[PolynomialBatch<F, C, D>],
         challenges_vars: &[P],
         global_vars: &[P],
+        public_vars: &[P],
         challenger: &mut Plonky2Challenger<F, C::Hasher>,
     ) -> Vec<PolynomialCoeffs<F>>
     where
@@ -264,7 +278,8 @@ where
                 let mut parser = StarkParser {
                     local_vars: &get_trace_values_packed(i_start),
                     next_vars: &get_trace_values_packed(i_next_start),
-                    global_vars: global_vars,
+                    global_vars,
+                    public_vars,
                     challenges: challenges_vars,
                     consumer: &mut consumer,
                 };

@@ -153,7 +153,7 @@ mod tests {
         let gadget = builder.ed_add::<E>(&p, &q);
 
         let air = builder.build();
-        let generator = ArithmeticGenerator::<L>::new(&[]);
+        let generator = ArithmeticGenerator::<L>::new(&air);
 
         let (tx, rx) = channel();
         let base = E::generator();

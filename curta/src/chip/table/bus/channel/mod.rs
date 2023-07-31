@@ -173,7 +173,7 @@ mod tests {
 
         let air = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new_from_air(&air);
+        let generator = ArithmeticGenerator::<L>::new(&air);
         let writer = generator.new_writer();
         for i in 0..L::num_rows() {
             let a = CubicElement([GoldilocksField::rand(); 3]);

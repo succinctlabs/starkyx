@@ -17,6 +17,7 @@ use crate::trace::AirTrace;
 pub struct WriterData<T> {
     trace: RwLock<AirTrace<T>>,
     pub(crate) global: RwLock<Vec<T>>,
+    pub(crate) public: RwLock<Vec<T>>,
     pub(crate) challenges: RwLock<Vec<T>>,
     height: usize,
 }
@@ -26,25 +27,33 @@ pub struct TraceWriter<T>(pub Arc<WriterData<T>>);
 
 impl<T> TraceWriter<T> {
     #[inline]
-    pub fn new(width: usize, num_rows: usize, global: Vec<T>) -> Self {
+    pub fn new(width: usize, num_rows: usize) -> Self {
         let height = num_rows;
         Self(Arc::new(WriterData {
             trace: RwLock::new(AirTrace::new_with_capacity(width, num_rows)),
-            global: RwLock::new(global),
+            global: RwLock::new(Vec::new()),
             challenges: RwLock::new(Vec::new()),
+            public: RwLock::new(Vec::new()),
             height,
         }))
     }
 
     #[inline]
-    pub fn new_with_value(width: usize, num_rows: usize, value: T, global: Vec<T>) -> Self
+    pub fn new_with_value(
+        value: T,
+        width: usize,
+        num_rows: usize,
+        num_public_inputs: usize,
+        num_global_values: usize,
+    ) -> Self
     where
         T: Copy,
     {
         let height = num_rows;
         Self(Arc::new(WriterData {
             trace: RwLock::new(AirTrace::new_with_value(width, num_rows, value)),
-            global: RwLock::new(global),
+            global: RwLock::new(vec![value; num_global_values]),
+            public: RwLock::new(vec![value; num_public_inputs]),
             challenges: RwLock::new(Vec::new()),
             height,
         }))
@@ -69,6 +78,10 @@ impl<T> TraceWriter<T> {
     pub fn global_mut(&self) -> LockResult<RwLockWriteGuard<'_, Vec<T>>> {
         self.0.global.write()
     }
+
+    pub fn public_mut(&self) -> LockResult<RwLockWriteGuard<'_, Vec<T>>> {
+        self.0.public.write()
+    }
 }
 
 impl<F: Field> TraceWriter<F> {
@@ -78,6 +91,7 @@ impl<F: Field> TraceWriter<F> {
             MemorySlice::Local(_, _) => self.read_from_trace(register, row_index),
             MemorySlice::Next(_, _) => self.read_from_trace(register, row_index),
             MemorySlice::Global(_, _) => self.read_from_global(register, row_index),
+            MemorySlice::Public(_, _) => self.read_from_public(register, row_index),
             MemorySlice::Challenge(_, _) => self.read_from_challenge(register, row_index),
         }
     }
@@ -86,15 +100,15 @@ impl<F: Field> TraceWriter<F> {
     fn read_from_trace<R: Register>(&self, register: &R, row_index: usize) -> R::Value<F> {
         let trace = self.0.trace.read().unwrap();
         let window = trace.window(row_index);
-        let parser = TraceWindowParser::new(window, &[], &[]);
+        let parser = TraceWindowParser::new(window, &[], &[], &[]);
         register.eval(&parser)
     }
 
     #[inline]
     fn read_from_global<R: Register>(&self, register: &R, _row_index: usize) -> R::Value<F> {
-        let global_inputs = self.0.global.read().unwrap();
+        let global_values = self.0.global.read().unwrap();
         let window = TraceWindow::empty();
-        let parser = TraceWindowParser::new(window, &[], &global_inputs);
+        let parser = TraceWindowParser::new(window, &[], &global_values, &[]);
         register.eval(&parser)
     }
 
@@ -102,7 +116,15 @@ impl<F: Field> TraceWriter<F> {
     fn read_from_challenge<R: Register>(&self, register: &R, _row_index: usize) -> R::Value<F> {
         let challenges = self.0.challenges.read().unwrap();
         let window = TraceWindow::empty();
-        let parser = TraceWindowParser::new(window, &challenges, &[]);
+        let parser = TraceWindowParser::new(window, &challenges, &[], &[]);
+        register.eval(&parser)
+    }
+
+    #[inline]
+    fn read_from_public<R: Register>(&self, register: &R, _row_index: usize) -> R::Value<F> {
+        let public_inputs = self.0.public.read().unwrap();
+        let window = TraceWindow::empty();
+        let parser = TraceWindowParser::new(window, &[], &[], &public_inputs);
         register.eval(&parser)
     }
 
@@ -138,7 +160,9 @@ impl<F: Field> TraceWriter<F> {
         let window = trace.window(row_index);
         let global_inputs = self.global.read().unwrap();
         let challenges = self.0.challenges.read().unwrap();
-        let mut parser = TraceWindowParser::new(window, &challenges, &global_inputs);
+        let public_inputs = self.0.public.read().unwrap();
+        let mut parser =
+            TraceWindowParser::new(window, &challenges, &global_inputs, &public_inputs);
         expression.eval(&mut parser)
     }
 

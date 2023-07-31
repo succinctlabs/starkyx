@@ -35,15 +35,19 @@ where
         vec![
             RoundDatum::new(
                 execution_trace_length,
-                (0, self.num_public_inputs),
+                (0, 0),
                 self.num_challenges,
             ),
             RoundDatum::new(
                 extended_trace_length,
-                (self.num_public_inputs, self.num_global_values),
+                (0, self.num_global_values),
                 0,
             ),
         ]
+    }
+
+    fn num_public_inputs(&self) -> usize {
+        self.num_public_inputs
     }
 
     fn width(&self) -> usize {

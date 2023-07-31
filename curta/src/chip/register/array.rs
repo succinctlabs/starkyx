@@ -59,17 +59,20 @@ impl<T: Register> ArrayRegister<T> {
     fn get_unchecked(&self, idx: usize) -> T {
         let offset = T::size_of() * idx;
         match self.register {
-            MemorySlice::Local(col, _) => {
-                T::from_register(MemorySlice::Local(col + offset, T::size_of()))
+            MemorySlice::Local(index, _) => {
+                T::from_register(MemorySlice::Local(index + offset, T::size_of()))
             }
-            MemorySlice::Next(col, _) => {
-                T::from_register(MemorySlice::Next(col + offset, T::size_of()))
+            MemorySlice::Next(index, _) => {
+                T::from_register(MemorySlice::Next(index + offset, T::size_of()))
             }
-            MemorySlice::Global(col, _) => {
-                T::from_register(MemorySlice::Global(col + offset, T::size_of()))
+            MemorySlice::Global(index, _) => {
+                T::from_register(MemorySlice::Global(index + offset, T::size_of()))
             }
-            MemorySlice::Challenge(col, _) => {
-                T::from_register(MemorySlice::Challenge(col + offset, T::size_of()))
+            MemorySlice::Public(index, _) => {
+                T::from_register(MemorySlice::Public(index + offset, T::size_of()))
+            }
+            MemorySlice::Challenge(index, _) => {
+                T::from_register(MemorySlice::Challenge(index + offset, T::size_of()))
             }
         }
     }

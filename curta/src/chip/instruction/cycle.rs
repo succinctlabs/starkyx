@@ -205,7 +205,7 @@ mod tests {
 
         let air = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&[]);
+        let generator = ArithmeticGenerator::<L>::new(&air);
         let (tx, rx) = channel();
         for i in 0..L::num_rows() {
             let writer = generator.new_writer();
@@ -224,7 +224,7 @@ mod tests {
         let trace = generator.trace_clone();
 
         for window in trace.windows_iter() {
-            let mut window_parser = TraceWindowParser::new(window, &[], &[]);
+            let mut window_parser = TraceWindowParser::new(window, &[], &[], &[]);
             assert_eq!(window_parser.local_slice().len(), L::num_columns());
             air.eval(&mut window_parser);
         }

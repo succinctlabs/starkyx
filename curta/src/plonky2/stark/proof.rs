@@ -71,20 +71,13 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> S
 
         let mut challenger = Plonky2Challenger::<F, C::Hasher>::new();
 
-        // Replace initial slice of global values with public inputs
-        let global_values_checked = public_inputs
-            .iter()
-            .chain(global_values[public_inputs.len()..].iter())
-            .copied()
-            .collect::<Vec<_>>();
+        // Observe public inputs
+        challenger.0.observe_elements(public_inputs);
 
         let mut challenges = vec![];
-
         for (round, cap) in stark.air().round_data().iter().zip_eq(trace_caps.iter()) {
             let (id_0, id_1) = round.global_values_range;
-            challenger
-                .0
-                .observe_elements(&global_values_checked[id_0..id_1]);
+            challenger.0.observe_elements(&global_values[id_0..id_1]);
             challenger.0.observe_cap(cap);
             let round_challenges = challenger.0.get_n_challenges(round.num_challenges);
             challenges.extend(round_challenges);
@@ -165,20 +158,13 @@ impl<const D: usize> StarkProofTarget<D> {
 
         let mut challenger = Plonky2RecursiveChallenger::<F, C::InnerHasher, D>::new(builder);
 
-        // Replace initial slice of global values with public inputs
-        let global_values_checked = public_inputs
-            .iter()
-            .chain(global_values[public_inputs.len()..].iter())
-            .copied()
-            .collect::<Vec<_>>();
+        // Observe public inputs
+        challenger.0.observe_elements(&public_inputs);
 
         let mut challenges = vec![];
-
         for (round, cap) in stark.air().round_data().iter().zip(trace_caps.iter()) {
             let (id_0, id_1) = round.global_values_range;
-            challenger
-                .0
-                .observe_elements(&global_values_checked[id_0..id_1]);
+            challenger.0.observe_elements(&global_values[id_0..id_1]);
             challenger.0.observe_cap(cap);
             let round_challenges = challenger.0.get_n_challenges(builder, round.num_challenges);
             challenges.extend(round_challenges);

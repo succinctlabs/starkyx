@@ -13,6 +13,8 @@ pub enum MemorySlice {
     /// A slice of the next row.
     Next(usize, usize),
     /// A slice of public inputs
+    Public(usize, usize),
+    /// A slice of values from global variables of the air
     Global(usize, usize),
     /// A slice of values coming from verifier challenges
     Challenge(usize, usize),
@@ -38,6 +40,7 @@ impl MemorySlice {
             MemorySlice::Local(index, length) => (*index, *index + length),
             MemorySlice::Next(index, length) => (*index, *index + length),
             MemorySlice::Global(index, length) => (*index, *index + length),
+            MemorySlice::Public(index, length) => (*index, *index + length),
             MemorySlice::Challenge(index, length) => (*index, *index + length),
         }
     }
@@ -48,6 +51,7 @@ impl MemorySlice {
             MemorySlice::Local(index, _) => *index,
             MemorySlice::Next(index, _) => *index,
             MemorySlice::Global(index, _) => *index,
+            MemorySlice::Public(index, _) => *index,
             MemorySlice::Challenge(index, _) => *index,
         }
     }
@@ -58,6 +62,7 @@ impl MemorySlice {
             MemorySlice::Local(_, length) => *length,
             MemorySlice::Next(_, length) => *length,
             MemorySlice::Global(_, length) => *length,
+            MemorySlice::Public(_, length) => *length,
             MemorySlice::Challenge(_, length) => *length,
         }
     }
@@ -73,6 +78,7 @@ impl MemorySlice {
             MemorySlice::Local(index, length) => &parser.local_slice()[*index..*index + length],
             MemorySlice::Next(index, length) => &parser.next_slice()[*index..*index + length],
             MemorySlice::Global(index, length) => &parser.global_slice()[*index..*index + length],
+            MemorySlice::Public(index, length) => &parser.public_slice()[*index..*index + length],
             MemorySlice::Challenge(index, length) => {
                 &parser.challenge_slice()[*index..*index + length]
             }
@@ -91,6 +97,9 @@ impl MemorySlice {
             MemorySlice::Global(_, _) => {
                 unreachable!("Cannot read from global inputs with this method")
             }
+            MemorySlice::Public(_, _) => {
+                unreachable!("Cannot read from public inputs with this method")
+            }
             MemorySlice::Challenge(_, _) => {
                 unreachable!("Cannot read from challenges with this method")
             }
@@ -105,6 +114,7 @@ impl MemorySlice {
                 unreachable!("Cannot read from next row with this method")
             }
             MemorySlice::Global(index, length) => &slice[*index..*index + length],
+            MemorySlice::Public(index, length) => &slice[*index..*index + length],
             MemorySlice::Challenge(index, length) => &slice[*index..*index + length],
         }
     }
@@ -128,7 +138,12 @@ impl MemorySlice {
             MemorySlice::Next(index, length) => {
                 trace_view.row_mut(row_index + 1)[*index..*index + length].copy_from_slice(value);
             }
-            MemorySlice::Global(_, _) => unreachable!("Cannot assign to global inputs, "),
+            MemorySlice::Global(_, _) => {
+                unreachable!("Cannot assign to global inputs with this method")
+            }
+            MemorySlice::Public(_, _) => {
+                unreachable!("Cannot assign to public inputs with this method")
+            }
             MemorySlice::Challenge(_, _) => unreachable!("Cannot assign to challenges"),
         }
         local_index + self.len()
@@ -144,6 +159,9 @@ impl MemorySlice {
             MemorySlice::Global(index, length) => {
                 row[*index..*index + length].copy_from_slice(value);
             }
+            MemorySlice::Public(index, length) => {
+                row[*index..*index + length].copy_from_slice(value);
+            }
             MemorySlice::Challenge(_, _) => unreachable!("Cannot assign to challenges"),
         }
     }
@@ -156,6 +174,7 @@ impl Hash for MemorySlice {
             MemorySlice::Local(_, _) => "local".hash(state),
             MemorySlice::Next(_, _) => "next".hash(state),
             MemorySlice::Global(_, _) => "public".hash(state),
+            MemorySlice::Public(_, _) => "public".hash(state),
             MemorySlice::Challenge(_, _) => "challenge".hash(state),
         }
     }

@@ -56,6 +56,10 @@ where
             .iter()
             .map(|x| F::Extension::from_basefield(*x))
             .collect::<Vec<_>>();
+        let public_inputs_ext = public_inputs
+            .iter()
+            .map(|x| F::Extension::from_basefield(*x))
+            .collect::<Vec<_>>();
         let challenges_ext = challenges
             .stark_betas
             .into_iter()
@@ -80,6 +84,7 @@ where
             local_vars: local_values,
             next_vars: next_values,
             global_vars: &global_values_ext,
+            public_vars: &public_inputs_ext,
             challenges: &challenges_ext,
             consumer: &mut consumer,
         };
@@ -221,6 +226,10 @@ where
             .iter()
             .map(|x| builder.convert_to_ext(*x))
             .collect::<Vec<_>>();
+        let public_inputs_ext = public_inputs
+            .iter()
+            .map(|x| builder.convert_to_ext(*x))
+            .collect::<Vec<_>>();
         let challenges_ext = challenges
             .stark_betas
             .iter()
@@ -232,6 +241,7 @@ where
             local_vars: local_values,
             next_vars: next_values,
             global_vars: &global_vals_ext,
+            public_vars: &public_inputs_ext,
             challenges: &challenges_ext,
             consumer: &mut consumer,
         };

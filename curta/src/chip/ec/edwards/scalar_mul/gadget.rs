@@ -237,7 +237,7 @@ mod tests {
         let scalar_mul_gadget = builder.ed_scalar_mul::<E>(&scalar_bit, &res, &temp);
 
         let air = builder.build();
-        let generator = ArithmeticGenerator::<L>::new(&[]);
+        let generator = ArithmeticGenerator::<L>::new(&air);
 
         let (tx, rx) = channel();
         let mut rng = thread_rng();

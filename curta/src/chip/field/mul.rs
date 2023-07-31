@@ -202,7 +202,7 @@ mod tests {
 
         let air = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&[]);
+        let generator = ArithmeticGenerator::<L>::new(&air);
 
         let (tx, rx) = channel();
 
