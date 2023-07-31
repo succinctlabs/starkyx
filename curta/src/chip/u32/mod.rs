@@ -2,5 +2,7 @@
 
 pub mod arithmetic;
 pub mod bit_operations;
-pub mod gadget;
-pub mod register;
+pub mod channel;
+pub mod opcode;
+pub mod operation;
+pub mod write_operation;

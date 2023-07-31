@@ -74,6 +74,12 @@ impl<F: Field> Add for ArithmeticExpression<F> {
     }
 }
 
+impl<F: Field> From<F> for ArithmeticExpression<F> {
+    fn from(f: F) -> Self {
+        Self::from_constant(f)
+    }
+}
+
 impl<F: Field> Sub for ArithmeticExpression<F> {
     type Output = Self;
 

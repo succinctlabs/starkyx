@@ -1,24 +1,52 @@
+use self::and::And;
+use crate::air::parser::AirParser;
+use crate::air::AirConstraint;
+use crate::chip::instruction::Instruction;
+use crate::chip::register::memory::MemorySlice;
+use crate::chip::trace::writer::TraceWriter;
+pub use crate::math::prelude::*;
+
 pub mod and;
 pub mod or;
 pub mod rotate;
 pub mod shr;
 pub mod xor;
 
-use and::And;
-
-use crate::chip::register::cubic::CubicRegister;
-use crate::chip::register::element::ElementRegister;
-
 #[derive(Debug, Clone, Copy)]
 pub enum BitOperation<const NUM_BITS: usize> {
     And(And<NUM_BITS>),
 }
 
-#[derive(Debug, Clone)]
-pub struct U32BitOperation {
-    pub a: ElementRegister,
-    pub b: ElementRegister,
-    pub output: ElementRegister,
-    pub digest: CubicRegister,
-    pub operation: BitOperation<32>,
+impl<AP: AirParser, const NUM_BITS: usize> AirConstraint<AP> for BitOperation<NUM_BITS> {
+    fn eval(&self, parser: &mut AP) {
+        match self {
+            BitOperation::And(and) => and.eval(parser),
+        }
+    }
+}
+
+impl<F: Field, const NUM_BITS: usize> Instruction<F> for BitOperation<NUM_BITS> {
+    fn inputs(&self) -> Vec<MemorySlice> {
+        match self {
+            BitOperation::And(and) => Instruction::<F>::inputs(and),
+        }
+    }
+
+    fn trace_layout(&self) -> Vec<MemorySlice> {
+        match self {
+            BitOperation::And(and) => Instruction::<F>::trace_layout(and),
+        }
+    }
+
+    fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
+        match self {
+            BitOperation::And(and) => Instruction::<F>::write(and, writer, row_index),
+        }
+    }
+}
+
+impl<const N: usize> From<And<N>> for BitOperation<N> {
+    fn from(and: And<N>) -> Self {
+        BitOperation::And(and)
+    }
 }

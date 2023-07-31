@@ -98,6 +98,8 @@ mod tests {
         builder.input_to_bus(&mut channel, x_1);
         builder.output_from_bus(&mut channel, x_2);
 
+        builder.constrain_bus(bus);
+
         let air = builder.build();
 
         let generator = ArithmeticGenerator::<L>::new(&air);
