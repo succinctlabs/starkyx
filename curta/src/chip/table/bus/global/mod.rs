@@ -3,7 +3,7 @@
 //! The globa bus constraint enforeces consistency between the channels of the bus.
 //! Namely, the constraint:
 //!
-//!     \prod_{i=1}^n channel_i = 1
+//! \prod_{i=1}^n channel_i = 1
 //!
 
 pub mod constraint;

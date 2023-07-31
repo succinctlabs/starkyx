@@ -159,7 +159,7 @@ impl<const D: usize> StarkProofTarget<D> {
         let mut challenger = Plonky2RecursiveChallenger::<F, C::InnerHasher, D>::new(builder);
 
         // Observe public inputs
-        challenger.0.observe_elements(&public_inputs);
+        challenger.0.observe_elements(public_inputs);
 
         let mut challenges = vec![];
         for (round, cap) in stark.air().round_data().iter().zip(trace_caps.iter()) {

@@ -54,7 +54,7 @@ where
         let mut challenger = Plonky2Challenger::<F, C::Hasher>::new();
 
         // Oberve public inputs
-        challenger.0.observe_elements(&public_inputs);
+        challenger.0.observe_elements(public_inputs);
 
         let rate_bits = config.fri_config.rate_bits;
         let cap_height = config.fri_config.cap_height;
@@ -73,7 +73,7 @@ where
                     r,
                     &challenges,
                     &mut global_values[..id_1],
-                    &public_inputs,
+                    public_inputs,
                 )
                 .map_err(|e| e.into())?;
 
@@ -200,6 +200,7 @@ where
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn quotient_polys<A, const COLUMNS: usize>(
         degree_bits: usize,
         config: &StarkyConfig<F, C, D>,
