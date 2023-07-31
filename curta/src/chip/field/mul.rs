@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use super::parameters::FieldParameters;
 use super::register::FieldRegister;
 use super::util;
@@ -89,11 +87,8 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpMulInstruction<P>
         ]
     }
 
-    fn inputs(&self) -> HashSet<MemorySlice> {
-        let mut set = HashSet::new();
-        set.insert(*self.a.register());
-        set.insert(*self.b.register());
-        set
+    fn inputs(&self) -> Vec<MemorySlice> {
+        vec![*self.a.register(), *self.b.register()]
     }
 
     fn constraint_degree(&self) -> usize {

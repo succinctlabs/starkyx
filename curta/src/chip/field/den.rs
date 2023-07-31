@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use num::BigUint;
 
 use super::parameters::FieldParameters;
@@ -105,8 +103,8 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpDenInstruction<P>
         ]
     }
 
-    fn inputs(&self) -> HashSet<MemorySlice> {
-        HashSet::from([*self.a.register(), *self.b.register()])
+    fn inputs(&self) -> Vec<MemorySlice> {
+        vec![*self.a.register(), *self.b.register()]
     }
 
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {

@@ -6,7 +6,6 @@ pub mod xor;
 
 use and::And;
 
-use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::element::ElementRegister;
 
@@ -21,6 +20,5 @@ pub struct U32BitOperation {
     pub b: ElementRegister,
     pub output: ElementRegister,
     pub digest: CubicRegister,
-    pub digest_challenges: ArrayRegister<CubicRegister>,
     pub operation: BitOperation<32>,
 }

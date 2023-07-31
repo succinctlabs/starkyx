@@ -1,5 +1,4 @@
 use core::hash::{Hash, Hasher};
-use std::collections::HashSet;
 
 use super::assign::AssignInstruction;
 use super::bit::BitConstraint;
@@ -46,7 +45,7 @@ impl<F: Field, I: Instruction<F>> Instruction<F> for AirInstruction<F, I> {
         }
     }
 
-    fn inputs(&self) -> HashSet<MemorySlice> {
+    fn inputs(&self) -> Vec<MemorySlice> {
         match self {
             AirInstruction::CustomInstruction(i) => i.inputs(),
             AirInstruction::WriteInstruction(i) => Instruction::<F>::inputs(i),

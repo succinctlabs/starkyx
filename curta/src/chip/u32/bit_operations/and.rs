@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::instruction::Instruction;
@@ -34,8 +32,8 @@ impl<AP: AirParser, const NUM_BITS: usize> AirConstraint<AP> for And<NUM_BITS> {
 }
 
 impl<F: Field, const NUM_BITS: usize> Instruction<F> for And<NUM_BITS> {
-    fn inputs(&self) -> HashSet<MemorySlice> {
-        HashSet::from([*self.a.register(), *self.b.register()])
+    fn inputs(&self) -> Vec<MemorySlice> {
+        vec![*self.a.register(), *self.b.register()]
     }
 
     fn trace_layout(&self) -> Vec<MemorySlice> {

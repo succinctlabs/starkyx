@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use super::add::FpAddInstruction;
 use super::den::FpDenInstruction;
 use super::inner_product::FpInnerProductInstruction;
@@ -62,7 +60,7 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpInstruction<P> {
         }
     }
 
-    fn inputs(&self) -> HashSet<MemorySlice> {
+    fn inputs(&self) -> Vec<MemorySlice> {
         match self {
             FpInstruction::Add(instruction) => Instruction::<F>::inputs(instruction),
             FpInstruction::Mul(instruction) => Instruction::<F>::inputs(instruction),

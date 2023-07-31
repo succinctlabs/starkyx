@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use itertools::Itertools;
 
 use super::Instruction;
@@ -74,7 +72,7 @@ impl<F: Field> Instruction<F> for AssignInstruction<F> {
         vec![self.target]
     }
 
-    fn inputs(&self) -> HashSet<MemorySlice> {
+    fn inputs(&self) -> Vec<MemorySlice> {
         self.source.registers().into_iter().collect()
     }
 

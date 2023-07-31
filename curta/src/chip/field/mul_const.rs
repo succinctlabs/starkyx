@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use num::{BigUint, Zero};
 
 use super::parameters::{FieldParameters, MAX_NB_LIMBS};
@@ -96,10 +94,8 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpMulConstInstructi
         ]
     }
 
-    fn inputs(&self) -> HashSet<MemorySlice> {
-        let mut set = HashSet::new();
-        set.insert(*self.a.register());
-        set
+    fn inputs(&self) -> Vec<MemorySlice> {
+        vec![*self.a.register()]
     }
 
     fn constraint_degree(&self) -> usize {

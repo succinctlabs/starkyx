@@ -1,5 +1,4 @@
 use core::fmt::Debug;
-use std::collections::HashSet;
 
 use super::builder::AirBuilder;
 use super::instruction::Instruction;
@@ -70,12 +69,12 @@ impl<F: Field, T: Register + Debug> Instruction<F> for SelectInstruction<T> {
         vec![*self.result.register()]
     }
 
-    fn inputs(&self) -> HashSet<MemorySlice> {
-        HashSet::from([
+    fn inputs(&self) -> Vec<MemorySlice> {
+        vec![
             *self.bit.register(),
             *self.true_value.register(),
             *self.false_value.register(),
-        ])
+        ]
     }
 
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {

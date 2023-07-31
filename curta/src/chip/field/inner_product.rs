@@ -2,8 +2,6 @@
 //!
 //! To understand the implementation, it may be useful to refer to `mod.rs`.
 
-use std::collections::HashSet;
-
 use num::{BigUint, Zero};
 
 use super::parameters::FieldParameters;
@@ -104,7 +102,7 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpInnerProductInstr
         ]
     }
 
-    fn inputs(&self) -> HashSet<MemorySlice> {
+    fn inputs(&self) -> Vec<MemorySlice> {
         self.a
             .iter()
             .map(|x| *x.register())

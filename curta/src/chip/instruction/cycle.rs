@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use super::set::AirInstruction;
 use super::Instruction;
 use crate::air::parser::AirParser;
@@ -123,8 +121,8 @@ impl<F: Field> Instruction<F> for Cycle<F> {
         ]
     }
 
-    fn inputs(&self) -> HashSet<MemorySlice> {
-        HashSet::new()
+    fn inputs(&self) -> Vec<MemorySlice> {
+        Vec::new()
     }
 
     fn constraint_degree(&self) -> usize {
