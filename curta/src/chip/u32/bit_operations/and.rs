@@ -115,8 +115,8 @@ pub mod tests {
                 writer.write(&expected, &F::from_canonical_u8(a_and_b as u8), i);
             }
 
-            writer.write_array(&a, &a_bits.map(|b| F::from_canonical_u8(b as u8)), i);
-            writer.write_array(&b, &b_bits.map(|b| F::from_canonical_u8(b as u8)), i);
+            writer.write_array(&a, a_bits.map(|b| F::from_canonical_u8(b as u8)), i);
+            writer.write_array(&b, b_bits.map(|b| F::from_canonical_u8(b as u8)), i);
             writer.write_instruction(&and, i);
         }
 
