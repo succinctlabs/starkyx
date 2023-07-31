@@ -29,8 +29,6 @@ pub trait Instruction<F: Field>: 'static + Send + Sync + Clone + Debug {
     fn inputs(&self) -> Vec<MemorySlice>;
 
     /// Writes the instruction to the trace.
-    ///
-    /// This method is called after all the inputs returned from `inputs` have been written to the trace.
     fn write(&self, writer: &TraceWriter<F>, row_index: usize);
 
     fn constraint_degree(&self) -> usize {
