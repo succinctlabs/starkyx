@@ -1,88 +1,61 @@
-use super::LogLookup;
-use crate::chip::register::RegisterSerializable;
+use super::{LogLookup, LookupTable};
+use crate::chip::register::{RegisterSerializable, Register};
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 use crate::plonky2::field::cubic::extension::CubicExtension;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct SplitData {
-    mid: usize,
-    values_range: (usize, usize),
-    acc_range: (usize, usize),
-}
-
-impl SplitData {
-    pub fn new(mid: usize, values_range: (usize, usize), acc_range: (usize, usize)) -> Self {
-        Self {
-            mid,
-            values_range,
-            acc_range,
-        }
-    }
-    pub(crate) fn split<'a, T>(&self, trace_row: &'a mut [T]) -> (&'a [T], &'a mut [T]) {
-        let (left, right) = trace_row.split_at_mut(self.mid);
-        (
-            &left[self.values_range.0..self.values_range.1],
-            &mut right[self.acc_range.0..self.acc_range.1],
-        )
-    }
-
-    pub(crate) fn split_log_data<F: Field, E: CubicParameters<F>>(
-        log_data: &LogLookup<F, E, 1>,
-    ) -> Self {
-        let values_idx = log_data.values.register().get_range();
-        let acc_idx = log_data.row_accumulators.register().get_range();
-        assert!(
-            values_idx.0 < acc_idx.0,
-            "Illegal memory pattern, expected values indices \
-        to be to the right of accumulator indices, \
-        instead got: values_idx: {values_idx:?}, acc_idx: {acc_idx:?}"
-        );
-        SplitData::new(
-            values_idx.1,
-            (values_idx.0, values_idx.1),
-            (acc_idx.0 - values_idx.1, acc_idx.1 - values_idx.1),
-        )
-    }
-}
 
 impl<F: PrimeField> TraceWriter<F> {
+
+    pub(crate) fn write_multiplicities_from_fn<E: CubicParameters<F>, T: Register>(
+        &self,
+        num_rows: usize,
+        table_data: &LookupTable<T, F, E>,
+        table_index: impl Fn(T::Value<F>) -> usize,
+        values: &[T],) {
+        // Calculate multiplicities
+        let mut multiplicities = vec![F::ZERO; num_rows];
+
+        let trace = self.read_trace().unwrap();
+
+        for row in trace.rows() {
+            for value in values.iter() {
+                let val = value.read_from_slice(row);
+                let index = table_index(val);
+                assert!(index < num_rows);
+                multiplicities[index] += F::ONE;
+            }
+        }
+        drop(trace);
+
+        // Write multiplicities into the trace
+        let multiplicity = table_data.multiplicities.get(0);
+        for (i, mult) in multiplicities.iter().enumerate() {
+            self.write(&multiplicity, mult, i);
+        }
+    }
+
     pub(crate) fn write_log_lookup<E: CubicParameters<F>>(
         &self,
         num_rows: usize,
         lookup_data: &LogLookup<F, E, 1>,
     ) {
         let beta = CubicExtension::<F, E>::from(self.read(&lookup_data.challenge, 0));
-        let table_index = lookup_data.table_index;
-        let values_idx = lookup_data.values.register().get_range();
 
-        // Calculate multiplicities
-        let mut multiplicities = vec![F::ZERO; num_rows];
-
-        let trace = self.read_trace().unwrap().clone();
-
-        for row in trace.rows() {
-            for value in row[values_idx.0..values_idx.1].iter() {
-                let index = table_index(*value);
-                assert!(index < num_rows);
-                multiplicities[index] += F::ONE;
-            }
+        // If a table index function is provided, calculate multiplicities
+        if let Some(table_index) = lookup_data.table_index {
+            self.write_multiplicities_from_fn(num_rows, &lookup_data.table_data, table_index, &lookup_data.values);
         }
 
-        // Write multiplicities into the trace
-        let multiplicity = lookup_data.multiplicities.get(0);
-        for (i, mult) in multiplicities.iter().enumerate() {
-            self.write(&multiplicity, mult, i);
-        }
-
-        // Write multiplicity inverse constraint
-        let mult_table_log_entries = multiplicities
-            .par_iter()
-            .enumerate()
-            .map(|(i, x)| {
-                let table = CubicExtension::from(F::from_canonical_usize(i));
-                CubicExtension::from(*x) / (beta - table)
+        // Write multiplicity inverse constraints
+        let mult_table_log_entries = (0..num_rows)
+            .into_par_iter()
+            .map(|i| {
+                let multiplicity_reg = lookup_data.table_data.multiplicities.get(0);
+                let x = self.read(&multiplicity_reg, i);
+                let table = self.read(&lookup_data.table_data.table[0], i);
+                CubicExtension::from(x) / (beta - table)
             })
             .collect::<Vec<_>>();
 
@@ -93,19 +66,21 @@ impl<F: PrimeField> TraceWriter<F> {
 
         // Log accumulator
         let mut value = CubicExtension::ZERO;
-        let split_data = SplitData::split_log_data(lookup_data);
+        // let split_data = SplitData::split_log_data(lookup_data);
         let accumulators = self
             .write_trace()
             .unwrap()
             .rows_par_mut()
             .map(|row| {
-                let (values, accumulators) = split_data.split(row);
                 let mut accumumulator = CubicExtension::ZERO;
-                for (k, pair) in values.chunks(2).enumerate() {
-                    let beta_minus_a = beta - CubicExtension::from(pair[0]);
-                    let beta_minus_b = beta - CubicExtension::from(pair[1]);
+                let accumulators = lookup_data.row_accumulators;
+                for (k, pair) in lookup_data.values.chunks_exact(2).enumerate() {
+                    let a = pair[0].read_from_slice(row);
+                    let b = pair[1].read_from_slice(row);
+                    let beta_minus_a = beta - CubicExtension::from(a);
+                    let beta_minus_b = beta - CubicExtension::from(b);
                     accumumulator += beta_minus_a.inverse() + beta_minus_b.inverse();
-                    accumulators[3 * k..3 * k + 3].copy_from_slice(accumumulator.as_base_slice());
+                    accumulators.get(k).assign_to_raw_slice(row, &accumumulator.0);
                 }
                 accumumulator
             })

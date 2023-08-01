@@ -27,7 +27,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let values = ArrayRegister::<ElementRegister>::from_register_unsafe(MemorySlice::Local(
             0,
             L::NUM_ARITHMETIC_COLUMNS,
-        ));
+        )).into_iter().collect::<Vec<_>>();
 
         self.lookup_log_derivative(&table, &values, Self::range_fn)
     }
