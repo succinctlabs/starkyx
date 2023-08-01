@@ -93,6 +93,11 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 
     pub fn build(mut self) -> Chip<L> {
+        // constrain all bus channels
+        for channel in self.bus_channels.iter() {
+            self.constraints.push(channel.clone().into());
+        }
+
         // Add the range checks
         if L::NUM_ARITHMETIC_COLUMNS > 0 {
             self.arithmetic_range_checks();

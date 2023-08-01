@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use super::entry::Entry;
 use super::BusChannel;
 use crate::air::extension::cubic::CubicParser;
@@ -28,36 +30,46 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
 
         // Constraint the running product, picking the values for the first row
         let mut prev = parser.one_extension();
-        let mut prev_first = parser.one_extension();
-        for (chunk, acc_reg) in product_chunck.zip(self.row_acc_product.iter()) {
-            let a = chunk[0].next().eval(parser);
-            let b = chunk[1].next().eval(parser);
-            let acc = acc_reg.next().eval(parser);
-
-            let a_first = chunk[0].eval(parser);
-            let b_first = chunk[1].eval(parser);
-            let acc_first = acc_reg.eval(parser);
+        for (chunk, acc_reg) in product_chunck.zip_eq(self.row_acc_product.iter()) {
+            let a = chunk[0].eval(parser);
+            let b = chunk[1].eval(parser);
+            let acc = acc_reg.eval(parser);
 
             let mut acc_constraint = parser.mul_extension(prev, a);
             acc_constraint = parser.mul_extension(acc_constraint, b);
             acc_constraint = parser.sub_extension(acc, acc_constraint);
             parser.constraint_extension(acc_constraint);
             prev = acc;
-
-            let mut acc_first_constraint = parser.mul_extension(prev_first, a_first);
-            acc_first_constraint = parser.mul_extension(acc_first_constraint, b_first);
-            acc_first_constraint = parser.sub_extension(acc_first, acc_first_constraint);
-            parser.constraint_extension(acc_first_constraint);
-            prev_first = acc_first;
         }
 
         // Constraint the bus values
-        let mut prod_value = prev;
-        let mut prod_value_first = prev_first;
-        if let Some(last_element) = last_element {
-            prod_value = parser.mul_extension(prod_value, last_element.next().eval(parser));
-            prod_value_first = parser.mul_extension(prod_value_first, last_element.eval(parser));
-        }
+        let prod_value = match (self.row_acc_product.last(), last_element) {
+            (Some(x), Some(y)) => {
+                let a = x.next().eval(parser);
+                let b = y.next().eval(parser);
+                parser.mul_extension(a, b)
+            }
+            (Some(x), None) => x.next().eval(parser),
+            (None, Some(y)) => y.next().eval(parser),
+            (None, None) => parser.one_extension(),
+        };
+
+        let prod_value_first = match (self.row_acc_product.last(), last_element) {
+            (Some(x), Some(y)) => {
+                let a = x.eval(parser);
+                let b = y.eval(parser);
+                parser.mul_extension(a, b)
+            }
+            (Some(x), None) => x.eval(parser),
+            (None, Some(y)) => y.eval(parser),
+            (None, None) => parser.one_extension(),
+        };
+        // let mut prod_value = self.row_acc_product.last().unwrap().next().eval(parser);
+        // let mut prod_value_first = self.row_acc_product.last().unwrap().eval(parser);
+        // if let Some(last_element) = last_element {
+        //     // prod_value = parser.mul_extension(prod_value, last_element.next().eval(parser));
+        //     prod_value_first = parser.mul_extension(prod_value_first, last_element.eval(parser));
+        // }
 
         let bus_value = self.table_accumulator.eval(parser);
         let bus_next_value = self.table_accumulator.next().eval(parser);

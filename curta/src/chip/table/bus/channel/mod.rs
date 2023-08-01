@@ -23,57 +23,64 @@ pub struct BusChannel<F, E> {
 }
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn input_to_bus(
-        &mut self,
-        bus: &mut BusChannel<L::Field, L::CubicParams>,
-        register: CubicRegister,
-    ) {
-        bus.input(register);
-        bus.entry_values.push(self.alloc_extended());
-        if bus.entries.len() % 2 == 0 {
+    pub fn input_to_bus(&mut self, channel_idx: usize, register: CubicRegister) {
+        let entry_values = self.alloc_extended();
+        self.bus_channels[channel_idx].input(register);
+        self.bus_channels[channel_idx]
+            .entry_values
+            .push(entry_values);
+        let length = self.bus_channels[channel_idx].entries.len();
+        if length % 2 == 0 {
             let product = self.alloc_extended::<CubicRegister>();
-            bus.row_acc_product.push(product);
+            self.bus_channels[channel_idx].row_acc_product.push(product);
         }
     }
 
     pub fn input_to_bus_filtered(
         &mut self,
-        bus: &mut BusChannel<L::Field, L::CubicParams>,
+        channel_idx: usize,
         register: CubicRegister,
         filter: ArithmeticExpression<L::Field>,
     ) {
+        let entry_values = self.alloc_extended();
+        let bus = &mut self.bus_channels[channel_idx];
         bus.input_filtered(register, filter);
-        bus.entry_values.push(self.alloc_extended());
-        if bus.entries.len() % 2 == 0 {
+        bus.entry_values.push(entry_values);
+        let len = bus.entries.len();
+        if len % 2 == 0 {
             let product = self.alloc_extended::<CubicRegister>();
-            bus.row_acc_product.push(product);
+            self.bus_channels[channel_idx].row_acc_product.push(product);
         }
     }
 
-    pub fn output_from_bus(
-        &mut self,
-        bus: &mut BusChannel<L::Field, L::CubicParams>,
-        register: CubicRegister,
-    ) {
-        bus.output(register);
-        bus.entry_values.push(self.alloc_extended());
-        if bus.entries.len() % 2 == 0 {
+    pub fn output_from_bus(&mut self, channel_idx: usize, register: CubicRegister) {
+        let entry_values = self.alloc_extended();
+        self.bus_channels[channel_idx].output(register);
+        self.bus_channels[channel_idx]
+            .entry_values
+            .push(entry_values);
+        let len = self.bus_channels[channel_idx].entries.len();
+        if len % 2 == 0 {
             let product = self.alloc_extended::<CubicRegister>();
-            bus.row_acc_product.push(product);
+            self.bus_channels[channel_idx].row_acc_product.push(product);
         }
     }
 
     pub fn output_from_bus_filtered(
         &mut self,
-        bus: &mut BusChannel<L::Field, L::CubicParams>,
+        channel_idx: usize,
         register: CubicRegister,
         filter: ArithmeticExpression<L::Field>,
     ) {
-        bus.output_filtered(register, filter);
-        bus.entry_values.push(self.alloc_extended());
-        if bus.entries.len() % 2 == 0 {
+        let entry_values = self.alloc_extended();
+        self.bus_channels[channel_idx].output_filtered(register, filter);
+        self.bus_channels[channel_idx]
+            .entry_values
+            .push(entry_values);
+        let len = self.bus_channels[channel_idx].entries.len();
+        if len % 2 == 0 {
             let product = self.alloc_extended::<CubicRegister>();
-            bus.row_acc_product.push(product);
+            self.bus_channels[channel_idx].row_acc_product.push(product);
         }
     }
 }
@@ -134,8 +141,8 @@ mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        const NUM_FREE_COLUMNS: usize = 6;
-        const EXTENDED_COLUMNS: usize = 12;
+        const NUM_FREE_COLUMNS: usize = 12;
+        const EXTENDED_COLUMNS: usize = 21;
 
         type Instruction = EmptyInstruction<GoldilocksField>;
 
@@ -153,15 +160,19 @@ mod tests {
         let mut builder = AirBuilder::<L>::new();
         let x_1 = builder.alloc::<CubicRegister>();
         let x_2 = builder.alloc::<CubicRegister>();
+        let x_3 = builder.alloc::<CubicRegister>();
+        let x_4 = builder.alloc::<CubicRegister>();
 
         let beta = builder.alloc_challenge::<CubicRegister>();
         let out_channel = builder.alloc_global::<CubicRegister>();
         let accumulator = builder.alloc_extended::<CubicRegister>();
-        let mut channel = BusChannel::new(beta, out_channel, accumulator);
+        let channel = BusChannel::new(beta, out_channel, accumulator);
         builder.bus_channels.push(channel.clone());
 
-        builder.input_to_bus(&mut channel, x_1);
-        builder.output_from_bus(&mut channel, x_2);
+        builder.input_to_bus(0, x_1);
+        builder.input_to_bus(0, x_3);
+        builder.output_from_bus(0, x_2);
+        builder.output_from_bus(0, x_4);
 
         let one = ArithmeticExpression::<F>::one();
         let zero = ArithmeticExpression::<F>::zero();
@@ -177,8 +188,11 @@ mod tests {
         let writer = generator.new_writer();
         for i in 0..L::num_rows() {
             let a = CubicElement([GoldilocksField::rand(); 3]);
+            let b = CubicElement([GoldilocksField::rand(); 3]);
             writer.write(&x_1, &a, L::num_rows() - 1 - i);
             writer.write(&x_2, &a, i);
+            writer.write(&x_3, &b, i);
+            writer.write(&x_4, &b, i);
         }
 
         let stark = Starky::from_chip(air);

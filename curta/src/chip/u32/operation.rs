@@ -1,7 +1,8 @@
 use super::arithmetic::U32ArithmericOperation;
 use super::bit_operations::and::And;
+use super::bit_operations::xor::Xor;
 use super::bit_operations::BitOperation;
-use super::opcode::{U32Opcode, OPCODE_AND};
+use super::opcode::{U32Opcode, OPCODE_AND, OPCODE_XOR};
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::builder::AirBuilder;
@@ -20,8 +21,11 @@ pub enum U32Operation {
 }
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn u32_operation_from_opcode(&mut self, opcode: &U32Opcode) -> U32Operation {
-        match opcode.ident {
+    pub fn u32_operation_from_opcode(&mut self, opcode: &U32Opcode) -> U32Operation
+    where
+        L::Instruction: From<U32Operation>,
+    {
+        let operation = match opcode.ident {
             OPCODE_AND => {
                 let a_bits = self.alloc_array::<BitRegister>(32);
                 let b_bits = self.alloc_array::<BitRegister>(32);
@@ -33,8 +37,21 @@ impl<L: AirParameters> AirBuilder<L> {
                 };
                 U32Operation::Bit(and.into())
             }
+            OPCODE_XOR => {
+                let a_bits = self.alloc_array::<BitRegister>(32);
+                let b_bits = self.alloc_array::<BitRegister>(32);
+                let result_bits = self.alloc_array::<BitRegister>(32);
+                let xor = Xor {
+                    a: a_bits,
+                    b: b_bits,
+                    result: result_bits,
+                };
+                U32Operation::Bit(xor.into())
+            }
             _ => unimplemented!(),
-        }
+        };
+        self.register_instruction(operation.clone());
+        operation
     }
 }
 

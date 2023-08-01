@@ -46,14 +46,14 @@ impl<E: Clone> Bus<E> {
     pub fn new_channel<L: AirParameters<CubicParams = E>>(
         &mut self,
         builder: &mut AirBuilder<L>,
-    ) -> BusChannel<L::Field, L::CubicParams> {
+    ) -> usize {
         let out_channel = builder.alloc_global::<CubicRegister>();
         self.channels.push(out_channel);
         let accumulator = builder.alloc_extended::<CubicRegister>();
         let channel = BusChannel::new(self.challenge, out_channel, accumulator);
-        builder.bus_channels.push(channel.clone());
-        builder.constraints.push(channel.clone().into());
-        channel
+        let index = builder.bus_channels.len();
+        builder.bus_channels.push(channel);
+        index
     }
 }
 
@@ -93,10 +93,10 @@ mod tests {
         let x_2 = builder.alloc::<CubicRegister>();
 
         let mut bus = builder.new_bus();
-        let mut channel = bus.new_channel(&mut builder);
+        let channel_idx = bus.new_channel(&mut builder);
 
-        builder.input_to_bus(&mut channel, x_1);
-        builder.output_from_bus(&mut channel, x_2);
+        builder.input_to_bus(channel_idx, x_1);
+        builder.output_from_bus(channel_idx, x_2);
 
         builder.constrain_bus(bus);
 
