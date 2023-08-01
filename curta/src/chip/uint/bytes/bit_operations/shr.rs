@@ -122,6 +122,9 @@ pub mod tests {
             assert!((exp_u32 >> 31) & 1 == 0);
 
             writer.write_instruction(&shr, i);
+            let carry = writer.read(&carry, i);
+            let carry_val = a_32 & 1;
+            assert_eq!(carry, F::from_canonical_u32(carry_val));
         }
 
         let stark = Starky::<_, { L::num_columns() }>::new(air);
