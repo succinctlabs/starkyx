@@ -56,6 +56,12 @@ pub trait AirParser: Sized {
         self.constant(Self::Field::ZERO)
     }
 
+    fn sum(&mut self, elements: &[Self::Var]) -> Self::Var {
+        elements
+            .iter()
+            .fold(self.zero(), |acc, x| self.add(acc, *x))
+    }
+
     fn assert_eq(&mut self, a: Self::Var, b: Self::Var) {
         let c = self.sub(a, b);
         self.constraint(c);
