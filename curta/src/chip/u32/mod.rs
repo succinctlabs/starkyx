@@ -78,14 +78,14 @@ mod tests {
             let a_val = F::from_canonical_u32(rng.gen::<u32>());
             let b_val = F::from_canonical_u32(rng.gen::<u32>());
 
-            writer.write(&a, &a_val, i);
-            writer.write(&b, &b_val, i);
+            writer.write(&a, &a_val, L::num_rows() - 1 - i);
+            writer.write(&b, &b_val, L::num_rows() - 1 - i);
 
             writer.write(&a_table, &a_val, i);
             writer.write(&b_table, &b_val, i);
 
-            writer.write_instruction(&opcode_dst, i);
-            writer.write_instruction(&op_write, i);
+            writer.write_instruction(&opcode_dst, L::num_rows() - 1 - i);
+            writer.write_instruction(&op_write, L::num_rows() - 1  - i);
         }
 
         let stark = Starky::<_, { L::num_columns() }>::new(air);
