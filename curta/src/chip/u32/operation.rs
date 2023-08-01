@@ -1,7 +1,3 @@
-use super::arithmetic::U32ArithmericOperation;
-use super::bit_operations::and::And;
-use super::bit_operations::xor::Xor;
-use super::bit_operations::BitOperation;
 use super::opcode::{U32Opcode, OPCODE_AND, OPCODE_XOR};
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
@@ -11,13 +7,15 @@ use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
+use crate::chip::uint::bytes::bit_operations::and::And;
+use crate::chip::uint::bytes::bit_operations::xor::Xor;
+use crate::chip::uint::bytes::bit_operations::BitOperation;
 use crate::chip::AirParameters;
 pub use crate::math::prelude::*;
 
 #[derive(Debug, Clone)]
 pub enum U32Operation {
     Bit(BitOperation<32>),
-    Arithmetic(U32ArithmericOperation),
 }
 
 impl<L: AirParameters> AirBuilder<L> {
@@ -59,21 +57,18 @@ impl U32Operation {
     pub fn a_bits(&self) -> ArrayRegister<BitRegister> {
         match self {
             U32Operation::Bit(op) => op.a_bits(),
-            U32Operation::Arithmetic(op) => op.a_bits(),
         }
     }
 
     pub fn b_bits(&self) -> ArrayRegister<BitRegister> {
         match self {
             U32Operation::Bit(op) => op.b_bits(),
-            U32Operation::Arithmetic(op) => op.b_bits(),
         }
     }
 
     pub fn result_bits(&self) -> ArrayRegister<BitRegister> {
         match self {
             U32Operation::Bit(op) => op.result_bits(),
-            U32Operation::Arithmetic(op) => op.result_bits(),
         }
     }
 }
@@ -82,7 +77,6 @@ impl<AP: AirParser> AirConstraint<AP> for U32Operation {
     fn eval(&self, parser: &mut AP) {
         match self {
             U32Operation::Bit(op) => op.eval(parser),
-            U32Operation::Arithmetic(op) => op.eval(parser),
         }
     }
 }
@@ -91,21 +85,18 @@ impl<F: PrimeField64> Instruction<F> for U32Operation {
     fn inputs(&self) -> Vec<MemorySlice> {
         match self {
             U32Operation::Bit(op) => Instruction::<F>::inputs(op),
-            U32Operation::Arithmetic(op) => Instruction::<F>::inputs(op),
         }
     }
 
     fn trace_layout(&self) -> Vec<MemorySlice> {
         match self {
             U32Operation::Bit(op) => Instruction::<F>::trace_layout(op),
-            U32Operation::Arithmetic(op) => Instruction::<F>::trace_layout(op),
         }
     }
 
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         match self {
             U32Operation::Bit(op) => Instruction::<F>::write(op, writer, row_index),
-            U32Operation::Arithmetic(op) => Instruction::<F>::write(op, writer, row_index),
         }
     }
 }
@@ -113,11 +104,5 @@ impl<F: PrimeField64> Instruction<F> for U32Operation {
 impl From<BitOperation<32>> for U32Operation {
     fn from(op: BitOperation<32>) -> Self {
         U32Operation::Bit(op)
-    }
-}
-
-impl From<U32ArithmericOperation> for U32Operation {
-    fn from(op: U32ArithmericOperation) -> Self {
-        U32Operation::Arithmetic(op)
     }
 }

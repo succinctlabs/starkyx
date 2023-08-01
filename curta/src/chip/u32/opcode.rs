@@ -67,6 +67,12 @@ impl<F: PrimeField64> Instruction<F> for U32Opcode {
                 let result = a & b;
                 writer.write(&self.result, &F::from_canonical_u32(result), row_index);
             }
+            OPCODE_XOR => {
+                let a = writer.read(&self.a, row_index).as_canonical_u64() as u32;
+                let b = writer.read(&self.b, row_index).as_canonical_u64() as u32;
+                let result = a ^ b;
+                writer.write(&self.result, &F::from_canonical_u32(result), row_index);
+            }
             _ => panic!("Invalid opcode"),
         }
     }
