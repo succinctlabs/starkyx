@@ -1,5 +1,4 @@
 use alloc::collections::VecDeque;
-use core::array;
 
 use super::LogLookup;
 use crate::air::extension::cubic::CubicParser;

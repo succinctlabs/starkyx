@@ -107,7 +107,8 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                     match data {
                         Lookup::LogDerivative(data) => {
                             self.writer.write_log_lookup(num_rows, data);
-                        }
+                        },
+                        _ => unimplemented!()
                     }
                 }
 
