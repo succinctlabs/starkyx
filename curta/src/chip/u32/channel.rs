@@ -14,10 +14,10 @@ pub struct U32Channel {
 }
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn new_u32_channel<'a>(
+    pub fn new_u32_channel(
         &mut self,
         challenges: &ArrayRegister<CubicRegister>,
-        bus: &'a mut Bus<L::CubicParams>,
+        bus: &mut Bus<L::CubicParams>,
     ) -> U32Channel {
         assert_eq!(challenges.len(), 4);
         let channel_idx = bus.new_channel(self);
