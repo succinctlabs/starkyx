@@ -7,9 +7,20 @@ use crate::chip::trace::writer::TraceWriter;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
+pub const OPCODE_AND: u32 = 97;
+pub const OPCODE_OR: u32 = 101;
+pub const OPCODE_XOR: u32 = 102;
+pub const OPCODE_ADD: u32 = 103;
+pub const fn opcode_rotate(n: usize) -> u32 {
+    4 + (n as u32) << 8u32
+}
+pub const fn opcode_shr(n: usize) -> u32 {
+    5 + (n as u32) << 8u32
+}
+
 #[derive(Debug, Clone)]
 pub struct U32Opcode {
-    ident: u32,
+    pub ident: u32,
     pub id: ElementRegister,
     pub a: ElementRegister,
     pub b: ElementRegister,
@@ -50,7 +61,7 @@ impl<F: PrimeField64> Instruction<F> for U32Opcode {
         writer.write(&self.id, &id_val, row_index);
 
         match self.ident {
-            100 => {
+            OPCODE_AND => {
                 let a = writer.read(&self.a, row_index).as_canonical_u64() as u32;
                 let b = writer.read(&self.b, row_index).as_canonical_u64() as u32;
                 let result = a & b;

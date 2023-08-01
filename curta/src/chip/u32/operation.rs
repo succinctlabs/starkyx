@@ -1,16 +1,65 @@
 use super::arithmetic::U32ArithmericOperation;
+use super::bit_operations::and::And;
 use super::bit_operations::BitOperation;
+use super::opcode::{U32Opcode, OPCODE_AND};
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
+use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
+use crate::chip::register::array::ArrayRegister;
+use crate::chip::register::bit::BitRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
+use crate::chip::AirParameters;
 pub use crate::math::prelude::*;
 
 #[derive(Debug, Clone)]
 pub enum U32Operation {
     Bit(BitOperation<32>),
     Arithmetic(U32ArithmericOperation),
+}
+
+impl<L: AirParameters> AirBuilder<L> {
+    pub fn u32_operation_from_opcode(&mut self, opcode: &U32Opcode) -> U32Operation {
+        match opcode.ident {
+            OPCODE_AND => {
+                let a_bits = self.alloc_array::<BitRegister>(32);
+                let b_bits = self.alloc_array::<BitRegister>(32);
+                let result_bits = self.alloc_array::<BitRegister>(32);
+                let and = And {
+                    a: a_bits,
+                    b: b_bits,
+                    result: result_bits,
+                };
+                let op = U32Operation::Bit(and.into());
+                op
+            }
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl U32Operation {
+    pub fn a_bits(&self) -> ArrayRegister<BitRegister> {
+        match self {
+            U32Operation::Bit(op) => op.a_bits(),
+            U32Operation::Arithmetic(op) => op.a_bits(),
+        }
+    }
+
+    pub fn b_bits(&self) -> ArrayRegister<BitRegister> {
+        match self {
+            U32Operation::Bit(op) => op.b_bits(),
+            U32Operation::Arithmetic(op) => op.b_bits(),
+        }
+    }
+
+    pub fn result_bits(&self) -> ArrayRegister<BitRegister> {
+        match self {
+            U32Operation::Bit(op) => op.result_bits(),
+            U32Operation::Arithmetic(op) => op.result_bits(),
+        }
+    }
 }
 
 impl<AP: AirParser> AirConstraint<AP> for U32Operation {

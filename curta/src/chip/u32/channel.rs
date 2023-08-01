@@ -17,13 +17,14 @@ pub struct U32Channel<F, E> {
 impl<L: AirParameters> AirBuilder<L> {
     pub fn new_u32_channel(
         &mut self,
+        challenges: &ArrayRegister<CubicRegister>,
         bus: &mut Bus<L::CubicParams>,
     ) -> U32Channel<L::Field, L::CubicParams> {
-        let challenges = self.alloc_array::<CubicRegister>(4);
+        assert_eq!(challenges.len(), 4);
         let channel = bus.new_channel(self);
 
         U32Channel {
-            challenges,
+            challenges: *challenges,
             bus_channel: channel,
         }
     }
