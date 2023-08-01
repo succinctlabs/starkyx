@@ -9,9 +9,10 @@ use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
 pub use crate::math::prelude::*;
 
+pub mod adc;
 pub mod and;
-pub mod or;
-pub mod rotate;
+pub mod not;
+pub mod shl;
 pub mod shr;
 pub mod xor;
 

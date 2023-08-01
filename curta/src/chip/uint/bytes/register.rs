@@ -1,11 +1,6 @@
-use crate::chip::builder::AirBuilder;
-use crate::chip::register::array::ArrayRegister;
-use crate::chip::register::bit::BitRegister;
 use crate::chip::register::cell::CellType;
-use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
-use crate::chip::AirParameters;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ByteRegister(MemorySlice);
