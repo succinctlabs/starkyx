@@ -31,8 +31,7 @@ impl<L: AirParameters> AirBuilder<L> {
                     b: b_bits,
                     result: result_bits,
                 };
-                let op = U32Operation::Bit(and.into());
-                op
+                U32Operation::Bit(and.into())
             }
             _ => unimplemented!(),
         }

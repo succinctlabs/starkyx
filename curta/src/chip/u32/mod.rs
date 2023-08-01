@@ -85,7 +85,7 @@ mod tests {
             writer.write(&b_table, &b_val, i);
 
             writer.write_instruction(&opcode_dst, L::num_rows() - 1 - i);
-            writer.write_instruction(&op_write, L::num_rows() - 1  - i);
+            writer.write_instruction(&op_write, L::num_rows() - 1 - i);
         }
 
         let stark = Starky::<_, { L::num_columns() }>::new(air);
