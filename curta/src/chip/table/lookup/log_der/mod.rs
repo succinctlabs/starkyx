@@ -6,10 +6,10 @@ use core::marker::PhantomData;
 
 use crate::chip::builder::AirBuilder;
 use crate::chip::constraint::Constraint;
-use crate::chip::register::Register;
 use crate::chip::register::array::ArrayRegister;
-use crate::chip::register::cubic::CubicRegister;
+use crate::chip::register::cubic::{CubicRegister, EvalCubic};
 use crate::chip::register::element::ElementRegister;
+use crate::chip::register::Register;
 use crate::chip::table::lookup::Lookup;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
@@ -20,20 +20,20 @@ pub mod trace;
 #[derive(Debug, Clone)]
 pub struct LookupTable<T: Register, F: Field, E: CubicParameters<F>> {
     pub(crate) table: Vec<T>,
-    pub(crate) multiplicities: ArrayRegister<ElementRegister>, 
+    pub(crate) multiplicities: ArrayRegister<ElementRegister>,
     _marker: core::marker::PhantomData<(F, E)>,
 }
 
 /// Currently, only supports an even number of values
 #[derive(Debug, Clone)]
-pub struct LogLookup<F: Field, E: CubicParameters<F>, const N: usize> {
+pub struct LogLookup<T: EvalCubic, F: Field, E: CubicParameters<F>> {
     pub(crate) challenge: CubicRegister,
-    pub(crate) table_data: LookupTable<ElementRegister, F, E>,
-    pub(crate) values: Vec<ElementRegister>,
+    pub(crate) table_data: LookupTable<T, F, E>,
+    pub(crate) values: Vec<T>,
     pub(crate) multiplicity_table_log: CubicRegister,
     pub(crate) row_accumulators: ArrayRegister<CubicRegister>,
     pub(crate) log_lookup_accumulator: CubicRegister,
-    table_index: Option<fn(F) -> usize>,
+    table_index: Option<fn(T::Value<F>) -> usize>,
     _marker: core::marker::PhantomData<(F, E)>,
 }
 
@@ -51,11 +51,17 @@ impl<L: AirParameters> AirBuilder<L> {
         let multiplicity_table_log = self.alloc_extended::<CubicRegister>();
         let row_accumulators = self.alloc_array_extended::<CubicRegister>(values.len() / 2);
         let log_lookup_accumulator = self.alloc_extended::<CubicRegister>();
-        let table = ArrayRegister::from_element(*table).into_iter().collect::<Vec<_>>();
+        let table = ArrayRegister::from_element(*table)
+            .into_iter()
+            .collect::<Vec<_>>();
 
         let lookup_data = Lookup::LogDerivative(LogLookup {
             challenge,
-            table_data : LookupTable { table, multiplicities, _marker: PhantomData },
+            table_data: LookupTable {
+                table,
+                multiplicities,
+                _marker: PhantomData,
+            },
             values: values.to_vec(),
             multiplicity_table_log,
             row_accumulators,

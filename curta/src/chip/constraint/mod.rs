@@ -20,7 +20,7 @@ pub enum Constraint<L: AirParameters> {
     Accumulator(Accumulator<L::CubicParams>),
     BusChannel(BusChannel<L::Field, L::CubicParams>),
     Bus(Bus<L::CubicParams>),
-    Lookup(Box<Lookup<L::Field, L::CubicParams, 1>>),
+    Lookup(Box<Lookup<L::Field, L::CubicParams>>),
     Evaluation(Evaluation<L::Field, L::CubicParams>),
 }
 
@@ -38,7 +38,7 @@ impl<L: AirParameters> Constraint<L> {
         Self::Instruction(AirInstruction::CustomInstruction(instruction.into()))
     }
 
-    pub fn lookup(lookup: Lookup<L::Field, L::CubicParams, 1>) -> Self {
+    pub fn lookup(lookup: Lookup<L::Field, L::CubicParams>) -> Self {
         Self::Lookup(Box::new(lookup))
     }
 

@@ -1,19 +1,19 @@
 use super::{LogLookup, LookupTable};
-use crate::chip::register::{RegisterSerializable, Register};
+use crate::chip::register::cubic::EvalCubic;
+use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 use crate::plonky2::field::cubic::extension::CubicExtension;
 
-
 impl<F: PrimeField> TraceWriter<F> {
-
     pub(crate) fn write_multiplicities_from_fn<E: CubicParameters<F>, T: Register>(
         &self,
         num_rows: usize,
         table_data: &LookupTable<T, F, E>,
         table_index: impl Fn(T::Value<F>) -> usize,
-        values: &[T],) {
+        values: &[T],
+    ) {
         // Calculate multiplicities
         let mut multiplicities = vec![F::ZERO; num_rows];
 
@@ -36,16 +36,21 @@ impl<F: PrimeField> TraceWriter<F> {
         }
     }
 
-    pub(crate) fn write_log_lookup<E: CubicParameters<F>>(
+    pub(crate) fn write_log_lookup<T: EvalCubic, E: CubicParameters<F>>(
         &self,
         num_rows: usize,
-        lookup_data: &LogLookup<F, E, 1>,
+        lookup_data: &LogLookup<T, F, E>,
     ) {
         let beta = CubicExtension::<F, E>::from(self.read(&lookup_data.challenge, 0));
 
         // If a table index function is provided, calculate multiplicities
         if let Some(table_index) = lookup_data.table_index {
-            self.write_multiplicities_from_fn(num_rows, &lookup_data.table_data, table_index, &lookup_data.values);
+            self.write_multiplicities_from_fn(
+                num_rows,
+                &lookup_data.table_data,
+                table_index,
+                &lookup_data.values,
+            );
         }
 
         // Write multiplicity inverse constraints
@@ -54,7 +59,8 @@ impl<F: PrimeField> TraceWriter<F> {
             .map(|i| {
                 let multiplicity_reg = lookup_data.table_data.multiplicities.get(0);
                 let x = self.read(&multiplicity_reg, i);
-                let table = self.read(&lookup_data.table_data.table[0], i);
+                let table_value = self.read(&lookup_data.table_data.table[0], i);
+                let table = CubicExtension::from(T::trace_value_as_cubic(table_value));
                 CubicExtension::from(x) / (beta - table)
             })
             .collect::<Vec<_>>();
@@ -75,12 +81,14 @@ impl<F: PrimeField> TraceWriter<F> {
                 let mut accumumulator = CubicExtension::ZERO;
                 let accumulators = lookup_data.row_accumulators;
                 for (k, pair) in lookup_data.values.chunks_exact(2).enumerate() {
-                    let a = pair[0].read_from_slice(row);
-                    let b = pair[1].read_from_slice(row);
+                    let a = T::trace_value_as_cubic(pair[0].read_from_slice(row));
+                    let b = T::trace_value_as_cubic(pair[1].read_from_slice(row));
                     let beta_minus_a = beta - CubicExtension::from(a);
                     let beta_minus_b = beta - CubicExtension::from(b);
                     accumumulator += beta_minus_a.inverse() + beta_minus_b.inverse();
-                    accumulators.get(k).assign_to_raw_slice(row, &accumumulator.0);
+                    accumulators
+                        .get(k)
+                        .assign_to_raw_slice(row, &accumumulator.0);
                 }
                 accumumulator
             })

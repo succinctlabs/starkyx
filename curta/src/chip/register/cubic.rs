@@ -3,6 +3,7 @@ use super::cell::CellType;
 use super::element::ElementRegister;
 use super::memory::MemorySlice;
 use super::{Register, RegisterSerializable, RegisterSized};
+use crate::air::parser::AirParser;
 use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::math::prelude::*;
 use crate::plonky2::field::cubic::element::CubicElement;
@@ -10,6 +11,21 @@ use crate::plonky2::field::cubic::element::CubicElement;
 /// A register for a single element/column in the trace. The value is not constrainted.
 #[derive(Debug, Clone, Copy)]
 pub struct CubicRegister(MemorySlice);
+
+pub trait EvalCubic: Register {
+    fn value_as_cubic<T: Copy>(value: Self::Value<T>, zero: T) -> CubicElement<T>;
+
+    fn eval_cubic<AP: AirParser>(&self, parser: &mut AP) -> CubicElement<AP::Var> {
+        let value = self.eval(parser);
+        let zero = parser.zero();
+        Self::value_as_cubic(value, zero)
+    }
+
+    fn trace_value_as_cubic<F: Field>(value: Self::Value<F>) -> CubicElement<F> {
+        let zero = F::ZERO;
+        Self::value_as_cubic(value, zero)
+    }
+}
 
 impl RegisterSerializable for CubicRegister {
     const CELL: CellType = CellType::Element;
@@ -67,5 +83,17 @@ impl CubicRegister {
             array.get(1).expr(),
             array.get(2).expr(),
         )
+    }
+}
+
+impl EvalCubic for CubicRegister {
+    fn value_as_cubic<T: Copy>(value: Self::Value<T>, _zero: T) -> CubicElement<T> {
+        value
+    }
+}
+
+impl EvalCubic for ElementRegister {
+    fn value_as_cubic<T: Copy>(value: Self::Value<T>, zero: T) -> CubicElement<T> {
+        CubicElement::from_base(value, zero)
     }
 }

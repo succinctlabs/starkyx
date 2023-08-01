@@ -4,49 +4,40 @@ use core::array;
 use super::LogLookup;
 use crate::air::extension::cubic::CubicParser;
 use crate::air::AirConstraint;
+use crate::chip::register::cubic::EvalCubic;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::*;
 
-impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>, const N: usize> AirConstraint<AP>
-    for LogLookup<AP::Field, E, N>
+impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
+    for LogLookup<T, AP::Field, E>
 {
     fn eval(&self, parser: &mut AP) {
         let beta = self.challenge.eval(parser);
 
-        let multiplicities: [_; N] = self
-            .table_data.multiplicities
-            .eval_array(parser)
-            .map(|e| parser.element_from_base_field(e));
+        let multiplicities = self
+            .table_data
+            .multiplicities
+            .eval_vec(parser)
+            .into_iter()
+            .map(|e| parser.element_from_base_field(e))
+            .collect::<Vec<_>>();
 
-        let table: [_; N] = self
-            .table_data.table.iter()
-            .map(|x| {
-                let e = x.eval(parser);
-                parser.element_from_base_field(e)
-                })
-            .collect::<Vec<_>>().try_into().unwrap();
+        let table = self
+            .table_data
+            .table
+            .iter()
+            .map(|x| x.eval_cubic(parser))
+            .collect::<Vec<_>>();
 
         let multiplicities_table_log = self.multiplicity_table_log.eval(parser);
-        let beta_minus_table: [_; N] = array::from_fn(|i| parser.sub_extension(beta, table[i]));
+        let beta_minus_table = parser.sub_extension(beta, table[0]);
 
         // Constrain multiplicities_table_log = sum(mult_i * log(beta - table_i))
-        let mult_table_constraint = match N {
-            1 => {
-                let mult_times_table =
-                    parser.mul_extension(multiplicities_table_log, beta_minus_table[0]);
-                parser.sub_extension(multiplicities[0], mult_times_table)
-            }
-            2 => {
-                let tables_prod = parser.mul_extension(beta_minus_table[0], beta_minus_table[1]);
-                let mult_times_tables = parser.mul_extension(multiplicities_table_log, tables_prod);
-                let mult_tablle_0 = parser.mul_extension(multiplicities[0], beta_minus_table[1]);
-                let mult_tablle_1 = parser.mul_extension(multiplicities[1], beta_minus_table[0]);
-                let numerator = parser.add_extension(mult_tablle_0, mult_tablle_1);
-                parser.sub_extension(numerator, mult_times_tables)
-            }
-            0 => unreachable!("N must be greater than 0"),
-            _ => unimplemented!("N > 2 not supported"),
+        let mult_table_constraint = {
+            let mult_times_table = parser.mul_extension(multiplicities_table_log, beta_minus_table);
+            parser.sub_extension(multiplicities[0], mult_times_table)
         };
+
         parser.constraint_extension(mult_table_constraint);
 
         // Constraint the accumulators for the elements being looked up
@@ -57,12 +48,12 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>, const N: usize> AirConst
             .map(|x| x.eval(parser))
             .collect::<VecDeque<_>>();
 
-        let mut range_pairs = self.values.chunks_exact(2)
+        let mut range_pairs = self
+            .values
+            .chunks_exact(2)
             .map(|chunk| {
-                let a_base = chunk[0].eval(parser);
-                let b_base = chunk[1].eval(parser);
-                let a = parser.element_from_base_field(a_base);
-                let b = parser.element_from_base_field(b_base);
+                let a = chunk[0].eval_cubic(parser);
+                let b = chunk[1].eval_cubic(parser);
                 (a, b)
             })
             .collect::<Vec<_>>()

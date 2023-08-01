@@ -30,7 +30,7 @@ pub struct AirBuilder<L: AirParameters> {
     pub(crate) constraints: Vec<Constraint<L>>,
     pub(crate) accumulators: Vec<Accumulator<L::CubicParams>>,
     pub(crate) bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
-    pub(crate) lookup_data: Vec<Lookup<L::Field, L::CubicParams, 1>>,
+    pub(crate) lookup_data: Vec<Lookup<L::Field, L::CubicParams>>,
     pub(crate) evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
     range_table: Option<ElementRegister>,
 }

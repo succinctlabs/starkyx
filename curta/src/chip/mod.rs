@@ -63,7 +63,7 @@ pub struct Chip<L: AirParameters> {
     num_public_inputs: usize,
     num_global_values: usize,
     accumulators: Vec<Accumulator<L::CubicParams>>,
-    lookup_data: Vec<Lookup<L::Field, L::CubicParams, 1>>,
+    lookup_data: Vec<Lookup<L::Field, L::CubicParams>>,
     bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
     evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
     range_table: Option<ElementRegister>,
