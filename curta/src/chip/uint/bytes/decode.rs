@@ -27,7 +27,7 @@ impl<L: AirParameters> AirBuilder<L> {
         L::Instruction: From<ByteDecodeInstruction>,
     {
         let instruction = ByteDecodeInstruction::new(*byte, *bits);
-        self.register_instruction(instruction.into());
+        self.register_instruction(instruction);
     }
 }
 
