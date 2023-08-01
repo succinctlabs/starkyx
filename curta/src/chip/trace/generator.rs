@@ -3,7 +3,6 @@ use alloc::sync::Arc;
 use anyhow::{Error, Result};
 
 use super::writer::TraceWriter;
-use crate::chip::table::lookup::Lookup;
 use crate::chip::{AirParameters, Chip};
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
@@ -16,12 +15,6 @@ pub struct ArithmeticGenerator<L: AirParameters> {
 }
 
 impl<L: ~const AirParameters> ArithmeticGenerator<L> {
-    // pub fn new(public_inputs: &[L::Field]) -> Self {
-    //     Self {
-    //         writer: TraceWriter::new(L::num_columns(), L::num_rows()),
-    //     }
-    // }
-
     pub fn new(air: &Chip<L>) -> Self {
         let num_public_inputs = air.num_public_inputs;
         let num_global_values = air.num_global_values;
@@ -104,12 +97,7 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
 
                 // Write lookup proofs
                 for data in air.lookup_data.iter() {
-                    match data {
-                        Lookup::LogDerivative(data) => {
-                            self.writer.write_log_lookup(num_rows, data);
-                        },
-                        _ => unimplemented!()
-                    }
+                    self.writer.write_lookup(num_rows, data);
                 }
 
                 // Write evaluation proofs

@@ -1,6 +1,5 @@
 use super::bit_operations::BitOperation;
 use super::register::ByteRegister;
-use crate::chip::register::bit::BitRegister;
 use crate::chip::register::cubic::CubicRegister;
 
 #[derive(Debug, Clone, Copy)]
@@ -12,21 +11,4 @@ pub struct ByteOperations {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ByteLookup {
-    and_digest: CubicRegister,
-    and_multiplicity: usize,
-    xor_digest: CubicRegister,
-    xor_multiplicity: usize,
-    not_digest: CubicRegister,
-    not_multiplicity: usize,
-    adc_digest: CubicRegister,
-    adc_multiplicity: usize,
-    or_digest: CubicRegister,
-    or_multiplicity: usize,
-    rotate_right_digest: CubicRegister,
-    rotate_right_multiplicity: usize,
-    shr_digest: CubicRegister,
-    shr_multiplicity: usize,
-    shl_digest: CubicRegister,
-    shl_multiplicity: usize,
-}
+pub struct ByteLookup {}

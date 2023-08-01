@@ -39,6 +39,18 @@ pub struct LogLookup<T: EvalCubic, F: Field, E: CubicParameters<F>> {
 
 // LogLookUp Memory allocation
 impl<L: AirParameters> AirBuilder<L> {
+    pub fn lookup_table(
+        &mut self,
+        table: &ElementRegister,
+    ) -> LookupTable<ElementRegister, L::Field, L::CubicParams> {
+        let multiplicity = self.alloc_array_extended::<ElementRegister>(1);
+        LookupTable {
+            table: vec![*table],
+            multiplicities: multiplicity,
+            _marker: PhantomData,
+        }
+    }
+
     pub fn lookup_log_derivative(
         &mut self,
         table: &ElementRegister,
@@ -47,21 +59,14 @@ impl<L: AirParameters> AirBuilder<L> {
     ) {
         // Allocate memory for the lookup
         let challenge = self.alloc_challenge::<CubicRegister>();
-        let multiplicities = self.alloc_array_extended::<ElementRegister>(1);
         let multiplicity_table_log = self.alloc_extended::<CubicRegister>();
         let row_accumulators = self.alloc_array_extended::<CubicRegister>(values.len() / 2);
         let log_lookup_accumulator = self.alloc_extended::<CubicRegister>();
-        let table = ArrayRegister::from_element(*table)
-            .into_iter()
-            .collect::<Vec<_>>();
+        let table_data = self.lookup_table(table);
 
         let lookup_data = Lookup::LogDerivative(LogLookup {
             challenge,
-            table_data: LookupTable {
-                table,
-                multiplicities,
-                _marker: PhantomData,
-            },
+            table_data,
             values: values.to_vec(),
             multiplicity_table_log,
             row_accumulators,
