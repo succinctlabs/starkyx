@@ -24,6 +24,7 @@ pub struct LookupTable<T: Register, F: Field, E: CubicParameters<F>> {
     pub(crate) multiplicities: ArrayRegister<ElementRegister>,
     pub(crate) multiplicities_table_log: ArrayRegister<CubicRegister>,
     pub(crate) table_accumulator: CubicRegister,
+    pub(crate) digest: CubicRegister,
     _marker: core::marker::PhantomData<(F, E)>,
 }
 
@@ -55,6 +56,7 @@ impl<L: AirParameters> AirBuilder<L> {
             multiplicities: multiplicity,
             multiplicities_table_log,
             table_accumulator,
+            digest: table_accumulator,
             _marker: PhantomData,
         }
     }

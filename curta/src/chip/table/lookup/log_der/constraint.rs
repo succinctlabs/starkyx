@@ -72,6 +72,11 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
         let acc_next_expected = parser.add_extension(accumulator, mult_table_log_sum_next);
         let acc_next_constraint = parser.sub_extension(acuumulator_next, acc_next_expected);
         parser.constraint_extension_transition(acc_next_constraint);
+
+        // Constraint the digest
+        let digest = self.digest.eval(parser);
+        let digest_constraint = parser.sub_extension(digest, accumulator);
+        parser.constraint_extension_last_row(digest_constraint);
     }
 }
 
