@@ -37,6 +37,7 @@ pub struct LogLookup<T: EvalCubic, F: Field, E: CubicParameters<F>> {
     pub(crate) row_accumulators: ArrayRegister<CubicRegister>,
     pub(crate) log_lookup_accumulator: CubicRegister,
     pub(crate) table_index: Option<fn(T::Value<F>) -> usize>,
+    pub digest : CubicRegister,
     _marker: core::marker::PhantomData<(F, E)>,
 }
 
@@ -80,6 +81,7 @@ impl<L: AirParameters> AirBuilder<L> {
             row_accumulators,
             log_lookup_accumulator,
             table_index: Some(table_index),
+            digest: log_lookup_accumulator,
             _marker: core::marker::PhantomData,
         });
 
