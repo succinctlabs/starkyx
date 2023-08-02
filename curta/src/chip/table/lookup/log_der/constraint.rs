@@ -2,12 +2,59 @@ use alloc::collections::VecDeque;
 
 use itertools::Itertools;
 
-use super::{LogLookup, LookupTable};
+use super::{LogLookup, LogLookupValues, LookupTable};
 use crate::air::extension::cubic::CubicParser;
 use crate::air::AirConstraint;
-use crate::chip::register::cubic::EvalCubic;
+use crate::chip::register::cubic::{CubicRegister, EvalCubic};
+use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::*;
+
+#[derive(Debug, Clone)]
+pub enum LookupConstraint<F: Field, E: CubicParameters<F>> {
+    Table(LookupTable<ElementRegister, F, E>),
+    CubicTable(LookupTable<CubicRegister, F, E>),
+    Log(LogLookup<ElementRegister, F, E>),
+    CubicLog(LogLookup<CubicRegister, F, E>),
+    Global(CubicRegister, CubicRegister),
+}
+
+impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
+    for LogLookup<T, AP::Field, E>
+{
+    fn eval(&self, parser: &mut AP) {
+        // Table constraints
+        self.table_data.eval(parser);
+
+        // Values and multiplicity constraints
+        self.values_data.eval(parser);
+
+        // Digest matching constraint
+        let lookup_digest = self.values_data.digest.eval(parser);
+        let table_digest = self.table_data.digest.eval(parser);
+        let digest_constraint = parser.sub_extension(lookup_digest, table_digest);
+        parser.constraint_extension_last_row(digest_constraint);
+    }
+}
+
+impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
+    for LookupConstraint<AP::Field, E>
+{
+    fn eval(&self, parser: &mut AP) {
+        match self {
+            LookupConstraint::Table(table) => table.eval(parser),
+            LookupConstraint::CubicTable(table) => table.eval(parser),
+            LookupConstraint::Log(log) => log.eval(parser),
+            LookupConstraint::CubicLog(log) => log.eval(parser),
+            LookupConstraint::Global(a, b) => {
+                let a = a.eval_cubic(parser);
+                let b = b.eval_cubic(parser);
+                let difference = parser.sub_extension(a, b);
+                parser.constraint_extension_last_row(difference);
+            }
+        }
+    }
+}
 
 impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
     for LookupTable<T, AP::Field, E>
@@ -79,38 +126,10 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
 }
 
 impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
-    for LogLookup<T, AP::Field, E>
+    for LogLookupValues<T, AP::Field, E>
 {
     fn eval(&self, parser: &mut AP) {
         let beta = self.challenge.eval(parser);
-
-        self.table_data.eval(parser);
-
-        let multiplicities = self
-            .table_data
-            .multiplicities
-            .eval_vec(parser)
-            .into_iter()
-            .map(|e| parser.element_from_base_field(e))
-            .collect::<Vec<_>>();
-
-        let table = self
-            .table_data
-            .table
-            .iter()
-            .map(|x| x.eval_cubic(parser))
-            .collect::<Vec<_>>();
-
-        let multiplicities_table_log = self.table_data.multiplicities_table_log.get(0).eval(parser);
-        let beta_minus_table = parser.sub_extension(beta, table[0]);
-
-        // Constrain multiplicities_table_log = sum(mult_i * log(beta - table_i))
-        let mult_table_constraint = {
-            let mult_times_table = parser.mul_extension(multiplicities_table_log, beta_minus_table);
-            parser.sub_extension(multiplicities[0], mult_times_table)
-        };
-
-        parser.constraint_extension(mult_table_constraint);
 
         // Constraint the accumulators for the elements being looked up
         // The accumulators collect the sums of the logarithmic derivatives 1/(beta - element_i)
@@ -179,11 +198,5 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
         let lookup_digest = self.digest.eval(parser);
         let lookup_digest_constraint = parser.sub_extension(lookup_digest, log_lookup_accumulator);
         parser.constraint_extension_last_row(lookup_digest_constraint);
-
-        // Add global digest constraint
-        let lookup_digest = self.digest.eval(parser);
-        let table_digest = self.table_data.digest.eval(parser);
-        let digest_constraint = parser.sub_extension(lookup_digest, table_digest);
-        parser.constraint_extension_last_row(digest_constraint);
     }
 }

@@ -99,8 +99,8 @@ impl<F: PrimeField> TraceWriter<F> {
             .rows_par_mut()
             .map(|row| {
                 let mut accumumulator = CubicExtension::ZERO;
-                let accumulators = lookup_data.row_accumulators;
-                for (k, pair) in lookup_data.values.chunks_exact(2).enumerate() {
+                let accumulators = lookup_data.values_data.row_accumulators;
+                for (k, pair) in lookup_data.values_data.values.chunks_exact(2).enumerate() {
                     let a = T::trace_value_as_cubic(pair[0].read_from_slice(row));
                     let b = T::trace_value_as_cubic(pair[1].read_from_slice(row));
                     let beta_minus_a = beta - CubicExtension::from(a);
@@ -114,7 +114,7 @@ impl<F: PrimeField> TraceWriter<F> {
             })
             .collect::<Vec<_>>();
 
-        let log_lookup = lookup_data.log_lookup_accumulator;
+        let log_lookup = lookup_data.values_data.log_lookup_accumulator;
         let mut value = CubicExtension::ZERO;
         for (i, acc) in accumulators.into_iter().enumerate() {
             value += acc;
@@ -122,6 +122,6 @@ impl<F: PrimeField> TraceWriter<F> {
         }
 
         // Write the digest value
-        self.write(&lookup_data.digest, &value.0, num_rows - 1);
+        self.write(&lookup_data.values_data.digest, &value.0, num_rows - 1);
     }
 }

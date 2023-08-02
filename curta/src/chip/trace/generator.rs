@@ -79,7 +79,7 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                                 num_rows,
                                 &log_data.table_data,
                                 table_index,
-                                &log_data.values,
+                                &log_data.values_data.values,
                             );
                         }
                     }

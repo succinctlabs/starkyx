@@ -30,14 +30,22 @@ pub struct LookupTable<T: Register, F: Field, E: CubicParameters<F>> {
 
 /// Currently, only supports an even number of values
 #[derive(Debug, Clone)]
-pub struct LogLookup<T: EvalCubic, F: Field, E: CubicParameters<F>> {
+pub struct LogLookupValues<T: EvalCubic, F: Field, E: CubicParameters<F>> {
     pub(crate) challenge: CubicRegister,
-    pub(crate) table_data: LookupTable<T, F, E>,
     pub(crate) values: Vec<T>,
     pub(crate) row_accumulators: ArrayRegister<CubicRegister>,
     pub(crate) log_lookup_accumulator: CubicRegister,
-    pub(crate) table_index: Option<fn(T::Value<F>) -> usize>,
     pub digest: CubicRegister,
+    _marker: core::marker::PhantomData<(F, E)>,
+}
+
+/// Currently, only supports an even number of values
+#[derive(Debug, Clone)]
+pub struct LogLookup<T: EvalCubic, F: Field, E: CubicParameters<F>> {
+    pub(crate) challenge: CubicRegister,
+    pub(crate) table_data: LookupTable<T, F, E>,
+    pub(crate) values_data: LogLookupValues<T, F, E>,
+    pub(crate) table_index: Option<fn(T::Value<F>) -> usize>,
     _marker: core::marker::PhantomData<(F, E)>,
 }
 
@@ -62,6 +70,25 @@ impl<L: AirParameters> AirBuilder<L> {
         }
     }
 
+    pub fn lookup_values(
+        &mut self,
+        challenge: &CubicRegister,
+        values: &[ElementRegister],
+    ) -> LogLookupValues<ElementRegister, L::Field, L::CubicParams> {
+        assert_eq!(values.len() % 2, 0, "Only even number of values supported");
+        let row_accumulators = self.alloc_array_extended::<CubicRegister>(values.len() / 2);
+        let log_lookup_accumulator = self.alloc_extended::<CubicRegister>();
+
+        LogLookupValues {
+            challenge: *challenge,
+            values: values.to_vec(),
+            row_accumulators,
+            log_lookup_accumulator,
+            digest: log_lookup_accumulator,
+            _marker: PhantomData,
+        }
+    }
+
     pub fn lookup_log_derivative(
         &mut self,
         table: &ElementRegister,
@@ -70,18 +97,15 @@ impl<L: AirParameters> AirBuilder<L> {
     ) {
         // Allocate memory for the lookup
         let challenge = self.alloc_challenge::<CubicRegister>();
-        let row_accumulators = self.alloc_array_extended::<CubicRegister>(values.len() / 2);
-        let log_lookup_accumulator = self.alloc_extended::<CubicRegister>();
+
         let table_data = self.lookup_table(&challenge, table);
+        let value_data = self.lookup_values(&challenge, values);
 
         let lookup_data = Lookup::LogDerivative(LogLookup {
             challenge,
             table_data,
-            values: values.to_vec(),
-            row_accumulators,
-            log_lookup_accumulator,
+            values_data: value_data,
             table_index: Some(table_index),
-            digest: log_lookup_accumulator,
             _marker: core::marker::PhantomData,
         });
 
