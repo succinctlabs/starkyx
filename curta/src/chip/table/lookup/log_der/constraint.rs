@@ -1,5 +1,7 @@
 use alloc::collections::VecDeque;
 
+use itertools::Itertools;
+
 use super::{LogLookup, LookupTable};
 use crate::air::extension::cubic::CubicParser;
 use crate::air::AirConstraint;
@@ -33,13 +35,15 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
             .collect::<Vec<_>>();
 
         // Constrain multiplicities_table_log = sum(mult_i * log(beta - table_i))
-        let mult_table_constraints = {
-            let mult_log_inv_times_table =
-                parser.mul_extension(multiplicities_table_log[0], beta_minus_tables[0]);
-            parser.sub_extension(multiplicities[0], mult_log_inv_times_table)
-        };
-
-        parser.constraint_extension(mult_table_constraints);
+        for ((mult_table_log, beta_minus_table), mult) in multiplicities_table_log
+            .iter()
+            .zip_eq(beta_minus_tables.iter())
+            .zip_eq(multiplicities.iter())
+        {
+            let mult_log_inv_times_table = parser.mul_extension(*mult_table_log, *beta_minus_table);
+            let mult_table_constraint = parser.sub_extension(*mult, mult_log_inv_times_table);
+            parser.constraint_extension(mult_table_constraint);
+        }
     }
 }
 
