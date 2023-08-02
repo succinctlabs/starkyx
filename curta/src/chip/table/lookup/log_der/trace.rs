@@ -38,7 +38,7 @@ impl<F: PrimeField> TraceWriter<F> {
         }
     }
 
-    /// Writte the table inverses and accumulate 
+    /// Writte the table inverses and accumulate
     /// Assumes table multiplicities have been written
     pub(crate) fn write_log_lookup_table<T: EvalCubic, E: CubicParameters<F>>(
         &self,
@@ -46,19 +46,28 @@ impl<F: PrimeField> TraceWriter<F> {
         table_data: &LookupTable<T, F, E>,
     ) -> Vec<CubicExtension<F, E>> {
         let beta = CubicExtension::<F, E>::from(self.read(&table_data.challenge, 0));
-        self.write_trace().unwrap().rows_par_mut().map(|row| {
-            let mut sum = CubicExtension::ZERO;
-            for ((table, multiplicity), table_log_register) in table_data.table.iter().zip_eq(table_data.multiplicities.iter()).zip_eq(table_data.multiplicities_table_log.iter()) {
-                let table_val = table.read_from_slice(row);
-                let mult_val = multiplicity.read_from_slice(row);
-                let table = CubicExtension::from(T::trace_value_as_cubic(table_val));
-                let mult = CubicExtension::from(mult_val);
-                let table_log = mult / (beta - table);
-                table_log_register.assign_to_raw_slice(row, &table_log.0);
-                sum += table_log;
-            }
-            sum
-        }).collect::<Vec<_>>()
+        self.write_trace()
+            .unwrap()
+            .rows_par_mut()
+            .map(|row| {
+                let mut sum = CubicExtension::ZERO;
+                for ((table, multiplicity), table_log_register) in table_data
+                    .table
+                    .iter()
+                    .zip_eq(table_data.multiplicities.iter())
+                    .zip_eq(table_data.multiplicities_table_log.iter())
+                {
+                    let table_val = table.read_from_slice(row);
+                    let mult_val = multiplicity.read_from_slice(row);
+                    let table = CubicExtension::from(T::trace_value_as_cubic(table_val));
+                    let mult = CubicExtension::from(mult_val);
+                    let table_log = mult / (beta - table);
+                    table_log_register.assign_to_raw_slice(row, &table_log.0);
+                    sum += table_log;
+                }
+                sum
+            })
+            .collect::<Vec<_>>()
     }
 
     pub(crate) fn write_log_lookup<T: EvalCubic, E: CubicParameters<F>>(

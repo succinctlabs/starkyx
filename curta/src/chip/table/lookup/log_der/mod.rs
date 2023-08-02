@@ -23,7 +23,7 @@ pub struct LookupTable<T: Register, F: Field, E: CubicParameters<F>> {
     pub(crate) table: Vec<T>,
     pub(crate) multiplicities: ArrayRegister<ElementRegister>,
     pub(crate) multiplicities_table_log: ArrayRegister<CubicRegister>,
-    pub (crate) table_accumulator : CubicRegister,
+    pub(crate) table_accumulator: CubicRegister,
     _marker: core::marker::PhantomData<(F, E)>,
 }
 
