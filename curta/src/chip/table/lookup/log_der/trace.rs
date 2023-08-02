@@ -36,6 +36,10 @@ impl<F: PrimeField> TraceWriter<F> {
         }
     }
 
+    pub(crate) fn write_log_lookup_table<T: EvalCubic, E: CubicParameters<F>>(&self, num_rows: usize, table_data: &LookupTable<T, F, E>) {
+
+    }
+
     pub(crate) fn write_log_lookup<T: EvalCubic, E: CubicParameters<F>>(
         &self,
         num_rows: usize,
@@ -55,7 +59,7 @@ impl<F: PrimeField> TraceWriter<F> {
             })
             .collect::<Vec<_>>();
 
-        let mult_table_log = lookup_data.multiplicity_table_log;
+        let mult_table_log = lookup_data.table_data.multiplicities_table_log.get(0);
         for (i, value) in mult_table_log_entries.iter().enumerate() {
             self.write_slice(&mult_table_log, value.as_base_slice(), i);
         }

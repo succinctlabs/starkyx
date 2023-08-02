@@ -28,7 +28,7 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
             .map(|x| x.eval_cubic(parser))
             .collect::<Vec<_>>();
 
-        let multiplicities_table_log = self.multiplicity_table_log.eval(parser);
+        let multiplicities_table_log = self.table_data.multiplicities_table_log.get(0).eval(parser);
         let beta_minus_table = parser.sub_extension(beta, table[0]);
 
         // Constrain multiplicities_table_log = sum(mult_i * log(beta - table_i))
