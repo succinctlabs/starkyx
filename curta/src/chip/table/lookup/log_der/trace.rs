@@ -6,6 +6,7 @@ use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
+use crate::plonky2::field::cubic::element::CubicElement;
 use crate::plonky2::field::cubic::extension::CubicExtension;
 
 impl<F: PrimeField> TraceWriter<F> {
@@ -46,7 +47,7 @@ impl<F: PrimeField> TraceWriter<F> {
         table_data: &LookupTable<T, F, E>,
     ) -> Vec<CubicExtension<F, E>> {
         let beta = CubicExtension::<F, E>::from(self.read(&table_data.challenge, 0));
-        self.write_trace()
+        let mult_table_log_entries = self.write_trace()
             .unwrap()
             .rows_par_mut()
             .map(|row| {
@@ -67,7 +68,16 @@ impl<F: PrimeField> TraceWriter<F> {
                 }
                 sum
             })
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+
+        // Write accumulation
+        let mut acc = CubicExtension::ZERO;
+        for (i, mult_table) in mult_table_log_entries.iter().enumerate() {
+            acc = acc + *mult_table;
+            self.write(&table_data.table_accumulator, &acc.0, i);
+        }
+
+        mult_table_log_entries
     }
 
     pub(crate) fn write_log_lookup<T: EvalCubic, E: CubicParameters<F>>(

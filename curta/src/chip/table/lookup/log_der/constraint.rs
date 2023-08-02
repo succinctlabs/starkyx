@@ -44,6 +44,34 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
             let mult_table_constraint = parser.sub_extension(*mult, mult_log_inv_times_table);
             parser.constraint_extension(mult_table_constraint);
         }
+
+        // Constrain the accumulation
+        let mult_table_log_sum = multiplicities_table_log.iter().fold(
+            parser.zero_extension(),
+            |acc, mult_table_log| parser.add_extension(acc, *mult_table_log),
+        );
+
+
+
+        let accumulator = self.table_accumulator.eval(parser);
+
+        let first_row_acc = parser.sub_extension(accumulator, mult_table_log_sum);
+        parser.constraint_extension_first_row(first_row_acc);
+
+
+        let mult_table_log_sum_next = self.multiplicities_table_log.iter().fold(
+            parser.zero_extension(),
+            |acc, mult_table_log| {
+                let value = mult_table_log.next().eval(parser);
+                parser.add_extension(acc, value)
+            }
+        );
+
+        let acuumulator_next = self.table_accumulator.next().eval(parser);
+
+        let acc_next_expected = parser.add_extension(accumulator, mult_table_log_sum_next);
+        let acc_next_constraint = parser.sub_extension(acuumulator_next, acc_next_expected);
+        parser.constraint_extension_transition(acc_next_constraint);
     }
 }
 
