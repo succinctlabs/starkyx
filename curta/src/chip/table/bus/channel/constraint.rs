@@ -64,12 +64,6 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
             (None, Some(y)) => y.eval(parser),
             (None, None) => parser.one_extension(),
         };
-        // let mut prod_value = self.row_acc_product.last().unwrap().next().eval(parser);
-        // let mut prod_value_first = self.row_acc_product.last().unwrap().eval(parser);
-        // if let Some(last_element) = last_element {
-        //     // prod_value = parser.mul_extension(prod_value, last_element.next().eval(parser));
-        //     prod_value_first = parser.mul_extension(prod_value_first, last_element.eval(parser));
-        // }
 
         let bus_value = self.table_accumulator.eval(parser);
         let bus_next_value = self.table_accumulator.next().eval(parser);

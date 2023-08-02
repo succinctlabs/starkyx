@@ -200,7 +200,7 @@ mod tests {
 
         const NUM_ARITHMETIC_COLUMNS: usize = 140;
         const NUM_FREE_COLUMNS: usize = 2;
-        const EXTENDED_COLUMNS: usize = 217;
+        const EXTENDED_COLUMNS: usize = 219;
 
         type Instruction = FpAddInstruction<Fp25519>;
 

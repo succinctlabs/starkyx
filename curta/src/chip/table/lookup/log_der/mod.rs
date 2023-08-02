@@ -19,10 +19,11 @@ pub mod trace;
 
 #[derive(Debug, Clone)]
 pub struct LookupTable<T: Register, F: Field, E: CubicParameters<F>> {
-    pub (crate) challenge : CubicRegister,
+    pub(crate) challenge: CubicRegister,
     pub(crate) table: Vec<T>,
     pub(crate) multiplicities: ArrayRegister<ElementRegister>,
     pub(crate) multiplicities_table_log: ArrayRegister<CubicRegister>,
+    pub (crate) table_accumulator : CubicRegister,
     _marker: core::marker::PhantomData<(F, E)>,
 }
 
@@ -42,16 +43,18 @@ pub struct LogLookup<T: EvalCubic, F: Field, E: CubicParameters<F>> {
 impl<L: AirParameters> AirBuilder<L> {
     pub fn lookup_table(
         &mut self,
-        challenge : &CubicRegister,
+        challenge: &CubicRegister,
         table: &ElementRegister,
     ) -> LookupTable<ElementRegister, L::Field, L::CubicParams> {
-        let multiplicity = self.alloc_array::<ElementRegister>(1); 
+        let multiplicity = self.alloc_array::<ElementRegister>(1);
         let multiplicities_table_log = self.alloc_array_extended::<CubicRegister>(1);
+        let table_accumulator = self.alloc_extended::<CubicRegister>();
         LookupTable {
             challenge: *challenge,
             table: vec![*table],
             multiplicities: multiplicity,
             multiplicities_table_log,
+            table_accumulator,
             _marker: PhantomData,
         }
     }

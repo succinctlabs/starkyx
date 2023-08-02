@@ -1,6 +1,6 @@
 use alloc::collections::VecDeque;
 
-use super::LogLookup;
+use super::{LogLookup, LookupTable};
 use crate::air::extension::cubic::CubicParser;
 use crate::air::AirConstraint;
 use crate::chip::register::cubic::EvalCubic;
@@ -8,10 +8,48 @@ use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::*;
 
 impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
+    for LookupTable<T, AP::Field, E>
+{
+    fn eval(&self, parser: &mut AP) {
+        let beta = self.challenge.eval(parser);
+
+        let multiplicities = self
+            .multiplicities
+            .eval_vec(parser)
+            .into_iter()
+            .map(|e| parser.element_from_base_field(e))
+            .collect::<Vec<_>>();
+
+        let table = self
+            .table
+            .iter()
+            .map(|x| x.eval_cubic(parser))
+            .collect::<Vec<_>>();
+
+        let multiplicities_table_log = self.multiplicities_table_log.eval_vec(parser);
+        let beta_minus_tables = table
+            .iter()
+            .map(|t| parser.sub_extension(beta, *t))
+            .collect::<Vec<_>>();
+
+        // Constrain multiplicities_table_log = sum(mult_i * log(beta - table_i))
+        let mult_table_constraints = {
+            let mult_log_inv_times_table =
+                parser.mul_extension(multiplicities_table_log[0], beta_minus_tables[0]);
+            parser.sub_extension(multiplicities[0], mult_log_inv_times_table)
+        };
+
+        parser.constraint_extension(mult_table_constraints);
+    }
+}
+
+impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
     for LogLookup<T, AP::Field, E>
 {
     fn eval(&self, parser: &mut AP) {
         let beta = self.challenge.eval(parser);
+
+        self.table_data.eval(parser);
 
         let multiplicities = self
             .table_data

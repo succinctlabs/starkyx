@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use super::{LogLookup, LookupTable};
 use crate::chip::register::cubic::EvalCubic;
 use crate::chip::register::{Register, RegisterSerializable};
@@ -36,8 +38,27 @@ impl<F: PrimeField> TraceWriter<F> {
         }
     }
 
-    pub(crate) fn write_log_lookup_table<T: EvalCubic, E: CubicParameters<F>>(&self, num_rows: usize, table_data: &LookupTable<T, F, E>) {
-
+    /// Writte the table inverses and accumulate 
+    /// Assumes table multiplicities have been written
+    pub(crate) fn write_log_lookup_table<T: EvalCubic, E: CubicParameters<F>>(
+        &self,
+        num_rows: usize,
+        table_data: &LookupTable<T, F, E>,
+    ) -> Vec<CubicExtension<F, E>> {
+        let beta = CubicExtension::<F, E>::from(self.read(&table_data.challenge, 0));
+        self.write_trace().unwrap().rows_par_mut().map(|row| {
+            let mut sum = CubicExtension::ZERO;
+            for ((table, multiplicity), table_log_register) in table_data.table.iter().zip_eq(table_data.multiplicities.iter()).zip_eq(table_data.multiplicities_table_log.iter()) {
+                let table_val = table.read_from_slice(row);
+                let mult_val = multiplicity.read_from_slice(row);
+                let table = CubicExtension::from(T::trace_value_as_cubic(table_val));
+                let mult = CubicExtension::from(mult_val);
+                let table_log = mult / (beta - table);
+                table_log_register.assign_to_raw_slice(row, &table_log.0);
+                sum += table_log;
+            }
+            sum
+        }).collect::<Vec<_>>()
     }
 
     pub(crate) fn write_log_lookup<T: EvalCubic, E: CubicParameters<F>>(
@@ -48,21 +69,7 @@ impl<F: PrimeField> TraceWriter<F> {
         let beta = CubicExtension::<F, E>::from(self.read(&lookup_data.challenge, 0));
 
         // Write multiplicity inverse constraints
-        let mult_table_log_entries = (0..num_rows)
-            .into_par_iter()
-            .map(|i| {
-                let multiplicity_reg = lookup_data.table_data.multiplicities.get(0);
-                let x = self.read(&multiplicity_reg, i);
-                let table_value = self.read(&lookup_data.table_data.table[0], i);
-                let table = CubicExtension::from(T::trace_value_as_cubic(table_value));
-                CubicExtension::from(x) / (beta - table)
-            })
-            .collect::<Vec<_>>();
-
-        let mult_table_log = lookup_data.table_data.multiplicities_table_log.get(0);
-        for (i, value) in mult_table_log_entries.iter().enumerate() {
-            self.write_slice(&mult_table_log, value.as_base_slice(), i);
-        }
+        let mult_table_log_entries = self.write_log_lookup_table(num_rows, &lookup_data.table_data);
 
         // Log accumulator
         let mut value = CubicExtension::ZERO;
