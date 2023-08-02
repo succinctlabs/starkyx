@@ -51,18 +51,18 @@ pub struct LogLookup<T: EvalCubic, F: Field, E: CubicParameters<F>> {
 
 // LogLookUp Memory allocation
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn lookup_table(
+    pub fn lookup_table<T: EvalCubic>(
         &mut self,
         challenge: &CubicRegister,
-        table: &ElementRegister,
-    ) -> LookupTable<ElementRegister, L::Field, L::CubicParams> {
-        let multiplicity = self.alloc_array::<ElementRegister>(1);
-        let multiplicities_table_log = self.alloc_array_extended::<CubicRegister>(1);
+        table: &[T],
+    ) -> LookupTable<T, L::Field, L::CubicParams> {
+        let multiplicities = self.alloc_array::<ElementRegister>(table.len());
+        let multiplicities_table_log = self.alloc_array_extended::<CubicRegister>(table.len());
         let table_accumulator = self.alloc_extended::<CubicRegister>();
         LookupTable {
             challenge: *challenge,
-            table: vec![*table],
-            multiplicities: multiplicity,
+            table: table.to_vec(),
+            multiplicities,
             multiplicities_table_log,
             table_accumulator,
             digest: table_accumulator,
@@ -70,11 +70,11 @@ impl<L: AirParameters> AirBuilder<L> {
         }
     }
 
-    pub fn lookup_values(
+    pub fn lookup_values<T: EvalCubic>(
         &mut self,
         challenge: &CubicRegister,
-        values: &[ElementRegister],
-    ) -> LogLookupValues<ElementRegister, L::Field, L::CubicParams> {
+        values: &[T],
+    ) -> LogLookupValues<T, L::Field, L::CubicParams> {
         assert_eq!(values.len() % 2, 0, "Only even number of values supported");
         let row_accumulators = self.alloc_array_extended::<CubicRegister>(values.len() / 2);
         let log_lookup_accumulator = self.alloc_extended::<CubicRegister>();
@@ -98,7 +98,7 @@ impl<L: AirParameters> AirBuilder<L> {
         // Allocate memory for the lookup
         let challenge = self.alloc_challenge::<CubicRegister>();
 
-        let table_data = self.lookup_table(&challenge, table);
+        let table_data = self.lookup_table(&challenge, &[*table]);
         let value_data = self.lookup_values(&challenge, values);
 
         let lookup_data = Lookup::LogDerivative(LogLookup {
@@ -115,5 +115,227 @@ impl<L: AirParameters> AirBuilder<L> {
 
         // Add the lookup to the list of lookups
         self.lookup_data.push(lookup_data);
+    }
+
+    pub fn lookup_log_derivative_no_index(
+        &mut self,
+        table: &[ElementRegister],
+        values: &[ElementRegister],
+    ) -> ArrayRegister<ElementRegister> {
+        // Allocate memory for the lookup
+        let challenge = self.alloc_challenge::<CubicRegister>();
+
+        let table_data = self.lookup_table(&challenge, table);
+        let value_data = self.lookup_values(&challenge, values);
+        let multiplicities = table_data.multiplicities;
+
+        let lookup_data = Lookup::LogDerivative(LogLookup {
+            challenge,
+            table_data,
+            values_data: value_data,
+            table_index: None,
+            _marker: core::marker::PhantomData,
+        });
+
+        // Add the lookup constraints
+        self.constraints
+            .push(Constraint::lookup(lookup_data.clone()));
+
+        // Add the lookup to the list of lookups
+        self.lookup_data.push(lookup_data);
+
+        multiplicities
+    }
+
+    pub fn lookup_cubic_log_derivative(
+        &mut self,
+        table: &[CubicRegister],
+        values: &[CubicRegister],
+    ) -> ArrayRegister<ElementRegister> {
+        // Allocate memory for the lookup
+        let challenge = self.alloc_challenge::<CubicRegister>();
+
+        let table_data = self.lookup_table(&challenge, table);
+        let value_data = self.lookup_values(&challenge, values);
+
+        let multiplicities = table_data.multiplicities;
+
+        let lookup_data = Lookup::CubicLog(LogLookup {
+            challenge,
+            table_data,
+            values_data: value_data,
+            table_index: None,
+            _marker: core::marker::PhantomData,
+        });
+
+        // Add the lookup constraints
+        self.constraints
+            .push(Constraint::lookup(lookup_data.clone()));
+
+        // Add the lookup to the list of lookups
+        self.lookup_data.push(lookup_data);
+
+        multiplicities
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use plonky2::field::types::Sample;
+    use rand::{thread_rng, Rng};
+
+    use super::*;
+    use crate::chip::builder::tests::*;
+    use crate::chip::AirParameters;
+    use crate::math::extension::cubic::element::CubicElement;
+
+    #[derive(Debug, Clone)]
+    struct LookupTest<const N: usize, const M: usize>;
+
+    impl<const N: usize, const M: usize> AirParameters for LookupTest<N, M> {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
+
+        const NUM_FREE_COLUMNS: usize = M + 2 * N;
+        const EXTENDED_COLUMNS: usize = (3 * (M / 2)) + 3 * N + 2 * 3;
+
+        type Instruction = EmptyInstruction<GoldilocksField>;
+
+        fn num_rows_bits() -> usize {
+            16
+        }
+    }
+
+    #[test]
+    fn test_lookup() {
+        type L = LookupTest<N, M>;
+        type F = GoldilocksField;
+        type SC = PoseidonGoldilocksStarkConfig;
+        const N: usize = 29;
+        const M: usize = 10;
+
+        let mut builder = AirBuilder::<L>::new();
+
+        let table_values = builder
+            .alloc_array::<ElementRegister>(N)
+            .into_iter()
+            .collect::<Vec<_>>();
+        let values = builder
+            .alloc_array::<ElementRegister>(M)
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        let multiplicities = builder.lookup_log_derivative_no_index(&table_values, &values);
+
+        let air = builder.build();
+
+        let generator = ArithmeticGenerator::<L>::new(&air);
+        let writer = generator.new_writer();
+
+        // Set the table vals
+        for i in 0..L::num_rows() {
+            let table_vals = [GoldilocksField::rand(); N];
+            for (reg, val) in table_values.iter().zip(table_vals) {
+                writer.write(reg, &val, i);
+            }
+        }
+
+        let mut rng = thread_rng();
+        // Se the lookup vals
+        for i in 0..L::num_rows() {
+            let j_vals = [rng.gen_range(0..L::num_rows()); M];
+            let k_vals = [rng.gen_range(0..N); M];
+            for (value, (&j, &k)) in values.iter().zip(j_vals.iter().zip(k_vals.iter())) {
+                let val = writer.read(&table_values[k], j);
+                let mult_value = writer.read(&multiplicities.get(k), j);
+                writer.write(&multiplicities.get(k), &(mult_value + F::ONE), j);
+                writer.write(value, &val, i);
+            }
+        }
+
+        let stark = Starky::from_chip(air);
+
+        let config = SC::standard_fast_config(L::num_rows());
+
+        // Generate proof and verify as a stark
+        test_starky(&stark, &config, &generator, &[]);
+
+        // Test the recursive proof.
+        test_recursive_starky(stark, config, generator, &[]);
+    }
+
+    #[derive(Debug, Clone)]
+    struct CubicLookupTest<const N: usize, const M: usize>;
+
+    impl<const N: usize, const M: usize> AirParameters for CubicLookupTest<N, M> {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
+
+        const NUM_FREE_COLUMNS: usize = 3 * M + 2 * 3 * N;
+        const EXTENDED_COLUMNS: usize = (3 * (3 * M / 2)) + 3 * 3 * N + 2 * 3;
+
+        type Instruction = EmptyInstruction<GoldilocksField>;
+
+        fn num_rows_bits() -> usize {
+            16
+        }
+    }
+
+    #[test]
+    fn test_cubic_lookup() {
+        type L = CubicLookupTest<N, M>;
+        type F = GoldilocksField;
+        type SC = PoseidonGoldilocksStarkConfig;
+        const N: usize = 4;
+        const M: usize = 102;
+
+        let mut builder = AirBuilder::<L>::new();
+
+        let table_values = builder
+            .alloc_array::<CubicRegister>(N)
+            .into_iter()
+            .collect::<Vec<_>>();
+        let values = builder
+            .alloc_array::<CubicRegister>(M)
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        let multiplicities = builder.lookup_cubic_log_derivative(&table_values, &values);
+
+        let air = builder.build();
+
+        let generator = ArithmeticGenerator::<L>::new(&air);
+        let writer = generator.new_writer();
+
+        // Set the table vals
+        for i in 0..L::num_rows() {
+            let table_vals = [CubicElement::from_slice(&[GoldilocksField::rand(); 3]); N];
+            for (reg, val) in table_values.iter().zip(table_vals) {
+                writer.write(reg, &val, i);
+            }
+        }
+
+        let mut rng = thread_rng();
+        // Se the lookup vals
+        for i in 0..L::num_rows() {
+            let j_vals = [rng.gen_range(0..L::num_rows()); M];
+            let k_vals = [rng.gen_range(0..N); M];
+            for (value, (&j, &k)) in values.iter().zip(j_vals.iter().zip(k_vals.iter())) {
+                let val = writer.read(&table_values[k], j);
+                let mult_value = writer.read(&multiplicities.get(k), j);
+                writer.write(&multiplicities.get(k), &(mult_value + F::ONE), j);
+                writer.write(value, &val, i);
+            }
+        }
+
+        let stark = Starky::from_chip(air);
+
+        let config = SC::standard_fast_config(L::num_rows());
+
+        // Generate proof and verify as a stark
+        test_starky(&stark, &config, &generator, &[]);
+
+        // Test the recursive proof.
+        test_recursive_starky(stark, config, generator, &[]);
     }
 }
