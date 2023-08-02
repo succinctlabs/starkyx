@@ -29,8 +29,9 @@ pub struct ByteLookup<const NUM_OPS: usize> {
     opcodes: [ElementRegister; NUM_OPS],
     results_bits: [ArrayRegister<BitRegister>; NUM_OPS],
     carry_bits: [BitRegister; NUM_OPS],
-    challenges: ArrayRegister<CubicRegister>,
-    digests: [CubicRegister; NUM_OPS],
+    row_acc_challenges: ArrayRegister<CubicRegister>,
+    lookup_challenges: [CubicRegister; NUM_OPS],
+    row_digests: [CubicRegister; NUM_OPS],
 }
 
 impl<L: AirParameters> AirBuilder<L> {
@@ -44,16 +45,17 @@ impl<L: AirParameters> AirBuilder<L> {
         let b_bits = self.alloc_array::<BitRegister>(8);
         let results_bits = [self.alloc_array::<BitRegister>(8); { Self::NUM_BIT_OPS }];
         let carry_bits = [self.alloc::<BitRegister>(); { Self::NUM_BIT_OPS }];
-        let challenges = self.alloc_challenge_array(NUM_CHALLENGES);
+        let row_acc_challenges = self.alloc_challenge_array(NUM_CHALLENGES);
+        let lookup_challenges = [self.alloc_challenge::<CubicRegister>(); { Self::NUM_BIT_OPS }];
         let opcodes = [self.alloc::<ElementRegister>(); Self::NUM_BIT_OPS];
 
         // Accumulate operations and opcodes
-        let digests: [_; Self::NUM_BIT_OPS] = opcodes
+        let row_digests: [_; Self::NUM_BIT_OPS] = opcodes
             .iter()
             .zip(results.iter())
             .map(|(opcode, result)| {
                 let values = [*opcode, a.element(), b.element(), result.element()];
-                self.accumulate(&challenges, &values)
+                self.accumulate(&row_acc_challenges, &values)
             })
             .collect::<Vec<_>>()
             .try_into()
@@ -68,8 +70,9 @@ impl<L: AirParameters> AirBuilder<L> {
             opcodes,
             results_bits,
             carry_bits,
-            challenges,
-            digests,
+            row_acc_challenges,
+            lookup_challenges,
+            row_digests,
         }
     }
 }

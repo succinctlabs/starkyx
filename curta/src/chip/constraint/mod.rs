@@ -17,7 +17,7 @@ pub enum Constraint<L: AirParameters> {
     Instruction(AirInstruction<L::Field, L::Instruction>),
     MulInstruction(ArithmeticExpression<L::Field>, L::Instruction),
     Arithmetic(ArithmeticConstraint<L::Field>),
-    Accumulator(Accumulator<L::CubicParams>),
+    Accumulator(Accumulator<L::Field, L::CubicParams>),
     BusChannel(BusChannel<L::Field, L::CubicParams>),
     Bus(Bus<L::CubicParams>),
     Lookup(Box<Lookup<L::Field, L::CubicParams>>),
@@ -77,8 +77,8 @@ impl<L: AirParameters> From<ArithmeticConstraint<L::Field>> for Constraint<L> {
     }
 }
 
-impl<L: AirParameters> From<Accumulator<L::CubicParams>> for Constraint<L> {
-    fn from(accumulator: Accumulator<L::CubicParams>) -> Self {
+impl<L: AirParameters> From<Accumulator<L::Field, L::CubicParams>> for Constraint<L> {
+    fn from(accumulator: Accumulator<L::Field, L::CubicParams>) -> Self {
         Self::Accumulator(accumulator)
     }
 }

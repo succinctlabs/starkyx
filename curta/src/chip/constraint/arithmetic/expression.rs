@@ -47,6 +47,10 @@ impl<F: Field> ArithmeticExpression<F> {
         Self::from_constant(F::ONE)
     }
 
+    pub fn read_from_slice<'a>(&self, slice: &'a [F]) -> Vec<F> {
+        self.expression.read_from_slice(slice)
+    }
+
     pub fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {
         self.expression.eval(parser)
     }

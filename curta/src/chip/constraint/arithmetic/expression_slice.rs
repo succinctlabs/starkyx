@@ -73,6 +73,42 @@ impl<F: Field> ArithmeticExpressionSlice<F> {
         }
     }
 
+    pub(crate) fn read_from_slice<'a>(&self, slice: &'a [F]) -> Vec<F> {
+        match self {
+            ArithmeticExpressionSlice::Input(input) => input.read_from_slice(slice).to_vec(),
+            ArithmeticExpressionSlice::Const(constants) => constants.clone(),
+            ArithmeticExpressionSlice::Add(left, right) => {
+                let left = left.read_from_slice(slice);
+                let right = right.read_from_slice(slice);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| *l + *r)
+                    .collect()
+            }
+            ArithmeticExpressionSlice::Sub(left, right) => {
+                let left = left.read_from_slice(slice);
+                let right = right.read_from_slice(slice);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| *l - *r)
+                    .collect()
+            }
+            ArithmeticExpressionSlice::ScalarMul(scalar, expr) => {
+                let expr_val = expr.read_from_slice(slice);
+                expr_val.iter().map(|x| *x * *scalar).collect()
+            }
+            ArithmeticExpressionSlice::Mul(left, right) => {
+                let left_vals = left.read_from_slice(slice);
+                let right_vals = right.read_from_slice(slice);
+                left_vals
+                    .iter()
+                    .zip(right_vals.iter())
+                    .map(|(l, r)| *l * *r)
+                    .collect()
+            }
+        }
+    }
+
     pub fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {
         match self {
             ArithmeticExpressionSlice::Input(input) => input.eval_slice(parser).to_vec(),

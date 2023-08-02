@@ -28,7 +28,7 @@ pub struct AirBuilder<L: AirParameters> {
     extended_index: usize,
     shared_memory: SharedMemory,
     pub(crate) constraints: Vec<Constraint<L>>,
-    pub(crate) accumulators: Vec<Accumulator<L::CubicParams>>,
+    pub(crate) accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
     pub(crate) bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
     pub(crate) lookup_data: Vec<Lookup<L::Field, L::CubicParams>>,
     pub(crate) evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,

@@ -1,28 +1,37 @@
+use itertools::Itertools;
+
 use super::Accumulator;
 use crate::air::extension::cubic::CubicParser;
 use crate::air::AirConstraint;
-use crate::chip::register::array::ArrayRegister;
-use crate::chip::register::element::ElementRegister;
-use crate::chip::register::{Register, RegisterSerializable};
+use crate::chip::register::Register;
 use crate::plonky2::field::CubicParameters;
 
-impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP> for Accumulator<E> {
+impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
+    for Accumulator<AP::Field, E>
+{
     fn eval(&self, parser: &mut AP) {
         let digest = self.digest.eval(parser);
 
-        let values_array = self
+        // let challenges_vec = self
+        //     .challenges
+        //     .iter()
+        //     .map(|x| x.eval(parser))
+        //     .collect::<Vec<_>>();
+
+        let values = self
             .values
             .iter()
-            .flat_map(|x| ArrayRegister::<ElementRegister>::from_register_unsafe(*x));
+            .map(|x| x.eval(parser))
+            .flatten()
+            .collect::<Vec<_>>();
 
-        let acc = values_array.zip(self.challenges).fold(
+        let acc = values.iter().zip_eq(self.challenges.iter()).fold(
             parser.zero_extension(),
-            |acc, (value, alpha)| {
-                let value = value.eval(parser);
-                let alpha = alpha.eval(parser);
-                let value = parser.element_from_base_field(value);
-                let alpha_times_value = parser.mul_extension(value, alpha);
-                parser.add_extension(acc, alpha_times_value)
+            |acc, (val, alpha)| {
+                let alpha_val = alpha.eval(parser);
+                let val_ext = parser.element_from_base_field(*val);
+                let alpha_times_val = parser.mul_extension(alpha_val, val_ext);
+                parser.add_extension(acc, alpha_times_val)
             },
         );
 

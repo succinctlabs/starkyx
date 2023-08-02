@@ -106,7 +106,7 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
 
                 // Write accumulations
                 for acc in air.accumulators.iter() {
-                    self.writer.write_accumulation(num_rows, acc);
+                    self.writer.write_accumulation(acc);
                 }
 
                 for channel in air.bus_channels.iter() {

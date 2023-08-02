@@ -10,31 +10,36 @@ pub mod trace;
 use core::marker::PhantomData;
 
 use crate::chip::builder::AirBuilder;
+use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::CubicRegister;
-use crate::chip::register::memory::MemorySlice;
-use crate::chip::register::RegisterSerializable;
+use crate::chip::register::Register;
 use crate::chip::AirParameters;
 
 #[derive(Debug, Clone)]
-pub struct Accumulator<E> {
+pub struct Accumulator<F, E> {
     pub(crate) challenges: ArrayRegister<CubicRegister>,
-    values: Vec<MemorySlice>,
+    values: Vec<ArithmeticExpression<F>>,
     digest: CubicRegister,
-    _marker: PhantomData<E>,
+    _marker: PhantomData<(F, E)>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn accumulate<T: RegisterSerializable>(
+    pub fn accumulate<T: Register>(
         &mut self,
         challenges: &ArrayRegister<CubicRegister>,
         values: &[T],
     ) -> CubicRegister {
-        let values = values
-            .iter()
-            .map(|data| *data.register())
-            .collect::<Vec<_>>();
-        let total_length = values.iter().map(|data| data.len()).sum::<usize>();
+        let values = values.iter().map(|data| data.expr()).collect::<Vec<_>>();
+        self.accumulate_expressions(challenges, &values)
+    }
+
+    pub fn accumulate_expressions(
+        &mut self,
+        challenges: &ArrayRegister<CubicRegister>,
+        values: &[ArithmeticExpression<L::Field>],
+    ) -> CubicRegister {
+        let total_length = values.iter().map(|data| data.size).sum::<usize>();
         assert_eq!(
             total_length,
             challenges.len(),
@@ -45,7 +50,7 @@ impl<L: AirParameters> AirBuilder<L> {
 
         let accumulator = Accumulator {
             challenges: *challenges,
-            values,
+            values: values.to_vec(),
             digest,
             _marker: PhantomData,
         };
@@ -66,6 +71,7 @@ pub mod tests {
     use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
     use crate::chip::register::Register;
     use crate::math::extension::cubic::element::CubicElement;
+    use crate::math::prelude::*;
 
     #[derive(Debug, Clone)]
     struct AccumulatorTest;
@@ -75,7 +81,7 @@ pub mod tests {
         type CubicParams = GoldilocksCubicParameters;
 
         const NUM_FREE_COLUMNS: usize = 2;
-        const EXTENDED_COLUMNS: usize = 3;
+        const EXTENDED_COLUMNS: usize = 6;
 
         type Instruction = EmptyInstruction<GoldilocksField>;
 
@@ -94,13 +100,31 @@ pub mod tests {
         let x_1 = builder.alloc::<ElementRegister>();
         let x_2 = builder.alloc::<ElementRegister>();
 
+        let expr_0 = x_1.expr() + x_2.expr();
+        let expr_1 = x_1.expr() * x_2.expr();
+        let expr_2 = x_1.expr() - x_2.expr() + F::ONE;
+        let expr_3 = ArithmeticExpression::from_constant(F::from_canonical_u32(42));
+
         let challenges = builder.alloc_challenge_array(2);
 
         let digest = builder.accumulate(&challenges, &[x_1, x_2]);
 
+        let challenges_expr = builder.alloc_challenge_array(4);
+
+        let digest_expr = builder.accumulate_expressions(
+            &challenges_expr,
+            &[
+                expr_0.clone(),
+                expr_1.clone(),
+                expr_2.clone(),
+                expr_3.clone(),
+            ],
+        );
+
         let zero = ArithmeticExpression::<F>::zero();
 
         let alphas = challenges.iter().map(|c| c.ext_expr());
+        let alphas_expr = challenges_expr.iter().map(|c| c.ext_expr());
 
         let mut acc =
             CubicElement::<ArithmeticExpression<F>>([zero.clone(), zero.clone(), zero.clone()]);
@@ -110,7 +134,23 @@ pub mod tests {
             acc = acc + alpha * x_ext;
         }
 
+        let mut acc_expr =
+            CubicElement::<ArithmeticExpression<F>>([zero.clone(), zero.clone(), zero.clone()]);
+        for (alpha, x) in alphas_expr.zip([expr_0, expr_1, expr_2, expr_3].iter()) {
+            let x_ext =
+                CubicElement::<ArithmeticExpression<F>>([x.clone(), zero.clone(), zero.clone()]);
+            acc_expr = acc_expr + alpha * x_ext;
+        }
+
         for (a, b) in digest.as_base_array().iter().zip(acc.as_slice().iter()) {
+            builder.assert_expressions_equal(a.expr(), b.clone());
+        }
+
+        for (a, b) in digest_expr
+            .as_base_array()
+            .iter()
+            .zip(acc_expr.as_slice().iter())
+        {
             builder.assert_expressions_equal(a.expr(), b.clone());
         }
 
