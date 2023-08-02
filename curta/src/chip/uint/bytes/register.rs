@@ -1,9 +1,16 @@
+use crate::chip::register::element::ElementRegister;
 use crate::chip::register::cell::CellType;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
 
 #[derive(Debug, Clone, Copy)]
 pub struct ByteRegister(MemorySlice);
+
+impl ByteRegister {
+    pub fn element(&self) -> ElementRegister {
+        ElementRegister::from_register_unsafe(self.0)
+    }
+}
 
 impl RegisterSerializable for ByteRegister {
     const CELL: CellType = CellType::Element;
