@@ -306,7 +306,8 @@ pub(crate) mod tests {
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = EmptyInstruction<GoldilocksField>;
         const NUM_ARITHMETIC_COLUMNS: usize = 2;
-        const EXTENDED_COLUMNS: usize = 11;
+        const NUM_FREE_COLUMNS: usize = 2;
+        const EXTENDED_COLUMNS: usize = 13;
 
         fn num_rows_bits() -> usize {
             14

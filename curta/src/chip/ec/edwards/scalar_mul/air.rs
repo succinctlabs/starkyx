@@ -19,6 +19,11 @@ use crate::math::prelude::*;
 
 pub type EdScalarMulGoldilocks = ScalarMulEd25519<GoldilocksField, GoldilocksCubicParameters>;
 
+const NUM_ARITHMETIC_COLUMNS: usize = 1504;
+const NUM_FREE_COLUMNS: usize = 77;
+const EXTENDED_COLUMNS: usize = 2293;
+pub const ED_NUM_COLUMNS: usize = NUM_ARITHMETIC_COLUMNS + NUM_FREE_COLUMNS + EXTENDED_COLUMNS;
+
 #[derive(Debug, Clone)]
 pub struct ScalarMulEd25519<F: PrimeField64, E: CubicParameters<F>>(
     core::marker::PhantomData<(F, E)>,
@@ -28,17 +33,15 @@ impl<F: PrimeField64, E: CubicParameters<F>> const AirParameters for ScalarMulEd
     type Field = F;
     type CubicParams = E;
 
-    const NUM_ARITHMETIC_COLUMNS: usize = 1504;
-    const NUM_FREE_COLUMNS: usize = 75;
-    const EXTENDED_COLUMNS: usize = 2292;
+    const NUM_ARITHMETIC_COLUMNS: usize = NUM_ARITHMETIC_COLUMNS;
+    const NUM_FREE_COLUMNS: usize = NUM_FREE_COLUMNS;
+    const EXTENDED_COLUMNS: usize = EXTENDED_COLUMNS;
     type Instruction = FpInstruction<Ed25519BaseField>;
 
     fn num_rows_bits() -> usize {
         16
     }
 }
-
-pub const ED_NUM_COLUMNS: usize = 1504 + 75 + 2292;
 
 impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
     #[allow(clippy::type_complexity)]

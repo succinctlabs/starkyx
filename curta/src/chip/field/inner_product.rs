@@ -194,7 +194,8 @@ mod tests {
         type CubicParams = GoldilocksCubicParameters;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 156;
-        const EXTENDED_COLUMNS: usize = 242;
+        const NUM_FREE_COLUMNS: usize = 2;
+        const EXTENDED_COLUMNS: usize = 243;
 
         type Instruction = FpInnerProductInstruction<Fp25519>;
 
