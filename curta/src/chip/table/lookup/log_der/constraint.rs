@@ -121,6 +121,7 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
             .iter()
             .map(|x| x.eval(parser))
             .collect::<VecDeque<_>>();
+        let acc_length = row_acc_queue.len();
 
         let mut range_pairs = self
             .values
@@ -160,29 +161,25 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
         let log_lookup_accumulator = self.log_lookup_accumulator.eval(parser);
         let log_lookup_accumulator_next = self.log_lookup_accumulator.next().eval(parser);
 
-        let prev_value = row_acc_queue.pop_back().unwrap();
+        let accumulated_value = row_acc_queue.pop_back().unwrap();
+        let accumulated_value_next = self.row_accumulators.get(acc_length-1).next().eval(parser);
         let mut acc_transition_constraint =
             parser.sub_extension(log_lookup_accumulator_next, log_lookup_accumulator);
-        acc_transition_constraint = parser.sub_extension(acc_transition_constraint, prev_value);
+        acc_transition_constraint = parser.sub_extension(acc_transition_constraint, accumulated_value_next);
         parser.constraint_extension_transition(acc_transition_constraint);
 
-        let acc_first_row_constraint = log_lookup_accumulator;
+        let acc_first_row_constraint = parser.sub_extension(log_lookup_accumulator, accumulated_value);
         parser.constraint_extension_first_row(acc_first_row_constraint);
-
-        let mut acc_last_row_constraint = parser.add_extension(log_lookup_accumulator, prev);
-        acc_last_row_constraint =
-            parser.sub_extension(acc_last_row_constraint, multiplicities_table_log);
-        // parser.constraint_extension_last_row(acc_last_row_constraint);
 
         // Add digest constraint
         let lookup_digest = self.digest.eval(parser);
         let lookup_digest_constraint = parser.sub_extension(lookup_digest, log_lookup_accumulator);
         parser.constraint_extension_last_row(lookup_digest_constraint);
 
-        // // Add global digest constraint
-        // let lookup_digest = self.digest.eval(parser);
-        // let table_digest = self.table_data.digest.eval(parser);
-        // let digest_constraint = parser.sub_extension(lookup_digest, table_digest);
-        // parser.constraint_extension_last_row(digest_constraint);
+        // Add global digest constraint
+        let lookup_digest = self.digest.eval(parser);
+        let table_digest = self.table_data.digest.eval(parser);
+        let digest_constraint = parser.sub_extension(lookup_digest, table_digest);
+        parser.constraint_extension_last_row(digest_constraint);
     }
 }

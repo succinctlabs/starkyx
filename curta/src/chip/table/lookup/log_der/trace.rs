@@ -2,11 +2,10 @@ use itertools::Itertools;
 
 use super::{LogLookup, LookupTable};
 use crate::chip::register::cubic::EvalCubic;
-use crate::chip::register::{Register, RegisterSerializable};
+use crate::chip::register::Register;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
-use crate::plonky2::field::cubic::element::CubicElement;
 use crate::plonky2::field::cubic::extension::CubicExtension;
 
 impl<F: PrimeField> TraceWriter<F> {
@@ -81,14 +80,12 @@ impl<F: PrimeField> TraceWriter<F> {
 
     pub(crate) fn write_log_lookup<T: EvalCubic, E: CubicParameters<F>>(
         &self,
-        num_rows: usize,
         lookup_data: &LogLookup<T, F, E>,
     ) {
         let beta = CubicExtension::<F, E>::from(self.read(&lookup_data.challenge, 0));
 
         // Write multiplicity inverse constraints
-        let mult_table_log_entries = self.write_log_lookup_table(&lookup_data.table_data);
-
+        self.write_log_lookup_table(&lookup_data.table_data);
 
         // let split_data = SplitData::split_log_data(lookup_data);
         let accumulators = self
@@ -112,16 +109,11 @@ impl<F: PrimeField> TraceWriter<F> {
             })
             .collect::<Vec<_>>();
 
-        let log_lookup_next = lookup_data.log_lookup_accumulator.next();  
+        let log_lookup = lookup_data.log_lookup_accumulator;  
         let mut value = CubicExtension::ZERO;
-        for (i, (acc, mult_table)) in accumulators
-            .into_iter()
-            .zip_eq(mult_table_log_entries)
-            .enumerate()
-            .filter(|(i, _)| *i != num_rows - 1)
-        {
+        for (i, acc) in accumulators.into_iter().enumerate() {
             value += acc;
-            self.write(&log_lookup_next, &value.0, i);
+            self.write(&log_lookup, &value.0, i);
         }
     }
 }
