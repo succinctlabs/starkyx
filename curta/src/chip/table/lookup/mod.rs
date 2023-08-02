@@ -28,10 +28,10 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP> for Lo
     }
 }
 impl<F: PrimeField> TraceWriter<F> {
-    pub(crate) fn write_lookup<E: CubicParameters<F>>(&self, data: &Lookup<F, E>) {
+    pub(crate) fn write_lookup<E: CubicParameters<F>>(&self, num_rows: usize, data: &Lookup<F, E>) {
         match data {
-            Lookup::LogDerivative(log) => self.write_log_lookup(log),
-            Lookup::CubicLog(log) => self.write_log_lookup(log),
+            Lookup::LogDerivative(log) => self.write_log_lookup(num_rows, log),
+            Lookup::CubicLog(log) => self.write_log_lookup(num_rows, log),
         }
     }
 }

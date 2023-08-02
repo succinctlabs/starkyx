@@ -46,25 +46,23 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
         }
 
         // Constrain the accumulation
-        let mult_table_log_sum = multiplicities_table_log.iter().fold(
-            parser.zero_extension(),
-            |acc, mult_table_log| parser.add_extension(acc, *mult_table_log),
-        );
-
-
+        let mult_table_log_sum = multiplicities_table_log
+            .iter()
+            .fold(parser.zero_extension(), |acc, mult_table_log| {
+                parser.add_extension(acc, *mult_table_log)
+            });
 
         let accumulator = self.table_accumulator.eval(parser);
 
         let first_row_acc = parser.sub_extension(accumulator, mult_table_log_sum);
         parser.constraint_extension_first_row(first_row_acc);
 
-
         let mult_table_log_sum_next = self.multiplicities_table_log.iter().fold(
             parser.zero_extension(),
             |acc, mult_table_log| {
                 let value = mult_table_log.next().eval(parser);
                 parser.add_extension(acc, value)
-            }
+            },
         );
 
         let acuumulator_next = self.table_accumulator.next().eval(parser);
@@ -162,13 +160,19 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
         let log_lookup_accumulator_next = self.log_lookup_accumulator.next().eval(parser);
 
         let accumulated_value = row_acc_queue.pop_back().unwrap();
-        let accumulated_value_next = self.row_accumulators.get(acc_length-1).next().eval(parser);
+        let accumulated_value_next = self
+            .row_accumulators
+            .get(acc_length - 1)
+            .next()
+            .eval(parser);
         let mut acc_transition_constraint =
             parser.sub_extension(log_lookup_accumulator_next, log_lookup_accumulator);
-        acc_transition_constraint = parser.sub_extension(acc_transition_constraint, accumulated_value_next);
+        acc_transition_constraint =
+            parser.sub_extension(acc_transition_constraint, accumulated_value_next);
         parser.constraint_extension_transition(acc_transition_constraint);
 
-        let acc_first_row_constraint = parser.sub_extension(log_lookup_accumulator, accumulated_value);
+        let acc_first_row_constraint =
+            parser.sub_extension(log_lookup_accumulator, accumulated_value);
         parser.constraint_extension_first_row(acc_first_row_constraint);
 
         // Add digest constraint

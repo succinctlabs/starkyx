@@ -115,7 +115,7 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
 
                 // Write lookup proofs
                 for data in air.lookup_data.iter() {
-                    self.writer.write_lookup(data);
+                    self.writer.write_lookup(num_rows, data);
                 }
 
                 // Write evaluation proofs

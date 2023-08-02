@@ -42,10 +42,12 @@ impl<F: PrimeField> TraceWriter<F> {
     /// Assumes table multiplicities have been written
     pub(crate) fn write_log_lookup_table<T: EvalCubic, E: CubicParameters<F>>(
         &self,
+        num_rows: usize,
         table_data: &LookupTable<T, F, E>,
     ) -> Vec<CubicExtension<F, E>> {
         let beta = CubicExtension::<F, E>::from(self.read(&table_data.challenge, 0));
-        let mult_table_log_entries = self.write_trace()
+        let mult_table_log_entries = self
+            .write_trace()
             .unwrap()
             .rows_par_mut()
             .map(|row| {
@@ -75,19 +77,22 @@ impl<F: PrimeField> TraceWriter<F> {
             self.write(&table_data.table_accumulator, &acc.0, i);
         }
 
+        // Write the digest value
+        self.write(&table_data.digest, &acc.0, num_rows - 1);
+
         mult_table_log_entries
     }
 
     pub(crate) fn write_log_lookup<T: EvalCubic, E: CubicParameters<F>>(
         &self,
+        num_rows: usize,
         lookup_data: &LogLookup<T, F, E>,
     ) {
         let beta = CubicExtension::<F, E>::from(self.read(&lookup_data.challenge, 0));
 
         // Write multiplicity inverse constraints
-        self.write_log_lookup_table(&lookup_data.table_data);
+        self.write_log_lookup_table(num_rows, &lookup_data.table_data);
 
-        // let split_data = SplitData::split_log_data(lookup_data);
         let accumulators = self
             .write_trace()
             .unwrap()
@@ -109,11 +114,14 @@ impl<F: PrimeField> TraceWriter<F> {
             })
             .collect::<Vec<_>>();
 
-        let log_lookup = lookup_data.log_lookup_accumulator;  
+        let log_lookup = lookup_data.log_lookup_accumulator;
         let mut value = CubicExtension::ZERO;
         for (i, acc) in accumulators.into_iter().enumerate() {
             value += acc;
             self.write(&log_lookup, &value.0, i);
         }
+
+        // Write the digest value
+        self.write(&lookup_data.digest, &value.0, num_rows - 1);
     }
 }
