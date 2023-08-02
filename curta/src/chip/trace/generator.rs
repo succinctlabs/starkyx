@@ -3,6 +3,7 @@ use alloc::sync::Arc;
 use anyhow::{Error, Result};
 
 use super::writer::TraceWriter;
+use crate::chip::table::lookup::Lookup;
 use crate::chip::{AirParameters, Chip};
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
@@ -59,6 +60,31 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                 let mut public_write = self.writer.0.public.write().unwrap();
                 public_write[id_0..id_1].copy_from_slice(&public_inputs[id_0..id_1]);
                 drop(public_write);
+
+                let num_rows = L::num_rows();
+
+                // Write the range check table and multiplicitiies
+                if let Some(table) = &air.range_table {
+                    for i in 0..num_rows {
+                        self.writer
+                            .write(table, &L::Field::from_canonical_usize(i), i);
+                    }
+                }
+
+                // Write multiplicities for lookup table with search functions
+                for data in air.lookup_data.iter() {
+                    if let Lookup::LogDerivative(log_data) = data {
+                        if let Some(table_index) = log_data.table_index {
+                            self.writer.write_multiplicities_from_fn(
+                                num_rows,
+                                &log_data.table_data,
+                                table_index,
+                                &log_data.values,
+                            );
+                        }
+                    }
+                }
+
                 let trace = self.trace_clone();
                 let execution_trace_values = trace
                     .rows_par()
@@ -77,14 +103,6 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                 let mut challenges_write = writer.challenges.write().unwrap();
                 challenges_write.extend_from_slice(challenges);
                 drop(challenges_write);
-
-                // Write the range check table
-                if let Some(table) = &air.range_table {
-                    for i in 0..num_rows {
-                        self.writer
-                            .write(table, &L::Field::from_canonical_usize(i), i);
-                    }
-                }
 
                 // Write accumulations
                 for acc in air.accumulators.iter() {

@@ -1,5 +1,5 @@
-use crate::chip::register::element::ElementRegister;
 use crate::chip::register::cell::CellType;
+use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
 

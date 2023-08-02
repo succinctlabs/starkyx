@@ -8,7 +8,7 @@ use crate::chip::AirParameters;
 
 impl<L: AirParameters> AirBuilder<L> {
     pub(crate) fn arithmetic_range_checks(&mut self) {
-        let table = self.alloc_extended::<ElementRegister>();
+        let table = self.alloc::<ElementRegister>();
 
         self.range_table = Some(table);
 

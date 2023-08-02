@@ -43,16 +43,6 @@ impl<F: PrimeField> TraceWriter<F> {
     ) {
         let beta = CubicExtension::<F, E>::from(self.read(&lookup_data.challenge, 0));
 
-        // If a table index function is provided, calculate multiplicities
-        if let Some(table_index) = lookup_data.table_index {
-            self.write_multiplicities_from_fn(
-                num_rows,
-                &lookup_data.table_data,
-                table_index,
-                &lookup_data.values,
-            );
-        }
-
         // Write multiplicity inverse constraints
         let mult_table_log_entries = (0..num_rows)
             .into_par_iter()

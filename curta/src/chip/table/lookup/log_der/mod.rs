@@ -33,7 +33,7 @@ pub struct LogLookup<T: EvalCubic, F: Field, E: CubicParameters<F>> {
     pub(crate) multiplicity_table_log: CubicRegister,
     pub(crate) row_accumulators: ArrayRegister<CubicRegister>,
     pub(crate) log_lookup_accumulator: CubicRegister,
-    table_index: Option<fn(T::Value<F>) -> usize>,
+    pub(crate) table_index: Option<fn(T::Value<F>) -> usize>,
     _marker: core::marker::PhantomData<(F, E)>,
 }
 
@@ -43,7 +43,7 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         table: &ElementRegister,
     ) -> LookupTable<ElementRegister, L::Field, L::CubicParams> {
-        let multiplicity = self.alloc_array_extended::<ElementRegister>(1);
+        let multiplicity = self.alloc_array::<ElementRegister>(1);
         LookupTable {
             table: vec![*table],
             multiplicities: multiplicity,

@@ -12,11 +12,28 @@ use crate::chip::register::element::ElementRegister;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::extension::cubic::parameters::CubicParameters;
 use crate::math::prelude::*;
+use crate::plonky2::field::cubic::element::CubicElement;
 
 #[derive(Debug, Clone)]
 pub enum Lookup<F: Field, E: CubicParameters<F>> {
     LogDerivative(LogLookup<ElementRegister, F, E>),
     CubicLog(LogLookup<CubicRegister, F, E>),
+}
+
+impl<F: Field, E: CubicParameters<F>> Lookup<F, E> {
+    pub fn element_table_index(&self) -> Option<fn(F) -> usize> {
+        match self {
+            Lookup::LogDerivative(log) => log.table_index,
+            Lookup::CubicLog(log) => None,
+        }
+    }
+
+    pub fn cubic_table_index(&self) -> Option<fn(CubicElement<F>) -> usize> {
+        match self {
+            Lookup::LogDerivative(log) => None,
+            Lookup::CubicLog(log) => log.table_index,
+        }
+    }
 }
 
 impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP> for Lookup<AP::Field, E> {
