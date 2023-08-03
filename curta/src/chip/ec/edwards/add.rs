@@ -151,35 +151,24 @@ mod tests {
         let p = builder.alloc_ec_point();
         let q = builder.alloc_ec_point();
 
-        let gadget = builder.ed_add::<E>(&p, &q);
+        let _gadget = builder.ed_add::<E>(&p, &q);
 
         let air = builder.build();
         let generator = ArithmeticGenerator::<L>::new(&air);
 
-        let (tx, rx) = channel();
         let base = E::generator();
         let mut rng = thread_rng();
         let a = rng.gen_biguint(256);
         let b = rng.gen_biguint(256);
         let p_int = &base * &a;
         let q_int = &base * &b;
-        for i in 0..L::num_rows() {
-            let writer = generator.new_writer();
-            let handle = tx.clone();
-            let gadget = gadget.clone();
-            let p_int = p_int.clone();
-            let q_int = q_int.clone();
-            rayon::spawn(move || {
-                writer.write_ec_point(&p, &p_int, i);
-                writer.write_ec_point(&q, &q_int, i);
-                writer.write_ed_add(&gadget, i);
-                handle.send(1).unwrap();
-            });
-        }
-        drop(tx);
-        for msg in rx.iter() {
-            assert!(msg == 1);
-        }
+        let writer = generator.new_writer();
+        (0..L::num_rows()).into_par_iter().for_each(|i| {
+            writer.write_ec_point(&p, &p_int, i);
+            writer.write_ec_point(&q, &q_int, i);
+            writer.write_row_instructions(&air, i);
+        });
+
         let stark = Starky::<_, { L::num_columns() }>::new(air);
         let config = SC::standard_fast_config(L::num_rows());
 
