@@ -138,9 +138,8 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
             .iter()
             .map(|x| x.eval(parser))
             .collect::<VecDeque<_>>();
-        let acc_length = row_acc_queue.len();        
-        let accumulated_value = row_acc_queue[acc_length-1];
-
+        let acc_length = row_acc_queue.len();
+        let accumulated_value = row_acc_queue[acc_length - 1];
 
         let mut range_pairs = self
             .values

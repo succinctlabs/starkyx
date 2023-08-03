@@ -3,7 +3,7 @@ use super::memory::MemorySlice;
 use super::{Register, RegisterSerializable, RegisterSized};
 
 /// A register for a single element/column in the trace. The value is not constrainted.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ElementRegister(MemorySlice);
 
 impl RegisterSerializable for ElementRegister {

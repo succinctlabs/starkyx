@@ -9,7 +9,7 @@ use crate::math::prelude::*;
 use crate::plonky2::field::cubic::element::CubicElement;
 
 /// A register for a single element/column in the trace. The value is not constrainted.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CubicRegister(MemorySlice);
 
 pub trait EvalCubic: Register {

@@ -89,6 +89,64 @@ impl<L: AirParameters> AirBuilder<L> {
         }
     }
 
+    pub fn lookup_from_table_and_values(
+        &mut self,
+        table_data: LookupTable<ElementRegister, L::Field, L::CubicParams>,
+        values_data: LogLookupValues<ElementRegister, L::Field, L::CubicParams>,
+    ) {
+        let table_challenge = table_data.challenge;
+        let values_challenge = values_data.challenge;
+        assert_eq!(
+            table_challenge, values_challenge,
+            "Challenges must be equal"
+        );
+        let challenge = table_challenge;
+
+        let lookup_data = Lookup::LogDerivative(LogLookup {
+            challenge,
+            table_data,
+            values_data,
+            table_index: None,
+            _marker: core::marker::PhantomData,
+        });
+
+        // Add the lookup constraints
+        self.constraints
+            .push(Constraint::lookup(lookup_data.clone()));
+
+        // Add the lookup to the list of lookups
+        self.lookup_data.push(lookup_data);
+    }
+
+    pub fn cubic_lookup_from_table_and_values(
+        &mut self,
+        table_data: LookupTable<CubicRegister, L::Field, L::CubicParams>,
+        values_data: LogLookupValues<CubicRegister, L::Field, L::CubicParams>,
+    ) {
+        let table_challenge = table_data.challenge;
+        let values_challenge = values_data.challenge;
+        assert_eq!(
+            table_challenge, values_challenge,
+            "Challenges must be equal"
+        );
+        let challenge = table_challenge;
+
+        let lookup_data = Lookup::CubicLog(LogLookup {
+            challenge,
+            table_data,
+            values_data,
+            table_index: None,
+            _marker: core::marker::PhantomData,
+        });
+
+        // Add the lookup constraints
+        self.constraints
+            .push(Constraint::lookup(lookup_data.clone()));
+
+        // Add the lookup to the list of lookups
+        self.lookup_data.push(lookup_data);
+    }
+
     pub fn lookup_log_derivative(
         &mut self,
         table: &ElementRegister,
