@@ -116,6 +116,16 @@ impl<T: Register> ArrayRegister<T> {
         let elem_fn = |i| self.get(i).eval(parser);
         core::array::from_fn(elem_fn)
     }
+
+    #[inline]
+    pub fn assign_to_raw_slice<F: Copy>(&self, slice: &mut [F], value: &[T::Value<F>]) {
+        let values = value
+            .iter()
+            .flat_map(|v| T::align(v))
+            .copied()
+            .collect::<Vec<_>>();
+        self.register().assign_to_raw_slice(slice, &values)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

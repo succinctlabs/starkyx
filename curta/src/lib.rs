@@ -6,6 +6,7 @@
 #![feature(const_trait_impl)]
 #![feature(specialization)]
 #![allow(clippy::new_without_default)]
+#![feature(bigint_helper_methods)]
 
 extern crate alloc;
 
