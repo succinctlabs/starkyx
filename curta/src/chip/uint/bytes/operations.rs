@@ -24,7 +24,7 @@ pub const OPCODE_VALUES: [u32; NUM_BIT_OPPS] = [
     OPCODE_AND, OPCODE_XOR, OPCODE_ADC, OPCODE_SHR, OPCODE_SHL, OPCODE_NOT,
 ];
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ByteOperation {
     And(ByteRegister, ByteRegister, ByteRegister),
     Xor(ByteRegister, ByteRegister, ByteRegister),
