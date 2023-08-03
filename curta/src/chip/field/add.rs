@@ -222,35 +222,36 @@ mod tests {
 
         let a = builder.alloc::<FieldRegister<P>>();
         let b = builder.alloc::<FieldRegister<P>>();
-        let add_insr = builder.fp_add(&a, &b);
+        let _add_insr = builder.fp_add(&a, &b);
 
         let air = builder.build();
 
         let generator = ArithmeticGenerator::<L>::new(&air);
 
-        let (tx, rx) = channel();
+        let trace_initial = (0..L::num_rows())
+            .into_par_iter()
+            .map(|_| {
+                let mut rng = thread_rng();
+                let writer = generator.new_writer();
+                // let handle = tx.clone();
+                let a_int: BigUint = rng.gen_biguint(256) % &p;
+                let b_int = rng.gen_biguint(256) % &p;
+                (writer, a_int, b_int)
+            })
+            .collect::<Vec<_>>();
 
-        let mut rng = thread_rng();
-        for i in 0..L::num_rows() {
-            let writer = generator.new_writer();
-            let handle = tx.clone();
-            let a_int: BigUint = rng.gen_biguint(256) % &p;
-            let b_int = rng.gen_biguint(256) % &p;
-            rayon::spawn(move || {
+        trace_initial
+            .into_par_iter()
+            .enumerate()
+            .for_each(|(i, (writer, a_int, b_int))| {
                 let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
                 let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
 
                 writer.write_slice(&a, p_a.coefficients(), i);
                 writer.write_slice(&b, p_b.coefficients(), i);
-                writer.write_instruction(&add_insr, i);
-
-                handle.send(1).unwrap();
+                writer.write_row_instructions(&air, i);
             });
-        }
-        drop(tx);
-        for msg in rx.iter() {
-            assert!(msg == 1);
-        }
+
         let stark = Starky::<_, { L::num_columns() }>::new(air);
         let config = SC::standard_fast_config(L::num_rows());
 

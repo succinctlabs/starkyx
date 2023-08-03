@@ -1,4 +1,5 @@
 use self::constraint::Constraint;
+use self::instruction::set::AirInstruction;
 use self::instruction::Instruction;
 use self::register::element::ElementRegister;
 use self::table::accumulator::Accumulator;
@@ -62,6 +63,7 @@ pub struct Chip<L: AirParameters> {
     num_challenges: usize,
     num_public_inputs: usize,
     num_global_values: usize,
+    instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
     lookup_data: Vec<Lookup<L::Field, L::CubicParams>>,
     bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,

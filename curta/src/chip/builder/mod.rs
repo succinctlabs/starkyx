@@ -27,6 +27,7 @@ pub struct AirBuilder<L: AirParameters> {
     next_index: usize,
     extended_index: usize,
     shared_memory: SharedMemory,
+    pub(crate) instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub(crate) constraints: Vec<Constraint<L>>,
     pub(crate) accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
     pub(crate) bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
@@ -48,6 +49,7 @@ impl<L: AirParameters> AirBuilder<L> {
             next_arithmetic_index: 0,
             extended_index: L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS,
             shared_memory,
+            instructions: Vec::new(),
             constraints: Vec::new(),
             accumulators: Vec::new(),
             bus_channels: Vec::new(),
@@ -80,6 +82,8 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         instruction: AirInstruction<L::Field, L::Instruction>,
     ) -> Result<()> {
+        // Add the instruction to the list
+        self.instructions.push(instruction.clone());
         // Add the constraints
         self.constraints
             .push(Constraint::from_instruction_set(instruction));
@@ -163,6 +167,7 @@ impl<L: AirParameters> AirBuilder<L> {
             execution_trace_length,
             num_public_inputs: self.shared_memory.public_index(),
             num_global_values: self.shared_memory.global_index(),
+            instructions: self.instructions,
             accumulators: self.accumulators,
             bus_channels: self.bus_channels,
             lookup_data: self.lookup_data,

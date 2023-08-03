@@ -70,6 +70,25 @@ impl<L: AirParameters> AirBuilder<L> {
         }
     }
 
+    pub fn lookup_table_with_multiplicities<T: EvalCubic>(
+        &mut self,
+        challenge: &CubicRegister,
+        table: &[T],
+        multiplicities: &ArrayRegister<ElementRegister>,
+    ) -> LookupTable<T, L::Field, L::CubicParams> {
+        let multiplicities_table_log = self.alloc_array_extended::<CubicRegister>(table.len());
+        let table_accumulator = self.alloc_extended::<CubicRegister>();
+        LookupTable {
+            challenge: *challenge,
+            table: table.to_vec(),
+            multiplicities: *multiplicities,
+            multiplicities_table_log,
+            table_accumulator,
+            digest: table_accumulator,
+            _marker: PhantomData,
+        }
+    }
+
     pub fn lookup_values<T: EvalCubic>(
         &mut self,
         challenge: &CubicRegister,

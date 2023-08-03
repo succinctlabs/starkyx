@@ -8,6 +8,7 @@ use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
+use crate::chip::{AirParameters, Chip};
 use crate::math::prelude::*;
 use crate::trace::window::TraceWindow;
 use crate::trace::window_parser::TraceWindowParser;
@@ -222,6 +223,17 @@ impl<F: Field> TraceWriter<F> {
     #[inline]
     pub fn write_instruction(&self, instruction: &impl Instruction<F>, row_index: usize) {
         instruction.write(self, row_index)
+    }
+
+    #[inline]
+    pub fn write_row_instructions<L: AirParameters<Field = F>>(
+        &self,
+        air: &Chip<L>,
+        row_index: usize,
+    ) {
+        for instruction in air.instructions.iter() {
+            self.write_instruction(instruction, row_index);
+        }
     }
 }
 
