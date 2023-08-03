@@ -150,21 +150,6 @@ impl<F: Field> Instruction<F> for Cycle<F> {
             writer.write(&self.start_counter, &(counter + F::ONE), row_index);
             writer.write(&self.end_counter, &counter, row_index);
         }
-
-        // if cycle == 0 {
-        //     writer.write(&self.start_bit, &F::ONE, row_index);
-        //     writer.write(&self.start_counter, &(counter), row_index);
-        // } else {
-        //     writer.write(&self.start_bit, &F::ZERO, row_index);
-        //     writer.write(&self.start_counter, &counter, row_index);
-        // }
-        // if cycle == self.group.len() - 1 {
-        //     writer.write(&self.end_bit, &F::ONE, row_index);
-        //     writer.write(&self.end_counter, &(counter + F::ONE), row_index);
-        // } else {
-        //     writer.write(&self.end_bit, &F::ZERO, row_index);
-        //     writer.write(&self.end_counter, &counter, row_index);
-        // }
     }
 }
 
