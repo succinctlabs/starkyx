@@ -94,7 +94,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
         let mut public_input_target_option = vec![None as Option<Target>; 256 * (8 + 2 * 32)];
         for (scalar_register, scalar_target) in scalars_limbs_input.iter().zip_eq(scalars.iter()) {
             let (s_0, s_1) = scalar_register.register().get_range();
-            let scalar_targets = scalar_target.iter().map(|x| Some(*x)).collect_vec();
+            let scalar_targets = scalar_target.iter().map(|x| Some(*x)).collect::<Vec<_>>();
             public_input_target_option[s_0..s_1].copy_from_slice(&scalar_targets);
         }
 
@@ -107,7 +107,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
                 .iter()
                 .chain(point_target.y.iter())
                 .map(|v| Some(*v))
-                .collect_vec();
+                .collect::<Vec<_>>();
             public_input_target_option[p_x_0..p_y_1].copy_from_slice(&point_targets);
         }
 
@@ -129,14 +129,14 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
                 .iter()
                 .chain(point_target.y.iter())
                 .map(|v| Some(*v))
-                .collect_vec();
+                .collect::<Vec<_>>();
             public_input_target_option[p_x_0..p_y_1].copy_from_slice(&point_targets);
         }
 
         let public_input_target = public_input_target_option
             .into_iter()
             .map(|x| x.unwrap())
-            .collect_vec();
+            .collect::<Vec<_>>();
 
         let stark = Starky::<_, ED_NUM_COLUMNS>::new(air);
         let config =

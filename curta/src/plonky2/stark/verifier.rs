@@ -114,7 +114,7 @@ where
             .trace_caps
             .into_iter()
             .chain(once(proof.quotient_polys_cap))
-            .collect_vec();
+            .collect::<Vec<_>>();
 
         verify_fri_proof::<F, C, D>(
             &stark.fri_instance(
@@ -263,7 +263,7 @@ where
             .trace_caps
             .into_iter()
             .chain(once(proof.quotient_polys_cap))
-            .collect_vec();
+            .collect::<Vec<_>>();
 
         let fri_instance = stark.fri_instance_target(
             builder,
@@ -326,14 +326,14 @@ where
         .chain(once(
             stark.air().quotient_degree_factor() * config.num_challenges,
         ))
-        .collect_vec();
+        .collect::<Vec<_>>();
 
     let num_rounds = stark.air().num_rounds();
     let num_global_values = stark.air().num_global_values();
     let global_values_target = builder.add_virtual_targets(num_global_values);
     let trace_caps = (0..num_rounds)
         .map(|_| builder.add_virtual_cap(cap_height))
-        .collect_vec();
+        .collect::<Vec<_>>();
     StarkProofTarget {
         trace_caps,
         quotient_polys_cap: builder.add_virtual_cap(cap_height),

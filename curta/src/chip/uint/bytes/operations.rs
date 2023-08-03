@@ -17,7 +17,7 @@ pub const OPCODE_VALUES: [u32; 6] = [
     OPCODE_AND, OPCODE_XOR, OPCODE_ADC, OPCODE_SHR, OPCODE_SHL, OPCODE_NOT,
 ];
 
-pub const NUM_CHALLENGES: usize = 1 + 8 * 3 + 1;
+pub const NUM_CHALLENGES: usize = 1 + 6 * 3;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ByteLookup<const NUM_OPS: usize> {
