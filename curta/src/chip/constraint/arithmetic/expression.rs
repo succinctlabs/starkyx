@@ -165,7 +165,7 @@ impl<F: Field> Mul<F> for ArithmeticExpression<F> {
 
     fn mul(self, rhs: F) -> Self::Output {
         Self {
-            expression: ArithmeticExpressionSlice::ScalarMul(rhs, Arc::new(self.expression)),
+            expression: ArithmeticExpressionSlice::ConstMul(rhs, Arc::new(self.expression)),
             size: self.size,
         }
     }
@@ -177,16 +177,16 @@ impl<F: Field> Mul for ArithmeticExpression<F> {
     fn mul(self, rhs: Self) -> Self::Output {
         match (self.size, rhs.size) {
             (1, _) => Self {
-                expression: ArithmeticExpressionSlice::Mul(
+                expression: ArithmeticExpressionSlice::ScalarMul(
                     Arc::new(self.expression),
                     Arc::new(rhs.expression),
                 ),
                 size: rhs.size,
             },
             (_, 1) => Self {
-                expression: ArithmeticExpressionSlice::Mul(
-                    Arc::new(self.expression),
+                expression: ArithmeticExpressionSlice::ScalarMul(
                     Arc::new(rhs.expression),
+                    Arc::new(self.expression),
                 ),
                 size: self.size,
             },
