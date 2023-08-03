@@ -6,9 +6,11 @@ use plonky2_maybe_rayon::ParallelIterator;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::trace::writer::TraceWriter;
-use crate::chip::u32::opcode::{OPCODE_AND, OPCODE_XOR};
 use crate::chip::uint::bytes::operations::instruction::ByteOperationValue;
-use crate::chip::uint::bytes::operations::{NUM_BIT_OPPS, OPCODE_NOT, OPCODE_VALUES};
+use crate::chip::uint::bytes::operations::{
+    NUM_BIT_OPPS, OPCODE_ADC_0, OPCODE_ADC_1, OPCODE_AND, OPCODE_INDICES, OPCODE_NOT, OPCODE_SHL,
+    OPCODE_SHR, OPCODE_XOR,
+};
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 
@@ -24,6 +26,10 @@ pub struct MultiplicityData<T> {
 }
 
 impl<F: Field> MultiplicityValues<F> {
+    pub fn new(num_rows: usize) -> Self {
+        Self(vec![[F::ZERO; NUM_BIT_OPPS]; num_rows])
+    }
+
     pub fn update(&mut self, row: usize, col: usize) {
         self.0[row][col] += F::ONE;
     }
@@ -31,26 +37,36 @@ impl<F: Field> MultiplicityValues<F> {
 
 impl<F: Field> MultiplicityData<F> {
     pub fn new(
+        num_rows: usize,
         rx: Receiver<ByteOperationValue<F>>,
         multiplicities: ArrayRegister<ElementRegister>,
     ) -> Self {
+        let mut operations_dict = HashMap::new();
         for (i, (a, b)) in (0..=u8::MAX).zip(0..=u8::MAX).enumerate() {
             for op_index in 0..NUM_BIT_OPPS {
-                let opcode = OPCODE_VALUES[op_index];
+                let opcode = OPCODE_INDICES[op_index];
 
-                for bit_input in [0, 1].iter() {
-                    let operation = match (opcode, bit_input) {
-                        (OPCODE_AND, _) => ByteOperationValue::and(a, b),
-                        (OPCODE_XOR, _) => ByteOperationValue::xor(a, b),
-                        (OPCODE_NOT, _) => ByteOperationValue::not(a),
-                        (OPCODE_SHR, _) => ByteOperationValue::shr(a, *bit_input),
-                        _ => unreachable!("Invalid opcode: {}", opcode),
-                    };
-                }
+                let operation = match opcode {
+                    OPCODE_AND => ByteOperationValue::and(a, b).as_field_op(),
+                    OPCODE_XOR => ByteOperationValue::xor(a, b).as_field_op(),
+                    OPCODE_NOT => ByteOperationValue::not(a).as_field_op(),
+                    OPCODE_SHR => ByteOperationValue::shr(a, b).as_field_op(),
+                    OPCODE_SHL => ByteOperationValue::shl(a, b).as_field_op(),
+                    OPCODE_ADC_0 => ByteOperationValue::adc(a, b, 0u8).as_field_op(),
+                    OPCODE_ADC_1 => ByteOperationValue::adc(a, b, 1u8).as_field_op(),
+                    _ => unreachable!("Invalid opcode: {}", opcode),
+                };
+                operations_dict.insert(operation, (i, op_index));
             }
         }
+        let multiplicity_values = MultiplicityValues::new(num_rows);
 
-        todo!()
+        Self {
+            rx,
+            multiplicities,
+            multiplicities_values: multiplicity_values,
+            operations_dict,
+        }
     }
 
     pub fn collect_values(&mut self) {

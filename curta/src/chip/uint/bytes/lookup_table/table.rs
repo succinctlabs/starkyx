@@ -1,9 +1,7 @@
 use std::sync::mpsc::Receiver;
 
-use super::super::operations::{ByteOperation, NUM_BIT_OPPS, NUM_OUTPUT_CARRY_BITS};
-use super::builder_operations::ByteLookupOperations;
+use super::super::operations::{NUM_BIT_OPPS, NUM_OUTPUT_CARRY_BITS};
 use super::multiplicity_data::MultiplicityData;
-use super::NUM_CHALLENGES;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
@@ -21,8 +19,7 @@ pub struct ByteLookupTable<F> {
     pub results: [ByteRegister; NUM_BIT_OPPS],
     a_bits: ArrayRegister<BitRegister>,
     b_bits: ArrayRegister<BitRegister>,
-    results_bits: [ArrayRegister<BitRegister>; NUM_BIT_OPPS],
-    result_carry_bits: [BitRegister; NUM_OUTPUT_CARRY_BITS],
+    results_bit_ops: [ArrayRegister<BitRegister>; NUM_BIT_OPPS + 1],
     input_carry_bits: [BitRegister; NUM_INPUT_CARRY_BITS],
     multiplicity_data: MultiplicityData<F>,
     row_acc_challenges: ArrayRegister<CubicRegister>,

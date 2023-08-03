@@ -1,3 +1,4 @@
+use super::{OPCODE_ADC, OPCODE_AND, OPCODE_NOT, OPCODE_SHL, OPCODE_SHR, OPCODE_XOR};
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -8,6 +9,19 @@ pub enum ByteOperationValue<T> {
     Shr(T, T, T),
     Shl(T, T, T),
     Not(T, T),
+}
+
+impl<T> ByteOperationValue<T> {
+    pub fn opcode(&self) -> u32 {
+        match self {
+            ByteOperationValue::And(_, _, _) => OPCODE_AND,
+            ByteOperationValue::Xor(_, _, _) => OPCODE_XOR,
+            ByteOperationValue::Adc(_, _, _, _, _) => OPCODE_ADC,
+            ByteOperationValue::Shr(_, _, _) => OPCODE_SHR,
+            ByteOperationValue::Shl(_, _, _) => OPCODE_SHL,
+            ByteOperationValue::Not(_, _) => OPCODE_NOT,
+        }
+    }
 }
 
 impl ByteOperationValue<u8> {

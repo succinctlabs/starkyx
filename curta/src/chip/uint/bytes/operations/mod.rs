@@ -10,22 +10,31 @@ use crate::math::prelude::*;
 pub const OPCODE_AND: u32 = 101;
 pub const OPCODE_XOR: u32 = 102;
 pub const OPCODE_ADC: u32 = 103;
+pub const OPCODE_ADC_0: u32 = 1030;
+pub const OPCODE_ADC_1: u32 = 1031;
 pub const OPCODE_SHR: u32 = 104;
 pub const OPCODE_SHL: u32 = 105;
 pub const OPCODE_NOT: u32 = 106;
 
 pub const NUM_OUTPUT_CARRY_BITS: usize = 2;
-pub const NUM_INPUT_CARRY_BITS: usize = 4;
+pub const NUM_INPUT_CARRY_BITS: usize = 2;
 pub const NUM_BIT_OPPS: usize = 6;
 
-pub const OPCODE_VALUES: [u32; NUM_BIT_OPPS] = [
-    OPCODE_AND, OPCODE_XOR, OPCODE_ADC, OPCODE_SHR, OPCODE_SHL, OPCODE_NOT,
+pub const OPCODE_INDICES: [u32; NUM_BIT_OPPS + 1] = [
+    OPCODE_AND,
+    OPCODE_XOR,
+    OPCODE_SHR,
+    OPCODE_SHL,
+    OPCODE_NOT,
+    OPCODE_ADC_0,
+    OPCODE_ADC_1,
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ByteOperation {
     And(ByteRegister, ByteRegister, ByteRegister),
     Xor(ByteRegister, ByteRegister, ByteRegister),
+    Add(ByteRegister, ByteRegister, ByteRegister, BitRegister),
     Adc(
         ByteRegister,
         ByteRegister,
@@ -43,6 +52,7 @@ impl ByteOperation {
         match self {
             ByteOperation::And(_, _, _) => OPCODE_AND,
             ByteOperation::Xor(_, _, _) => OPCODE_XOR,
+            ByteOperation::Add(_, _, _, _) => OPCODE_ADC,
             ByteOperation::Adc(_, _, _, _, _) => OPCODE_ADC,
             ByteOperation::Shr(_, _, _) => OPCODE_SHR,
             ByteOperation::Shl(_, _, _) => OPCODE_SHL,
@@ -79,6 +89,14 @@ impl ByteOperation {
                 c.expr(),
                 d.expr(),
                 e.expr(),
+            ],
+            ByteOperation::Add(a, b, c, d) => [
+                ArithmeticExpression::from(self.field_opcode::<F>()),
+                a.expr(),
+                b.expr(),
+                ArithmeticExpression::zero(),
+                c.expr(),
+                d.expr(),
             ],
             ByteOperation::Shr(a, b, c) => [
                 ArithmeticExpression::from(self.field_opcode::<F>()),
