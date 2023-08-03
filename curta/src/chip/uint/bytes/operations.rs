@@ -1,14 +1,8 @@
+use super::lookup_table::NUM_CHALLENGES;
 use super::register::ByteRegister;
-use crate::chip::builder::AirBuilder;
-use crate::chip::instruction::Instruction;
-use crate::chip::register::array::ArrayRegister;
+use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::chip::register::bit::BitRegister;
-use crate::chip::register::cubic::CubicRegister;
-use crate::chip::register::element::ElementRegister;
-use crate::chip::register::memory::MemorySlice;
-use crate::chip::register::RegisterSerializable;
-use crate::chip::table::lookup::log_der::{LogLookupValues, LookupTable};
-use crate::chip::AirParameters;
+use crate::chip::register::Register;
 use crate::math::prelude::*;
 
 pub const OPCODE_AND: u32 = 101;
@@ -40,10 +34,85 @@ pub enum ByteOperation {
     Not(ByteRegister, ByteRegister),
 }
 
-// impl<F: Field> Instruction<F> for ByteOperation {
-//     fn trace_layout(&self) -> Vec<MemorySlice> {
-//         match self {
-//             ByteOperation::And(a, b, c) => vec![*c.register()],
-//         }
-//     }
-// }
+impl ByteOperation {
+
+    pub const fn opcode(&self) -> u32 {
+        match self {
+            ByteOperation::And(_, _, _) => OPCODE_AND,
+            ByteOperation::Xor(_, _, _) => OPCODE_XOR,
+            ByteOperation::Adc(_, _, _, _, _) => OPCODE_ADC,
+            ByteOperation::Shr(_, _, _, _) => OPCODE_SHR,
+            ByteOperation::Shl(_, _, _, _) => OPCODE_SHL,
+            ByteOperation::Not(_, _) => OPCODE_NOT,
+        }
+    }
+
+    pub fn field_opcode<F: Field>(&self) -> F {
+        F::from_canonical_u32(self.opcode())
+    }
+
+    pub fn expression_array<F: Field>(&self)  -> [ArithmeticExpression<F>; NUM_CHALLENGES] {
+        match self {
+            ByteOperation::And(a, b, c) => {
+                [
+                    ArithmeticExpression::from(self.field_opcode::<F>()),
+                    a.expr(),
+                    b.expr(),
+                    c.expr(),
+                    ArithmeticExpression::zero(),
+                    ArithmeticExpression::zero(),
+                ]
+            },
+            ByteOperation::Xor(a, b, c) => {
+                [
+                    ArithmeticExpression::from(self.field_opcode::<F>()),
+                    a.expr(),
+                    b.expr(),
+                    c.expr(),
+                    ArithmeticExpression::zero(),
+                    ArithmeticExpression::zero(),
+                ]
+            },
+            ByteOperation::Adc(a, b, c, d, e) => {
+                [
+                    ArithmeticExpression::from(self.field_opcode::<F>()),
+                    a.expr(),
+                    b.expr(),
+                    c.expr(),
+                    d.expr(),
+                    e.expr(),
+                ]
+            },
+            ByteOperation::Shr(a, b, c, d) => {
+                [
+                    ArithmeticExpression::from(self.field_opcode::<F>()),
+                    a.expr(),
+                    b.expr(),
+                    c.expr(),
+                    d.expr(),
+                    ArithmeticExpression::zero(),
+                ]
+            },
+            ByteOperation::Shl(a, b, c, d) => {
+                [
+                    ArithmeticExpression::from(self.field_opcode::<F>()),
+                    a.expr(),
+                    b.expr(),
+                    c.expr(),
+                    d.expr(),
+                    ArithmeticExpression::zero(),
+                ]
+            },
+            ByteOperation::Not(a, b) => {
+                [
+                    ArithmeticExpression::from(self.field_opcode::<F>()),
+                    a.expr(),
+                    b.expr(),
+                    ArithmeticExpression::zero(),
+                    ArithmeticExpression::zero(),
+                    ArithmeticExpression::zero(),
+                ]
+            },
+        } 
+    }
+}
