@@ -261,7 +261,7 @@ impl<F: RichField + Extendable<D>, const D: usize> StarkOpeningSet<F, D> {
                 .collect::<Vec<_>>(),
         };
         let zeta_next_batch = FriOpeningBatch {
-            values: self.next_values.iter().copied().collect::<Vec<_>>(),
+            values: self.next_values.to_vec(),
         };
         FriOpenings {
             batches: vec![zeta_batch, zeta_next_batch],
@@ -287,7 +287,7 @@ impl<const D: usize> StarkOpeningSetTarget<D> {
                 .collect::<Vec<_>>(),
         };
         let zeta_next_batch = FriOpeningBatchTarget {
-            values: self.next_values.iter().copied().collect::<Vec<_>>(),
+            values: self.next_values.to_vec(),
         };
         FriOpeningsTarget {
             batches: vec![zeta_batch, zeta_next_batch],

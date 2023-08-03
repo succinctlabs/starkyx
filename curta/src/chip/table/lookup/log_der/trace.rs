@@ -73,7 +73,7 @@ impl<F: PrimeField> TraceWriter<F> {
         // Write accumulation
         let mut acc = CubicExtension::ZERO;
         for (i, mult_table) in mult_table_log_entries.iter().enumerate() {
-            acc = acc + *mult_table;
+            acc += *mult_table;
             self.write(&table_data.table_accumulator, &acc.0, i);
         }
 

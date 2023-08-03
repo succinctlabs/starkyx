@@ -12,19 +12,18 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 
-
 use super::air::{ScalarMulEd25519, ED_NUM_COLUMNS};
 use super::gadget::EdScalarMulGadget;
 use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
+use crate::chip::ec::edwards::EdwardsParameters;
 use crate::chip::ec::gadget::EllipticCurveWriter;
 use crate::chip::ec::point::AffinePoint;
-use crate::chip::ec::edwards::EdwardsParameters;
 use crate::chip::ec::EllipticCurveParameters;
 use crate::chip::field::instruction::FpInstruction;
 use crate::chip::instruction::set::AirInstruction;
 use crate::chip::register::RegisterSerializable;
 use crate::chip::trace::generator::ArithmeticGenerator;
-use crate::chip::utils::{biguint_to_16_digits_field, field_limbs_to_biguint, biguint_to_bits_le};
+use crate::chip::utils::{biguint_to_16_digits_field, biguint_to_bits_le, field_limbs_to_biguint};
 use crate::chip::{AirParameters, Chip};
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
@@ -84,14 +83,8 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
     where
         C::Hasher: AlgebraicHasher<F>,
     {
-        let (
-            air,
-            gadget,
-            scalars_limbs_input,
-            input_points,
-            output_points,
-            (set_last, set_bit),
-        ) = ScalarMulEd25519::<F, E>::air();
+        let (air, gadget, scalars_limbs_input, input_points, output_points, (set_last, set_bit)) =
+            ScalarMulEd25519::<F, E>::air();
 
         let mut public_input_target_option = vec![None as Option<Target>; 256 * (8 + 2 * 32)];
         for (scalar_register, scalar_target) in scalars_limbs_input.iter().zip_eq(scalars.iter()) {
@@ -239,7 +232,7 @@ pub struct SimpleScalarMulEd25519Generator<
     // S,
     const D: usize,
 > {
-    stark : EdDSAStark<F, E>, 
+    stark: EdDSAStark<F, E>,
     gadget: EdScalarMulGadget<F, Ed25519>,
     points: Vec<AffinePointTarget>,
     scalars: Vec<Vec<Target>>, // 32-byte limbs
@@ -260,7 +253,7 @@ impl<
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        stark : EdDSAStark<F, E>,
+        stark: EdDSAStark<F, E>,
         gadget: EdScalarMulGadget<F, Ed25519>,
         points: Vec<AffinePointTarget>,
         scalars: Vec<Vec<Target>>,
@@ -350,21 +343,21 @@ where
             let starting_row = 256 * k;
             let tx = tx.clone();
             // let gadget = self.gadget.clone();
-            writer.write_ec_point(&res, & Ed25519::neutral(), starting_row);
+            writer.write_ec_point(&res, &Ed25519::neutral(), starting_row);
             writer.write_ec_point(&temp, &points[k], starting_row);
-            let scalar_bits = biguint_to_bits_le(&scalars[k], nb_bits);               
+            let scalar_bits = biguint_to_bits_le(&scalars[k], nb_bits);
             for (i, bit) in scalar_bits.iter().enumerate() {
                 let f_bit = F::from_canonical_u8(*bit as u8);
                 writer.write(&scalar_bit, &f_bit, starting_row + i);
                 writer.write_row_instructions(&self.stark.air, starting_row + i);
             }
-             // let res = writer.write_ed_double_and_add(
-                //     &scalar,
-                //     &point,
-                //     &gadget.double_and_add_gadget,
-                //     256 * i,
-                // );
-            tx.send((k, &points[k]* &scalars[k])).unwrap();
+            // let res = writer.write_ed_double_and_add(
+            //     &scalar,
+            //     &point,
+            //     &gadget.double_and_add_gadget,
+            //     256 * i,
+            // );
+            tx.send((k, &points[k] * &scalars[k])).unwrap();
         });
         drop(tx);
         for (i, res) in rx.iter() {

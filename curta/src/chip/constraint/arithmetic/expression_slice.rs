@@ -84,7 +84,7 @@ impl<F: Field> ArithmeticExpressionSlice<F> {
         }
     }
 
-    pub(crate) fn read_from_slice<'a>(&self, slice: &'a [F]) -> Vec<F> {
+    pub(crate) fn read_from_slice(&self, slice: &[F]) -> Vec<F> {
         match self {
             ArithmeticExpressionSlice::Input(input) => input.read_from_slice(slice).to_vec(),
             ArithmeticExpressionSlice::Const(constants) => constants.clone(),

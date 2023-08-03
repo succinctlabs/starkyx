@@ -47,7 +47,7 @@ impl<F: Field> ArithmeticExpression<F> {
         Self::from_constant(F::ONE)
     }
 
-    pub fn read_from_slice<'a>(&self, slice: &'a [F]) -> Vec<F> {
+    pub fn read_from_slice(&self, slice: &[F]) -> Vec<F> {
         self.expression.read_from_slice(slice)
     }
 

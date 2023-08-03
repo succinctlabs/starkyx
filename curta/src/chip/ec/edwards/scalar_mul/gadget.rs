@@ -1,4 +1,3 @@
-
 use crate::chip::builder::AirBuilder;
 use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::chip::ec::edwards::add::EdAddGadget;
@@ -181,15 +180,14 @@ mod tests {
     use plonky2::timed;
     use plonky2::util::timing::TimingTree;
     use rand::thread_rng;
-    use crate::math::prelude::*;
-use crate::chip::utils::biguint_to_bits_le;
 
     use super::*;
-use crate::chip::ec::gadget::EllipticCurveWriter;
     use crate::chip::builder::tests::*;
     use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
-    use crate::chip::ec::gadget::EllipticCurveGadget;
+    use crate::chip::ec::gadget::{EllipticCurveGadget, EllipticCurveWriter};
     use crate::chip::field::instruction::FpInstruction;
+    use crate::chip::utils::biguint_to_bits_le;
+    use crate::math::prelude::*;
     use crate::plonky2::stark::gadget::StarkGadget;
     use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
     use crate::plonky2::stark::prover::StarkyProver;
@@ -245,7 +243,7 @@ use crate::chip::ec::gadget::EllipticCurveWriter;
                 // let handle = tx.clone();
                 let a = rng.gen_biguint(256);
                 let point = E::generator() * a;
-                writer.write_ec_point(&res, & E::neutral(), starting_row);
+                writer.write_ec_point(&res, &E::neutral(), starting_row);
                 writer.write_ec_point(&temp, &point, starting_row);
                 let scalar = rng.gen_biguint(256);
                 let scalar_bits = biguint_to_bits_le(&scalar, nb_bits);

@@ -21,8 +21,7 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
         let values = self
             .values
             .iter()
-            .map(|x| x.eval(parser))
-            .flatten()
+            .flat_map(|x| x.eval(parser))
             .collect::<Vec<_>>();
 
         let acc = values.iter().zip_eq(self.challenges.iter()).fold(
