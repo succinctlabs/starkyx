@@ -39,7 +39,7 @@ impl<L: AirParameters> AirBuilder<L> {
 
         let mut temp = *a;
         for (k, bit) in b.into_iter().enumerate() {
-            // Calculate the shift (intermediate value << 2^k)
+            // Calculate the shift (temp << 2^k)
             let num_shift_bits = 1 << k;
 
             let res = if k == m - 1 {
