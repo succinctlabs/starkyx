@@ -62,6 +62,8 @@ pub mod tests {
     pub use crate::chip::builder::tests::*;
     use crate::chip::builder::AirBuilder;
     use crate::chip::AirParameters;
+    use crate::chip::instruction::set::AirInstruction;
+    use crate::chip::register::Register;
 
     #[derive(Debug, Clone)]
     pub struct AndTest<const N: usize>;
@@ -72,7 +74,7 @@ pub mod tests {
 
         type Instruction = And<N>;
 
-        const NUM_FREE_COLUMNS: usize = 4 * N;
+        const NUM_FREE_COLUMNS: usize = 4 * N + 1;
 
         fn num_rows_bits() -> usize {
             16
@@ -115,6 +117,60 @@ pub mod tests {
 
             writer.write_array(&a, a_bits.map(|b| F::from_canonical_u8(b as u8)), i);
             writer.write_array(&b, b_bits.map(|b| F::from_canonical_u8(b as u8)), i);
+            writer.write_row_instructions(&air, i);
+        }
+
+        let stark = Starky::<_, { L::num_columns() }>::new(air);
+        let config = SC::standard_fast_config(L::num_rows());
+
+        // Generate proof and verify as a stark
+        test_starky(&stark, &config, &generator, &[]);
+
+        // Test the recursive proof.
+        test_recursive_starky(stark, config, generator, &[]);
+    }
+
+
+    #[test]
+    fn test_filtered_bit_and() {
+        type F = GoldilocksField;
+        type L = AndTest<N>;
+        type SC = PoseidonGoldilocksStarkConfig;
+        const N: usize = 8;
+
+        let mut builder = AirBuilder::<L>::new();
+
+        let a = builder.alloc_array::<BitRegister>(N);
+        let b = builder.alloc_array::<BitRegister>(N);
+        let result = builder.alloc_array::<BitRegister>(N);
+        let filter = builder.alloc::<BitRegister>();
+        let expected = builder.alloc_array::<BitRegister>(N);
+
+        builder.assert_expression_zero((result.expr()- expected.expr()) * filter.expr());
+
+        let and = AirInstruction::from(And { a, b, result });
+        let and_filter = and.as_filtered(filter.expr());
+        builder.register_air_instruction_internal(and_filter).unwrap();
+
+        let air = builder.build();
+
+        let generator = ArithmeticGenerator::<L>::new(&air);
+        let writer = generator.new_writer();
+
+        let mut rng = thread_rng();
+        for i in 0..L::num_rows() {
+            let a_bits = [false; N].map(|_| rng.gen_bool(0.5));
+            let b_bits = [false; N].map(|_| rng.gen_bool(0.5));
+            let filter_val = rng.gen_bool(0.5);
+
+            for ((a, b), expected) in a_bits.iter().zip(b_bits.iter()).zip(expected) {
+                let a_and_b = *a && *b;
+                writer.write(&expected, &F::from_canonical_u8(a_and_b as u8), i);
+            }
+
+            writer.write_array(&a, a_bits.map(|b| F::from_canonical_u8(b as u8)), i);
+            writer.write_array(&b, b_bits.map(|b| F::from_canonical_u8(b as u8)), i);
+            writer.write(&filter, &F::from_canonical_u8(filter_val as u8), i);
             writer.write_row_instructions(&air, i);
         }
 
