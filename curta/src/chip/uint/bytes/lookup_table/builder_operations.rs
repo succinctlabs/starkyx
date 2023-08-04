@@ -10,3 +10,17 @@ pub struct ByteLookupOperations<T> {
     row_acc_challenges: ArrayRegister<CubicRegister>,
     values: Vec<CubicRegister>,
 }
+
+impl<T> ByteLookupOperations<T> {
+    pub fn new(
+        tx: Sender<ByteOperationValue<T>>,
+        row_acc_challenges: ArrayRegister<CubicRegister>,
+    ) -> Self {
+        let values = Vec::new();
+        ByteLookupOperations {
+            tx,
+            row_acc_challenges,
+            values,
+        }
+    }
+}

@@ -1,14 +1,14 @@
-use super::{OPCODE_ADC, OPCODE_AND, OPCODE_NOT, OPCODE_SHL, OPCODE_SHR, OPCODE_XOR};
+use super::{OPCODE_AND, OPCODE_NOT, OPCODE_RANGE, OPCODE_ROT, OPCODE_SHR, OPCODE_XOR};
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ByteOperationValue<T> {
     And(T, T, T),
     Xor(T, T, T),
-    Adc(T, T, T, T, T),
     Shr(T, T, T),
-    Shl(T, T, T),
+    Rot(T, T, T),
     Not(T, T),
+    Range(T),
 }
 
 impl<T> ByteOperationValue<T> {
@@ -16,10 +16,10 @@ impl<T> ByteOperationValue<T> {
         match self {
             ByteOperationValue::And(_, _, _) => OPCODE_AND,
             ByteOperationValue::Xor(_, _, _) => OPCODE_XOR,
-            ByteOperationValue::Adc(_, _, _, _, _) => OPCODE_ADC,
             ByteOperationValue::Shr(_, _, _) => OPCODE_SHR,
-            ByteOperationValue::Shl(_, _, _) => OPCODE_SHL,
+            ByteOperationValue::Rot(_, _, _) => OPCODE_ROT,
             ByteOperationValue::Not(_, _) => OPCODE_NOT,
+            ByteOperationValue::Range(_) => OPCODE_RANGE,
         }
     }
 }
@@ -33,23 +33,20 @@ impl ByteOperationValue<u8> {
         ByteOperationValue::Xor(a, b, a ^ b)
     }
 
-    pub fn adc(a: u8, b: u8, carry: u8) -> Self {
-        assert!(carry == 0 || carry == 1);
-        let carry_flag = (carry & 1) == 1;
-        let (c, res_carry) = a.carrying_add(b, carry_flag);
-        ByteOperationValue::Adc(a, b, carry, c, res_carry as u8)
-    }
-
     pub fn shr(a: u8, b: u8) -> Self {
         ByteOperationValue::Shr(a, b, a >> b)
     }
 
-    pub fn shl(a: u8, b: u8) -> Self {
-        ByteOperationValue::Shl(a, b, a << b)
+    pub fn rot(a: u8, b: u8) -> Self {
+        ByteOperationValue::Rot(a, b, a.rotate_right(b as u32))
     }
 
     pub fn not(a: u8) -> Self {
         ByteOperationValue::Not(a, !a)
+    }
+
+    pub fn range(a: u8) -> Self {
+        ByteOperationValue::Range(a)
     }
 
     pub fn as_field_op<F: Field>(self) -> ByteOperationValue<F> {
@@ -61,20 +58,14 @@ impl ByteOperationValue<u8> {
             ByteOperationValue::Xor(a, b, c) => {
                 ByteOperationValue::Xor(as_field(a), as_field(b), as_field(c))
             }
-            ByteOperationValue::Adc(a, b, c, d, e) => ByteOperationValue::Adc(
-                as_field(a),
-                as_field(b),
-                as_field(c),
-                as_field(d),
-                as_field(e),
-            ),
             ByteOperationValue::Shr(a, b, c) => {
                 ByteOperationValue::Shr(as_field(a), as_field(b), as_field(c))
             }
-            ByteOperationValue::Shl(a, b, c) => {
-                ByteOperationValue::Shl(as_field(a), as_field(b), as_field(c))
+            ByteOperationValue::Rot(a, b, c) => {
+                ByteOperationValue::Rot(as_field(a), as_field(b), as_field(c))
             }
             ByteOperationValue::Not(a, b) => ByteOperationValue::Not(as_field(a), as_field(b)),
+            ByteOperationValue::Range(a) => ByteOperationValue::Range(as_field(a)),
         }
     }
 
@@ -88,20 +79,14 @@ impl ByteOperationValue<u8> {
             ByteOperationValue::Xor(a, b, c) => {
                 ByteOperationValue::Xor(from_field(a), from_field(b), from_field(c))
             }
-            ByteOperationValue::Adc(a, b, c, d, e) => ByteOperationValue::Adc(
-                from_field(a),
-                from_field(b),
-                from_field(c),
-                from_field(d),
-                from_field(e),
-            ),
             ByteOperationValue::Shr(a, b, c) => {
                 ByteOperationValue::Shr(from_field(a), from_field(b), from_field(c))
             }
-            ByteOperationValue::Shl(a, b, c) => {
-                ByteOperationValue::Shl(from_field(a), from_field(b), from_field(c))
+            ByteOperationValue::Rot(a, b, c) => {
+                ByteOperationValue::Rot(from_field(a), from_field(b), from_field(c))
             }
             ByteOperationValue::Not(a, b) => ByteOperationValue::Not(from_field(a), from_field(b)),
+            ByteOperationValue::Range(a) => ByteOperationValue::Range(from_field(a)),
         }
     }
 }

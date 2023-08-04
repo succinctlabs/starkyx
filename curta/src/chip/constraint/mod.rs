@@ -15,7 +15,10 @@ pub mod arithmetic;
 #[derive(Debug, Clone)]
 pub enum Constraint<L: AirParameters> {
     Instruction(AirInstruction<L::Field, L::Instruction>),
-    MulInstruction(ArithmeticExpression<L::Field>, L::Instruction),
+    Filtered(
+        ArithmeticExpression<L::Field>,
+        AirInstruction<L::Field, L::Instruction>,
+    ),
     Arithmetic(ArithmeticConstraint<L::Field>),
     Accumulator(Accumulator<L::Field, L::CubicParams>),
     BusChannel(BusChannel<L::Field, L::CubicParams>),
@@ -38,6 +41,16 @@ impl<L: AirParameters> Constraint<L> {
         Self::Instruction(AirInstruction::CustomInstruction(instruction.into()))
     }
 
+    pub fn filtered<I>(
+        instruction: AirInstruction<L::Field, L::Instruction>,
+        filter: ArithmeticExpression<L::Field>,
+    ) -> Self
+    where
+        L::Instruction: From<I>,
+    {
+        Self::Filtered(filter, instruction)
+    }
+
     pub fn lookup(lookup: Lookup<L::Field, L::CubicParams>) -> Self {
         Self::Lookup(Box::new(lookup))
     }
@@ -55,11 +68,14 @@ where
     fn eval(&self, parser: &mut AP) {
         match self {
             Constraint::Instruction(instruction) => instruction.eval(parser),
-            Constraint::MulInstruction(expression, instruction) => {
-                assert!(expression.size == 1);
+            Constraint::Filtered(expression, instruction) => {
+                assert_eq!(
+                    expression.size, 1,
+                    "Expression multiplying instruction must be of size 1"
+                );
                 let element = expression.eval(parser)[0];
                 let mut mul_parser = MulParser::new(parser, element);
-                instruction.eval(&mut mul_parser);
+                instruction.eval(&mut mul_parser)
             }
             Constraint::Arithmetic(constraint) => constraint.eval(parser),
             Constraint::Accumulator(accumulator) => accumulator.eval(parser),

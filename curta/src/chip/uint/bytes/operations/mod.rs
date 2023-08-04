@@ -1,50 +1,38 @@
 pub mod instruction;
 
-use super::lookup_table::NUM_CHALLENGES;
 use super::register::ByteRegister;
 use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
-use crate::chip::register::bit::BitRegister;
 use crate::chip::register::Register;
 use crate::math::prelude::*;
 
 pub const OPCODE_AND: u32 = 101;
 pub const OPCODE_XOR: u32 = 102;
-pub const OPCODE_ADC: u32 = 103;
-pub const OPCODE_ADC_0: u32 = 1030;
-pub const OPCODE_ADC_1: u32 = 1031;
-pub const OPCODE_SHR: u32 = 104;
-pub const OPCODE_SHL: u32 = 105;
-pub const OPCODE_NOT: u32 = 106;
+pub const OPCODE_SHR: u32 = 103;
+pub const OPCODE_ROT: u32 = 104;
+pub const OPCODE_NOT: u32 = 105;
+pub const OPCODE_RANGE: u32 = 106;
 
-pub const NUM_OUTPUT_CARRY_BITS: usize = 2;
-pub const NUM_INPUT_CARRY_BITS: usize = 2;
-pub const NUM_BIT_OPPS: usize = 6;
+pub const NUM_BIT_OPPS: usize = 5;
 
 pub const OPCODE_INDICES: [u32; NUM_BIT_OPPS + 1] = [
     OPCODE_AND,
     OPCODE_XOR,
     OPCODE_SHR,
-    OPCODE_SHL,
+    OPCODE_ROT,
     OPCODE_NOT,
-    OPCODE_ADC_0,
-    OPCODE_ADC_1,
+    OPCODE_RANGE,
 ];
+
+pub const NUM_CHALLENGES: usize = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ByteOperation {
     And(ByteRegister, ByteRegister, ByteRegister),
     Xor(ByteRegister, ByteRegister, ByteRegister),
-    Add(ByteRegister, ByteRegister, ByteRegister, BitRegister),
-    Adc(
-        ByteRegister,
-        ByteRegister,
-        BitRegister,
-        ByteRegister,
-        BitRegister,
-    ),
     Shr(ByteRegister, ByteRegister, ByteRegister),
-    Shl(ByteRegister, ByteRegister, ByteRegister),
+    Rot(ByteRegister, ByteRegister, ByteRegister),
     Not(ByteRegister, ByteRegister),
+    Range(ByteRegister),
 }
 
 impl ByteOperation {
@@ -52,11 +40,10 @@ impl ByteOperation {
         match self {
             ByteOperation::And(_, _, _) => OPCODE_AND,
             ByteOperation::Xor(_, _, _) => OPCODE_XOR,
-            ByteOperation::Add(_, _, _, _) => OPCODE_ADC,
-            ByteOperation::Adc(_, _, _, _, _) => OPCODE_ADC,
             ByteOperation::Shr(_, _, _) => OPCODE_SHR,
-            ByteOperation::Shl(_, _, _) => OPCODE_SHL,
+            ByteOperation::Rot(_, _, _) => OPCODE_ROT,
             ByteOperation::Not(_, _) => OPCODE_NOT,
+            ByteOperation::Range(_) => OPCODE_RANGE,
         }
     }
 
@@ -65,60 +52,16 @@ impl ByteOperation {
     }
 
     pub fn expression_array<F: Field>(&self) -> [ArithmeticExpression<F>; NUM_CHALLENGES] {
+        let opcode = ArithmeticExpression::from(self.field_opcode::<F>());
         match self {
-            ByteOperation::And(a, b, c) => [
-                ArithmeticExpression::from(self.field_opcode::<F>()),
+            ByteOperation::And(a, b, c) => [opcode, a.expr(), b.expr(), c.expr()],
+            ByteOperation::Xor(a, b, c) => [opcode, a.expr(), b.expr(), c.expr()],
+            ByteOperation::Shr(a, b, c) => [opcode, a.expr(), b.expr(), c.expr()],
+            ByteOperation::Rot(a, b, c) => [opcode, a.expr(), b.expr(), c.expr()],
+            ByteOperation::Not(a, b) => [opcode, a.expr(), b.expr(), ArithmeticExpression::zero()],
+            ByteOperation::Range(a) => [
+                opcode,
                 a.expr(),
-                b.expr(),
-                c.expr(),
-                ArithmeticExpression::zero(),
-                ArithmeticExpression::zero(),
-            ],
-            ByteOperation::Xor(a, b, c) => [
-                ArithmeticExpression::from(self.field_opcode::<F>()),
-                a.expr(),
-                b.expr(),
-                c.expr(),
-                ArithmeticExpression::zero(),
-                ArithmeticExpression::zero(),
-            ],
-            ByteOperation::Adc(a, b, c, d, e) => [
-                ArithmeticExpression::from(self.field_opcode::<F>()),
-                a.expr(),
-                b.expr(),
-                c.expr(),
-                d.expr(),
-                e.expr(),
-            ],
-            ByteOperation::Add(a, b, c, d) => [
-                ArithmeticExpression::from(self.field_opcode::<F>()),
-                a.expr(),
-                b.expr(),
-                ArithmeticExpression::zero(),
-                c.expr(),
-                d.expr(),
-            ],
-            ByteOperation::Shr(a, b, c) => [
-                ArithmeticExpression::from(self.field_opcode::<F>()),
-                a.expr(),
-                b.expr(),
-                c.expr(),
-                ArithmeticExpression::zero(),
-                ArithmeticExpression::zero(),
-            ],
-            ByteOperation::Shl(a, b, c) => [
-                ArithmeticExpression::from(self.field_opcode::<F>()),
-                a.expr(),
-                b.expr(),
-                c.expr(),
-                ArithmeticExpression::zero(),
-                ArithmeticExpression::zero(),
-            ],
-            ByteOperation::Not(a, b) => [
-                ArithmeticExpression::from(self.field_opcode::<F>()),
-                a.expr(),
-                b.expr(),
-                ArithmeticExpression::zero(),
                 ArithmeticExpression::zero(),
                 ArithmeticExpression::zero(),
             ],

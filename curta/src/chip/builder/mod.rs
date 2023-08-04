@@ -8,6 +8,7 @@ use core::cmp::Ordering;
 use anyhow::Result;
 
 use self::shared_memory::SharedMemory;
+use super::constraint::arithmetic::expression::ArithmeticExpression;
 use super::constraint::Constraint;
 use super::instruction::set::AirInstruction;
 use super::register::element::ElementRegister;
@@ -87,6 +88,34 @@ impl<L: AirParameters> AirBuilder<L> {
         // Add the constraints
         self.constraints
             .push(Constraint::from_instruction_set(instruction));
+
+        Ok(())
+    }
+
+    /// Registers an custom instruction with the builder.
+    pub fn register_instruction_filtered<I>(
+        &mut self,
+        instruction: I,
+        filter: ArithmeticExpression<L::Field>,
+    ) where
+        L::Instruction: From<I>,
+    {
+        let instr = L::Instruction::from(instruction);
+        self.register_air_instruction_internal_filtered(AirInstruction::from(instr), filter)
+            .unwrap();
+    }
+
+    /// Register an instrucgtion into the builder.
+    pub(crate) fn register_air_instruction_internal_filtered(
+        &mut self,
+        instruction: AirInstruction<L::Field, L::Instruction>,
+        filter: ArithmeticExpression<L::Field>,
+    ) -> Result<()> {
+        // Add the instruction to the list
+        self.instructions.push(instruction.clone());
+        // Add the constraints
+        self.constraints
+            .push(Constraint::filtered(instruction, filter));
 
         Ok(())
     }

@@ -5,22 +5,24 @@ use self::table::ByteLookupTable;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::cubic::CubicRegister;
 use crate::chip::uint::bytes::operations::instruction::ByteOperationValue;
+use crate::chip::uint::bytes::operations::NUM_CHALLENGES;
 use crate::chip::AirParameters;
 
 pub mod builder_operations;
 pub mod multiplicity_data;
 pub mod table;
 
-pub const NUM_CHALLENGES: usize = 6;
-
 impl<L: AirParameters> AirBuilder<L> {
     pub fn byte_operations(
         &mut self,
     ) -> (ByteLookupOperations<L::Field>, ByteLookupTable<L::Field>) {
-        let (_tx, _rx) = mpsc::channel::<ByteOperationValue<L::Field>>();
+        let (tx, rx) = mpsc::channel::<ByteOperationValue<L::Field>>();
 
-        let _row_acc_challenges = self.alloc_challenge_array::<CubicRegister>(NUM_CHALLENGES);
+        let row_acc_challenges = self.alloc_challenge_array::<CubicRegister>(NUM_CHALLENGES);
 
-        todo!()
+        let lookup_table = self.new_byte_lookup_table(row_acc_challenges, rx);
+        let operations = ByteLookupOperations::new(tx, row_acc_challenges);
+
+        (operations, lookup_table)
     }
 }
