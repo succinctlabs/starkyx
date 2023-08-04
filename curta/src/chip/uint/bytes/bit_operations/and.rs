@@ -75,7 +75,7 @@ pub mod tests {
         const NUM_FREE_COLUMNS: usize = 4 * N;
 
         fn num_rows_bits() -> usize {
-            9
+            16
         }
     }
 
@@ -84,7 +84,7 @@ pub mod tests {
         type F = GoldilocksField;
         type L = AndTest<N>;
         type SC = PoseidonGoldilocksStarkConfig;
-        const N: usize = 32;
+        const N: usize = 8;
 
         let mut builder = AirBuilder::<L>::new();
 
@@ -115,7 +115,7 @@ pub mod tests {
 
             writer.write_array(&a, a_bits.map(|b| F::from_canonical_u8(b as u8)), i);
             writer.write_array(&b, b_bits.map(|b| F::from_canonical_u8(b as u8)), i);
-            writer.write_instruction(&and, i);
+            writer.write_row_instructions(&air, i);
         }
 
         let stark = Starky::<_, { L::num_columns() }>::new(air);
