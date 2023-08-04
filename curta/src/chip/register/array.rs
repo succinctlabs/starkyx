@@ -61,7 +61,7 @@ impl<T: Register> ArrayRegister<T> {
     }
 
     #[inline]
-    pub fn get_slice(&self, range: Range<usize>) -> Self {
+    pub fn get_subarray(&self, range: Range<usize>) -> Self {
         if range.end > self.len() {
             panic!(
                 "End index {} out of bounds for an array of length {}",
@@ -69,7 +69,7 @@ impl<T: Register> ArrayRegister<T> {
                 self.len()
             );
         }
-        self.get_slice_unchecked(range)
+        self.get_subarray_unchecked(range)
     }
 
     #[inline]
@@ -95,7 +95,7 @@ impl<T: Register> ArrayRegister<T> {
     }
 
     #[inline]
-    fn get_slice_unchecked(&self, range: Range<usize>) -> Self {
+    fn get_subarray_unchecked(&self, range: Range<usize>) -> Self {
         let offset = T::size_of() * range.start;
         let length = range.end - range.start;
         match self.register {
