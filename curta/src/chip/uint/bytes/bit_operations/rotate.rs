@@ -40,7 +40,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let mut temp = *a;
         for (k, bit) in b.into_iter().enumerate() {
             // Calculate temp.right_rotate(2^k) and set it to result if bit = 1
-            let num_shift_bits = 1 << k;
+            let num_rotate_bits = 1 << k;
 
             let res = if k == m - 1 {
                 *result
@@ -51,7 +51,7 @@ impl<L: AirParameters> AirBuilder<L> {
             for i in 0..n {
                 self.set_select(
                     &bit,
-                    &temp.get((i + num_shift_bits) % n),
+                    &temp.get((i + num_rotate_bits) % n),
                     &temp.get(i),
                     &res.get(i),
                 );
@@ -70,7 +70,7 @@ impl<L: AirParameters> AirBuilder<L> {
         L::Instruction: From<SelectInstruction<BitRegister>>,
     {
         let result = self.alloc_array::<BitRegister>(a.len());
-        self.set_shr(a, b, &result);
+        self.set_rotate_left(a, b, &result);
         result
     }
 
@@ -141,7 +141,7 @@ pub mod tests {
     fn test_rotate_right() {
         type F = GoldilocksField;
         type L = RotateTest<N, LOG_N>;
-        const LOG_N: usize = 3;
+        const LOG_N: usize = 8;
         const N: usize = 8;
         type SC = PoseidonGoldilocksStarkConfig;
 
@@ -177,6 +177,72 @@ pub mod tests {
             let b_bits = to_bits_le(b_val);
             assert_eq!(a_val, to_val(&a_bits));
             let expected_val = a_val.rotate_right(b_val as u32);
+            let expected_bits = to_bits_le(expected_val);
+            writer.write_array(&a, a_bits.map(|a| F::from_canonical_u8(a)), i);
+            writer.write_array(&b, b_bits.map(|b| F::from_canonical_u8(b)), i);
+            writer.write_array(&expected, expected_bits.map(|b| F::from_canonical_u8(b)), i);
+            writer.write_row_instructions(&air, i);
+        }
+
+        let trace = generator.trace_clone();
+
+        for window in trace.windows_iter() {
+            let mut window_parser = TraceWindowParser::new(window, &[], &[], &[]);
+            air.eval(&mut window_parser);
+        }
+
+        let stark = Starky::<_, { L::num_columns() }>::new(air);
+        let config = SC::standard_fast_config(L::num_rows());
+
+        // Generate proof and verify as a stark
+        test_starky(&stark, &config, &generator, &[]);
+
+        // Test the recursive proof.
+        test_recursive_starky(stark, config, generator, &[]);
+    }
+
+
+    #[test]
+    fn test_rotate_left() {
+        type F = GoldilocksField;
+        type L = RotateTest<N, M>;
+        const M: usize = 8;
+        const N: usize = 8;
+        type SC = PoseidonGoldilocksStarkConfig;
+
+        let mut builder = AirBuilder::<L>::new();
+
+        let a = builder.alloc_array::<BitRegister>(N);
+        let b = builder.alloc_array::<BitRegister>(M);
+        let result = builder.rotate_left(&a, &b);
+        let expected = builder.alloc_array::<BitRegister>(N);
+
+        builder.assert_expressions_equal(result.expr(), expected.expr());
+
+        let air = builder.build();
+
+        let generator = ArithmeticGenerator::<L>::new(&air);
+        let writer = generator.new_writer();
+
+        let mut rng = thread_rng();
+
+        let to_bits_le = |x: u8| {
+            let mut bits = [0u8; 8];
+            for i in 0..8 {
+                bits[i] = (x >> i) & 1;
+            }
+            bits
+        };
+
+        let to_val = |bits: &[u8]| bits.iter().enumerate().map(|(i, b)| b << i).sum::<u8>();
+        for i in 0..L::num_rows() {
+            let a_val = rng.gen::<u8>();
+            let b_val = rng.gen::<u8>();
+            let a_bits = to_bits_le(a_val);
+            let b_bits = to_bits_le(b_val);
+            assert_eq!(a_val, to_val(&a_bits));
+            assert_eq!(b_val, to_val(&b_bits));
+            let expected_val = a_val.rotate_left(b_val as u32);
             let expected_bits = to_bits_le(expected_val);
             writer.write_array(&a, a_bits.map(|a| F::from_canonical_u8(a)), i);
             writer.write_array(&b, b_bits.map(|b| F::from_canonical_u8(b)), i);
