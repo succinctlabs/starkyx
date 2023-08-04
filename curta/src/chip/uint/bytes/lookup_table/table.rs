@@ -8,7 +8,7 @@ use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::element::ElementRegister;
-use crate::chip::uint::bytes::operations::instruction::ByteOperationValue;
+use crate::chip::uint::bytes::operations::value::ByteOperation;
 use crate::chip::uint::bytes::register::ByteRegister;
 use crate::chip::AirParameters;
 
@@ -28,7 +28,7 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn new_byte_lookup_table(
         &mut self,
         row_acc_challenges: ArrayRegister<CubicRegister>,
-        rx: Receiver<ByteOperationValue<L::Field>>,
+        rx: Receiver<ByteOperation<L::Field>>,
     ) -> ByteLookupTable<L::Field> {
         let multiplicities = self.alloc_array::<ElementRegister>(NUM_BIT_OPPS);
 

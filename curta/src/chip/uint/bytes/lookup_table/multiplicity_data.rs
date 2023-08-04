@@ -6,7 +6,7 @@ use plonky2_maybe_rayon::ParallelIterator;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::trace::writer::TraceWriter;
-use crate::chip::uint::bytes::operations::instruction::ByteOperationValue;
+use crate::chip::uint::bytes::operations::value::ByteOperation;
 use crate::chip::uint::bytes::operations::{
     NUM_BIT_OPPS, OPCODE_AND, OPCODE_INDICES, OPCODE_NOT, OPCODE_RANGE, OPCODE_ROT, OPCODE_SHR,
     OPCODE_XOR,
@@ -19,10 +19,10 @@ pub struct MultiplicityValues<T>(Vec<[T; NUM_BIT_OPPS]>);
 
 #[derive(Debug)]
 pub struct MultiplicityData<T> {
-    rx: Receiver<ByteOperationValue<T>>,
+    rx: Receiver<ByteOperation<T>>,
     multiplicities: ArrayRegister<ElementRegister>,
     multiplicities_values: MultiplicityValues<T>,
-    operations_dict: HashMap<ByteOperationValue<T>, (usize, usize)>,
+    operations_dict: HashMap<ByteOperation<T>, (usize, usize)>,
 }
 
 impl<F: Field> MultiplicityValues<F> {
@@ -38,19 +38,19 @@ impl<F: Field> MultiplicityValues<F> {
 impl<F: Field> MultiplicityData<F> {
     pub fn new(
         num_rows: usize,
-        rx: Receiver<ByteOperationValue<F>>,
+        rx: Receiver<ByteOperation<F>>,
         multiplicities: ArrayRegister<ElementRegister>,
     ) -> Self {
         let mut operations_dict = HashMap::new();
         for (row_index, (a, b)) in (0..=u8::MAX).zip(0..=u8::MAX).enumerate() {
             for (op_index, opcode) in OPCODE_INDICES.into_iter().enumerate() {
                 let operation = match opcode {
-                    OPCODE_AND => ByteOperationValue::and(a, b).as_field_op(),
-                    OPCODE_XOR => ByteOperationValue::xor(a, b).as_field_op(),
-                    OPCODE_SHR => ByteOperationValue::shr(a, b).as_field_op(),
-                    OPCODE_ROT => ByteOperationValue::rot(a, b).as_field_op(),
-                    OPCODE_NOT => ByteOperationValue::not(a).as_field_op(),
-                    OPCODE_RANGE => ByteOperationValue::range(a).as_field_op(),
+                    OPCODE_AND => ByteOperation::and(a, b).as_field_op(),
+                    OPCODE_XOR => ByteOperation::xor(a, b).as_field_op(),
+                    OPCODE_SHR => ByteOperation::shr(a, b).as_field_op(),
+                    OPCODE_ROT => ByteOperation::rot(a, b).as_field_op(),
+                    OPCODE_NOT => ByteOperation::not(a).as_field_op(),
+                    OPCODE_RANGE => ByteOperation::range(a).as_field_op(),
                     _ => unreachable!("Invalid opcode: {}", opcode),
                 };
                 operations_dict.insert(operation, (row_index, op_index));

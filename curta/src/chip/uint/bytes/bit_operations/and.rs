@@ -61,9 +61,9 @@ pub mod tests {
     use super::*;
     pub use crate::chip::builder::tests::*;
     use crate::chip::builder::AirBuilder;
-    use crate::chip::AirParameters;
     use crate::chip::instruction::set::AirInstruction;
     use crate::chip::register::Register;
+    use crate::chip::AirParameters;
 
     #[derive(Debug, Clone)]
     pub struct AndTest<const N: usize>;
@@ -130,7 +130,6 @@ pub mod tests {
         test_recursive_starky(stark, config, generator, &[]);
     }
 
-
     #[test]
     fn test_filtered_bit_and() {
         type F = GoldilocksField;
@@ -146,11 +145,13 @@ pub mod tests {
         let filter = builder.alloc::<BitRegister>();
         let expected = builder.alloc_array::<BitRegister>(N);
 
-        builder.assert_expression_zero((result.expr()- expected.expr()) * filter.expr());
+        builder.assert_expression_zero((result.expr() - expected.expr()) * filter.expr());
 
         let and = AirInstruction::from(And { a, b, result });
         let and_filter = and.as_filtered(filter.expr());
-        builder.register_air_instruction_internal(and_filter).unwrap();
+        builder
+            .register_air_instruction_internal(and_filter)
+            .unwrap();
 
         let air = builder.build();
 
