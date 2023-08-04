@@ -1,4 +1,5 @@
 use core::marker::PhantomData;
+use core::ops::Range;
 
 use super::memory::MemorySlice;
 use super::{CellType, Register, RegisterSerializable};
@@ -6,7 +7,6 @@ use crate::air::parser::AirParser;
 use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::chip::constraint::arithmetic::expression_slice::ArithmeticExpressionSlice;
 use crate::math::field::Field;
-use core::ops::Index;
 
 /// A helper struct for representing an array of registers. In particular, it makes it easier
 /// to access the memory slice as well as converting from a memory slice to the struct.
@@ -51,9 +51,25 @@ impl<T: Register> ArrayRegister<T> {
     #[inline]
     pub fn get(&self, idx: usize) -> T {
         if idx >= self.len() {
-            panic!("Index out of bounds");
+            panic!(
+                "Index {} out of bounds for an array of length {}",
+                idx,
+                self.len()
+            );
         }
         self.get_unchecked(idx)
+    }
+
+    #[inline]
+    pub fn get_slice(&self, range: Range<usize>) -> Self {
+        if range.end > self.len() {
+            panic!(
+                "End index {} out of bounds for an array of length {}",
+                range.end,
+                self.len()
+            );
+        }
+        self.get_slice_unchecked(range)
     }
 
     #[inline]
@@ -75,6 +91,33 @@ impl<T: Register> ArrayRegister<T> {
             MemorySlice::Challenge(index, _) => {
                 T::from_register(MemorySlice::Challenge(index + offset, T::size_of()))
             }
+        }
+    }
+
+    #[inline]
+    fn get_slice_unchecked(&self, range: Range<usize>) -> Self {
+        let offset = T::size_of() * range.start;
+        let length = range.end - range.start;
+        match self.register {
+            MemorySlice::Local(index, _) => Self::from_register_unsafe(MemorySlice::Local(
+                index + offset,
+                length * T::size_of(),
+            )),
+            MemorySlice::Next(index, _) => {
+                Self::from_register_unsafe(MemorySlice::Next(index + offset, length * T::size_of()))
+            }
+            MemorySlice::Global(index, _) => Self::from_register_unsafe(MemorySlice::Global(
+                index + offset,
+                length * T::size_of(),
+            )),
+            MemorySlice::Public(index, _) => Self::from_register_unsafe(MemorySlice::Public(
+                index + offset,
+                length * T::size_of(),
+            )),
+            MemorySlice::Challenge(index, _) => Self::from_register_unsafe(MemorySlice::Challenge(
+                index + offset,
+                length * T::size_of(),
+            )),
         }
     }
 
@@ -161,6 +204,3 @@ impl<T: Register> IntoIterator for ArrayRegister<T> {
         }
     }
 }
-
-
-// Indexing trait implementation
