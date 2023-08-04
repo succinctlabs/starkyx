@@ -6,6 +6,7 @@ use crate::air::parser::AirParser;
 use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::chip::constraint::arithmetic::expression_slice::ArithmeticExpressionSlice;
 use crate::math::field::Field;
+use core::ops::Index;
 
 /// A helper struct for representing an array of registers. In particular, it makes it easier
 /// to access the memory slice as well as converting from a memory slice to the struct.
@@ -160,3 +161,6 @@ impl<T: Register> IntoIterator for ArrayRegister<T> {
         }
     }
 }
+
+
+// Indexing trait implementation

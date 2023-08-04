@@ -103,6 +103,7 @@ pub mod tests {
     use rand::{thread_rng, Rng};
 
     use super::*;
+    use crate::chip::bool::SelectInstruction;
     pub use crate::chip::builder::tests::*;
     use crate::chip::builder::AirBuilder;
     use crate::chip::AirParameters;
@@ -116,7 +117,23 @@ pub mod tests {
 
         type Instruction = Shr<N, LOG_N>;
 
-        const NUM_FREE_COLUMNS: usize = 4 * N;
+        const NUM_FREE_COLUMNS: usize = 2 * N + LOG_N * N + N;
+
+        fn num_rows_bits() -> usize {
+            9
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct ShrTestBuilder<const N: usize, const LOG_N: usize>;
+
+    impl<const N: usize, const LOG_N: usize> const AirParameters for ShrTestBuilder<N, LOG_N> {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
+
+        type Instruction = SelectInstruction<BitRegister>;
+
+        const NUM_FREE_COLUMNS: usize = 2 * N + LOG_N * N + N;
 
         fn num_rows_bits() -> usize {
             9
@@ -124,7 +141,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_shr() {
+    fn test_shr_instruction() {
         type F = GoldilocksField;
         type L = ShrTest<N, LOG_N>;
         const LOG_N: usize = 3;
@@ -135,7 +152,7 @@ pub mod tests {
 
         let a = builder.alloc_array::<BitRegister>(N);
         let b = builder.alloc_array::<BitRegister>(LOG_N);
-        let results = [builder.alloc_array::<BitRegister>(N); LOG_N];
+        let results: [_; LOG_N] = core::array::from_fn(|_| builder.alloc_array::<BitRegister>(N));
         let expected = builder.alloc_array::<BitRegister>(N);
 
         let shr = Shr { a, b, results };
@@ -171,6 +188,94 @@ pub mod tests {
             writer.write_array(&b, b_bits.map(|b| F::from_canonical_u8(b)), i);
             writer.write_array(&expected, expected_bits.map(|b| F::from_canonical_u8(b)), i);
             writer.write_instruction(&shr, i);
+        }
+
+        let trace = generator.trace_clone();
+
+        for window in trace.windows_iter() {
+            let mut window_parser = TraceWindowParser::new(window, &[], &[], &[]);
+            air.eval(&mut window_parser);
+        }
+
+        let stark = Starky::<_, { L::num_columns() }>::new(air);
+        let config = SC::standard_fast_config(L::num_rows());
+
+        // Generate proof and verify as a stark
+        test_starky(&stark, &config, &generator, &[]);
+
+        // Test the recursive proof.
+        test_recursive_starky(stark, config, generator, &[]);
+    }
+
+    #[test]
+    fn test_shr_builder_methods() {
+        type F = GoldilocksField;
+        type L = ShrTestBuilder<N, LOG_N>;
+        const LOG_N: usize = 3;
+        const N: usize = 8;
+        type SC = PoseidonGoldilocksStarkConfig;
+
+        let mut builder = AirBuilder::<L>::new();
+
+        let a = builder.alloc_array::<BitRegister>(N);
+        let b = builder.alloc_array::<BitRegister>(LOG_N);
+        let results: [_; LOG_N] = core::array::from_fn(|_| builder.alloc_array::<BitRegister>(N));
+        let expected = builder.alloc_array::<BitRegister>(N);
+
+        let mut results = vec![];
+
+        let mut temp = a;
+        for (k, bit) in b.into_iter().enumerate() {
+            // Calculate the shift (intermediate value << 2^k)
+            let num_shift_bits = 1 << k;
+
+            let mut res = Vec::new();
+            // For i< NUM_BITS - num_shift_bits, we have shifted_res[i] = temp[i + num_shift_bits]
+            for i in 0..(N - num_shift_bits) {
+                let result_i = builder.select(&bit, &temp.get(i + num_shift_bits), &temp.get(i));
+                res.push(result_i);
+            }
+
+            // For i >= NUM_BITS - num_shift_bits, we have shifted_res[i] = 0
+            for i in (N - num_shift_bits)..N {
+                let result_i = builder.select(&bit, &bit, &temp.get(i));
+                res.push(result_i);
+            }
+            let idx = res[0].register().index();
+            let value = ArrayRegister::from_register_unsafe(MemorySlice::Local(idx, N));
+            results.push(value);
+            temp = results[k];
+        }
+        builder.assert_expressions_equal(results[LOG_N - 1].expr(), expected.expr());
+
+        let air = builder.build();
+
+        let generator = ArithmeticGenerator::<L>::new(&air);
+        let writer = generator.new_writer();
+
+        let mut rng = thread_rng();
+
+        let to_bits_le = |x: u8| {
+            let mut bits = [0u8; 8];
+            for i in 0..8 {
+                bits[i] = (x >> i) & 1;
+            }
+            bits
+        };
+
+        let to_val = |bits: &[u8]| bits.iter().enumerate().map(|(i, b)| b << i).sum::<u8>();
+        for i in 0..L::num_rows() {
+            let a_val = rng.gen::<u8>();
+            let a_bits = to_bits_le(a_val);
+            let b_bits = [0, 0, 0];
+            let b_val = to_val(&b_bits);
+            assert_eq!(a_val, to_val(&a_bits));
+            let expected_val = a_val >> b_val;
+            let expected_bits = to_bits_le(expected_val);
+            writer.write_array(&a, a_bits.map(|a| F::from_canonical_u8(a)), i);
+            writer.write_array(&b, b_bits.map(|b| F::from_canonical_u8(b)), i);
+            writer.write_array(&expected, expected_bits.map(|b| F::from_canonical_u8(b)), i);
+            writer.write_row_instructions(&air, i);
         }
 
         let trace = generator.trace_clone();

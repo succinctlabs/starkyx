@@ -34,6 +34,19 @@ impl<L: AirParameters> AirBuilder<L> {
         self.register_instruction(instr);
         result
     }
+
+    pub fn set_select<T: Register>(&mut self, bit: &BitRegister, a: &T, b: &T, result: &T)
+    where
+        L::Instruction: From<SelectInstruction<T>>,
+    {
+        let instr = SelectInstruction {
+            bit: *bit,
+            true_value: *a,
+            false_value: *b,
+            result: *result,
+        };
+        self.register_instruction(instr);
+    }
 }
 
 impl<AP: AirParser, T: Register> AirConstraint<AP> for SelectInstruction<T> {
