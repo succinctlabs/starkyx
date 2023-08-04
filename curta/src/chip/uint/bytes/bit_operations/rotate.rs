@@ -60,7 +60,6 @@ impl<L: AirParameters> AirBuilder<L> {
         }
     }
 
-
     pub fn rotate_left(
         &mut self,
         a: &ArrayRegister<BitRegister>,
@@ -200,7 +199,6 @@ pub mod tests {
         // Test the recursive proof.
         test_recursive_starky(stark, config, generator, &[]);
     }
-
 
     #[test]
     fn test_rotate_left() {

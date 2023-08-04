@@ -7,9 +7,9 @@
 use crate::chip::bool::SelectInstruction;
 use crate::chip::builder::AirBuilder;
 use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
-use crate::chip::register::Register;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
+use crate::chip::register::Register;
 use crate::chip::AirParameters;
 pub use crate::math::prelude::*;
 
@@ -108,7 +108,7 @@ impl<L: AirParameters> AirBuilder<L> {
 
             // For i< num_shift_bits, we have shifted_res[i] = zero
             let one_minus_bit = ArithmeticExpression::one() - bit.expr();
-            for i in 0..num_shift_bits {                
+            for i in 0..num_shift_bits {
                 let value = one_minus_bit.clone() * temp.get(i).expr();
                 self.set_to_expression(&res.get(i), value);
             }
@@ -136,6 +136,7 @@ pub mod tests {
     use crate::chip::bool::SelectInstruction;
     pub use crate::chip::builder::tests::*;
     use crate::chip::builder::AirBuilder;
+    use crate::chip::uint::bytes::bit_operations::test_helpers::{bits_u8_to_val, u8_to_bits_le};
     use crate::chip::AirParameters;
 
     #[derive(Debug, Clone)]
@@ -242,23 +243,14 @@ pub mod tests {
 
         let mut rng = thread_rng();
 
-        let to_bits_le = |x: u8| {
-            let mut bits = [0u8; 8];
-            for i in 0..8 {
-                bits[i] = (x >> i) & 1;
-            }
-            bits
-        };
-
-        let to_val = |bits: &[u8]| bits.iter().enumerate().map(|(i, b)| b << i).sum::<u8>();
         for i in 0..L::num_rows() {
             let a_val = rng.gen::<u8>();
             let b_val = rng.gen::<u8>() % 8;
-            let a_bits = to_bits_le(a_val);
-            let b_bits = to_bits_le(b_val);
-            assert_eq!(a_val, to_val(&a_bits));
+            let a_bits = u8_to_bits_le(a_val);
+            let b_bits = u8_to_bits_le(b_val);
+            assert_eq!(a_val, bits_u8_to_val(&a_bits));
             let expected_val = a_val << b_val;
-            let expected_bits = to_bits_le(expected_val);
+            let expected_bits = u8_to_bits_le(expected_val);
             writer.write_array(&a, a_bits.map(|a| F::from_canonical_u8(a)), i);
             writer.write_array(&b, b_bits.map(|b| F::from_canonical_u8(b)), i);
             writer.write_array(&expected, expected_bits.map(|b| F::from_canonical_u8(b)), i);
