@@ -36,27 +36,24 @@ impl<L: AirParameters> AirBuilder<L> {
 
         let a = self.alloc::<ByteRegister>();
         let b = self.alloc::<ByteRegister>();
-        let results = [self.alloc::<ByteRegister>(); NUM_BIT_OPPS];
 
         let a_bits = self.alloc_array::<BitRegister>(8);
         let b_bits = self.alloc_array::<BitRegister>(8);
-        let results_bits = [self.alloc_array::<BitRegister>(8); NUM_BIT_OPPS + 1];
-        let result_carry_bits = [self.alloc::<BitRegister>(); NUM_OUTPUT_CARRY_BITS];
-        let input_carry_bits = [self.alloc::<BitRegister>(); NUM_INPUT_CARRY_BITS];
+        todo!();
 
-        let multiplicity_data = MultiplicityData::new(L::num_rows(), rx, multiplicities);
+        // let multiplicity_data = MultiplicityData::new(L::num_rows(), rx, multiplicities);
 
-        ByteLookupTable {
-            a,
-            b,
-            results,
-            a_bits,
-            b_bits,
-            results_bits,
-            input_carry_bits,
-            result_carry_bits,
-            multiplicity_data,
-            row_acc_challenges,
-        }
+        // ByteLookupTable {
+        //     a,
+        //     b,
+        //     results,
+        //     a_bits,
+        //     b_bits,
+        //     results_bits,
+        //     input_carry_bits,
+        //     result_carry_bits,
+        //     multiplicity_data,
+        //     row_acc_challenges,
+        // }
     }
 }
