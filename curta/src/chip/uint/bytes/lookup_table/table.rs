@@ -19,11 +19,11 @@ pub struct ByteLookupTable<F> {
     pub results: [ByteRegister; NUM_BIT_OPPS],
     a_bits: ArrayRegister<BitRegister>,
     b_bits: ArrayRegister<BitRegister>,
-    results_bit_ops: [ArrayRegister<BitRegister>; NUM_BIT_OPPS + 1],
+    results_bits: [ArrayRegister<BitRegister>; NUM_BIT_OPPS + 1],
     input_carry_bits: [BitRegister; NUM_INPUT_CARRY_BITS],
+    result_carry_bits: [BitRegister; NUM_OUTPUT_CARRY_BITS],
     multiplicity_data: MultiplicityData<F>,
     row_acc_challenges: ArrayRegister<CubicRegister>,
-    row_digests: [CubicRegister; NUM_BIT_OPPS],
 }
 
 impl<L: AirParameters> AirBuilder<L> {
@@ -40,10 +40,23 @@ impl<L: AirParameters> AirBuilder<L> {
 
         let a_bits = self.alloc_array::<BitRegister>(8);
         let b_bits = self.alloc_array::<BitRegister>(8);
-        let results_bits = [self.alloc_array::<BitRegister>(8); NUM_BIT_OPPS];
+        let results_bits = [self.alloc_array::<BitRegister>(8); NUM_BIT_OPPS + 1];
         let result_carry_bits = [self.alloc::<BitRegister>(); NUM_OUTPUT_CARRY_BITS];
         let input_carry_bits = [self.alloc::<BitRegister>(); NUM_INPUT_CARRY_BITS];
 
-        todo!()
+        let multiplicity_data = MultiplicityData::new(L::num_rows(), rx, multiplicities);
+
+        ByteLookupTable {
+            a,
+            b,
+            results,
+            a_bits,
+            b_bits,
+            results_bits,
+            input_carry_bits,
+            result_carry_bits,
+            multiplicity_data,
+            row_acc_challenges,
+        }
     }
 }

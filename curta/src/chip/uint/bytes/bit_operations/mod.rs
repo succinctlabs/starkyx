@@ -1,4 +1,5 @@
 use self::and::And;
+use self::shr::Shr;
 use self::xor::Xor;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
@@ -17,16 +18,18 @@ pub mod shr;
 pub mod xor;
 
 #[derive(Debug, Clone, Copy)]
-pub enum BitOperation<const NUM_BITS: usize> {
+pub enum BitOperation<const NUM_BITS: usize, const LOG_N: usize> {
     And(And<NUM_BITS>),
     Xor(Xor<NUM_BITS>),
+    Shr(Shr<NUM_BITS, LOG_N>),
 }
 
-impl<const NUM_BITS: usize> BitOperation<NUM_BITS> {
+impl<const NUM_BITS: usize, const LOG_N: usize> BitOperation<NUM_BITS, LOG_N> {
     pub fn a_bits(&self) -> ArrayRegister<BitRegister> {
         match self {
             BitOperation::And(and) => and.a,
             BitOperation::Xor(xor) => xor.a,
+            BitOperation::Shr(shr) => shr.a,
         }
     }
 
@@ -34,6 +37,7 @@ impl<const NUM_BITS: usize> BitOperation<NUM_BITS> {
         match self {
             BitOperation::And(and) => and.b,
             BitOperation::Xor(xor) => xor.b,
+            BitOperation::Shr(shr) => shr.b,
         }
     }
 
@@ -41,24 +45,31 @@ impl<const NUM_BITS: usize> BitOperation<NUM_BITS> {
         match self {
             BitOperation::And(and) => and.result,
             BitOperation::Xor(xor) => xor.result,
+            BitOperation::Shr(shr) => shr.results[LOG_N - 1],
         }
     }
 }
 
-impl<AP: AirParser, const NUM_BITS: usize> AirConstraint<AP> for BitOperation<NUM_BITS> {
+impl<AP: AirParser, const NUM_BITS: usize, const LOG_N: usize> AirConstraint<AP>
+    for BitOperation<NUM_BITS, LOG_N>
+{
     fn eval(&self, parser: &mut AP) {
         match self {
             BitOperation::And(and) => and.eval(parser),
             BitOperation::Xor(xor) => xor.eval(parser),
+            BitOperation::Shr(shr) => shr.eval(parser),
         }
     }
 }
 
-impl<F: Field, const NUM_BITS: usize> Instruction<F> for BitOperation<NUM_BITS> {
+impl<F: Field, const NUM_BITS: usize, const LOG_N: usize> Instruction<F>
+    for BitOperation<NUM_BITS, LOG_N>
+{
     fn inputs(&self) -> Vec<MemorySlice> {
         match self {
             BitOperation::And(and) => Instruction::<F>::inputs(and),
             BitOperation::Xor(xor) => Instruction::<F>::inputs(xor),
+            BitOperation::Shr(shr) => Instruction::<F>::inputs(shr),
         }
     }
 
@@ -66,6 +77,7 @@ impl<F: Field, const NUM_BITS: usize> Instruction<F> for BitOperation<NUM_BITS> 
         match self {
             BitOperation::And(and) => Instruction::<F>::trace_layout(and),
             BitOperation::Xor(xor) => Instruction::<F>::trace_layout(xor),
+            BitOperation::Shr(shr) => Instruction::<F>::trace_layout(shr),
         }
     }
 
@@ -73,18 +85,25 @@ impl<F: Field, const NUM_BITS: usize> Instruction<F> for BitOperation<NUM_BITS> 
         match self {
             BitOperation::And(and) => Instruction::<F>::write(and, writer, row_index),
             BitOperation::Xor(xor) => Instruction::<F>::write(xor, writer, row_index),
+            BitOperation::Shr(shr) => Instruction::<F>::write(shr, writer, row_index),
         }
     }
 }
 
-impl<const N: usize> From<And<N>> for BitOperation<N> {
+impl<const N: usize, const LOG_N: usize> From<And<N>> for BitOperation<N, LOG_N> {
     fn from(and: And<N>) -> Self {
         BitOperation::And(and)
     }
 }
 
-impl<const N: usize> From<Xor<N>> for BitOperation<N> {
+impl<const N: usize, const LOG_N: usize> From<Xor<N>> for BitOperation<N, LOG_N> {
     fn from(xor: Xor<N>) -> Self {
         BitOperation::Xor(xor)
+    }
+}
+
+impl<const N: usize, const LOG_N: usize> From<Shr<N, LOG_N>> for BitOperation<N, LOG_N> {
+    fn from(shr: Shr<N, LOG_N>) -> Self {
+        BitOperation::Shr(shr)
     }
 }

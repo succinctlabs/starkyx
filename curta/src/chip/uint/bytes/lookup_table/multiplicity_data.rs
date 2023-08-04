@@ -43,9 +43,7 @@ impl<F: Field> MultiplicityData<F> {
     ) -> Self {
         let mut operations_dict = HashMap::new();
         for (i, (a, b)) in (0..=u8::MAX).zip(0..=u8::MAX).enumerate() {
-            for op_index in 0..NUM_BIT_OPPS {
-                let opcode = OPCODE_INDICES[op_index];
-
+            for (op_index, opcode) in OPCODE_INDICES.into_iter().enumerate() {
                 let operation = match opcode {
                     OPCODE_AND => ByteOperationValue::and(a, b).as_field_op(),
                     OPCODE_XOR => ByteOperationValue::xor(a, b).as_field_op(),
