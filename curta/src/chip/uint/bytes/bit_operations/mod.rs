@@ -12,9 +12,9 @@ pub use crate::math::prelude::*;
 pub mod adc;
 pub mod and;
 pub mod not;
-pub mod shl;
-pub mod shr;
+pub mod shift;
 pub mod xor;
+pub mod rotate;
 
 // #[derive(Debug, Clone, Copy)]
 // pub enum BitOperation<const NUM_BITS: usize> {
