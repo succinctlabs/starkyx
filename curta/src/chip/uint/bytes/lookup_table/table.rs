@@ -28,7 +28,7 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn new_byte_lookup_table(
         &mut self,
         row_acc_challenges: ArrayRegister<CubicRegister>,
-        rx: Receiver<ByteOperation<L::Field>>,
+        rx: Receiver<ByteOperation<u8>>,
     ) -> ByteLookupTable<L::Field> {
         let multiplicities = self.alloc_array::<ElementRegister>(NUM_BIT_OPPS);
 

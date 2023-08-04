@@ -18,11 +18,11 @@ use crate::maybe_rayon::*;
 pub struct MultiplicityValues<T>(Vec<[T; NUM_BIT_OPPS]>);
 
 #[derive(Debug)]
-pub struct MultiplicityData<T> {
-    rx: Receiver<ByteOperation<T>>,
+pub struct MultiplicityData<F> {
+    rx: Receiver<ByteOperation<u8>>,
     multiplicities: ArrayRegister<ElementRegister>,
-    multiplicities_values: MultiplicityValues<T>,
-    operations_dict: HashMap<ByteOperation<T>, (usize, usize)>,
+    multiplicities_values: MultiplicityValues<F>,
+    operations_dict: HashMap<ByteOperation<u8>, (usize, usize)>,
 }
 
 impl<F: Field> MultiplicityValues<F> {
@@ -38,19 +38,19 @@ impl<F: Field> MultiplicityValues<F> {
 impl<F: Field> MultiplicityData<F> {
     pub fn new(
         num_rows: usize,
-        rx: Receiver<ByteOperation<F>>,
+        rx: Receiver<ByteOperation<u8>>,
         multiplicities: ArrayRegister<ElementRegister>,
     ) -> Self {
         let mut operations_dict = HashMap::new();
         for (row_index, (a, b)) in (0..=u8::MAX).zip(0..=u8::MAX).enumerate() {
             for (op_index, opcode) in OPCODE_INDICES.into_iter().enumerate() {
                 let operation = match opcode {
-                    OPCODE_AND => ByteOperation::and(a, b).as_field_op(),
-                    OPCODE_XOR => ByteOperation::xor(a, b).as_field_op(),
-                    OPCODE_SHR => ByteOperation::shr(a, b).as_field_op(),
-                    OPCODE_ROT => ByteOperation::rot(a, b).as_field_op(),
-                    OPCODE_NOT => ByteOperation::not(a).as_field_op(),
-                    OPCODE_RANGE => ByteOperation::range(a).as_field_op(),
+                    OPCODE_AND => ByteOperation::and(a, b),
+                    OPCODE_XOR => ByteOperation::xor(a, b),
+                    OPCODE_SHR => ByteOperation::shr(a, b),
+                    OPCODE_ROT => ByteOperation::rot(a, b),
+                    OPCODE_NOT => ByteOperation::not(a),
+                    OPCODE_RANGE => ByteOperation::range(a),
                     _ => unreachable!("Invalid opcode: {}", opcode),
                 };
                 operations_dict.insert(operation, (row_index, op_index));

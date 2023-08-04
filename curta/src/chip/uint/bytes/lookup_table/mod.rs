@@ -13,10 +13,8 @@ pub mod multiplicity_data;
 pub mod table;
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn byte_operations(
-        &mut self,
-    ) -> (ByteLookupOperations<L::Field>, ByteLookupTable<L::Field>) {
-        let (tx, rx) = mpsc::channel::<ByteOperation<L::Field>>();
+    pub fn byte_operations(&mut self) -> (ByteLookupOperations, ByteLookupTable<L::Field>) {
+        let (tx, rx) = mpsc::channel::<ByteOperation<u8>>();
 
         let row_acc_challenges = self.alloc_challenge_array::<CubicRegister>(NUM_CHALLENGES);
 
