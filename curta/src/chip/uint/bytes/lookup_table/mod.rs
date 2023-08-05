@@ -23,4 +23,22 @@ impl<L: AirParameters> AirBuilder<L> {
 
         (operations, lookup_table)
     }
+
+    pub fn register_byte_lookup(
+        &mut self,
+        operation_values: ByteLookupOperations,
+        table: &ByteLookupTable<L::Field>,
+    ) {
+        let multiplicities = table.multiplicity_data.multiplicities().clone();
+        let lookup_challenge = self.alloc_challenge::<CubicRegister>();
+
+        let lookup_table = self.lookup_table_with_multiplicities(
+            &lookup_challenge,
+            &table.digests,
+            &multiplicities,
+        );
+        let lookup_values = self.lookup_values(&lookup_challenge, &operation_values.values);
+
+        self.cubic_lookup_from_table_and_values(lookup_table, lookup_values);
+    }
 }

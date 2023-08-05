@@ -6,8 +6,7 @@ pub mod rotate;
 pub mod shift;
 pub mod xor;
 
-#[cfg(test)]
-pub(crate) mod test_helpers {
+pub mod util {
 
     #[inline]
     pub fn u8_to_bits_le(x: u8) -> [u8; 8] {

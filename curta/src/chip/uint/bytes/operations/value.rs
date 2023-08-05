@@ -5,6 +5,7 @@ use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::trace::writer::TraceWriter;
+use crate::chip::uint::bytes::bit_operations::util::u8_to_bits_le;
 use crate::chip::uint::bytes::register::ByteRegister;
 use crate::math::prelude::*;
 
@@ -120,6 +121,18 @@ impl<T> ByteOperation<T> {
         }
     }
 
+    pub fn from_opcode_and_values(opcode: u32, a: T, b: T, c: Option<T>) -> Self {
+        match opcode {
+            OPCODE_AND => ByteOperation::And(a, b, c.unwrap()),
+            OPCODE_XOR => ByteOperation::Xor(a, b, c.unwrap()),
+            OPCODE_SHR => ByteOperation::Shr(a, b, c.unwrap()),
+            OPCODE_ROT => ByteOperation::Rot(a, b, c.unwrap()),
+            OPCODE_NOT => ByteOperation::Not(a, c.unwrap()),
+            OPCODE_RANGE => ByteOperation::Range(a),
+            _ => panic!("Invalid opcode {}", opcode),
+        }
+    }
+
     pub fn field_opcode<F: Field>(&self) -> F {
         F::from_canonical_u32(self.opcode())
     }
@@ -167,6 +180,26 @@ impl ByteOperation<u8> {
             }
             ByteOperation::Not(a, b) => ByteOperation::Not(as_field(a), as_field(b)),
             ByteOperation::Range(a) => ByteOperation::Range(as_field(a)),
+        }
+    }
+
+    pub fn as_field_bits_op<F: Field>(self) -> ByteOperation<[F; 8]> {
+        let as_field_bits = |x| u8_to_bits_le(x).map(|b| F::from_canonical_u8(b));
+        match self {
+            ByteOperation::And(a, b, c) => {
+                ByteOperation::And(as_field_bits(a), as_field_bits(b), as_field_bits(c))
+            }
+            ByteOperation::Xor(a, b, c) => {
+                ByteOperation::Xor(as_field_bits(a), as_field_bits(b), as_field_bits(c))
+            }
+            ByteOperation::Shr(a, b, c) => {
+                ByteOperation::Shr(as_field_bits(a), as_field_bits(b), as_field_bits(c))
+            }
+            ByteOperation::Rot(a, b, c) => {
+                ByteOperation::Rot(as_field_bits(a), as_field_bits(b), as_field_bits(c))
+            }
+            ByteOperation::Not(a, b) => ByteOperation::Not(as_field_bits(a), as_field_bits(b)),
+            ByteOperation::Range(a) => ByteOperation::Range(as_field_bits(a)),
         }
     }
 }

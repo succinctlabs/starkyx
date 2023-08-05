@@ -22,7 +22,8 @@ pub struct MultiplicityData<F> {
     rx: Receiver<ByteOperation<u8>>,
     multiplicities: ArrayRegister<ElementRegister>,
     multiplicities_values: MultiplicityValues<F>,
-    operations_dict: HashMap<ByteOperation<u8>, (usize, usize)>,
+    operations_multipcitiy_dict: HashMap<ByteOperation<u8>, (usize, usize)>,
+    pub operations_dict: HashMap<usize, Vec<ByteOperation<u8>>>,
 }
 
 impl<F: Field> MultiplicityValues<F> {
@@ -41,8 +42,10 @@ impl<F: Field> MultiplicityData<F> {
         rx: Receiver<ByteOperation<u8>>,
         multiplicities: ArrayRegister<ElementRegister>,
     ) -> Self {
+        let mut operations_multipcitiy_dict = HashMap::new();
         let mut operations_dict = HashMap::new();
         for (row_index, (a, b)) in (0..=u8::MAX).zip(0..=u8::MAX).enumerate() {
+            let mut operations = Vec::with_capacity(NUM_BIT_OPPS + 1);
             for (op_index, opcode) in OPCODE_INDICES.into_iter().enumerate() {
                 let operation = match opcode {
                     OPCODE_AND => ByteOperation::and(a, b),
@@ -53,8 +56,10 @@ impl<F: Field> MultiplicityData<F> {
                     OPCODE_RANGE => ByteOperation::range(a),
                     _ => unreachable!("Invalid opcode: {}", opcode),
                 };
-                operations_dict.insert(operation, (row_index, op_index));
+                operations_multipcitiy_dict.insert(operation, (row_index, op_index));
+                operations.push(operation);
             }
+            operations_dict.insert(row_index, operations);
         }
         let multiplicity_values = MultiplicityValues::new(num_rows);
 
@@ -63,17 +68,22 @@ impl<F: Field> MultiplicityData<F> {
             multiplicities,
             multiplicities_values: multiplicity_values,
             operations_dict,
+            operations_multipcitiy_dict,
         }
     }
 
     pub fn collect_values(&mut self) {
         for operation in self.rx.iter() {
-            let (row, col) = self.operations_dict[&operation];
+            let (row, col) = self.operations_multipcitiy_dict[&operation];
             self.multiplicities_values.update(row, col);
         }
     }
 
-    pub fn assign(&self, writer: TraceWriter<F>) {
+    pub fn multiplicities(&self) -> &ArrayRegister<ElementRegister> {
+        &self.multiplicities
+    }
+
+    pub fn write_multiplicities(&self, writer: &TraceWriter<F>) {
         let multiplicities_array = self.multiplicities;
         writer
             .write_trace()
