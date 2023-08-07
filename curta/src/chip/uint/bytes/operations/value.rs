@@ -83,14 +83,14 @@ impl ByteOperation<ByteRegister> {
             }
             ByteOperation::Shr(a, b, c) => {
                 let a_val = from_field(writer.read(a, row_index));
-                let b_val = from_field(writer.read(b, row_index));
+                let b_val = from_field(writer.read(b, row_index)) & 7;
                 let c_val = a_val >> b_val;
                 writer.write(c, &as_field(c_val), row_index);
                 ByteOperation::Shr(a_val, b_val, c_val)
             }
             ByteOperation::Rot(a, b, c) => {
                 let a_val = from_field(writer.read(a, row_index));
-                let b_val = from_field(writer.read(b, row_index));
+                let b_val = from_field(writer.read(b, row_index)) & 7;
                 let c_val = a_val.rotate_right(b_val as u32);
                 writer.write(c, &as_field(c_val), row_index);
                 ByteOperation::Rot(a_val, b_val, c_val)

@@ -37,6 +37,8 @@ impl<L: AirParameters> AirBuilder<L> {
         let m = b.len();
         assert!(m <= n, "b must be shorter or eual length to a");
 
+        //    let n_log = n.ilog2() as usize;
+
         let mut temp = *a;
         for (k, bit) in b.into_iter().enumerate() {
             // Calculate temp.right_rotate(2^k) and set it to result if bit = 1
@@ -148,7 +150,8 @@ pub mod tests {
 
         let a = builder.alloc_array::<BitRegister>(N);
         let b = builder.alloc_array::<BitRegister>(LOG_N);
-        let result = builder.rotate_right(&a, &b);
+        let result = builder.alloc_array::<BitRegister>(N);
+        builder.set_rotate_right(&a, &b, &result);
         let expected = builder.alloc_array::<BitRegister>(N);
 
         builder.assert_expressions_equal(result.expr(), expected.expr());

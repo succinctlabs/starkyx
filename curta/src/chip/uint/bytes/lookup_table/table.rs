@@ -1,8 +1,12 @@
 use core::array::from_fn;
 use std::sync::mpsc::Receiver;
 
+use itertools::Itertools;
+
 use super::super::operations::NUM_BIT_OPPS;
 use super::multiplicity_data::MultiplicityData;
+use super::ByteInstructionSet;
+use crate::chip::bool::SelectInstruction;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
@@ -10,9 +14,15 @@ use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::Register;
 use crate::chip::trace::writer::TraceWriter;
+use crate::chip::uint::bytes::bit_operations::and::And;
+use crate::chip::uint::bytes::bit_operations::not::Not;
 use crate::chip::uint::bytes::bit_operations::util::u8_to_bits_le;
+use crate::chip::uint::bytes::bit_operations::xor::Xor;
+use crate::chip::uint::bytes::decode::ByteDecodeInstruction;
 use crate::chip::uint::bytes::operations::value::ByteOperation;
-use crate::chip::uint::bytes::operations::OPCODE_INDICES;
+use crate::chip::uint::bytes::operations::{
+    OPCODE_AND, OPCODE_INDICES, OPCODE_NOT, OPCODE_RANGE, OPCODE_ROT, OPCODE_SHR, OPCODE_XOR,
+};
 use crate::chip::uint::bytes::register::ByteRegister;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
@@ -35,7 +45,10 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         row_acc_challenges: ArrayRegister<CubicRegister>,
         rx: Receiver<ByteOperation<u8>>,
-    ) -> ByteLookupTable<L::Field> {
+    ) -> ByteLookupTable<L::Field>
+    where
+        L::Instruction: From<ByteInstructionSet> + From<SelectInstruction<BitRegister>> + From<ByteDecodeInstruction>,
+    {
         let multiplicities = self.alloc_array::<ElementRegister>(NUM_BIT_OPPS + 1);
 
         let a = self.alloc::<ByteRegister>();
@@ -47,6 +60,50 @@ impl<L: AirParameters> AirBuilder<L> {
         let results_bits = from_fn::<_, NUM_BIT_OPPS, _>(|_| self.alloc_array::<BitRegister>(8));
 
         let multiplicity_data = MultiplicityData::new(L::num_rows(), rx, multiplicities);
+
+        // Constrain the bit instructions
+        for (k, &opcode) in OPCODE_INDICES.iter().enumerate() {
+            match opcode {
+                OPCODE_AND => {
+                    let and = And {
+                        a: a_bits,
+                        b: b_bits,
+                        result: results_bits[k],
+                    };
+                    self.register_instruction::<ByteInstructionSet>(and.into());
+                }
+                OPCODE_XOR => {
+                    let xor = Xor {
+                        a: a_bits,
+                        b: b_bits,
+                        result: results_bits[k],
+                    };
+                    self.register_instruction::<ByteInstructionSet>(xor.into());
+                }
+                OPCODE_NOT => {
+                    let not = Not {
+                        a: a_bits,
+                        result: results_bits[k],
+                    };
+                    self.register_instruction::<ByteInstructionSet>(not.into());
+                }
+                OPCODE_SHR => {
+                    self.set_shr(&a_bits, &b_bits.get_subarray(0..3), &results_bits[k]);
+                }
+                OPCODE_ROT => {
+                    self.set_rotate_right(&a_bits, &b_bits.get_subarray(0..3), &results_bits[k]);
+                }
+                OPCODE_RANGE => {}
+                _ => unreachable!("Invalid opcode"),
+            }
+        }
+
+        // Constrain the equality between the byte registers and their bit representations
+        self.decode_byte(&a, &a_bits);
+        self.decode_byte(&b, &b_bits);
+        for (result, bits) in results.iter().zip_eq(results_bits.iter()) {
+            self.decode_byte(result, bits);
+        }
 
         // Accumulate entries for the lookup table
         let mut digests = Vec::new();
@@ -72,13 +129,7 @@ impl<L: AirParameters> AirBuilder<L> {
 }
 
 impl<F: PrimeField64> ByteLookupTable<F> {
-    pub fn write(&mut self, writer: &TraceWriter<F>, max_num_ops: usize) {
-        // Collect the multiplicity values
-        self.multiplicity_data.collect_values(max_num_ops);
-
-        // Assign multiplicities to the trace
-        self.multiplicity_data.write_multiplicities(writer);
-
+    pub fn write_table_entries(&mut self, writer: &TraceWriter<F>) {
         // Write the lookup table entries
         writer
             .write_trace()
@@ -100,55 +151,41 @@ impl<F: PrimeField64> ByteLookupTable<F> {
                             self.results[k].assign_to_raw_slice(row, &as_field(c));
                             // Write bit values
                             self.a_bits.assign_to_raw_slice(row, &as_field_bits(a));
-                            self.a_bits.assign_to_raw_slice(row, &as_field_bits(b));
-                            self.results_bits[k].assign_to_raw_slice(row, &as_field_bits(c));
-                        }
-                        ByteOperation::Xor(a, b, c) => {
-                            // Write field values
-                            self.a.assign_to_raw_slice(row, &as_field(a));
-                            self.b.assign_to_raw_slice(row, &as_field(b));
-                            self.results[k].assign_to_raw_slice(row, &as_field(c));
-                            // Write bit values
-                            self.a_bits.assign_to_raw_slice(row, &as_field_bits(a));
-                            self.a_bits.assign_to_raw_slice(row, &as_field_bits(b));
-                            self.results_bits[k].assign_to_raw_slice(row, &as_field_bits(c));
-                        }
-                        ByteOperation::Shr(a, b, c) => {
-                            // Write field values
-                            self.a.assign_to_raw_slice(row, &as_field(a));
-                            self.b.assign_to_raw_slice(row, &as_field(b));
-                            self.results[k].assign_to_raw_slice(row, &as_field(c));
-                            // Write bit values
-                            self.a_bits.assign_to_raw_slice(row, &as_field_bits(a));
                             self.b_bits.assign_to_raw_slice(row, &as_field_bits(b));
                             self.results_bits[k].assign_to_raw_slice(row, &as_field_bits(c));
                         }
-                        ByteOperation::Rot(a, b, c) => {
+                        ByteOperation::Xor(_, _, c) => {
                             // Write field values
-                            self.a.assign_to_raw_slice(row, &as_field(a));
-                            self.b.assign_to_raw_slice(row, &as_field(b));
                             self.results[k].assign_to_raw_slice(row, &as_field(c));
                             // Write bit values
-                            self.a_bits.assign_to_raw_slice(row, &as_field_bits(a));
-                            self.b_bits.assign_to_raw_slice(row, &as_field_bits(b));
                             self.results_bits[k].assign_to_raw_slice(row, &as_field_bits(c));
                         }
-                        ByteOperation::Not(a, c) => {
+                        ByteOperation::Not(_, c) => {
                             // Write field values
-                            self.a.assign_to_raw_slice(row, &as_field(a));
                             self.results[k].assign_to_raw_slice(row, &as_field(c));
                             // Write bit values
-                            self.a_bits.assign_to_raw_slice(row, &as_field_bits(a));
                             self.results_bits[k].assign_to_raw_slice(row, &as_field_bits(c));
                         }
-                        ByteOperation::Range(a) => {
+                        ByteOperation::Shr(_, _, c) => {
                             // Write field value
-                            self.a.assign_to_raw_slice(row, &as_field(a));
-                            // Write bit values
-                            self.a_bits.assign_to_raw_slice(row, &as_field_bits(a));
+                            self.results[k].assign_to_raw_slice(row, &as_field(c));
                         }
+                        ByteOperation::Rot(_, _, c) => {
+                            // Write field value
+                            self.results[k].assign_to_raw_slice(row, &as_field(c));
+                        }
+
+                        ByteOperation::Range(_) => {}
                     }
                 }
             });
+    }
+
+    pub fn write_multiplicities(&mut self, writer: &TraceWriter<F>, max_num_ops: usize) {
+        // Collect the multiplicity values
+        self.multiplicity_data.collect_values(max_num_ops);
+
+        // Assign multiplicities to the trace
+        self.multiplicity_data.write_multiplicities(writer);
     }
 }
