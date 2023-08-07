@@ -144,4 +144,24 @@ impl<L: AirParameters> AirBuilder<L> {
             .unwrap();
         instr
     }
+
+    #[inline]
+    pub fn assert_zero(&mut self, data: &impl Register) {
+        self.assert_expression_zero(data.expr());
+    }
+
+    #[inline]
+    pub fn assert_zero_first_row(&mut self, data: &impl Register) {
+        self.assert_expression_zero_first_row(data.expr());
+    }
+
+    #[inline]
+    pub fn assert_zero_last_row(&mut self, data: &impl Register) {
+        self.assert_expression_zero_last_row(data.expr());
+    }
+
+    #[inline]
+    pub fn assert_zero_transition(&mut self, data: &impl Register) {
+        self.assert_expression_zero_transition(data.expr());
+    }
 }
