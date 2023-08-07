@@ -147,7 +147,7 @@ pub mod tests {
         builder.assert_expression_zero((result.expr() - expected.expr()) * filter.expr());
 
         let and = And { a, b, result };
-        builder.register_instruction_with_filter(and, filter.expr()); 
+        builder.register_instruction_with_filter(and, filter.expr());
 
         let air = builder.build();
 

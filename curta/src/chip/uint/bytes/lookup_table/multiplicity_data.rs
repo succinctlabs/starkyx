@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::mpsc::Receiver;
 
+use itertools::Itertools;
 use plonky2_maybe_rayon::ParallelIterator;
 
 use crate::chip::register::array::ArrayRegister;
@@ -15,7 +16,7 @@ use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 
 #[derive(Debug, Clone)]
-pub struct MultiplicityValues<T>(Vec<[T; NUM_BIT_OPPS]>);
+pub struct MultiplicityValues<T>(Vec<[T; NUM_BIT_OPPS + 1]>);
 
 #[derive(Debug)]
 pub struct MultiplicityData<F> {
@@ -28,7 +29,7 @@ pub struct MultiplicityData<F> {
 
 impl<F: Field> MultiplicityValues<F> {
     pub fn new(num_rows: usize) -> Self {
-        Self(vec![[F::ZERO; NUM_BIT_OPPS]; num_rows])
+        Self(vec![[F::ZERO; NUM_BIT_OPPS + 1]; num_rows])
     }
 
     pub fn update(&mut self, row: usize, col: usize) {
@@ -44,7 +45,7 @@ impl<F: Field> MultiplicityData<F> {
     ) -> Self {
         let mut operations_multipcitiy_dict = HashMap::new();
         let mut operations_dict = HashMap::new();
-        for (row_index, (a, b)) in (0..=u8::MAX).zip(0..=u8::MAX).enumerate() {
+        for (row_index, (a, b)) in (0..=u8::MAX).cartesian_product(0..=u8::MAX).enumerate() {
             let mut operations = Vec::with_capacity(NUM_BIT_OPPS + 1);
             for (op_index, opcode) in OPCODE_INDICES.into_iter().enumerate() {
                 let operation = match opcode {
@@ -72,8 +73,8 @@ impl<F: Field> MultiplicityData<F> {
         }
     }
 
-    pub fn collect_values(&mut self) {
-        for operation in self.rx.iter() {
+    pub fn collect_values(&mut self, _max_num_values: usize) {
+        for operation in self.rx.try_iter() {
             let (row, col) = self.operations_multipcitiy_dict[&operation];
             self.multiplicities_values.update(row, col);
         }

@@ -1,5 +1,12 @@
 //! Byte operations with a lookup table
 
+use self::instruction::ByteOperationInstruction;
+use self::value::ByteOperation;
+use super::lookup_table::builder_operations::ByteLookupOperations;
+use super::register::ByteRegister;
+use crate::chip::builder::AirBuilder;
+use crate::chip::AirParameters;
+
 pub mod instruction;
 pub mod value;
 
@@ -22,3 +29,22 @@ pub const OPCODE_INDICES: [u32; NUM_BIT_OPPS + 1] = [
 ];
 
 pub const NUM_CHALLENGES: usize = 4;
+
+impl<L: AirParameters> AirBuilder<L> {
+    pub fn set_byte_operation(
+        &mut self,
+        op: &ByteOperation<ByteRegister>,
+        lookup_values: &mut ByteLookupOperations,
+    ) where
+        L::Instruction: From<ByteOperationInstruction>,
+    {
+        let tx = lookup_values.tx.clone();
+
+        let digest =
+            self.accumulate_expressions(&lookup_values.row_acc_challenges, &op.expression_array());
+
+        let instr = ByteOperationInstruction::new(tx, *op);
+        self.register_instruction(instr.into());
+        lookup_values.values.push(digest);
+    }
+}

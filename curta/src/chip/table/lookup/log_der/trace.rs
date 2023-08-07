@@ -46,6 +46,11 @@ impl<F: PrimeField> TraceWriter<F> {
         table_data: &LookupTable<T, F, E>,
     ) -> Vec<CubicExtension<F, E>> {
         let beta = CubicExtension::<F, E>::from(self.read(&table_data.challenge, 0));
+        assert_eq!(
+            table_data.table.len(),
+            table_data.multiplicities_table_log.len()
+        );
+        assert_eq!(table_data.table.len(), table_data.multiplicities.len());
         let mult_table_log_entries = self
             .write_trace()
             .unwrap()

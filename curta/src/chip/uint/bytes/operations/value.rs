@@ -163,8 +163,8 @@ impl ByteOperation<u8> {
         ByteOperation::Range(a)
     }
 
-    pub fn as_field_op<F: Field>(self) -> ByteOperation<F> {
-        let as_field = |x| F::from_canonical_u8(x);
+    pub fn as_field_op<F: Field>(&self) -> ByteOperation<F> {
+        let as_field = |&x| F::from_canonical_u8(x);
         match self {
             ByteOperation::And(a, b, c) => {
                 ByteOperation::And(as_field(a), as_field(b), as_field(c))

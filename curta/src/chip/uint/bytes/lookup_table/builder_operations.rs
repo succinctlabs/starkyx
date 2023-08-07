@@ -6,8 +6,8 @@ use crate::chip::uint::bytes::operations::value::ByteOperation;
 
 #[derive(Debug, Clone)]
 pub struct ByteLookupOperations {
-    tx: Sender<ByteOperation<u8>>,
-    row_acc_challenges: ArrayRegister<CubicRegister>,
+    pub tx: Sender<ByteOperation<u8>>,
+    pub row_acc_challenges: ArrayRegister<CubicRegister>,
     pub values: Vec<CubicRegister>,
 }
 
