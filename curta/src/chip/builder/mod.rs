@@ -78,6 +78,21 @@ impl<L: AirParameters> AirBuilder<L> {
             .unwrap();
     }
 
+    /// Registers an custom instruction with the builder.
+    pub fn register_instruction_with_filter<I>(
+        &mut self,
+        instruction: I,
+        filter: ArithmeticExpression<L::Field>,
+    ) where
+        L::Instruction: From<I>,
+    {
+        let instr = AirInstruction::from(L::Instruction::from(instruction));
+        let filtered_instr = instr.as_filtered(filter);
+
+        self.register_air_instruction_internal(filtered_instr)
+            .unwrap();
+    }
+
     /// Register an instrucgtion into the builder.
     pub(crate) fn register_air_instruction_internal(
         &mut self,
