@@ -14,6 +14,8 @@ pub enum ByteOperation<T> {
     And(T, T, T),
     Xor(T, T, T),
     Shr(T, T, T),
+    ShrConst(T, u8, T),
+    RotConst(T, u8, T),
     Rot(T, T, T),
     Not(T, T),
     Range(T),
@@ -26,7 +28,19 @@ impl ByteOperation<ByteRegister> {
             ByteOperation::And(a, b, c) => [opcode, a.expr(), b.expr(), c.expr()],
             ByteOperation::Xor(a, b, c) => [opcode, a.expr(), b.expr(), c.expr()],
             ByteOperation::Shr(a, b, c) => [opcode, a.expr(), b.expr(), c.expr()],
+            ByteOperation::ShrConst(a, b, c) => [
+                opcode,
+                a.expr(),
+                ArithmeticExpression::from_constant(F::from_canonical_u8(*b)),
+                c.expr(),
+            ],
             ByteOperation::Rot(a, b, c) => [opcode, a.expr(), b.expr(), c.expr()],
+            ByteOperation::RotConst(a, b, c) => [
+                opcode,
+                a.expr(),
+                ArithmeticExpression::from_constant(F::from_canonical_u8(*b)),
+                c.expr(),
+            ],
             ByteOperation::Not(a, b) => [opcode, a.expr(), b.expr(), ArithmeticExpression::zero()],
             ByteOperation::Range(a) => [
                 opcode,
@@ -42,7 +56,9 @@ impl ByteOperation<ByteRegister> {
             ByteOperation::And(a, b, _) => vec![*a.register(), *b.register()],
             ByteOperation::Xor(a, b, _) => vec![*a.register(), *b.register()],
             ByteOperation::Shr(a, b, _) => vec![*a.register(), *b.register()],
+            ByteOperation::ShrConst(a, _, _) => vec![*a.register()],
             ByteOperation::Rot(a, b, _) => vec![*a.register(), *b.register()],
+            ByteOperation::RotConst(a, _, _) => vec![*a.register()],
             ByteOperation::Not(a, _) => vec![*a.register()],
             ByteOperation::Range(a) => vec![*a.register()],
         }
@@ -53,7 +69,9 @@ impl ByteOperation<ByteRegister> {
             ByteOperation::And(_, _, c) => vec![*c.register()],
             ByteOperation::Xor(_, _, c) => vec![*c.register()],
             ByteOperation::Shr(_, _, c) => vec![*c.register()],
+            ByteOperation::ShrConst(_, _, c) => vec![*c.register()],
             ByteOperation::Rot(_, _, c) => vec![*c.register()],
+            ByteOperation::RotConst(_, _, c) => vec![*c.register()],
             ByteOperation::Not(_, b) => vec![*b.register()],
             ByteOperation::Range(_) => vec![],
         }
@@ -88,12 +106,24 @@ impl ByteOperation<ByteRegister> {
                 writer.write(c, &as_field(c_val), row_index);
                 ByteOperation::Shr(a_val, b_val, c_val)
             }
+            ByteOperation::ShrConst(a, b, c) => {
+                let a_val = from_field(writer.read(a, row_index));
+                let c_val = a_val >> (b & 0x7);
+                writer.write(c, &as_field(c_val), row_index);
+                ByteOperation::Shr(a_val, *b, c_val)
+            }
             ByteOperation::Rot(a, b, c) => {
                 let a_val = from_field(writer.read(a, row_index));
                 let b_val = from_field(writer.read(b, row_index));
                 let c_val = a_val.rotate_right((b_val & 0x7) as u32);
                 writer.write(c, &as_field(c_val), row_index);
                 ByteOperation::Rot(a_val, b_val, c_val)
+            }
+            ByteOperation::RotConst(a, b, c) => {
+                let a_val = from_field(writer.read(a, row_index));
+                let c_val = a_val.rotate_right((b & 0x7) as u32);
+                writer.write(c, &as_field(c_val), row_index);
+                ByteOperation::Rot(a_val, *b, c_val)
             }
             ByteOperation::Not(a, b) => {
                 let a_val = from_field(writer.read(a, row_index));
@@ -115,7 +145,9 @@ impl<T> ByteOperation<T> {
             ByteOperation::And(_, _, _) => OPCODE_AND,
             ByteOperation::Xor(_, _, _) => OPCODE_XOR,
             ByteOperation::Shr(_, _, _) => OPCODE_SHR,
+            ByteOperation::ShrConst(_, _, _) => OPCODE_SHR,
             ByteOperation::Rot(_, _, _) => OPCODE_ROT,
+            ByteOperation::RotConst(_, _, _) => OPCODE_ROT,
             ByteOperation::Not(_, _) => OPCODE_NOT,
             ByteOperation::Range(_) => OPCODE_RANGE,
         }
@@ -177,8 +209,14 @@ impl ByteOperation<u8> {
             ByteOperation::Shr(a, b, c) => {
                 ByteOperation::Shr(as_field(a), as_field(b), as_field(c))
             }
+            ByteOperation::ShrConst(a, b, c) => {
+                ByteOperation::ShrConst(as_field(a), *b, as_field(c))
+            }
             ByteOperation::Rot(a, b, c) => {
                 ByteOperation::Rot(as_field(a), as_field(b), as_field(c))
+            }
+            ByteOperation::RotConst(a, b, c) => {
+                ByteOperation::RotConst(as_field(a), *b, as_field(c))
             }
             ByteOperation::Not(a, b) => ByteOperation::Not(as_field(a), as_field(b)),
             ByteOperation::Range(a) => ByteOperation::Range(as_field(a)),
@@ -202,6 +240,7 @@ impl ByteOperation<u8> {
             }
             ByteOperation::Not(a, b) => ByteOperation::Not(as_field_bits(a), as_field_bits(b)),
             ByteOperation::Range(a) => ByteOperation::Range(as_field_bits(a)),
+            _ => unreachable!("Const parameters operations cannot convert to field bits"),
         }
     }
 }

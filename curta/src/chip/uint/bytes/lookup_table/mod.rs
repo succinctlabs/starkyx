@@ -176,8 +176,8 @@ mod tests {
 
         type Instruction = ByteInstructionSet;
 
-        const NUM_FREE_COLUMNS: usize = 221;
-        const EXTENDED_COLUMNS: usize = 312;
+        const NUM_FREE_COLUMNS: usize = 261;
+        const EXTENDED_COLUMNS: usize = 402;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
         fn num_rows_bits() -> usize {
@@ -198,17 +198,24 @@ mod tests {
 
         let mut a_vec = Vec::new();
         let mut b_vec = Vec::new();
+        let mut b_const_vec = Vec::new();
         let mut and_expected_vec = Vec::new();
         let mut xor_expected_vec = Vec::new();
         let mut not_expected_vec = Vec::new();
         let mut shr_expected_vec = Vec::new();
+        let mut shr_const_expected_vec = Vec::new();
         let mut rot_expected_vec = Vec::new();
+        let mut rot_const_expected_vec = Vec::new();
 
+        let mut rng = thread_rng();
         for _ in 0..NUM_VALS {
             let a = builder.alloc::<ByteRegister>();
             let b = builder.alloc::<ByteRegister>();
             a_vec.push(a);
             b_vec.push(b);
+
+            let b_const = rng.gen::<u8>() & 0x7;
+            b_const_vec.push(b_const);
 
             let a_and_b = builder.alloc::<ByteRegister>();
             let and = ByteOperation::And(a, b, a_and_b);
@@ -238,12 +245,26 @@ mod tests {
             builder.assert_equal(&a_shr_b, &shr_expected);
             shr_expected_vec.push(shr_expected);
 
+            let a_shr_b_const = builder.alloc::<ByteRegister>();
+            let shr = ByteOperation::ShrConst(a, b_const, a_shr_b_const);
+            builder.set_byte_operation(&shr, &mut operations);
+            let shr_const_expected = builder.alloc::<ByteRegister>();
+            builder.assert_equal(&a_shr_b_const, &shr_const_expected);
+            shr_const_expected_vec.push(shr_const_expected);
+
             let a_rot_b = builder.alloc::<ByteRegister>();
             let rot = ByteOperation::Rot(a, b, a_rot_b);
             builder.set_byte_operation(&rot, &mut operations);
             let rot_expected = builder.alloc::<ByteRegister>();
             builder.assert_equal(&a_rot_b, &rot_expected);
             rot_expected_vec.push(rot_expected);
+
+            let a_rot_b_const = builder.alloc::<ByteRegister>();
+            let rot = ByteOperation::RotConst(a, b_const, a_rot_b_const);
+            builder.set_byte_operation(&rot, &mut operations);
+            let rot_const_expected = builder.alloc::<ByteRegister>();
+            builder.assert_equal(&a_rot_b_const, &rot_const_expected);
+            rot_const_expected_vec.push(rot_const_expected);
 
             let range_op = ByteOperation::Range(a);
             builder.set_byte_operation(&range_op, &mut operations);
@@ -258,7 +279,6 @@ mod tests {
 
         table.write_table_entries(&writer);
 
-        let mut rng = thread_rng();
         for i in 0..L::num_rows() {
             for k in 0..NUM_VALS {
                 let a_v = rng.gen::<u8>();
@@ -275,8 +295,18 @@ mod tests {
                     i,
                 );
                 writer.write(
+                    &shr_const_expected_vec[k],
+                    &F::from_canonical_u8(a_v >> b_const_vec[k]),
+                    i,
+                );
+                writer.write(
                     &rot_expected_vec[k],
                     &F::from_canonical_u8(a_v.rotate_right((b_v & 0x7) as u32)),
+                    i,
+                );
+                writer.write(
+                    &rot_const_expected_vec[k],
+                    &F::from_canonical_u8(a_v.rotate_right(b_const_vec[k] as u32)),
                     i,
                 );
             }

@@ -178,6 +178,7 @@ impl<F: PrimeField64> ByteLookupTable<F> {
                         }
 
                         ByteOperation::Range(_) => {}
+                        _ => unreachable!("const parameter operations are not supported"),
                     }
                 }
             });
