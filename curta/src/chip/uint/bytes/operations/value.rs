@@ -83,15 +83,15 @@ impl ByteOperation<ByteRegister> {
             }
             ByteOperation::Shr(a, b, c) => {
                 let a_val = from_field(writer.read(a, row_index));
-                let b_val = from_field(writer.read(b, row_index)) & 7;
-                let c_val = a_val >> b_val;
+                let b_val = from_field(writer.read(b, row_index));
+                let c_val = a_val >> (b_val & 0x7);
                 writer.write(c, &as_field(c_val), row_index);
                 ByteOperation::Shr(a_val, b_val, c_val)
             }
             ByteOperation::Rot(a, b, c) => {
                 let a_val = from_field(writer.read(a, row_index));
-                let b_val = from_field(writer.read(b, row_index)) & 7;
-                let c_val = a_val.rotate_right(b_val as u32);
+                let b_val = from_field(writer.read(b, row_index));
+                let c_val = a_val.rotate_right((b_val & 0x7) as u32);
                 writer.write(c, &as_field(c_val), row_index);
                 ByteOperation::Rot(a_val, b_val, c_val)
             }
@@ -148,11 +148,13 @@ impl ByteOperation<u8> {
     }
 
     pub fn shr(a: u8, b: u8) -> Self {
-        ByteOperation::Shr(a, b, a >> b)
+        let b_val = b & 0x7;
+        ByteOperation::Shr(a, b, a >> b_val)
     }
 
     pub fn rot(a: u8, b: u8) -> Self {
-        ByteOperation::Rot(a, b, a.rotate_right(b as u32))
+        let b_val = b & 0x7;
+        ByteOperation::Rot(a, b, a.rotate_right(b_val as u32))
     }
 
     pub fn not(a: u8) -> Self {

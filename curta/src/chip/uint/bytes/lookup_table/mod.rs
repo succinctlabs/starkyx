@@ -176,8 +176,8 @@ mod tests {
 
         type Instruction = ByteInstructionSet;
 
-        const NUM_FREE_COLUMNS: usize = 3 * N + 130;
-        const EXTENDED_COLUMNS: usize = 267;
+        const NUM_FREE_COLUMNS: usize = 221;
+        const EXTENDED_COLUMNS: usize = 312;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
         fn num_rows_bits() -> usize {
@@ -188,8 +188,8 @@ mod tests {
     #[test]
     fn test_bit_op_lookup() {
         type F = GoldilocksField;
-        const NUM_OPS: usize = 50;
-        type L = ByteOpTest<NUM_OPS>;
+        const NUM_VALS: usize = 10;
+        type L = ByteOpTest<NUM_VALS>;
         type SC = PoseidonGoldilocksStarkConfig;
 
         let mut builder = AirBuilder::<L>::new();
@@ -198,15 +198,55 @@ mod tests {
 
         let mut a_vec = Vec::new();
         let mut b_vec = Vec::new();
+        let mut and_expected_vec = Vec::new();
+        let mut xor_expected_vec = Vec::new();
+        let mut not_expected_vec = Vec::new();
+        let mut shr_expected_vec = Vec::new();
+        let mut rot_expected_vec = Vec::new();
 
-        for _ in 0..NUM_OPS {
+        for _ in 0..NUM_VALS {
             let a = builder.alloc::<ByteRegister>();
             let b = builder.alloc::<ByteRegister>();
-            let result = builder.alloc::<ByteRegister>();
-            let op = ByteOperation::And(a, b, result);
-            builder.set_byte_operation(&op, &mut operations);
             a_vec.push(a);
             b_vec.push(b);
+
+            let a_and_b = builder.alloc::<ByteRegister>();
+            let and = ByteOperation::And(a, b, a_and_b);
+            builder.set_byte_operation(&and, &mut operations);
+            let and_expected = builder.alloc::<ByteRegister>();
+            builder.assert_equal(&a_and_b, &and_expected);
+            and_expected_vec.push(and_expected);
+
+            let a_xor_b = builder.alloc::<ByteRegister>();
+            let xor = ByteOperation::Xor(a, b, a_xor_b);
+            builder.set_byte_operation(&xor, &mut operations);
+            let xor_expected = builder.alloc::<ByteRegister>();
+            builder.assert_equal(&a_xor_b, &xor_expected);
+            xor_expected_vec.push(xor_expected);
+
+            let a_not = builder.alloc::<ByteRegister>();
+            let not = ByteOperation::Not(a, a_not);
+            builder.set_byte_operation(&not, &mut operations);
+            let not_expected = builder.alloc::<ByteRegister>();
+            builder.assert_equal(&a_not, &not_expected);
+            not_expected_vec.push(not_expected);
+
+            let a_shr_b = builder.alloc::<ByteRegister>();
+            let shr = ByteOperation::Shr(a, b, a_shr_b);
+            builder.set_byte_operation(&shr, &mut operations);
+            let shr_expected = builder.alloc::<ByteRegister>();
+            builder.assert_equal(&a_shr_b, &shr_expected);
+            shr_expected_vec.push(shr_expected);
+
+            let a_rot_b = builder.alloc::<ByteRegister>();
+            let rot = ByteOperation::Rot(a, b, a_rot_b);
+            builder.set_byte_operation(&rot, &mut operations);
+            let rot_expected = builder.alloc::<ByteRegister>();
+            builder.assert_equal(&a_rot_b, &rot_expected);
+            rot_expected_vec.push(rot_expected);
+
+            let range_op = ByteOperation::Range(a);
+            builder.set_byte_operation(&range_op, &mut operations);
         }
 
         builder.register_byte_lookup(operations, &table);
@@ -220,12 +260,25 @@ mod tests {
 
         let mut rng = thread_rng();
         for i in 0..L::num_rows() {
-            let a_v = rng.gen::<u8>();
-            let b_v = rng.gen::<u8>();
-
-            for k in 0..NUM_OPS {
+            for k in 0..NUM_VALS {
+                let a_v = rng.gen::<u8>();
+                let b_v = rng.gen::<u8>();
                 writer.write(&a_vec[k], &F::from_canonical_u8(a_v), i);
                 writer.write(&b_vec[k], &F::from_canonical_u8(b_v), i);
+
+                writer.write(&and_expected_vec[k], &F::from_canonical_u8(a_v & b_v), i);
+                writer.write(&xor_expected_vec[k], &F::from_canonical_u8(a_v ^ b_v), i);
+                writer.write(&not_expected_vec[k], &F::from_canonical_u8(!a_v), i);
+                writer.write(
+                    &shr_expected_vec[k],
+                    &F::from_canonical_u8(a_v >> (b_v & 0x7)),
+                    i,
+                );
+                writer.write(
+                    &rot_expected_vec[k],
+                    &F::from_canonical_u8(a_v.rotate_right((b_v & 0x7) as u32)),
+                    i,
+                );
             }
 
             writer.write_row_instructions(&air, i);
