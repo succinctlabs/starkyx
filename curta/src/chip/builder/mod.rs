@@ -12,7 +12,7 @@ use super::constraint::arithmetic::expression::ArithmeticExpression;
 use super::constraint::Constraint;
 use super::instruction::set::AirInstruction;
 use super::register::element::ElementRegister;
-use super::register::Register;
+use super::register::{Register, RegisterSerializable};
 use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
 use super::table::evaluation::Evaluation;
@@ -110,6 +110,15 @@ impl<L: AirParameters> AirBuilder<L> {
     #[inline]
     pub fn range_fn(element: L::Field) -> usize {
         element.as_canonical_u64() as usize
+    }
+
+    pub fn clock(&mut self) -> ElementRegister {
+        let clk = self.alloc::<ElementRegister>();
+
+        self.set_to_expression_first_row(&clk, ArithmeticExpression::zero());
+        self.set_to_expression_transition(&clk.next(), clk.expr() + L::Field::ONE);
+
+        clk
     }
 
     pub fn build(mut self) -> Chip<L> {
@@ -327,7 +336,7 @@ pub(crate) mod tests {
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = EmptyInstruction<GoldilocksField>;
         const NUM_ARITHMETIC_COLUMNS: usize = 2;
-        const NUM_FREE_COLUMNS: usize = 2;
+        const NUM_FREE_COLUMNS: usize = 4;
         const EXTENDED_COLUMNS: usize = 13;
 
         fn num_rows_bits() -> usize {
@@ -345,6 +354,11 @@ pub(crate) mod tests {
         let x_0 = builder.alloc::<U16Register>();
         let x_1 = builder.alloc::<U16Register>();
 
+        let clk = builder.clock();
+        let clk_expected = builder.alloc::<ElementRegister>();
+
+        builder.assert_equal(&clk, &clk_expected);
+
         let air = builder.build();
         let generator = ArithmeticGenerator::<L>::new(&air);
 
@@ -355,6 +369,8 @@ pub(crate) mod tests {
             // rayon::spawn(move || {
             writer.write(&x_0, &F::ZERO, i);
             writer.write(&x_1, &F::from_canonical_usize(0), i);
+            writer.write(&clk_expected, &F::from_canonical_usize(i), i);
+            writer.write_row_instructions(&air, i);
             handle.send(1).unwrap();
             // });
         }

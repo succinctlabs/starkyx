@@ -39,7 +39,9 @@ pub enum ByteInstructionSet {
 impl<L: AirParameters> AirBuilder<L> {
     pub fn byte_operations(&mut self) -> (ByteLookupOperations, ByteLookupTable<L::Field>)
     where
-        L::Instruction: From<ByteInstructionSet> + From<SelectInstruction<BitRegister>> + From<ByteDecodeInstruction>,
+        L::Instruction: From<ByteInstructionSet>
+            + From<SelectInstruction<BitRegister>>
+            + From<ByteDecodeInstruction>,
     {
         let (tx, rx) = mpsc::channel::<ByteOperation<u8>>();
 
@@ -175,7 +177,7 @@ mod tests {
         type Instruction = ByteInstructionSet;
 
         const NUM_FREE_COLUMNS: usize = 3 * N + 130;
-        const EXTENDED_COLUMNS: usize = 2 * N + (3 * N) / 2 + 62;
+        const EXTENDED_COLUMNS: usize = 267;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
         fn num_rows_bits() -> usize {
@@ -186,7 +188,7 @@ mod tests {
     #[test]
     fn test_bit_op_lookup() {
         type F = GoldilocksField;
-        const NUM_OPS: usize = 4;
+        const NUM_OPS: usize = 50;
         type L = ByteOpTest<NUM_OPS>;
         type SC = PoseidonGoldilocksStarkConfig;
 

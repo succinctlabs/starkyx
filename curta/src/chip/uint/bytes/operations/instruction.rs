@@ -3,7 +3,6 @@ use std::sync::mpsc::Sender;
 use super::value::ByteOperation;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
-use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;

@@ -21,7 +21,6 @@ pub mod instruction;
 pub mod register;
 pub mod table;
 pub mod trace;
-pub mod u32;
 pub mod uint;
 pub mod utils;
 

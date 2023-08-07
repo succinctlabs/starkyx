@@ -47,7 +47,9 @@ impl<L: AirParameters> AirBuilder<L> {
         rx: Receiver<ByteOperation<u8>>,
     ) -> ByteLookupTable<L::Field>
     where
-        L::Instruction: From<ByteInstructionSet> + From<SelectInstruction<BitRegister>> + From<ByteDecodeInstruction>,
+        L::Instruction: From<ByteInstructionSet>
+            + From<SelectInstruction<BitRegister>>
+            + From<ByteDecodeInstruction>,
     {
         let multiplicities = self.alloc_array::<ElementRegister>(NUM_BIT_OPPS + 1);
 
