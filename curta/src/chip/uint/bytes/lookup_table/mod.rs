@@ -58,13 +58,13 @@ impl<L: AirParameters> AirBuilder<L> {
         operation_values: ByteLookupOperations,
         table: &ByteLookupTable<L::Field>,
     ) {
-        let multiplicities = table.multiplicity_data.multiplicities().clone();
+        let multiplicities = table.multiplicity_data.multiplicities();
         let lookup_challenge = self.alloc_challenge::<CubicRegister>();
 
         let lookup_table = self.lookup_table_with_multiplicities(
             &lookup_challenge,
             &table.digests,
-            &multiplicities,
+            multiplicities,
         );
         let lookup_values = self.lookup_values(&lookup_challenge, &operation_values.values);
 

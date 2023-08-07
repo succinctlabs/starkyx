@@ -44,7 +44,7 @@ impl<L: AirParameters> AirBuilder<L> {
             self.accumulate_expressions(&lookup_values.row_acc_challenges, &op.expression_array());
 
         let instr = ByteOperationInstruction::new(tx, *op);
-        self.register_instruction(instr.into());
+        self.register_instruction(instr);
         lookup_values.values.push(digest);
     }
 }

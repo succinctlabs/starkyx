@@ -11,8 +11,8 @@ pub mod util {
     #[inline]
     pub fn u8_to_bits_le(x: u8) -> [u8; 8] {
         let mut bits = [0u8; 8];
-        for i in 0..8 {
-            bits[i] = (x >> i) & 1;
+        for (i, bit) in bits.iter_mut().enumerate() {
+            *bit = (x >> i) & 1;
         }
         bits
     }
