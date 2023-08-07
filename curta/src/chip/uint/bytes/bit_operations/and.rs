@@ -61,7 +61,6 @@ pub mod tests {
     use super::*;
     pub use crate::chip::builder::tests::*;
     use crate::chip::builder::AirBuilder;
-    use crate::chip::instruction::set::AirInstruction;
     use crate::chip::register::Register;
     use crate::chip::AirParameters;
 
@@ -147,11 +146,8 @@ pub mod tests {
 
         builder.assert_expression_zero((result.expr() - expected.expr()) * filter.expr());
 
-        let and = AirInstruction::from(And { a, b, result });
-        let and_filter = and.as_filtered(filter.expr());
-        builder
-            .register_air_instruction_internal(and_filter)
-            .unwrap();
+        let and = And { a, b, result };
+        builder.register_instruction_with_filter(and, filter.expr()); 
 
         let air = builder.build();
 
