@@ -16,25 +16,5 @@ impl<L: AirParameters> AirBuilder<L> {
     ) where
         L::Instruction: From<ByteOperationInstruction>,
     {
-        let a_bytes = a.bytes();
-        let result_bytes = result.bytes();
-
-        let shift = shift % (N * 8);
-
-        let byte_shift = shift / 8 + 1;
-        let zero = ArithmeticExpression::zero();
-        for i in N - byte_shift..N {
-            self.set_to_expression(&result_bytes.get(i), zero.clone());
-        }
-
-        let bit_shift = 8 - (shift % 8);
-        for i in 0..N - byte_shift {
-            let shr = ByteOperation::ShrConst(
-                a_bytes.get(i + byte_shift),
-                bit_shift as u8,
-                result_bytes.get(i),
-            );
-            self.set_byte_operation(&shr, operations);
-        }
     }
 }

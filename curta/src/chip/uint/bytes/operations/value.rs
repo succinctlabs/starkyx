@@ -15,6 +15,7 @@ pub enum ByteOperation<T> {
     Xor(T, T, T),
     Shr(T, T, T),
     ShrConst(T, u8, T),
+    ShrCarry(T, u8, T, T),
     RotConst(T, u8, T),
     Rot(T, T, T),
     Not(T, T),
@@ -25,8 +26,8 @@ impl ByteOperation<ByteRegister> {
     pub fn expression_array<F: Field>(&self) -> [ArithmeticExpression<F>; NUM_CHALLENGES] {
         let opcode = ArithmeticExpression::from(self.field_opcode::<F>());
         match self {
-            ByteOperation::And(a, b, c) => [opcode, a.expr(), b.expr(), c.expr()],
-            ByteOperation::Xor(a, b, c) => [opcode, a.expr(), b.expr(), c.expr()],
+            ByteOperation::And(a, b, result) => [opcode, a.expr(), b.expr(), result.expr()],
+            ByteOperation::Xor(a, b, result) => [opcode, a.expr(), b.expr(), result.expr()],
             ByteOperation::Shr(a, b, c) => [opcode, a.expr(), b.expr(), c.expr()],
             ByteOperation::ShrConst(a, b, c) => [
                 opcode,
@@ -34,7 +35,13 @@ impl ByteOperation<ByteRegister> {
                 ArithmeticExpression::from_constant(F::from_canonical_u8(*b)),
                 c.expr(),
             ],
-            ByteOperation::Rot(a, b, c) => [opcode, a.expr(), b.expr(), c.expr()],
+            ByteOperation::ShrCarry(a, shift, result, carry) => [
+                opcode,
+                a.expr(),
+                ArithmeticExpression::from_constant(F::from_canonical_u8(*shift)),
+                result.expr() + (carry.expr() * F::from_canonical_u8(1 << (8 - shift))),
+            ],
+            ByteOperation::Rot(a, b, result) => [opcode, a.expr(), b.expr(), result.expr()],
             ByteOperation::RotConst(a, b, c) => [
                 opcode,
                 a.expr(),
@@ -57,6 +64,7 @@ impl ByteOperation<ByteRegister> {
             ByteOperation::Xor(a, b, _) => vec![*a.register(), *b.register()],
             ByteOperation::Shr(a, b, _) => vec![*a.register(), *b.register()],
             ByteOperation::ShrConst(a, _, _) => vec![*a.register()],
+            ByteOperation::ShrCarry(a, _, _, _) => vec![*a.register()],
             ByteOperation::Rot(a, b, _) => vec![*a.register(), *b.register()],
             ByteOperation::RotConst(a, _, _) => vec![*a.register()],
             ByteOperation::Not(a, _) => vec![*a.register()],
@@ -70,6 +78,7 @@ impl ByteOperation<ByteRegister> {
             ByteOperation::Xor(_, _, c) => vec![*c.register()],
             ByteOperation::Shr(_, _, c) => vec![*c.register()],
             ByteOperation::ShrConst(_, _, c) => vec![*c.register()],
+            ByteOperation::ShrCarry(_, _, res, c) => vec![*res.register(), *c.register()],
             ByteOperation::Rot(_, _, c) => vec![*c.register()],
             ByteOperation::RotConst(_, _, c) => vec![*c.register()],
             ByteOperation::Not(_, b) => vec![*b.register()],
@@ -112,6 +121,24 @@ impl ByteOperation<ByteRegister> {
                 writer.write(c, &as_field(c_val), row_index);
                 ByteOperation::Shr(a_val, *b, c_val)
             }
+            ByteOperation::ShrCarry(a, b, result, carry) => {
+                let a_val = from_field(writer.read(a, row_index));
+                let b_mod = b & 0x7;
+                let (res_val, carry_val) = if b_mod != 0 {
+                    let res_val = a_val >> b_mod;
+                    let carry_val = (a_val << (8 - b_mod)) >> (8 - b_mod);
+                    debug_assert_eq!(
+                        a_val.rotate_right(b_mod as u32),
+                        res_val + (carry_val << (8 - b_mod))
+                    );
+                    (res_val, carry_val)
+                } else {
+                    (a_val, 0u8)
+                };
+                writer.write(result, &as_field(res_val), row_index);
+                writer.write(carry, &as_field(carry_val), row_index);
+                ByteOperation::Rot(a_val, *b, res_val + (carry_val << (8 - b_mod)))
+            }
             ByteOperation::Rot(a, b, c) => {
                 let a_val = from_field(writer.read(a, row_index));
                 let b_val = from_field(writer.read(b, row_index));
@@ -146,6 +173,7 @@ impl<T> ByteOperation<T> {
             ByteOperation::Xor(_, _, _) => OPCODE_XOR,
             ByteOperation::Shr(_, _, _) => OPCODE_SHR,
             ByteOperation::ShrConst(_, _, _) => OPCODE_SHR,
+            ByteOperation::ShrCarry(_, _, _, _) => OPCODE_ROT,
             ByteOperation::Rot(_, _, _) => OPCODE_ROT,
             ByteOperation::RotConst(_, _, _) => OPCODE_ROT,
             ByteOperation::Not(_, _) => OPCODE_NOT,
@@ -211,6 +239,9 @@ impl ByteOperation<u8> {
             }
             ByteOperation::ShrConst(a, b, c) => {
                 ByteOperation::ShrConst(as_field(a), *b, as_field(c))
+            }
+            ByteOperation::ShrCarry(a, b, c, d) => {
+                ByteOperation::ShrCarry(as_field(a), *b, as_field(c), as_field(d))
             }
             ByteOperation::Rot(a, b, c) => {
                 ByteOperation::Rot(as_field(a), as_field(b), as_field(c))

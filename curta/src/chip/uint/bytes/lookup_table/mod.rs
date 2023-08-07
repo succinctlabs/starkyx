@@ -176,8 +176,8 @@ mod tests {
 
         type Instruction = ByteInstructionSet;
 
-        const NUM_FREE_COLUMNS: usize = 261;
-        const EXTENDED_COLUMNS: usize = 402;
+        const NUM_FREE_COLUMNS: usize = 281;
+        const EXTENDED_COLUMNS: usize = 447;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
         fn num_rows_bits() -> usize {
@@ -258,6 +258,12 @@ mod tests {
             let rot_expected = builder.alloc::<ByteRegister>();
             builder.assert_equal(&a_rot_b, &rot_expected);
             rot_expected_vec.push(rot_expected);
+
+            let a_shr_b_res = builder.alloc::<ByteRegister>();
+            let a_shr_b_carry = builder.alloc::<ByteRegister>();
+            let shr_carry = ByteOperation::ShrCarry(a, b_const, a_shr_b_res, a_shr_b_carry);
+            builder.set_byte_operation(&shr_carry, &mut operations);
+            builder.assert_equal(&a_shr_b_res, &shr_const_expected);
 
             let a_rot_b_const = builder.alloc::<ByteRegister>();
             let rot = ByteOperation::RotConst(a, b_const, a_rot_b_const);
