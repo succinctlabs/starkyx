@@ -1,5 +1,6 @@
 pub mod and;
 pub mod not;
+pub mod rotate;
 pub mod shr;
 pub mod xor;
 
