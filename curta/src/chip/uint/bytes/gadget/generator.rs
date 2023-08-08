@@ -2,7 +2,7 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::generator::{GeneratedValues, SimpleGenerator};
 use plonky2::iop::target::Target;
-use plonky2::iop::witness::PartitionWitness;
+use plonky2::iop::witness::{PartitionWitness, Witness};
 use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::util::serialization::{Buffer, IoResult};
 
@@ -65,7 +65,45 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
         dependencies
     }
 
-    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {}
+    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
+        // let operations = self.operations.iter().map(|op| 
+        //     match op {
+        //         ByteOperation::And(a, b, _) => {
+        //             let a = witness.get_target(*a).as_canonical_u64() as u8;
+        //             let b = witness.get_target(*b).as_canonical_u64() as u8;
+        //             ByteOperation::and(a, b);
+        //         }
+        //         ByteOperation::Xor(a, b, _) => {
+        //             let a = witness.get_target(*a).as_canonical_u64() as u8;
+        //             let b = witness.get_target(*b).as_canonical_u64() as u8;
+        //             ByteOperation::xor(a, b);
+        //         }
+        //         ByteOperation::Not(a, _) => {
+        //             let a = witness.get_target(*a).as_canonical_u64() as u8;
+        //             ByteOperation::not(a);
+        //         }
+        //         ByteOperation::Shr(a, b, _) => {
+
+        //             dependencies.push(*b);
+        //         }
+        //         ByteOperation::ShrCarry(a, _, _, _) => {
+        //             dependencies.push(*a);
+        //         }
+        //         ByteOperation::ShrConst(a, _, _) => {
+        //             dependencies.push(*a);
+        //         }
+        //         ByteOperation::Rot(a, b, _) => {
+        //             dependencies.push(*a);
+        //         }
+        //         ByteOperation::RotConst(a, _, _) => {
+        //             dependencies.push(*a);
+        //         }
+        //         ByteOperation::Range(a) => {
+        //             dependencies.push(*a);
+        //         }
+        //     }
+        // ).collect::<Vec<_>>();
+    }
 
     fn serialize(&self, dst: &mut Vec<u8>, _common_data: &CommonCircuitData<F, D>) -> IoResult<()> {
         unimplemented!("ByteOperation::serialize")
