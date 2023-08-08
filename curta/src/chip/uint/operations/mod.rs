@@ -69,15 +69,15 @@ mod tests {
         let num_ops = 10;
 
         for _ in 0..num_ops {
-            let shift = (rng.gen::<u32>() % 7) as usize;
+            let shift = rng.gen::<u32>() as usize;
             shr_shift_vals.push(shift);
 
             let a_shr = builder.alloc::<ByteArrayRegister<N>>();
             builder.set_bit_shr(&a, shift, &a_shr, &mut operations);
             let shr_expected = builder.alloc::<ByteArrayRegister<N>>();
             builder.assert_equal(&a_shr, &shr_expected);
-            // let a_shr_second = builder.alloc::<ByteArrayRegister<N>>(); // To guarantee even number of operations
-            // builder.set_bit_shr(&a, shift, &a_shr_second, &mut operations);
+            let a_shr_second = builder.alloc::<ByteArrayRegister<N>>(); // To guarantee even number of operations
+            builder.set_bit_shr(&a, shift, &a_shr_second, &mut operations);
             shr_expected_vec.push(shr_expected);
         }
 
