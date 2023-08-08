@@ -1,6 +1,6 @@
 use itertools::Itertools;
 
-use super::{LogLookup, LookupTable};
+use super::{LogLookup, LogLookupValues, LookupTable};
 use crate::chip::register::cubic::EvalCubic;
 use crate::chip::register::Register;
 use crate::chip::trace::writer::TraceWriter;
@@ -88,15 +88,12 @@ impl<F: PrimeField> TraceWriter<F> {
         mult_table_log_entries
     }
 
-    pub(crate) fn write_log_lookup<T: EvalCubic, E: CubicParameters<F>>(
+    pub(crate) fn write_log_lookup_values<T: EvalCubic, E: CubicParameters<F>>(
         &self,
         num_rows: usize,
-        lookup_data: &LogLookup<T, F, E>,
+        values_data: &LogLookupValues<T, F, E>,
     ) {
-        let beta = CubicExtension::<F, E>::from(self.read(&lookup_data.challenge, 0));
-
-        // Write multiplicity inverse constraints
-        self.write_log_lookup_table(num_rows, &lookup_data.table_data);
+        let beta = CubicExtension::<F, E>::from(self.read(&values_data.challenge, 0));
 
         let accumulators = self
             .write_trace()
@@ -104,8 +101,8 @@ impl<F: PrimeField> TraceWriter<F> {
             .rows_par_mut()
             .map(|row| {
                 let mut accumumulator = CubicExtension::ZERO;
-                let accumulators = lookup_data.values_data.row_accumulators;
-                for (k, pair) in lookup_data.values_data.values.chunks_exact(2).enumerate() {
+                let accumulators = values_data.row_accumulators;
+                for (k, pair) in values_data.values.chunks_exact(2).enumerate() {
                     let a = T::trace_value_as_cubic(pair[0].read_from_slice(row));
                     let b = T::trace_value_as_cubic(pair[1].read_from_slice(row));
                     let beta_minus_a = beta - CubicExtension::from(a);
@@ -119,7 +116,7 @@ impl<F: PrimeField> TraceWriter<F> {
             })
             .collect::<Vec<_>>();
 
-        let log_lookup = lookup_data.values_data.log_lookup_accumulator;
+        let log_lookup = values_data.log_lookup_accumulator;
         let mut value = CubicExtension::ZERO;
         for (i, acc) in accumulators.into_iter().enumerate() {
             value += acc;
@@ -127,6 +124,20 @@ impl<F: PrimeField> TraceWriter<F> {
         }
 
         // Write the digest value
-        self.write(&lookup_data.values_data.digest, &value.0, num_rows - 1);
+        self.write(&values_data.digest, &value.0, num_rows - 1);
+    }
+
+    pub(crate) fn write_log_lookup<T: EvalCubic, E: CubicParameters<F>>(
+        &self,
+        num_rows: usize,
+        lookup_data: &LogLookup<T, F, E>,
+    ) {
+        // let beta = CubicExtension::<F, E>::from(self.read(&lookup_data.challenge, 0));
+
+        // Write multiplicity inverse constraints
+        self.write_log_lookup_table(num_rows, &lookup_data.table_data);
+
+        // Write the value data accumulating 1/(beta-value)
+        self.write_log_lookup_values(num_rows, &lookup_data.values_data);
     }
 }

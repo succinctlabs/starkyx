@@ -42,7 +42,6 @@ pub struct LogLookupValues<T: EvalCubic, F: Field, E: CubicParameters<F>> {
 /// Currently, only supports an even number of values
 #[derive(Debug, Clone)]
 pub struct LogLookup<T: EvalCubic, F: Field, E: CubicParameters<F>> {
-    pub(crate) challenge: CubicRegister,
     pub(crate) table_data: LookupTable<T, F, E>,
     pub(crate) values_data: LogLookupValues<T, F, E>,
     pub(crate) table_index: Option<fn(T::Value<F>) -> usize>,
@@ -119,10 +118,7 @@ impl<L: AirParameters> AirBuilder<L> {
             table_challenge, values_challenge,
             "Challenges must be equal"
         );
-        let challenge = table_challenge;
-
         let lookup_data = Lookup::LogDerivative(LogLookup {
-            challenge,
             table_data,
             values_data,
             table_index: None,
@@ -148,10 +144,7 @@ impl<L: AirParameters> AirBuilder<L> {
             table_challenge, values_challenge,
             "Challenges must be equal"
         );
-        let challenge = table_challenge;
-
         let lookup_data = Lookup::CubicLog(LogLookup {
-            challenge,
             table_data,
             values_data,
             table_index: None,
@@ -179,7 +172,6 @@ impl<L: AirParameters> AirBuilder<L> {
         let value_data = self.lookup_values(&challenge, values);
 
         let lookup_data = Lookup::LogDerivative(LogLookup {
-            challenge,
             table_data,
             values_data: value_data,
             table_index: Some(table_index),
@@ -207,7 +199,6 @@ impl<L: AirParameters> AirBuilder<L> {
         let multiplicities = table_data.multiplicities;
 
         let lookup_data = Lookup::LogDerivative(LogLookup {
-            challenge,
             table_data,
             values_data: value_data,
             table_index: None,
@@ -238,7 +229,6 @@ impl<L: AirParameters> AirBuilder<L> {
         let multiplicities = table_data.multiplicities;
 
         let lookup_data = Lookup::CubicLog(LogLookup {
-            challenge,
             table_data,
             values_data: value_data,
             table_index: None,
