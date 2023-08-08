@@ -1,8 +1,10 @@
 use itertools::Itertools;
 
 use super::{LogLookup, LogLookupValues, LookupTable};
+use crate::chip::register::RegisterSerializable;
 use crate::chip::register::cubic::EvalCubic;
 use crate::chip::register::Register;
+use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
@@ -125,23 +127,24 @@ impl<F: PrimeField> TraceWriter<F> {
         }
 
         // Accumulate lookups for public inputs
-        let mut accumumulator = CubicExtension::ZERO;
-        let accumulators = values_data.global_accumulators;
-        let mut public_slice = self.public_mut().unwrap();
+        let mut global_accumumulator = CubicExtension::ZERO;
+        let global_accumulators = values_data.global_accumulators;
         for (k, pair) in values_data.public_values.chunks_exact(2).enumerate() {
-            let a = T::trace_value_as_cubic(pair[0].read_from_slice(&public_slice));
-            let b = T::trace_value_as_cubic(pair[1].read_from_slice(&public_slice));
+            let a = T::trace_value_as_cubic(self.read(&pair[0], 0));
+            let b = T::trace_value_as_cubic(self.read(&pair[1], 0));
             let beta_minus_a = beta - CubicExtension::from(a);
             let beta_minus_b = beta - CubicExtension::from(b);
-            accumumulator += beta_minus_a.inverse() + beta_minus_b.inverse();
-            accumulators
-                .get(k)
-                .assign_to_raw_slice(&mut public_slice, &accumumulator.0);
+            global_accumumulator += beta_minus_a.inverse() + beta_minus_b.inverse();
+            self.write_global(&global_accumulators.get(k), &global_accumumulator.0);
         }
-        value += accumumulator;
+        value +=  global_accumumulator;
 
         // Write the digest value
-        self.write(&values_data.digest, &value.0, num_rows - 1);
+        match values_data.digest.register() {
+            MemorySlice::Local(..) => self.write(&values_data.digest, &value.0, num_rows - 1),
+            MemorySlice::Global(..) => self.write_global(&values_data.digest, &value.0), 
+            _ => unreachable!("Invalid register type for lookup digest")
+        }
     }
 
     pub(crate) fn write_log_lookup<T: EvalCubic, E: CubicParameters<F>>(
@@ -149,8 +152,6 @@ impl<F: PrimeField> TraceWriter<F> {
         num_rows: usize,
         lookup_data: &LogLookup<T, F, E>,
     ) {
-        // let beta = CubicExtension::<F, E>::from(self.read(&lookup_data.challenge, 0));
-
         // Write multiplicity inverse constraints
         self.write_log_lookup_table(num_rows, &lookup_data.table_data);
 

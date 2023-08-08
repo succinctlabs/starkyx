@@ -119,8 +119,13 @@ impl<L: AirParameters> AirBuilder<L> {
             "Only even number of values supported"
         );
         let row_accumulators = self.alloc_array_extended::<CubicRegister>(trace_values.len() / 2);
-        let global_accumulators = self.alloc_array_global::<CubicRegister>(trace_values.len() / 2);
+        let global_accumulators = self.alloc_array_global::<CubicRegister>(public_values.len() / 2);
         let log_lookup_accumulator = self.alloc_extended::<CubicRegister>();
+
+        let digest = match public_values.len() {
+            0 => log_lookup_accumulator,
+            _ => self.alloc_global::<CubicRegister>(),
+        };
 
         LogLookupValues {
             challenge: *challenge,
@@ -129,7 +134,7 @@ impl<L: AirParameters> AirBuilder<L> {
             row_accumulators,
             global_accumulators,
             log_lookup_accumulator,
-            digest: log_lookup_accumulator,
+            digest,
             _marker: PhantomData,
         }
     }
@@ -431,5 +436,86 @@ mod tests {
 
         // Test the recursive proof.
         test_recursive_starky(stark, config, generator, &[]);
+    }
+
+
+    #[test]
+    fn test_cubic_lookup_with_public_values() {
+        type L = CubicLookupTest<N, M>;
+        type F = GoldilocksField;
+        type SC = PoseidonGoldilocksStarkConfig;
+        const N: usize = 4;
+        const M: usize = 102;
+        const PUB : usize = 10;
+
+        let mut builder = AirBuilder::<L>::new();
+
+        let table_values = builder
+            .alloc_array::<CubicRegister>(N)
+            .into_iter()
+            .collect::<Vec<_>>();
+        let trace_values = builder
+            .alloc_array::<CubicRegister>(M)
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        let public_values = builder.alloc_array_public::<CubicRegister>(PUB).into_iter().collect::<Vec<_>>();
+        let values = trace_values.iter().copied().chain(public_values.iter().copied()).collect::<Vec<_>>();
+
+        // let multiplicities = builder.lookup_cubic_log_derivative(&table_values, &values);
+        let challenge = builder.alloc_challenge::<CubicRegister>();
+        let lookup_table = builder.lookup_table(&challenge, &table_values);
+        let lookup_values = builder.lookup_values(&challenge, &values);
+        assert_eq!(lookup_values.values.len(), M);
+        assert_eq!(lookup_values.public_values.len(), PUB);
+        let multiplicities = lookup_table.multiplicities; 
+        builder.cubic_lookup_from_table_and_values(lookup_table, lookup_values);
+
+        let air = builder.build();
+
+        let generator = ArithmeticGenerator::<L>::new(&air);
+        let writer = generator.new_writer();
+
+        // Set the table vals
+        for i in 0..L::num_rows() {
+            let table_vals = [CubicElement::from_slice(&[GoldilocksField::rand(); 3]); N];
+            for (reg, val) in table_values.iter().zip(table_vals) {
+                writer.write(reg, &val, i);
+            }
+        }
+
+        let mut rng = thread_rng();
+        // Set the lookup vals
+        for i in 0..L::num_rows() {
+            let j_vals = [rng.gen_range(0..L::num_rows()); M];
+            let k_vals = [rng.gen_range(0..N); M];
+            for (value, (&j, &k)) in values.iter().zip(j_vals.iter().zip(k_vals.iter())) {
+                let val = writer.read(&table_values[k], j);
+                let mult_value = writer.read(&multiplicities.get(k), j);
+                writer.write(&multiplicities.get(k), &(mult_value + F::ONE), j);
+                writer.write(value, &val, i);
+            }
+        }
+
+        // Set the public values
+        let mut public_inputs : Vec<F> = Vec::with_capacity(3 * PUB);
+        for _ in 0..PUB {
+            let j = rng.gen_range(0..L::num_rows());
+            let k = rng.gen_range(0..N);
+            let val = writer.read(&table_values[k], j);
+            public_inputs.extend(val.as_slice());
+            let mult_value = writer.read(&multiplicities.get(k), j);
+            writer.write(&multiplicities.get(k), &(mult_value + F::ONE), j);
+        }
+
+        let stark = Starky::from_chip(air);
+
+        let config = SC::standard_fast_config(L::num_rows());
+
+        // Generate proof and verify as a stark
+        test_starky(&stark, &config, &generator, &public_inputs);
+
+        // Test the recursive proof.
+        test_recursive_starky(stark, config, generator, &public_inputs);
     }
 }

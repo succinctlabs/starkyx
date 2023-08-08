@@ -130,7 +130,7 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
         let beta = self.challenge.eval(parser);
 
         let mut prev = parser.zero_extension();
-        for (chunk, row_acc) in self.values.chunks_exact(2).zip(self.row_accumulators.iter()) {
+        for (chunk, row_acc) in self.values.chunks_exact(2).zip(self.row_accumulators) {
             let a = chunk[0].eval_cubic(parser);
             let b = chunk[1].eval_cubic(parser);
             let acc = row_acc.eval(parser);
@@ -166,11 +166,26 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
         parser.constraint_extension_first_row(acc_first_row_constraint);
 
         // Constrain the public accumulation
-
+        let mut prev = parser.zero_extension();
+        for (chunk, row_acc) in self.public_values.chunks_exact(2).zip(self.global_accumulators) {
+            let a = chunk[0].eval_cubic(parser);
+            let b = chunk[1].eval_cubic(parser);
+            let acc = row_acc.eval(parser);
+            let beta_minus_a = parser.sub_extension(beta, a);
+            let beta_minus_b = parser.sub_extension(beta, b);
+            let acc_minus_prev = parser.sub_extension(acc, prev);
+            let mut product = parser.mul_extension(beta_minus_a, beta_minus_b);
+            product = parser.mul_extension(product, acc_minus_prev);
+            let mut constraint = parser.add_extension(beta_minus_a, beta_minus_b);
+            constraint = parser.sub_extension(constraint, product);
+            parser.constraint_extension(constraint);
+            prev = acc;
+        }
+        let lookup_total_value = parser.add_extension(prev, log_lookup_accumulator);
 
         // Add digest constraint
         let lookup_digest = self.digest.eval(parser);
-        let lookup_digest_constraint = parser.sub_extension(lookup_digest, log_lookup_accumulator);
+        let lookup_digest_constraint = parser.sub_extension(lookup_digest, lookup_total_value);
         parser.constraint_extension_last_row(lookup_digest_constraint);
     }
 }
