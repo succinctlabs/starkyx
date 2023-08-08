@@ -95,6 +95,7 @@ impl<F: PrimeField> TraceWriter<F> {
     ) {
         let beta = CubicExtension::<F, E>::from(self.read(&values_data.challenge, 0));
 
+        // Accumulate lookup values in the trace
         let accumulators = self
             .write_trace()
             .unwrap()
@@ -122,6 +123,22 @@ impl<F: PrimeField> TraceWriter<F> {
             value += acc;
             self.write(&log_lookup, &value.0, i);
         }
+
+        // Accumulate lookups for public inputs
+        let mut accumumulator = CubicExtension::ZERO;
+        let accumulators = values_data.global_accumulators;
+        let mut public_slice = self.public_mut().unwrap();
+        for (k, pair) in values_data.public_values.chunks_exact(2).enumerate() {
+            let a = T::trace_value_as_cubic(pair[0].read_from_slice(&public_slice));
+            let b = T::trace_value_as_cubic(pair[1].read_from_slice(&public_slice));
+            let beta_minus_a = beta - CubicExtension::from(a);
+            let beta_minus_b = beta - CubicExtension::from(b);
+            accumumulator += beta_minus_a.inverse() + beta_minus_b.inverse();
+            accumulators
+                .get(k)
+                .assign_to_raw_slice(&mut public_slice, &accumumulator.0);
+        }
+        value += accumumulator;
 
         // Write the digest value
         self.write(&values_data.digest, &value.0, num_rows - 1);

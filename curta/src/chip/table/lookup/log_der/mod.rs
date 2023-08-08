@@ -9,6 +9,7 @@ use crate::chip::constraint::Constraint;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::{CubicRegister, EvalCubic};
 use crate::chip::register::element::ElementRegister;
+use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::Register;
 use crate::chip::table::lookup::Lookup;
 use crate::chip::AirParameters;
@@ -33,7 +34,9 @@ pub struct LookupTable<T: Register, F: Field, E: CubicParameters<F>> {
 pub struct LogLookupValues<T: EvalCubic, F: Field, E: CubicParameters<F>> {
     pub(crate) challenge: CubicRegister,
     pub(crate) values: Vec<T>,
+    pub(crate) public_values: Vec<T>,
     pub(crate) row_accumulators: ArrayRegister<CubicRegister>,
+    pub(crate) global_accumulators: ArrayRegister<CubicRegister>,
     pub(crate) log_lookup_accumulator: CubicRegister,
     pub digest: CubicRegister,
     _marker: core::marker::PhantomData<(F, E)>,
@@ -93,14 +96,38 @@ impl<L: AirParameters> AirBuilder<L> {
         challenge: &CubicRegister,
         values: &[T],
     ) -> LogLookupValues<T, L::Field, L::CubicParams> {
-        assert_eq!(values.len() % 2, 0, "Only even number of values supported");
-        let row_accumulators = self.alloc_array_extended::<CubicRegister>(values.len() / 2);
+        let mut trace_values = Vec::new();
+        let mut public_values = Vec::new();
+
+        for value in values.iter() {
+            match value.register() {
+                MemorySlice::Public(..) => public_values.push(*value),
+                MemorySlice::Local(..) => trace_values.push(*value),
+                MemorySlice::Next(..) => unreachable!("Next register not supported for lookup"),
+                MemorySlice::Global(..) => unreachable!("Global register not supported for lookup"),
+                MemorySlice::Challenge(..) => unreachable!("Cannot send challenge register"),
+            }
+        }
+        assert_eq!(
+            trace_values.len() % 2,
+            0,
+            "Only even number of values supported"
+        );
+        assert_eq!(
+            public_values.len() % 2,
+            0,
+            "Only even number of values supported"
+        );
+        let row_accumulators = self.alloc_array_extended::<CubicRegister>(trace_values.len() / 2);
+        let global_accumulators = self.alloc_array_global::<CubicRegister>(trace_values.len() / 2);
         let log_lookup_accumulator = self.alloc_extended::<CubicRegister>();
 
         LogLookupValues {
             challenge: *challenge,
-            values: values.to_vec(),
+            values: trace_values.to_vec(),
+            public_values: public_values.to_vec(),
             row_accumulators,
+            global_accumulators,
             log_lookup_accumulator,
             digest: log_lookup_accumulator,
             _marker: PhantomData,
