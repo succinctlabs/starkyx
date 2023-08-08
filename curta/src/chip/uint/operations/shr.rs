@@ -30,9 +30,7 @@ impl<L: AirParameters> AirBuilder<L> {
             self.assert_zero(&result_bytes.get(i));
         }
 
-        assert!(bit_shift < 8, "Shifts larger than 8 are not supported yet");
         let mult = L::Field::from_canonical_u32(1 << (8 - bit_shift));
-
         let mut carry = ArithmeticExpression::zero();
         for i in (0..N - byte_shift).rev() {
             let (shift_res, next_carry) =

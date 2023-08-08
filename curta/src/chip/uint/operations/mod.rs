@@ -24,8 +24,8 @@ mod tests {
 
         type Instruction = ByteInstructionSet;
 
-        const NUM_FREE_COLUMNS: usize = 413;
-        const EXTENDED_COLUMNS: usize = 456;
+        const NUM_FREE_COLUMNS: usize = 661;
+        const EXTENDED_COLUMNS: usize = 699;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
         fn num_rows_bits() -> usize {
@@ -66,6 +66,7 @@ mod tests {
 
         let mut shr_shift_vals = vec![];
         let mut shr_expected_vec = vec![];
+        let mut rot_expected_vec = vec![];
 
         let num_ops = 10;
 
@@ -80,6 +81,15 @@ mod tests {
             let a_shr_second = builder.alloc::<ByteArrayRegister<N>>(); // To guarantee even number of operations
             builder.set_bit_shr(&a, shift, &a_shr_second, &mut operations);
             shr_expected_vec.push(shr_expected);
+
+            let a_rot = builder.alloc::<ByteArrayRegister<N>>();
+            builder.set_bit_rotate_right(&a, shift, &a_rot, &mut operations);
+            let rot_expected = builder.alloc::<ByteArrayRegister<N>>();
+            builder.assert_equal(&a_rot, &rot_expected);
+            rot_expected_vec.push(rot_expected);
+
+            let a_rot_second = builder.alloc::<ByteArrayRegister<N>>(); // To guarantee even number of operations
+            builder.set_bit_rotate_right(&a, shift, &a_rot_second, &mut operations);
         }
 
         builder.register_byte_lookup(operations, &table);
@@ -110,6 +120,11 @@ mod tests {
             for k in 0..num_ops {
                 let shr_val = a_val >> shr_shift_vals[k];
                 writer.write(&shr_expected_vec[k], &to_field(shr_val), i);
+            }
+
+            for k in 0..num_ops {
+                let rot_val = a_val.rotate_right(shr_shift_vals[k] as u32);
+                writer.write(&rot_expected_vec[k], &to_field(rot_val), i);
             }
 
             writer.write_row_instructions(&air, i);
