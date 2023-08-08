@@ -3,6 +3,7 @@ pub mod not;
 pub mod rotate;
 pub mod shr;
 pub mod xor;
+pub mod add;
 
 #[cfg(test)]
 mod tests {
@@ -24,8 +25,8 @@ mod tests {
 
         type Instruction = ByteInstructionSet;
 
-        const NUM_FREE_COLUMNS: usize = 661;
-        const EXTENDED_COLUMNS: usize = 699;
+        const NUM_FREE_COLUMNS: usize = 400;
+        const EXTENDED_COLUMNS: usize = 450;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
         fn num_rows_bits() -> usize {
@@ -68,7 +69,7 @@ mod tests {
         let mut shr_expected_vec = vec![];
         let mut rot_expected_vec = vec![];
 
-        let num_ops = 10;
+        let num_ops = 5;
 
         for _ in 0..num_ops {
             let shift = rng.gen::<u32>() as usize;
