@@ -438,7 +438,6 @@ mod tests {
         test_recursive_starky(stark, config, generator, &[]);
     }
 
-
     #[test]
     fn test_cubic_lookup_with_public_values() {
         type L = CubicLookupTest<N, M>;
@@ -446,7 +445,7 @@ mod tests {
         type SC = PoseidonGoldilocksStarkConfig;
         const N: usize = 4;
         const M: usize = 102;
-        const PUB : usize = 10;
+        const PUB: usize = 10;
 
         let mut builder = AirBuilder::<L>::new();
 
@@ -459,8 +458,15 @@ mod tests {
             .into_iter()
             .collect::<Vec<_>>();
 
-        let public_values = builder.alloc_array_public::<CubicRegister>(PUB).into_iter().collect::<Vec<_>>();
-        let values = trace_values.iter().copied().chain(public_values.iter().copied()).collect::<Vec<_>>();
+        let public_values = builder
+            .alloc_array_public::<CubicRegister>(PUB)
+            .into_iter()
+            .collect::<Vec<_>>();
+        let values = trace_values
+            .iter()
+            .copied()
+            .chain(public_values.iter().copied())
+            .collect::<Vec<_>>();
 
         // let multiplicities = builder.lookup_cubic_log_derivative(&table_values, &values);
         let challenge = builder.alloc_challenge::<CubicRegister>();
@@ -468,7 +474,7 @@ mod tests {
         let lookup_values = builder.lookup_values(&challenge, &values);
         assert_eq!(lookup_values.values.len(), M);
         assert_eq!(lookup_values.public_values.len(), PUB);
-        let multiplicities = lookup_table.multiplicities; 
+        let multiplicities = lookup_table.multiplicities;
         builder.cubic_lookup_from_table_and_values(lookup_table, lookup_values);
 
         let air = builder.build();
@@ -498,7 +504,7 @@ mod tests {
         }
 
         // Set the public values
-        let mut public_inputs : Vec<F> = Vec::with_capacity(3 * PUB);
+        let mut public_inputs: Vec<F> = Vec::with_capacity(3 * PUB);
         for _ in 0..PUB {
             let j = rng.gen_range(0..L::num_rows());
             let k = rng.gen_range(0..N);

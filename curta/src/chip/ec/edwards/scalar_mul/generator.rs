@@ -330,10 +330,6 @@ where
         let trace_generator = &self.trace_generator;
 
         let writer = trace_generator.new_writer();
-        // for j in 0..(1 << 16) {
-        //     writer.write_instruction(&self.gadget.cycle, j);
-        //     writer.write_instruction(&self.bit_eval.cycle, j);
-        // }
         let (tx, rx) = channel();
         let res = self.gadget.double_and_add_gadget.result;
         let temp = self.gadget.double_and_add_gadget.temp;
@@ -351,12 +347,6 @@ where
                 writer.write(&scalar_bit, &f_bit, starting_row + i);
                 writer.write_row_instructions(&self.stark.air, starting_row + i);
             }
-            // let res = writer.write_ed_double_and_add(
-            //     &scalar,
-            //     &point,
-            //     &gadget.double_and_add_gadget,
-            //     256 * i,
-            // );
             tx.send((k, &points[k] * &scalars[k])).unwrap();
         });
         drop(tx);

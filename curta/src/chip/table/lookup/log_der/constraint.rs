@@ -148,7 +148,7 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
         let log_lookup_accumulator = self.log_lookup_accumulator.eval(parser);
         let log_lookup_accumulator_next = self.log_lookup_accumulator.next().eval(parser);
 
-        let row_acc_length = self.row_accumulators.len(); 
+        let row_acc_length = self.row_accumulators.len();
         let accumulated_value = self.row_accumulators.get(row_acc_length - 1).eval(parser);
         let accumulated_value_next = self
             .row_accumulators
@@ -167,7 +167,11 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
 
         // Constrain the public accumulation
         let mut prev = parser.zero_extension();
-        for (chunk, row_acc) in self.public_values.chunks_exact(2).zip(self.global_accumulators) {
+        for (chunk, row_acc) in self
+            .public_values
+            .chunks_exact(2)
+            .zip(self.global_accumulators)
+        {
             let a = chunk[0].eval_cubic(parser);
             let b = chunk[1].eval_cubic(parser);
             let acc = row_acc.eval(parser);

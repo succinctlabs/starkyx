@@ -1,10 +1,9 @@
 use itertools::Itertools;
 
 use super::{LogLookup, LogLookupValues, LookupTable};
-use crate::chip::register::RegisterSerializable;
 use crate::chip::register::cubic::EvalCubic;
-use crate::chip::register::Register;
 use crate::chip::register::memory::MemorySlice;
+use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
@@ -137,13 +136,13 @@ impl<F: PrimeField> TraceWriter<F> {
             global_accumumulator += beta_minus_a.inverse() + beta_minus_b.inverse();
             self.write_global(&global_accumulators.get(k), &global_accumumulator.0);
         }
-        value +=  global_accumumulator;
+        value += global_accumumulator;
 
         // Write the digest value
         match values_data.digest.register() {
             MemorySlice::Local(..) => self.write(&values_data.digest, &value.0, num_rows - 1),
-            MemorySlice::Global(..) => self.write_global(&values_data.digest, &value.0), 
-            _ => unreachable!("Invalid register type for lookup digest")
+            MemorySlice::Global(..) => self.write_global(&values_data.digest, &value.0),
+            _ => unreachable!("Invalid register type for lookup digest"),
         }
     }
 
