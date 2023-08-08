@@ -53,7 +53,7 @@ impl<F: PrimeField> TraceWriter<F> {
         }
 
         // Write the final accumulated value to the output channel
-        self.write_global(&channel.out_channel, &acc.0);
+        self.write(&channel.out_channel, &acc.0, num_rows - 1);
 
         // Write the row-wise running product value
         let product_chunks = channel.entry_values.chunks_exact(2);

@@ -206,11 +206,17 @@ impl<F: Field> TraceWriter<F> {
 
     #[inline]
     pub fn write<T: Register>(&self, data: &T, value: &T::Value<F>, row_index: usize) {
-        self.write_slice(data, T::align(value), row_index)
+        match data.register() {
+            MemorySlice::Local(..) => self.write_slice(data, T::align(value), row_index),
+            MemorySlice::Next(..) => self.write_slice(data, T::align(value), row_index),
+            MemorySlice::Global(..) => self.write_global(data, value),
+            MemorySlice::Public(..) => unreachable!("Public registers are read-only"),
+            MemorySlice::Challenge(..) => unreachable!("Challenge registers are read-only"),
+        }
     }
 
     #[inline]
-    pub fn write_global<T: Register>(&self, data: &T, value: &T::Value<F>) {
+    fn write_global<T: Register>(&self, data: &T, value: &T::Value<F>) {
         match data.register() {
             MemorySlice::Global(_, _) => {
                 let mut global = self.0.global.write().unwrap();

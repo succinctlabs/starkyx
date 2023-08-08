@@ -12,12 +12,6 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
     fn eval(&self, parser: &mut AP) {
         let digest = self.digest.eval(parser);
 
-        // let challenges_vec = self
-        //     .challenges
-        //     .iter()
-        //     .map(|x| x.eval(parser))
-        //     .collect::<Vec<_>>();
-
         let values = self
             .values
             .iter()
