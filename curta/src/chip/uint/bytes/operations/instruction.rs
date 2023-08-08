@@ -13,6 +13,7 @@ use crate::math::prelude::*;
 pub struct ByteOperationInstruction {
     tx: Sender<ByteOperation<u8>>,
     inner: ByteOperation<ByteRegister>,
+    global: bool,
     // filter: ArithmeticExpression<F>,
 }
 
@@ -20,11 +21,13 @@ impl ByteOperationInstruction {
     pub fn new(
         tx: Sender<ByteOperation<u8>>,
         inner: ByteOperation<ByteRegister>,
+        global: bool,
         // filter: ArithmeticExpression<F>,
     ) -> Self {
         ByteOperationInstruction {
             tx,
             inner,
+            global,
             // filter,
         }
     }
@@ -44,11 +47,10 @@ impl<F: PrimeField64> Instruction<F> for ByteOperationInstruction {
     }
 
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
-        // let filter = writer.read_expression(&self.filter, row_index)[0];
-
-        // if filter == F::ONE {
+        if self.global && row_index!= 0 {
+            return;
+        }
         let value = self.inner.write(writer, row_index);
         self.tx.send(value).unwrap();
-        // }
     }
 }

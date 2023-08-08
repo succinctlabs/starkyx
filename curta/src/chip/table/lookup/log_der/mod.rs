@@ -104,7 +104,7 @@ impl<L: AirParameters> AirBuilder<L> {
                 MemorySlice::Public(..) => public_values.push(*value),
                 MemorySlice::Local(..) => trace_values.push(*value),
                 MemorySlice::Next(..) => unreachable!("Next register not supported for lookup"),
-                MemorySlice::Global(..) => unreachable!("Global register not supported for lookup"),
+                MemorySlice::Global(..) => public_values.push(*value),
                 MemorySlice::Challenge(..) => unreachable!("Cannot send challenge register"),
             }
         }
@@ -158,8 +158,7 @@ impl<L: AirParameters> AirBuilder<L> {
         });
 
         // Add the lookup constraints
-        self.constraints
-            .push(Constraint::lookup(lookup_data.clone()));
+        self.constraints.push(Constraint::lookup(lookup_data.clone()));
 
         // Add the lookup to the list of lookups
         self.lookup_data.push(lookup_data);
@@ -446,6 +445,7 @@ mod tests {
         const N: usize = 4;
         const M: usize = 102;
         const PUB: usize = 10;
+        const GLOB: usize = 2;
 
         let mut builder = AirBuilder::<L>::new();
 
@@ -462,10 +462,17 @@ mod tests {
             .alloc_array_public::<CubicRegister>(PUB)
             .into_iter()
             .collect::<Vec<_>>();
+
+        let global_values = builder
+            .alloc_array_global::<CubicRegister>(GLOB)
+            .into_iter()
+            .collect::<Vec<_>>();
+
         let values = trace_values
             .iter()
             .copied()
             .chain(public_values.iter().copied())
+            .chain(global_values.iter().copied())
             .collect::<Vec<_>>();
 
         // let multiplicities = builder.lookup_cubic_log_derivative(&table_values, &values);
@@ -473,7 +480,7 @@ mod tests {
         let lookup_table = builder.lookup_table(&challenge, &table_values);
         let lookup_values = builder.lookup_values(&challenge, &values);
         assert_eq!(lookup_values.values.len(), M);
-        assert_eq!(lookup_values.public_values.len(), PUB);
+        assert_eq!(lookup_values.public_values.len(), PUB + GLOB);
         let multiplicities = lookup_table.multiplicities;
         builder.cubic_lookup_from_table_and_values(lookup_table, lookup_values);
 
@@ -512,6 +519,15 @@ mod tests {
             public_inputs.extend(val.as_slice());
             let mult_value = writer.read(&multiplicities.get(k), j);
             writer.write(&multiplicities.get(k), &(mult_value + F::ONE), j);
+        }
+
+        for i in 0..GLOB {
+            let j = rng.gen_range(0..L::num_rows());
+            let k = rng.gen_range(0..N);
+            let val = writer.read(&table_values[k], j);
+            writer.write(&global_values[i], &val, 0); 
+            let mult_value = writer.read(&multiplicities.get(k), j);
+            writer.write(&multiplicities.get(k), &(mult_value + F::ONE), j);   
         }
 
         let stark = Starky::from_chip(air);

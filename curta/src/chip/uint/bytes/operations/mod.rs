@@ -43,7 +43,25 @@ impl<L: AirParameters> AirBuilder<L> {
         let digest =
             self.accumulate_expressions(&lookup_values.row_acc_challenges, &op.expression_array());
 
-        let instr = ByteOperationInstruction::new(tx, *op);
+        let instr = ByteOperationInstruction::new(tx, *op, false);
+        self.register_instruction(instr);
+        lookup_values.values.push(digest);
+    }
+
+    pub fn set_public_inputs_byte_operation(
+        &mut self,
+        op: &ByteOperation<ByteRegister>,
+        lookup_values: &mut ByteLookupOperations,
+    ) where
+        L::Instruction: From<ByteOperationInstruction>,
+    {
+        // TODO: Check that the inputs are public
+        let tx = lookup_values.tx.clone();
+
+        let digest =
+            self.accumulate_public_expressions(&lookup_values.row_acc_challenges, &op.expression_array());
+
+        let instr = ByteOperationInstruction::new(tx, *op, true);
         self.register_instruction(instr);
         lookup_values.values.push(digest);
     }

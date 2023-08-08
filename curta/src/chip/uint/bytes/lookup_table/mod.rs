@@ -163,6 +163,7 @@ mod tests {
     use super::*;
     pub use crate::chip::builder::tests::*;
     use crate::chip::builder::AirBuilder;
+    use crate::chip::register::Register;
     use crate::chip::uint::bytes::register::ByteRegister;
     use crate::chip::AirParameters;
     use crate::plonky2::field::Field;
@@ -276,6 +277,16 @@ mod tests {
             builder.set_byte_operation(&range_op, &mut operations);
         }
 
+        // Add some public byte operations
+        let a_pub = builder.alloc_public::<ByteRegister>();
+        let b_pub = builder.alloc_public::<ByteRegister>();
+        let a_pub_and_b_pub = builder.alloc_global::<ByteRegister>();
+        let and_pub = ByteOperation::And(a_pub, b_pub, a_pub_and_b_pub);
+        builder.set_public_inputs_byte_operation(&and_pub, &mut operations);
+        let a_pub_xor_b_pub = builder.alloc_global::<ByteRegister>();
+        let xor_pub = ByteOperation::Xor(a_pub, b_pub, a_pub_xor_b_pub);
+        builder.set_public_inputs_byte_operation(&xor_pub, &mut operations);
+
         builder.register_byte_lookup(operations, &table);
 
         let air = builder.build();
@@ -284,6 +295,13 @@ mod tests {
         let writer = generator.new_writer();
 
         table.write_table_entries(&writer);
+
+        // Write public inputs
+        let mut public_inputs = vec![F::ZERO; air.num_public_inputs];
+        let a_pub_val = rng.gen::<u8>();
+        let b_pub_val = rng.gen::<u8>();
+        a_pub.assign_to_raw_slice(&mut public_inputs, &F::from_canonical_u8(a_pub_val));
+        b_pub.assign_to_raw_slice(&mut public_inputs, &F::from_canonical_u8(b_pub_val));
 
         for i in 0..L::num_rows() {
             for k in 0..NUM_VALS {
@@ -326,9 +344,9 @@ mod tests {
         let config = SC::standard_fast_config(L::num_rows());
 
         // Generate proof and verify as a stark
-        test_starky(&stark, &config, &generator, &[]);
+        test_starky(&stark, &config, &generator, &public_inputs);
 
         // Test the recursive proof.
-        test_recursive_starky(stark, config, generator, &[]);
+        test_recursive_starky(stark, config, generator, &public_inputs);
     }
 }
