@@ -216,7 +216,7 @@ mod tests {
             writer.write_row_instructions(&air, i);
         }
 
-        table.write_multiplicities(&writer, L::num_rows() * 2);
+        table.write_multiplicities(&writer);
 
         let stark = Starky::<_, { L::num_columns() }>::new(air);
         let config = SC::standard_fast_config(L::num_rows());

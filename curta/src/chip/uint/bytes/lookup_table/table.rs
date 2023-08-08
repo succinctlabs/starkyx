@@ -184,9 +184,9 @@ impl<F: PrimeField64> ByteLookupTable<F> {
             });
     }
 
-    pub fn write_multiplicities(&mut self, writer: &TraceWriter<F>, max_num_ops: usize) {
+    pub fn write_multiplicities(&mut self, writer: &TraceWriter<F>) {
         // Collect the multiplicity values
-        self.multiplicity_data.collect_values(max_num_ops);
+        self.multiplicity_data.collect_values();
 
         // Assign multiplicities to the trace
         self.multiplicity_data.write_multiplicities(writer);

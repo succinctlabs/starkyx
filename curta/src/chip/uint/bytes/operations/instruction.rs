@@ -47,7 +47,7 @@ impl<F: PrimeField64> Instruction<F> for ByteOperationInstruction {
     }
 
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
-        if self.global && row_index!= 0 {
+        if self.global && row_index != 0 {
             return;
         }
         let value = self.inner.write(writer, row_index);

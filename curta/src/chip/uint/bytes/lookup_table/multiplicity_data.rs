@@ -73,7 +73,7 @@ impl<F: Field> MultiplicityData<F> {
         }
     }
 
-    pub fn collect_values(&mut self, _max_num_values: usize) {
+    pub fn collect_values(&mut self) {
         for operation in self.rx.try_iter() {
             let (row, col) = self.operations_multipcitiy_dict[&operation];
             self.multiplicities_values.update(row, col);
