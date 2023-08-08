@@ -14,7 +14,6 @@ pub struct ByteOperationInstruction {
     tx: Sender<ByteOperation<u8>>,
     inner: ByteOperation<ByteRegister>,
     global: bool,
-    // filter: ArithmeticExpression<F>,
 }
 
 impl ByteOperationInstruction {
@@ -22,13 +21,11 @@ impl ByteOperationInstruction {
         tx: Sender<ByteOperation<u8>>,
         inner: ByteOperation<ByteRegister>,
         global: bool,
-        // filter: ArithmeticExpression<F>,
     ) -> Self {
         ByteOperationInstruction {
             tx,
             inner,
             global,
-            // filter,
         }
     }
 }
