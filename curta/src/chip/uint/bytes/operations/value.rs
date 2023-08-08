@@ -255,7 +255,7 @@ impl ByteOperation<u8> {
     }
 
     pub fn as_field_bits_op<F: Field>(self) -> ByteOperation<[F; 8]> {
-        let as_field_bits = |x| u8_to_bits_le(x).map(|b| F::from_canonical_u8(b));
+        let as_field_bits = |x| u8_to_bits_le(x).map(F::from_canonical_u8);
         match self {
             ByteOperation::And(a, b, c) => {
                 ByteOperation::And(as_field_bits(a), as_field_bits(b), as_field_bits(c))

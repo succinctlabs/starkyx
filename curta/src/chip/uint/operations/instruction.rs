@@ -183,7 +183,7 @@ mod tests {
 
         table.write_table_entries(&writer);
 
-        let to_field = |a: u32| a.to_le_bytes().map(|x| F::from_canonical_u8(x));
+        let to_field = |a: u32| a.to_le_bytes().map(F::from_canonical_u8);
         for i in 0..L::num_rows() {
             let a_val = u32::MAX; //rng.gen::<u32>();
             let b_val = 8; //rng.gen::<u32>();

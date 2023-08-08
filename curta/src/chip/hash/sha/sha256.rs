@@ -3,6 +3,8 @@ use crate::chip::register::array::ArrayRegister;
 use crate::chip::uint::register::U32Register;
 use crate::chip::AirParameters;
 
+#[allow(dead_code)]
+#[allow(unused_variables)]
 impl<L: AirParameters> AirBuilder<L> {
     pub fn sha_256_round(&mut self, chunk: ArrayRegister<U32Register>) {
         let cycle_64 = self.cycle(6);
@@ -14,10 +16,9 @@ impl<L: AirParameters> AirBuilder<L> {
         let ab_s_1 = self.alloc::<U32Register>();
 
         // Put the w value into the bus
-        todo!();
+        //TODO
 
         // Sponge compression
-
         let a = self.alloc::<U32Register>();
         let b = self.alloc::<U32Register>();
         let c = self.alloc::<U32Register>();

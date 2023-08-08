@@ -165,8 +165,8 @@ pub mod tests {
 
         let to_bits_le = |x: u8| {
             let mut bits = [0u8; 8];
-            for i in 0..8 {
-                bits[i] = (x >> i) & 1;
+            for (i, bit) in bits.iter_mut().enumerate() {
+                *bit = (x >> i) & 1;
             }
             bits
         };
@@ -180,9 +180,9 @@ pub mod tests {
             assert_eq!(a_val, to_val(&a_bits));
             let expected_val = a_val.rotate_right(b_val as u32);
             let expected_bits = to_bits_le(expected_val);
-            writer.write_array(&a, a_bits.map(|a| F::from_canonical_u8(a)), i);
-            writer.write_array(&b, b_bits.map(|b| F::from_canonical_u8(b)), i);
-            writer.write_array(&expected, expected_bits.map(|b| F::from_canonical_u8(b)), i);
+            writer.write_array(&a, a_bits.map(F::from_canonical_u8), i);
+            writer.write_array(&b, b_bits.map(F::from_canonical_u8), i);
+            writer.write_array(&expected, expected_bits.map(F::from_canonical_u8), i);
             writer.write_row_instructions(&air, i);
         }
 
@@ -229,8 +229,8 @@ pub mod tests {
 
         let to_bits_le = |x: u8| {
             let mut bits = [0u8; 8];
-            for i in 0..8 {
-                bits[i] = (x >> i) & 1;
+            for (i, bit) in bits.iter_mut().enumerate() {
+                *bit = (x >> i) & 1;
             }
             bits
         };
@@ -245,9 +245,9 @@ pub mod tests {
             assert_eq!(b_val, to_val(&b_bits));
             let expected_val = a_val.rotate_left(b_val as u32);
             let expected_bits = to_bits_le(expected_val);
-            writer.write_array(&a, a_bits.map(|a| F::from_canonical_u8(a)), i);
-            writer.write_array(&b, b_bits.map(|b| F::from_canonical_u8(b)), i);
-            writer.write_array(&expected, expected_bits.map(|b| F::from_canonical_u8(b)), i);
+            writer.write_array(&a, a_bits.map(F::from_canonical_u8), i);
+            writer.write_array(&b, b_bits.map(F::from_canonical_u8), i);
+            writer.write_array(&expected, expected_bits.map(F::from_canonical_u8), i);
             writer.write_row_instructions(&air, i);
         }
 
