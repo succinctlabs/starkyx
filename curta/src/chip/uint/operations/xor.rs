@@ -16,13 +16,27 @@ impl<L: AirParameters> AirBuilder<L> {
         L::Instruction: From<ByteOperationInstruction>,
     {
         for ((a_byte, b_byte), result_byte) in a
-            .bytes()
+            .to_le_bytes()
             .iter()
-            .zip(b.bytes().iter())
-            .zip(result.bytes().iter())
+            .zip(b.to_le_bytes().iter())
+            .zip(result.to_le_bytes().iter())
         {
             let xor = ByteOperation::Xor(a_byte, b_byte, result_byte);
             self.set_byte_operation(&xor, operations);
         }
+    }
+
+    pub fn bitwise_xor<const N: usize>(
+        &mut self,
+        a: &ByteArrayRegister<N>,
+        b: &ByteArrayRegister<N>,
+        operations: &mut ByteLookupOperations,
+    ) -> ByteArrayRegister<N>
+    where
+        L::Instruction: From<ByteOperationInstruction>,
+    {
+        let result = self.alloc::<ByteArrayRegister<N>>();
+        self.set_bitwise_xor(a, b, &result, operations);
+        result
     }
 }

@@ -41,6 +41,21 @@ impl<const N: usize> ByteArrayAdd<N> {
 }
 
 impl<L: AirParameters> AirBuilder<L> {
+    pub fn carrying_add_u32(
+        &mut self,
+        a: &U32Register,
+        b: &U32Register,
+        operations: &mut ByteLookupOperations,
+    ) -> (U32Register, BitRegister)
+    where
+        L::Instruction: From<ByteArrayAdd<4>> + From<ByteOperationInstruction>,
+    {
+        let result = self.alloc::<U32Register>();
+        let carry = self.set_add_u32(a, b, &result, operations);
+
+        (result, carry)
+    }
+
     pub fn set_add_u32(
         &mut self,
         a: &U32Register,
@@ -55,7 +70,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let add = ByteArrayAdd::<4>::new(*a, *b, *result, carry);
         self.register_instruction(add);
 
-        for byte in result.bytes() {
+        for byte in result.to_le_bytes() {
             let result_range = ByteOperation::Range(byte);
             self.set_byte_operation(&result_range, operations);
         }

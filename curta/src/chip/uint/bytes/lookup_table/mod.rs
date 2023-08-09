@@ -36,6 +36,16 @@ pub enum ByteInstructionSet {
     Decode(ByteDecodeInstruction),
 }
 
+pub trait ByteInstructions:
+    From<ByteInstructionSet>
+    + From<ByteOperationInstruction>
+    + From<SelectInstruction<BitRegister>>
+    + From<ByteDecodeInstruction>
+{
+}
+
+impl ByteInstructions for ByteInstructionSet {}
+
 impl<L: AirParameters> AirBuilder<L> {
     pub fn byte_operations(&mut self) -> (ByteLookupOperations, ByteLookupTable<L::Field>)
     where

@@ -10,6 +10,20 @@ use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
 impl<L: AirParameters> AirBuilder<L> {
+    pub fn bit_shr<const N: usize>(
+        &mut self,
+        a: &ByteArrayRegister<N>,
+        shift: usize,
+        operations: &mut ByteLookupOperations,
+    ) -> ByteArrayRegister<N>
+    where
+        L::Instruction: From<ByteOperationInstruction>,
+    {
+        let result = self.alloc::<ByteArrayRegister<N>>();
+        self.set_bit_shr(a, shift, &result, operations);
+        result
+    }
+
     pub fn set_bit_shr<const N: usize>(
         &mut self,
         a: &ByteArrayRegister<N>,
@@ -19,8 +33,8 @@ impl<L: AirParameters> AirBuilder<L> {
     ) where
         L::Instruction: From<ByteOperationInstruction>,
     {
-        let a_bytes = a.bytes();
-        let result_bytes = result.bytes();
+        let a_bytes = a.to_le_bytes();
+        let result_bytes = result.to_le_bytes();
 
         let shift = shift % (N * 8);
         let byte_shift = shift / 8;

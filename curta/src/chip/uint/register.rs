@@ -12,7 +12,7 @@ pub type U16Register = ByteArrayRegister<2>;
 pub type U32Register = ByteArrayRegister<4>;
 
 impl<const N: usize> ByteArrayRegister<N> {
-    pub fn bytes(&self) -> ArrayRegister<ByteRegister> {
+    pub fn to_le_bytes(&self) -> ArrayRegister<ByteRegister> {
         ArrayRegister::from_register_unsafe(self.0)
     }
 }

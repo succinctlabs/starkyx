@@ -20,7 +20,7 @@ impl<L: AirParameters> AirBuilder<L> {
     ) where
         L::Instruction: From<ByteOperationInstruction>,
     {
-        let result_bytes = result.bytes();
+        let result_bytes = result.to_le_bytes();
 
         let rotation = rotation % (N * 8);
         let byte_rotation = rotation / 8;
@@ -28,7 +28,7 @@ impl<L: AirParameters> AirBuilder<L> {
 
         let mult = L::Field::from_canonical_u32(1 << (8 - bit_rotation));
 
-        let a_bytes = a.bytes();
+        let a_bytes = a.to_le_bytes();
         let a_bytes_rotated: [_; N] = from_fn(|i| a_bytes.get((i + byte_rotation) % N));
 
         let (last_rot, last_carry) = (self.alloc::<ByteRegister>(), self.alloc::<ByteRegister>());
@@ -59,5 +59,19 @@ impl<L: AirParameters> AirBuilder<L> {
         // Constraint the last byte with the carry from the first
         let expected_res = last_rot.expr() + carry.clone() * mult;
         self.set_to_expression(&result_bytes.get(N - 1), expected_res);
+    }
+
+    pub fn bit_rotate_right<const N: usize>(
+        &mut self,
+        a: &ByteArrayRegister<N>,
+        rotation: usize,
+        operations: &mut ByteLookupOperations,
+    ) -> ByteArrayRegister<N>
+    where
+        L::Instruction: From<ByteOperationInstruction>,
+    {
+        let result = self.alloc::<ByteArrayRegister<N>>();
+        self.set_bit_rotate_right(a, rotation, &result, operations);
+        result
     }
 }

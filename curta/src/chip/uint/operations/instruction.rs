@@ -7,7 +7,7 @@ use crate::chip::register::bit::BitRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::decode::ByteDecodeInstruction;
-use crate::chip::uint::bytes::lookup_table::ByteInstructionSet;
+use crate::chip::uint::bytes::lookup_table::{ByteInstructionSet, ByteInstructions};
 use crate::chip::uint::bytes::operations::instruction::ByteOperationInstruction;
 use crate::math::prelude::*;
 
@@ -16,6 +16,12 @@ pub enum U32Instruction {
     Bit(ByteInstructionSet),
     Add(ByteArrayAdd<4>),
 }
+
+pub trait U32Instructions: ByteInstructions + From<U32Instruction> {}
+
+impl ByteInstructions for U32Instruction {}
+
+impl U32Instructions for U32Instruction {}
 
 impl<AP: AirParser> AirConstraint<AP> for U32Instruction {
     fn eval(&self, parser: &mut AP) {
@@ -122,23 +128,19 @@ mod tests {
         let a = builder.alloc::<ByteArrayRegister<N>>();
         let b = builder.alloc::<ByteArrayRegister<N>>();
 
-        let a_and_b = builder.alloc::<ByteArrayRegister<N>>();
-        builder.set_bitwise_and(&a, &b, &a_and_b, &mut operations);
+        let a_and_b = builder.bitwise_and(&a, &b, &mut operations);
         let and_expected = builder.alloc::<ByteArrayRegister<N>>();
         builder.assert_equal(&a_and_b, &and_expected);
 
-        let a_xor_b = builder.alloc::<ByteArrayRegister<N>>();
-        builder.set_bitwise_xor(&a, &b, &a_xor_b, &mut operations);
+        let a_xor_b = builder.bitwise_xor(&a, &b, &mut operations);
         let xor_expected = builder.alloc::<ByteArrayRegister<N>>();
         builder.assert_equal(&a_xor_b, &xor_expected);
 
-        let a_not = builder.alloc::<ByteArrayRegister<N>>();
-        builder.set_bitwise_not(&a, &a_not, &mut operations);
+        let a_not = builder.bitwise_not(&a, &mut operations);
         let not_expected = builder.alloc::<ByteArrayRegister<N>>();
         builder.assert_equal(&a_not, &not_expected);
 
-        let a_plus_b = builder.alloc::<ByteArrayRegister<N>>();
-        let carry = builder.set_add_u32(&a, &b, &a_plus_b, &mut operations);
+        let (a_plus_b, carry) = builder.carrying_add_u32(&a, &b, &mut operations);
         let add_expected = builder.alloc::<ByteArrayRegister<N>>();
         builder.assert_equal(&a_plus_b, &add_expected);
         let carry_expected = builder.alloc::<BitRegister>();
