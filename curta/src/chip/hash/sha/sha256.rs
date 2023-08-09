@@ -3,10 +3,9 @@ use crate::chip::register::array::ArrayRegister;
 use crate::chip::uint::operations::instruction::U32Instructions;
 use crate::chip::uint::register::U32Register;
 use crate::chip::AirParameters;
-
 use crate::math::prelude::*;
 
-pub fn round_constants<F : Field>() -> [[F ; 4] ; 64] {
+pub fn round_constants<F: Field>() -> [[F; 4]; 64] {
     [
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
         0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
@@ -18,9 +17,10 @@ pub fn round_constants<F : Field>() -> [[F ; 4] ; 64] {
         0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
         0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
         0xc67178f2,
-    ].map(u32::to_le_bytes).map(|x| x.map(F::from_canonical_u8))
+    ]
+    .map(u32::to_le_bytes)
+    .map(|x| x.map(F::from_canonical_u8))
 }
-
 
 #[allow(dead_code)]
 #[allow(unused_variables)]
@@ -31,7 +31,6 @@ impl<L: AirParameters> AirBuilder<L> {
     {
         let cycle_64 = self.cycle(6);
         let cycle_16 = self.cycle(4);
-
 
         // Inistialize the byte lookup table
         let (mut operations, mut table) = self.byte_operations();

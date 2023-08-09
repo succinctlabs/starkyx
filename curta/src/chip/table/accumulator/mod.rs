@@ -8,8 +8,8 @@ pub mod trace;
 
 use core::marker::PhantomData;
 
-use crate::chip::builder::AirBuilder;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
+use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::Register;
@@ -99,8 +99,8 @@ pub mod tests {
     use plonky2::field::types::Sample;
 
     use super::*;
-    use crate::chip::builder::tests::*;
     use crate::chip::arithmetic::expression::ArithmeticExpression;
+    use crate::chip::builder::tests::*;
     use crate::chip::register::Register;
     use crate::math::extension::cubic::element::CubicElement;
     use crate::math::prelude::*;

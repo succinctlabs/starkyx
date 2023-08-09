@@ -4,9 +4,9 @@
 //! a << (b + c) = (a << b) << c
 //! a << (b + 2^i c) = (a << b) << 2^i c = ((a << b) << c) << 2^(i-1) c
 
+use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::bool::SelectInstruction;
 use crate::chip::builder::AirBuilder;
-use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::Register;

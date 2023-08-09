@@ -210,7 +210,7 @@ impl<F: Field> TraceWriter<F> {
             MemorySlice::Local(..) => self.write_slice(data, T::align(value), row_index),
             MemorySlice::Next(..) => self.write_slice(data, T::align(value), row_index),
             MemorySlice::Global(..) => self.write_global(data, value),
-            MemorySlice::Public(..) => {}
+            MemorySlice::Public(..) => self.write_public(data, value),
             MemorySlice::Challenge(..) => unreachable!("Challenge registers are read-only"),
         }
     }
@@ -223,6 +223,17 @@ impl<F: Field> TraceWriter<F> {
                 data.assign_to_raw_slice(&mut global, value);
             }
             _ => panic!("Expected global register"),
+        }
+    }
+
+    #[inline]
+    fn write_public<T: Register>(&self, data: &T, value: &T::Value<F>) {
+        match data.register() {
+            MemorySlice::Public(_, _) => {
+                let mut global = self.0.public.write().unwrap();
+                data.assign_to_raw_slice(&mut global, value);
+            }
+            _ => panic!("Expected public register"),
         }
     }
 

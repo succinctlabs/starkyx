@@ -1,5 +1,5 @@
-use crate::chip::builder::AirBuilder;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
+use crate::chip::builder::AirBuilder;
 use crate::chip::ec::edwards::add::EdAddGadget;
 use crate::chip::ec::edwards::EdwardsParameters;
 use crate::chip::ec::point::AffinePointRegister;

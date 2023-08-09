@@ -1,8 +1,8 @@
 use core::borrow::Borrow;
 use core::marker::PhantomData;
 
-use crate::chip::builder::AirBuilder;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
+use crate::chip::builder::AirBuilder;
 use crate::chip::constraint::Constraint;
 use crate::chip::instruction::cycle::Cycle;
 use crate::chip::instruction::set::AirInstruction;

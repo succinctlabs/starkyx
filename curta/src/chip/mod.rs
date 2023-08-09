@@ -11,6 +11,7 @@ use crate::math::prelude::*;
 use crate::plonky2::stark::Starky;
 
 pub mod air;
+pub mod arithmetic;
 pub mod bool;
 pub mod builder;
 pub mod constraint;
@@ -23,7 +24,6 @@ pub mod table;
 pub mod trace;
 pub mod uint;
 pub mod utils;
-pub mod arithmetic;
 
 #[const_trait]
 pub trait AirParameters {

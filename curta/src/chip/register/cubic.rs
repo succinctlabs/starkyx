@@ -61,9 +61,7 @@ impl Register for CubicRegister {
         &value.0
     }
 
-    fn expr<F: Field>(
-        &self,
-    ) -> crate::chip::arithmetic::expression::ArithmeticExpression<F> {
+    fn expr<F: Field>(&self) -> crate::chip::arithmetic::expression::ArithmeticExpression<F> {
         unimplemented!(
             "Cannot create expression from cubic register, use the method ext_expr() instead"
         )

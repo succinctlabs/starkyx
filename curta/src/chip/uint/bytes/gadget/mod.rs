@@ -13,9 +13,8 @@ pub mod operation;
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone)]
-pub struct BytesGadget<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> {
+pub struct BytesGadget {
     operations: Vec<ByteOperation<Target>>,
-    air_builder: AirBuilder<ByteGadgetParameters<F, E, D>>,
 }
 
 pub struct ByteTarget(Target);
