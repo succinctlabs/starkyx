@@ -1,7 +1,7 @@
 use self::cell::CellType;
 use self::memory::MemorySlice;
-use super::constraint::arithmetic::expression::ArithmeticExpression;
-use super::constraint::arithmetic::expression_slice::ArithmeticExpressionSlice;
+use super::arithmetic::expression::ArithmeticExpression;
+use super::arithmetic::expression_slice::ArithmeticExpressionSlice;
 use crate::air::parser::AirParser;
 use crate::math::prelude::*;
 

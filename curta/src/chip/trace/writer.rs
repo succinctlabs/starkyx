@@ -3,7 +3,7 @@ use core::borrow::Borrow;
 use core::ops::Deref;
 use std::sync::{LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
+use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::memory::MemorySlice;

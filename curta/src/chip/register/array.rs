@@ -4,8 +4,8 @@ use core::ops::Range;
 use super::memory::MemorySlice;
 use super::{CellType, Register, RegisterSerializable};
 use crate::air::parser::AirParser;
-use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
-use crate::chip::constraint::arithmetic::expression_slice::ArithmeticExpressionSlice;
+use crate::chip::arithmetic::expression::ArithmeticExpression;
+use crate::chip::arithmetic::expression_slice::ArithmeticExpressionSlice;
 use crate::math::field::Field;
 
 /// A helper struct for representing an array of registers. In particular, it makes it easier

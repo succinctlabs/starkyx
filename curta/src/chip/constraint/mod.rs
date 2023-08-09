@@ -1,4 +1,4 @@
-use self::arithmetic::ArithmeticConstraint;
+use super::arithmetic::ArithmeticConstraint;
 use super::instruction::set::AirInstruction;
 use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
@@ -9,7 +9,6 @@ use super::AirParameters;
 use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::{AirParser, MulParser};
 use crate::air::AirConstraint;
-pub mod arithmetic;
 
 #[derive(Debug, Clone)]
 pub enum Constraint<L: AirParameters> {

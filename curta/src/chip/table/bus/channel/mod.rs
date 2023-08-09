@@ -6,7 +6,7 @@ use core::marker::PhantomData;
 
 use self::entry::Entry;
 use crate::chip::builder::AirBuilder;
-use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
+use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::register::cubic::CubicRegister;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
@@ -129,7 +129,7 @@ mod tests {
 
     use super::*;
     use crate::chip::builder::tests::*;
-    use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
+    use crate::chip::arithmetic::expression::ArithmeticExpression;
     use crate::chip::register::Register;
     use crate::chip::AirParameters;
     use crate::math::extension::cubic::element::CubicElement;

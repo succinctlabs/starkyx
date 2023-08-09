@@ -4,7 +4,7 @@ use super::element::ElementRegister;
 use super::memory::MemorySlice;
 use super::{Register, RegisterSerializable, RegisterSized};
 use crate::air::parser::AirParser;
-use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
+use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::math::prelude::*;
 use crate::plonky2::field::cubic::element::CubicElement;
 
@@ -63,7 +63,7 @@ impl Register for CubicRegister {
 
     fn expr<F: Field>(
         &self,
-    ) -> crate::chip::constraint::arithmetic::expression::ArithmeticExpression<F> {
+    ) -> crate::chip::arithmetic::expression::ArithmeticExpression<F> {
         unimplemented!(
             "Cannot create expression from cubic register, use the method ext_expr() instead"
         )

@@ -6,7 +6,7 @@
 
 use crate::chip::bool::SelectInstruction;
 use crate::chip::builder::AirBuilder;
-use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
+use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::Register;

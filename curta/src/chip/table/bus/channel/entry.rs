@@ -1,4 +1,4 @@
-use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
+use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::register::cubic::CubicRegister;
 
 #[derive(Debug, Clone)]

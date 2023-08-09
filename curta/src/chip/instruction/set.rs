@@ -8,7 +8,7 @@ use super::write::WriteInstruction;
 use super::{Instruction, InstructionId};
 use crate::air::parser::{AirParser, MulParser};
 use crate::air::AirConstraint;
-use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
+use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;

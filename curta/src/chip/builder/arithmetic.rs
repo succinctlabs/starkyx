@@ -1,6 +1,6 @@
 use super::AirBuilder;
-use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
-use crate::chip::constraint::arithmetic::ArithmeticConstraint;
+use crate::chip::arithmetic::expression::ArithmeticExpression;
+use crate::chip::arithmetic::ArithmeticConstraint;
 use crate::chip::instruction::assign::{AssignInstruction, AssignType};
 use crate::chip::instruction::set::AirInstruction;
 use crate::chip::register::Register;

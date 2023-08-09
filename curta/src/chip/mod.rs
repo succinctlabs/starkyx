@@ -23,6 +23,7 @@ pub mod table;
 pub mod trace;
 pub mod uint;
 pub mod utils;
+pub mod arithmetic;
 
 #[const_trait]
 pub trait AirParameters {

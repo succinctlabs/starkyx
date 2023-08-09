@@ -8,7 +8,7 @@ use core::cmp::Ordering;
 use anyhow::Result;
 
 use self::shared_memory::SharedMemory;
-use super::constraint::arithmetic::expression::ArithmeticExpression;
+use super::arithmetic::expression::ArithmeticExpression;
 use super::constraint::Constraint;
 use super::instruction::set::AirInstruction;
 use super::register::element::ElementRegister;
