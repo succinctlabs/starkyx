@@ -8,6 +8,7 @@ use crate::chip::builder::AirBuilder;
 
 pub mod air;
 pub mod generator;
+pub mod operation;
 
 use crate::math::prelude::*;
 

@@ -246,7 +246,6 @@ pub mod tests {
             acc_expr = acc_expr + alpha * x_ext;
         }
 
-
         for (a, b) in digest_expr
             .as_base_array()
             .iter()

@@ -22,11 +22,7 @@ impl ByteOperationInstruction {
         inner: ByteOperation<ByteRegister>,
         global: bool,
     ) -> Self {
-        ByteOperationInstruction {
-            tx,
-            inner,
-            global,
-        }
+        ByteOperationInstruction { tx, inner, global }
     }
 }
 

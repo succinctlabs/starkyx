@@ -58,8 +58,10 @@ impl<L: AirParameters> AirBuilder<L> {
         // TODO: Check that the inputs are public
         let tx = lookup_values.tx.clone();
 
-        let digest =
-            self.accumulate_public_expressions(&lookup_values.row_acc_challenges, &op.expression_array());
+        let digest = self.accumulate_public_expressions(
+            &lookup_values.row_acc_challenges,
+            &op.expression_array(),
+        );
 
         let instr = ByteOperationInstruction::new(tx, *op, true);
         self.register_instruction(instr);

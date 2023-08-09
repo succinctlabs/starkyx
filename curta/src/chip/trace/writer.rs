@@ -210,7 +210,7 @@ impl<F: Field> TraceWriter<F> {
             MemorySlice::Local(..) => self.write_slice(data, T::align(value), row_index),
             MemorySlice::Next(..) => self.write_slice(data, T::align(value), row_index),
             MemorySlice::Global(..) => self.write_global(data, value),
-            MemorySlice::Public(..) => {},
+            MemorySlice::Public(..) => {}
             MemorySlice::Challenge(..) => unreachable!("Challenge registers are read-only"),
         }
     }

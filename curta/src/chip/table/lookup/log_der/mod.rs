@@ -158,7 +158,8 @@ impl<L: AirParameters> AirBuilder<L> {
         });
 
         // Add the lookup constraints
-        self.constraints.push(Constraint::lookup(lookup_data.clone()));
+        self.constraints
+            .push(Constraint::lookup(lookup_data.clone()));
 
         // Add the lookup to the list of lookups
         self.lookup_data.push(lookup_data);
@@ -525,9 +526,9 @@ mod tests {
             let j = rng.gen_range(0..L::num_rows());
             let k = rng.gen_range(0..N);
             let val = writer.read(&table_values[k], j);
-            writer.write(&global_values[i], &val, 0); 
+            writer.write(&global_values[i], &val, 0);
             let mult_value = writer.read(&multiplicities.get(k), j);
-            writer.write(&multiplicities.get(k), &(mult_value + F::ONE), j);   
+            writer.write(&multiplicities.get(k), &(mult_value + F::ONE), j);
         }
 
         let stark = Starky::from_chip(air);
