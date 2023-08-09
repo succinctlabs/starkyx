@@ -278,14 +278,14 @@ mod tests {
         }
 
         // Add some public byte operations
-        // let a_pub = builder.alloc_public::<ByteRegister>();
-        // let b_pub = builder.alloc_public::<ByteRegister>();
-        // let a_pub_and_b_pub = builder.alloc_public::<ByteRegister>();
-        // let and_pub = ByteOperation::And(a_pub, b_pub, a_pub_and_b_pub);
-        // builder.set_public_inputs_byte_operation(&and_pub, &mut operations);
-        // let a_pub_xor_b_pub = builder.alloc_public::<ByteRegister>();
-        // let xor_pub = ByteOperation::Xor(a_pub, b_pub, a_pub_xor_b_pub);
-        // builder.set_public_inputs_byte_operation(&xor_pub, &mut operations);
+        let a_pub = builder.alloc_public::<ByteRegister>();
+        let b_pub = builder.alloc_public::<ByteRegister>();
+        let a_pub_and_b_pub = builder.alloc_public::<ByteRegister>();
+        let and_pub = ByteOperation::And(a_pub, b_pub, a_pub_and_b_pub);
+        builder.set_public_inputs_byte_operation(&and_pub, &mut operations);
+        let a_pub_xor_b_pub = builder.alloc_public::<ByteRegister>();
+        let xor_pub = ByteOperation::Xor(a_pub, b_pub, a_pub_xor_b_pub);
+        builder.set_public_inputs_byte_operation(&xor_pub, &mut operations);
 
         builder.register_byte_lookup(operations, &table);
 
@@ -297,22 +297,24 @@ mod tests {
         table.write_table_entries(&writer);
 
         // Write public inputs
-        let mut public_inputs = vec![F::ZERO; air.num_public_inputs];
-        // assert_eq!(public_inputs.len(), 4);
-        // let a_pub_val = rng.gen::<u8>();
-        // let b_pub_val = rng.gen::<u8>();
-        // let a_pub_and_b_pub_val = a_pub_val & b_pub_val;
-        // let a_pub_xor_b_pub_val = a_pub_val ^ b_pub_val;
-        // a_pub.assign_to_raw_slice(&mut public_inputs, &F::from_canonical_u8(a_pub_val));
-        // b_pub.assign_to_raw_slice(&mut public_inputs, &F::from_canonical_u8(b_pub_val));
-        // a_pub_and_b_pub.assign_to_raw_slice(
-        //     &mut public_inputs,
-        //     &F::from_canonical_u8(a_pub_and_b_pub_val),
-        // );
-        // a_pub_xor_b_pub.assign_to_raw_slice(
-        //     &mut public_inputs,
-        //     &F::from_canonical_u8(a_pub_xor_b_pub_val),
-        // );
+        let mut public_write = writer.public.write().unwrap();
+        assert_eq!(public_write.len(), 4);
+        let a_pub_val = rng.gen::<u8>();
+        let b_pub_val = rng.gen::<u8>();
+        let a_pub_and_b_pub_val = a_pub_val & b_pub_val;
+        let a_pub_xor_b_pub_val = a_pub_val ^ b_pub_val;
+        a_pub.assign_to_raw_slice(&mut public_write, &F::from_canonical_u8(a_pub_val));
+        b_pub.assign_to_raw_slice(&mut public_write, &F::from_canonical_u8(b_pub_val));
+        a_pub_and_b_pub.assign_to_raw_slice(
+            &mut public_write,
+            &F::from_canonical_u8(a_pub_and_b_pub_val),
+        );
+        a_pub_xor_b_pub.assign_to_raw_slice(
+            &mut public_write,
+            &F::from_canonical_u8(a_pub_xor_b_pub_val),
+        );
+        let public_inputs = public_write.clone();
+        drop(public_write);
 
         for i in 0..L::num_rows() {
             for k in 0..NUM_VALS {

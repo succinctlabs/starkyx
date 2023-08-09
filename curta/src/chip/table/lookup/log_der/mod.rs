@@ -511,12 +511,12 @@ mod tests {
         }
 
         // Set the public values
-        let mut public_inputs: Vec<F> = Vec::with_capacity(3 * PUB);
-        for _ in 0..PUB {
+        let mut public_inputs: Vec<F> = vec![F::ZERO; air.num_public_inputs];
+        for i in 0..PUB {
             let j = rng.gen_range(0..L::num_rows());
             let k = rng.gen_range(0..N);
             let val = writer.read(&table_values[k], j);
-            public_inputs.extend(val.as_slice());
+            public_values[i].assign_to_raw_slice(&mut public_inputs, &val);
             let mult_value = writer.read(&multiplicities.get(k), j);
             writer.write(&multiplicities.get(k), &(mult_value + F::ONE), j);
         }
