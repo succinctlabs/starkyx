@@ -39,6 +39,7 @@ impl<L: AirParameters> AirBuilder<L> {
         L::Instruction: From<ByteOperationInstruction>,
     {
         let tx = lookup_values.tx.clone();
+        lookup_values.num_operations += L::num_rows();
 
         let digest =
             self.accumulate_expressions(&lookup_values.row_acc_challenges, &op.expression_array());
@@ -57,6 +58,7 @@ impl<L: AirParameters> AirBuilder<L> {
     {
         // TODO: Check that the inputs are public
         let tx = lookup_values.tx.clone();
+        lookup_values.num_operations += 1;
 
         let digest = self.accumulate_public_expressions(
             &lookup_values.row_acc_challenges,

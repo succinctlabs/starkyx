@@ -171,7 +171,6 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
     }
 
     fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
-
         // Write the target values
         self.hint(witness, out_buffer);
 

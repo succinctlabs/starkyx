@@ -53,7 +53,7 @@ impl<L: AirParameters> AirBuilder<L> {
             + From<SelectInstruction<BitRegister>>
             + From<ByteDecodeInstruction>,
     {
-        let (tx, rx) = mpsc::channel::<ByteOperation<u8>>();
+        let (tx, rx) = mpsc::sync_channel::<ByteOperation<u8>>(L::num_rows());
 
         let row_acc_challenges = self.alloc_challenge_array::<CubicRegister>(NUM_CHALLENGES);
 
@@ -66,8 +66,9 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn register_byte_lookup(
         &mut self,
         operation_values: ByteLookupOperations,
-        table: &ByteLookupTable<L::Field>,
+        table: &mut ByteLookupTable<L::Field>,
     ) {
+        table.num_operations = Some(operation_values.num_operations);
         let multiplicities = table.multiplicity_data.multiplicities();
         let lookup_challenge = self.alloc_challenge::<CubicRegister>();
 
@@ -297,7 +298,7 @@ mod tests {
         let xor_pub = ByteOperation::Xor(a_pub, b_pub, a_pub_xor_b_pub);
         builder.set_public_inputs_byte_operation(&xor_pub, &mut operations);
 
-        builder.register_byte_lookup(operations, &table);
+        builder.register_byte_lookup(operations, &mut table);
 
         let air = builder.build();
 
@@ -326,41 +327,45 @@ mod tests {
         let public_inputs = public_write.clone();
         drop(public_write);
 
-        for i in 0..L::num_rows() {
-            for k in 0..NUM_VALS {
-                let a_v = rng.gen::<u8>();
-                let b_v = rng.gen::<u8>();
-                writer.write(&a_vec[k], &F::from_canonical_u8(a_v), i);
-                writer.write(&b_vec[k], &F::from_canonical_u8(b_v), i);
+        rayon::join(
+            || {
+                let mut rng = thread_rng();
+                for i in 0..L::num_rows() {
+                    for k in 0..NUM_VALS {
+                        let a_v = rng.gen::<u8>();
+                        let b_v = rng.gen::<u8>();
+                        writer.write(&a_vec[k], &F::from_canonical_u8(a_v), i);
+                        writer.write(&b_vec[k], &F::from_canonical_u8(b_v), i);
 
-                writer.write(&and_expected_vec[k], &F::from_canonical_u8(a_v & b_v), i);
-                writer.write(&xor_expected_vec[k], &F::from_canonical_u8(a_v ^ b_v), i);
-                writer.write(&not_expected_vec[k], &F::from_canonical_u8(!a_v), i);
-                writer.write(
-                    &shr_expected_vec[k],
-                    &F::from_canonical_u8(a_v >> (b_v & 0x7)),
-                    i,
-                );
-                writer.write(
-                    &shr_const_expected_vec[k],
-                    &F::from_canonical_u8(a_v >> b_const_vec[k]),
-                    i,
-                );
-                writer.write(
-                    &rot_expected_vec[k],
-                    &F::from_canonical_u8(a_v.rotate_right((b_v & 0x7) as u32)),
-                    i,
-                );
-                writer.write(
-                    &rot_const_expected_vec[k],
-                    &F::from_canonical_u8(a_v.rotate_right(b_const_vec[k] as u32)),
-                    i,
-                );
-            }
-            writer.write_row_instructions(&air, i);
-        }
-
-        table.write_multiplicities(&writer);
+                        writer.write(&and_expected_vec[k], &F::from_canonical_u8(a_v & b_v), i);
+                        writer.write(&xor_expected_vec[k], &F::from_canonical_u8(a_v ^ b_v), i);
+                        writer.write(&not_expected_vec[k], &F::from_canonical_u8(!a_v), i);
+                        writer.write(
+                            &shr_expected_vec[k],
+                            &F::from_canonical_u8(a_v >> (b_v & 0x7)),
+                            i,
+                        );
+                        writer.write(
+                            &shr_const_expected_vec[k],
+                            &F::from_canonical_u8(a_v >> b_const_vec[k]),
+                            i,
+                        );
+                        writer.write(
+                            &rot_expected_vec[k],
+                            &F::from_canonical_u8(a_v.rotate_right((b_v & 0x7) as u32)),
+                            i,
+                        );
+                        writer.write(
+                            &rot_const_expected_vec[k],
+                            &F::from_canonical_u8(a_v.rotate_right(b_const_vec[k] as u32)),
+                            i,
+                        );
+                    }
+                    writer.write_row_instructions(&air, i);
+                }
+            },
+            || table.write_multiplicities(&writer),
+        );
 
         let stark = Starky::<_, { L::num_columns() }>::new(air);
         let config = SC::standard_fast_config(L::num_rows());

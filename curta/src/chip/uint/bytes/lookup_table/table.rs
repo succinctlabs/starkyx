@@ -38,6 +38,7 @@ pub struct ByteLookupTable<F> {
     results_bits: [ArrayRegister<BitRegister>; NUM_BIT_OPPS],
     pub multiplicity_data: MultiplicityData<F>,
     pub digests: Vec<CubicRegister>,
+    pub num_operations: Option<usize>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
@@ -126,6 +127,7 @@ impl<L: AirParameters> AirBuilder<L> {
             results_bits,
             multiplicity_data,
             digests,
+            num_operations: None,
         }
     }
 }
@@ -185,8 +187,9 @@ impl<F: PrimeField64> ByteLookupTable<F> {
     }
 
     pub fn write_multiplicities(&mut self, writer: &TraceWriter<F>) {
+        let num_operations = self.num_operations.expect("num_operations not set");
         // Collect the multiplicity values
-        self.multiplicity_data.collect_values();
+        self.multiplicity_data.collect_values(num_operations);
 
         // Assign multiplicities to the trace
         self.multiplicity_data.write_multiplicities(writer);

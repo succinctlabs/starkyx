@@ -176,7 +176,7 @@ mod tests {
             builder.set_bit_rotate_right(&a, shift, &a_rot_second, &mut operations);
         }
 
-        builder.register_byte_lookup(operations, &table);
+        builder.register_byte_lookup(operations, &mut table);
 
         let air = builder.build();
 
@@ -186,39 +186,44 @@ mod tests {
         table.write_table_entries(&writer);
 
         let to_field = |a: u32| a.to_le_bytes().map(F::from_canonical_u8);
-        for i in 0..L::num_rows() {
-            let a_val = u32::MAX; //rng.gen::<u32>();
-            let b_val = 8; //rng.gen::<u32>();
-            writer.write(&a, &to_field(a_val), i);
-            writer.write(&b, &to_field(b_val), i);
 
-            let and_val = a_val & b_val;
-            writer.write(&and_expected, &to_field(and_val), i);
+        rayon::join(
+            || {
+                let mut rng = thread_rng();
+                for i in 0..L::num_rows() {
+                    let a_val = rng.gen::<u32>();
+                    let b_val = rng.gen::<u32>();
+                    writer.write(&a, &to_field(a_val), i);
+                    writer.write(&b, &to_field(b_val), i);
 
-            let xor_val = a_val ^ b_val;
-            writer.write(&xor_expected, &to_field(xor_val), i);
+                    let and_val = a_val & b_val;
+                    writer.write(&and_expected, &to_field(and_val), i);
 
-            let not_val = !a_val;
-            writer.write(&not_expected, &to_field(not_val), i);
+                    let xor_val = a_val ^ b_val;
+                    writer.write(&xor_expected, &to_field(xor_val), i);
 
-            let (add_val, carry_val) = a_val.carrying_add(b_val, false);
-            writer.write(&add_expected, &to_field(add_val), i);
-            writer.write(&carry_expected, &F::from_canonical_u8(carry_val as u8), i);
+                    let not_val = !a_val;
+                    writer.write(&not_expected, &to_field(not_val), i);
 
-            for k in 0..num_ops {
-                let shr_val = a_val >> shr_shift_vals[k];
-                writer.write(&shr_expected_vec[k], &to_field(shr_val), i);
-            }
+                    let (add_val, carry_val) = a_val.carrying_add(b_val, false);
+                    writer.write(&add_expected, &to_field(add_val), i);
+                    writer.write(&carry_expected, &F::from_canonical_u8(carry_val as u8), i);
 
-            for k in 0..num_ops {
-                let rot_val = a_val.rotate_right(shr_shift_vals[k] as u32);
-                writer.write(&rot_expected_vec[k], &to_field(rot_val), i);
-            }
+                    for k in 0..num_ops {
+                        let shr_val = a_val >> shr_shift_vals[k];
+                        writer.write(&shr_expected_vec[k], &to_field(shr_val), i);
+                    }
 
-            writer.write_row_instructions(&air, i);
-        }
+                    for k in 0..num_ops {
+                        let rot_val = a_val.rotate_right(shr_shift_vals[k] as u32);
+                        writer.write(&rot_expected_vec[k], &to_field(rot_val), i);
+                    }
 
-        table.write_multiplicities(&writer);
+                    writer.write_row_instructions(&air, i);
+                }
+            },
+            || table.write_multiplicities(&writer),
+        );
 
         let stark = Starky::<_, { L::num_columns() }>::new(air);
         let config = SC::standard_fast_config(L::num_rows());

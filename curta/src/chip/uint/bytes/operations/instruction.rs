@@ -1,4 +1,4 @@
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::SyncSender;
 
 use super::value::ByteOperation;
 use crate::air::parser::AirParser;
@@ -11,14 +11,14 @@ use crate::math::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct ByteOperationInstruction {
-    tx: Sender<ByteOperation<u8>>,
+    tx: SyncSender<ByteOperation<u8>>,
     inner: ByteOperation<ByteRegister>,
     global: bool,
 }
 
 impl ByteOperationInstruction {
     pub fn new(
-        tx: Sender<ByteOperation<u8>>,
+        tx: SyncSender<ByteOperation<u8>>,
         inner: ByteOperation<ByteRegister>,
         global: bool,
     ) -> Self {
