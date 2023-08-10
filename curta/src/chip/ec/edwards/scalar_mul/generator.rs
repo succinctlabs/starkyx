@@ -335,9 +335,9 @@ where
         let temp = self.gadget.double_and_add_gadget.temp;
         let scalar_bit = self.gadget.double_and_add_gadget.bit;
         let nb_bits = Ed25519::nb_scalar_bits();
-        (0..256usize).into_par_iter().for_each(|k| {
+        let tx_vec = (0..256).into_iter().map(|_| tx.clone()).collect::<Vec<_>>();
+        tx_vec.into_par_iter().enumerate().for_each(|(k, tx)| {
             let starting_row = 256 * k;
-            let tx = tx.clone();
             // let gadget = self.gadget.clone();
             writer.write_ec_point(&res, &Ed25519::neutral(), starting_row);
             writer.write_ec_point(&temp, &points[k], starting_row);
