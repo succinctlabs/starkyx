@@ -204,10 +204,12 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
 
         // Write the operations and table multiplicities
         let num_rows = ByteGadgetParameters::<F, E, D>::num_rows();
+        let mut table = self.table.lock().unwrap();
+        table.write_table_entries(&writer);
+        drop(table);
         rayon::join(
             || {
                 let mut table = self.table.lock().unwrap();
-                table.write_table_entries(&writer);
                 table.write_multiplicities(&writer)
             },
             || {

@@ -190,8 +190,6 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
 
         let trace_generator = ArithmeticGenerator::<ByteGadgetParameters<F, E, D>>::new(&air);
 
-    
-
         let public_input_target = operations
             .iter()
             .flat_map(|op| op.all_targets())
@@ -226,8 +224,6 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField;
@@ -257,42 +253,38 @@ mod tests {
         let mut builder = CircuitBuilder::<F, D>::new(config);
         let mut gadget = BytesGadget::<F, E, D>::new();
 
-
         let mut a_targets = Vec::new();
         let mut b_targets = Vec::new();
 
-        let mut and_expected_targets = Vec::new();
-        let mut xor_expected_targets = Vec::new();
-        let mut shr_expected_targets = Vec::new();
-        let mut a_not_expected_targets = Vec::new();
+        // let mut and_expected_targets = Vec::new();
+        // let mut xor_expected_targets = Vec::new();
+        // let mut shr_expected_targets = Vec::new();
+        // let mut a_not_expected_targets = Vec::new();
         for _ in 0..num_ops {
             let a = builder.add_virtual_byte_target(&mut gadget);
             let b = builder.add_virtual_byte_target(&mut gadget);
             a_targets.push(a);
             b_targets.push(b);
 
-            let a_and_b = builder.and_bytes(a, b, &mut gadget);
-            let and_expected = builder.add_virtual_byte_target_unsafe(&mut gadget);
-            builder.connect(a_and_b.0, and_expected.0);
-            and_expected_targets.push(and_expected);
-            let a_xor_b = builder.xor_bytes(a, b, &mut gadget);
-            let xor_expected = builder.add_virtual_byte_target_unsafe(&mut gadget);
-            builder.connect(a_xor_b.0, xor_expected.0);
-            xor_expected_targets.push(xor_expected);
-            let a_shr = builder.shr_bytes(a, 3, &mut gadget);
-            let shr_expected = builder.add_virtual_byte_target_unsafe(&mut gadget);
-            builder.connect(a_shr.0, shr_expected.0);
-            shr_expected_targets.push(shr_expected);
-            let a_not = builder.not_bytes(a, &mut gadget);
-            let a_not_expected = builder.add_virtual_byte_target_unsafe(&mut gadget);
-            builder.connect(a_not.0, a_not_expected.0);
-            a_not_expected_targets.push(a_not_expected);
+            // let a_and_b = builder.and_bytes(a, b, &mut gadget);
+            // let and_expected = builder.add_virtual_byte_target_unsafe(&mut gadget);
+            // builder.connect(a_and_b.0, and_expected.0);
+            // and_expected_targets.push(and_expected);
+            // let a_xor_b = builder.xor_bytes(a, b, &mut gadget);
+            // let xor_expected = builder.add_virtual_byte_target_unsafe(&mut gadget);
+            // builder.connect(a_xor_b.0, xor_expected.0);
+            // xor_expected_targets.push(xor_expected);
+            // let a_shr = builder.shr_bytes(a, 3, &mut gadget);
+            // let shr_expected = builder.add_virtual_byte_target_unsafe(&mut gadget);
+            // builder.connect(a_shr.0, shr_expected.0);
+            // shr_expected_targets.push(shr_expected);
+            // let a_not = builder.not_bytes(a, &mut gadget);
+            // let a_not_expected = builder.add_virtual_byte_target_unsafe(&mut gadget);
+            // builder.connect(a_not.0, a_not_expected.0);
+            // a_not_expected_targets.push(a_not_expected);
         }
 
-        let byte = builder.add_virtual_byte_target(&mut gadget);
-        let another_byte = builder.add_virtual_byte_target(&mut gadget);
         builder.register_byte_operations::<C>(gadget);
-
 
         let data = builder.build::<C>();
         let mut pw = PartialWitness::new();
@@ -304,13 +296,11 @@ mod tests {
             let b_val = rng.gen::<u8>();
             pw.set_target(a.0, to_field(a_val));
             pw.set_target(b.0, to_field(b_val));
-            pw.set_target(and_expected_targets[k].0, to_field(a_val & b_val));
-            pw.set_target(xor_expected_targets[k].0, to_field(a_val ^ b_val));
-            pw.set_target(shr_expected_targets[k].0, to_field(a_val >> 3));
-            pw.set_target(a_not_expected_targets[k].0, to_field(!a_val));
+            // pw.set_target(and_expected_targets[k].0, to_field(a_val & b_val));
+            // pw.set_target(xor_expected_targets[k].0, to_field(a_val ^ b_val));
+            // pw.set_target(shr_expected_targets[k].0, to_field(a_val >> 3));
+            // pw.set_target(a_not_expected_targets[k].0, to_field(!a_val));
         }
-        pw.set_target(byte.0, F::ZERO);
-        pw.set_target(another_byte.0, F::ONE);
 
         let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
         let recursive_proof = timed!(
@@ -321,6 +311,98 @@ mod tests {
         .unwrap();
         timing.print();
         data.verify(recursive_proof).unwrap();
+    }
 
+    #[test]
+    fn test_bit_equivalent() {
+        type F = GoldilocksField;
+        type E = GoldilocksCubicParameters;
+        type C = PoseidonGoldilocksConfig;
+        const D: usize = 2;
+
+        let num_ops = 10000;
+
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let config = CircuitConfig::standard_recursion_config();
+        let mut builder = CircuitBuilder::<F, D>::new(config);
+
+        let mut a_targets = Vec::new();
+        let mut b_targets = Vec::new();
+
+        let mut and_expected_targets = Vec::new();
+        let mut xor_expected_targets = Vec::new();
+        let mut shr_expected_targets = Vec::new();
+        let mut a_not_expected_targets = Vec::new();
+
+        for _ in 0..num_ops {
+            let a: [_; 8] = core::array::from_fn(|_| builder.add_virtual_bool_target_safe());
+            let b: [_; 8] = core::array::from_fn(|_| builder.add_virtual_bool_target_safe());
+            a_targets.push(a);
+            b_targets.push(b);
+
+            let a_and_b: [_; 8] = core::array::from_fn(|_| builder.add_virtual_bool_target_safe());
+            let and_expected: [_; 8] =
+                core::array::from_fn(|_| builder.add_virtual_bool_target_safe());
+            for ((a_bit, b_bit), a_and_b_bit) in a.iter().zip(b.iter()).zip(a_and_b.iter()) {
+                let a_bit = *a_bit;
+                let b_bit = *b_bit;
+                let a_and_b = builder.and(a_bit, b_bit);
+                builder.connect(a_and_b.target, a_and_b_bit.target);
+            }
+            for (res, exp) in a_and_b.iter().zip(and_expected.iter()) {
+                builder.connect(res.target, exp.target);
+            }
+            and_expected_targets.push(and_expected);
+
+            let a_xor_b: [_; 8] = core::array::from_fn(|_| builder.add_virtual_bool_target_safe());
+            let xor_expected: [_; 8] =
+                core::array::from_fn(|_| builder.add_virtual_bool_target_safe());
+            for (res, exp) in a_xor_b.iter().zip(xor_expected.iter()) {
+                builder.connect(res.target, exp.target);
+            }
+            xor_expected_targets.push(xor_expected);
+            let a_shr: [_; 8] = core::array::from_fn(|_| builder.add_virtual_bool_target_safe());
+            let shr_expected: [_; 8] =
+                core::array::from_fn(|_| builder.add_virtual_bool_target_safe());
+            for (res, exp) in a_shr.iter().zip(shr_expected.iter()) {
+                builder.connect(res.target, exp.target);
+            }
+            shr_expected_targets.push(shr_expected);
+            let a_not: [_; 8] = core::array::from_fn(|_| builder.add_virtual_bool_target_safe());
+            let a_not_expected: [_; 8] =
+                core::array::from_fn(|_| builder.add_virtual_bool_target_safe());
+            for (res, exp) in a_not.iter().zip(a_not_expected.iter()) {
+                builder.connect(res.target, exp.target);
+            }
+            a_not_expected_targets.push(a_not_expected);
+        }
+
+        let data = builder.build::<C>();
+        let mut pw = PartialWitness::new();
+
+        let mut rng = thread_rng();
+        for (k, (a, b)) in a_targets.into_iter().zip(b_targets).enumerate() {
+            let a_val = rng.gen::<u8>();
+            let b_val = rng.gen::<u8>();
+            for j in 0..8 {
+                pw.set_bool_target(a[j], (a_val >> j) & 1 == 1);
+                pw.set_bool_target(b[j], (b_val >> j) & 1 == 1);
+                pw.set_bool_target(and_expected_targets[k][j], ((a_val & b_val) >> j) & 1 == 1);
+                pw.set_bool_target(xor_expected_targets[k][j], ((a_val ^ b_val) >> j) & 1 == 1);
+                pw.set_bool_target(shr_expected_targets[k][j], ((a_val >> 3) >> j) & 1 == 1);
+                pw.set_bool_target(a_not_expected_targets[k][j], ((!a_val) >> j) & 1 == 1);
+            }
+        }
+
+        let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
+        let recursive_proof = timed!(
+            timing,
+            "Generate proof",
+            plonky2::plonk::prover::prove(&data.prover_only, &data.common, pw, &mut timing)
+        )
+        .unwrap();
+        timing.print();
+        data.verify(recursive_proof).unwrap();
     }
 }

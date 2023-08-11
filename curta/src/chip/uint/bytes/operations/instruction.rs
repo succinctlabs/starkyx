@@ -44,6 +44,6 @@ impl<F: PrimeField64> Instruction<F> for ByteOperationInstruction {
             return;
         }
         let value = self.inner.write(writer, row_index);
-        self.tx.send(value).unwrap();
+        self.tx.try_send(value).unwrap();
     }
 }

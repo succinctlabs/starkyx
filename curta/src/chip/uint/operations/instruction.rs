@@ -105,8 +105,8 @@ mod tests {
 
         type Instruction = U32Instruction;
 
-        const NUM_FREE_COLUMNS: usize = 450;
-        const EXTENDED_COLUMNS: usize = 500;
+        const NUM_FREE_COLUMNS: usize = 1200;
+        const EXTENDED_COLUMNS: usize = 1400;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
         fn num_rows_bits() -> usize {
@@ -152,7 +152,7 @@ mod tests {
         let mut shr_expected_vec = vec![];
         let mut rot_expected_vec = vec![];
 
-        let num_ops = 5;
+        let num_ops = 20;
 
         for _ in 0..num_ops {
             let shift = rng.gen::<u32>() as usize;
