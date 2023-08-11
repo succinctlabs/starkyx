@@ -297,6 +297,12 @@ mod tests {
         let a_pub_xor_b_pub = builder.alloc_public::<ByteRegister>();
         let xor_pub = ByteOperation::Xor(a_pub, b_pub, a_pub_xor_b_pub);
         builder.set_public_inputs_byte_operation(&xor_pub, &mut operations);
+        let a_not = builder.alloc_public::<ByteRegister>();
+        let not = ByteOperation::Not(a_pub, a_not);
+        builder.set_public_inputs_byte_operation(&not, &mut operations);
+        let b_not = builder.alloc_public::<ByteRegister>();
+        let not = ByteOperation::Not(b_pub, b_not);
+        builder.set_public_inputs_byte_operation(&not, &mut operations);
 
         builder.register_byte_lookup(operations, &mut table);
 
@@ -309,7 +315,6 @@ mod tests {
 
         // Write public inputs
         let mut public_write = writer.public.write().unwrap();
-        assert_eq!(public_write.len(), 4);
         let a_pub_val = rng.gen::<u8>();
         let b_pub_val = rng.gen::<u8>();
         let a_pub_and_b_pub_val = a_pub_val & b_pub_val;
@@ -324,6 +329,8 @@ mod tests {
             &mut public_write,
             &F::from_canonical_u8(a_pub_xor_b_pub_val),
         );
+        a_not.assign_to_raw_slice(&mut public_write, &F::from_canonical_u8(!a_pub_val));
+        b_not.assign_to_raw_slice(&mut public_write, &F::from_canonical_u8(!b_pub_val));
         let public_inputs = public_write.clone();
         drop(public_write);
 

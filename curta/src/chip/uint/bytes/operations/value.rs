@@ -2,11 +2,13 @@ use super::{
     NUM_CHALLENGES, OPCODE_AND, OPCODE_NOT, OPCODE_RANGE, OPCODE_ROT, OPCODE_SHR, OPCODE_XOR,
 };
 use crate::chip::arithmetic::expression::ArithmeticExpression;
+use crate::chip::builder::AirBuilder;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::bit_operations::util::u8_to_bits_le;
 use crate::chip::uint::bytes::register::ByteRegister;
+use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -272,6 +274,64 @@ impl ByteOperation<u8> {
             ByteOperation::Not(a, b) => ByteOperation::Not(as_field_bits(a), as_field_bits(b)),
             ByteOperation::Range(a) => ByteOperation::Range(as_field_bits(a)),
             _ => unreachable!("Const parameters operations cannot convert to field bits"),
+        }
+    }
+}
+
+impl<L: AirParameters> AirBuilder<L> {
+    pub fn alloc_public_byte_operation_from_template<T>(
+        &mut self,
+        op: &ByteOperation<T>,
+    ) -> ByteOperation<ByteRegister> {
+        match op {
+            ByteOperation::And(_, _, _) => {
+                let a = self.alloc_public::<ByteRegister>();
+                let b = self.alloc_public::<ByteRegister>();
+                let result = self.alloc_public::<ByteRegister>();
+                ByteOperation::And(a, b, result)
+            }
+            ByteOperation::Xor(_, _, _) => {
+                let a = self.alloc_public::<ByteRegister>();
+                let b = self.alloc_public::<ByteRegister>();
+                let result = self.alloc_public::<ByteRegister>();
+                ByteOperation::Xor(a, b, result)
+            }
+            ByteOperation::Shr(_, _, _) => {
+                let a = self.alloc_public::<ByteRegister>();
+                let b = self.alloc_public::<ByteRegister>();
+                let result = self.alloc_public::<ByteRegister>();
+                ByteOperation::Shr(a, b, result)
+            }
+            ByteOperation::ShrConst(_, b, _) => {
+                let a = self.alloc_public::<ByteRegister>();
+                let result = self.alloc_public::<ByteRegister>();
+                ByteOperation::ShrConst(a, *b, result)
+            }
+            ByteOperation::ShrCarry(_, b, _, _) => {
+                let a = self.alloc_public::<ByteRegister>();
+                let result = self.alloc_public::<ByteRegister>();
+                ByteOperation::ShrCarry(a, *b, result, self.alloc_public::<ByteRegister>())
+            }
+            ByteOperation::Rot(_, _, _) => {
+                let a = self.alloc_public::<ByteRegister>();
+                let b = self.alloc_public::<ByteRegister>();
+                let result = self.alloc_public::<ByteRegister>();
+                ByteOperation::Rot(a, b, result)
+            }
+            ByteOperation::RotConst(_, b, _) => {
+                let a = self.alloc_public::<ByteRegister>();
+                let result = self.alloc_public::<ByteRegister>();
+                ByteOperation::RotConst(a, *b, result)
+            }
+            ByteOperation::Not(_, _) => {
+                let a = self.alloc_public::<ByteRegister>();
+                let result = self.alloc_public::<ByteRegister>();
+                ByteOperation::Not(a, result)
+            }
+            ByteOperation::Range(_) => {
+                let a = self.alloc_public::<ByteRegister>();
+                ByteOperation::Range(a)
+            }
         }
     }
 }

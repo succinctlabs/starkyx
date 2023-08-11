@@ -11,11 +11,13 @@ use plonky2::util::serialization::{Buffer, IoResult};
 
 use super::air::ByteGadgetParameters;
 use crate::chip::trace::generator::ArithmeticGenerator;
+use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::lookup_table::table::ByteLookupTable;
 use crate::chip::uint::bytes::operations::value::ByteOperation;
 use crate::chip::uint::bytes::register::ByteRegister;
-use crate::chip::Chip;
+use crate::chip::{AirParameters, Chip};
 use crate::math::prelude::*;
+use crate::maybe_rayon::*;
 
 // A generator for the byte lookup STARK
 #[derive(Debug, Clone)]
@@ -31,8 +33,29 @@ pub struct BytesLookupGenerator<F: RichField + Extendable<D>, E: CubicParameters
 impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
     BytesLookupGenerator<F, E, D>
 {
-    pub fn hint(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
-        let writer = self.trace_generator.new_writer();
+    /// Create a new instance from all the entries
+    pub fn new(
+        operations: Vec<ByteOperation<Target>>,
+        air_operations: Vec<ByteOperation<ByteRegister>>,
+        trace_generator: ArithmeticGenerator<ByteGadgetParameters<F, E, D>>,
+        table: Arc<Mutex<ByteLookupTable<F>>>,
+        air: Chip<ByteGadgetParameters<F, E, D>>,
+    ) -> Self {
+        Self {
+            operations,
+            air_operations,
+            trace_generator,
+            table,
+            air,
+        }
+    }
+
+    pub fn hint(
+        &self,
+        witness: &PartitionWitness<F>,
+        out_buffer: &mut GeneratedValues<F>,
+        writer: &TraceWriter<F>,
+    ) {
         // Set all the target values and write the operation values to the trace
         for (op, air_op) in self.operations.iter().zip(self.air_operations.iter()) {
             match op {
@@ -68,11 +91,15 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
                 }
                 ByteOperation::Not(a_t, res_t) => {
                     let a = witness.get_target(*a_t).as_canonical_u64() as u8;
-                    let ByteOperation::Not(_, res) = ByteOperation::not(a).as_field_op::<F>()
+                    let ByteOperation::Not(a, res) = ByteOperation::not(a).as_field_op::<F>()
                     else {
                         unreachable!()
                     };
+                    let ByteOperation::Not(a_r, _) = air_op else {
+                        unreachable!("Air operations must match")
+                    };
                     out_buffer.set_target(*res_t, res);
+                    writer.write(a_r, &a, 0);
                 }
                 ByteOperation::Shr(a_t, b_t, res_t) => {
                     let a = witness.get_target(*a_t).as_canonical_u64() as u8;
@@ -171,13 +198,24 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
     }
 
     fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
-        // Write the target values
-        self.hint(witness, out_buffer);
-
-        // Write the lookup table
-        let mut table = self.table.lock().unwrap();
         let writer = self.trace_generator.new_writer();
-        table.write_table_entries(&writer);
+        // Write the operation values
+        self.hint(witness, out_buffer, &writer);
+
+        // Write the operations and table multiplicities
+        let num_rows = ByteGadgetParameters::<F, E, D>::num_rows();
+        rayon::join(
+            || {
+                let mut table = self.table.lock().unwrap();
+                table.write_table_entries(&writer);
+                table.write_multiplicities(&writer)
+            },
+            || {
+                for i in 0..num_rows {
+                    writer.write_row_instructions(&self.air, i);
+                }
+            },
+        );
     }
 
     fn serialize(
