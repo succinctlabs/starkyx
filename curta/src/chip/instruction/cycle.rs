@@ -17,8 +17,8 @@ pub struct Cycle<F> {
     pub end_bit: BitRegister,
     num_cycles: usize,
     element: ElementRegister,
-    start_counter: ElementRegister,
-    end_counter: ElementRegister,
+    pub start_counter: ElementRegister,
+    pub end_counter: ElementRegister,
     group: Vec<F>,
 }
 
@@ -96,7 +96,7 @@ impl<AP: AirParser<Field = F>, F: Field> AirConstraint<AP> for Cycle<F> {
         let end_bit_constraint = parser.mul(end_bit, elem_minus_one);
         parser.constraint(end_bit_constraint);
 
-        // Impose start_counter constraints, to verify that end_bit = 1 every time element = gen_inv
+        // Impose end_counter constraints, to verify that end_bit = 1 every time element = gen_inv
         let end_counter = self.end_counter.eval(parser);
         parser.constraint_first_row(end_counter);
         let end_counter_next = self.end_counter.next().eval(parser);

@@ -53,7 +53,7 @@ impl<L: AirParameters> AirBuilder<L> {
             + From<SelectInstruction<BitRegister>>
             + From<ByteDecodeInstruction>,
     {
-        let (tx, rx) = mpsc::sync_channel::<ByteOperation<u8>>(L::num_rows());
+        let (tx, rx) = mpsc::sync_channel::<ByteOperation<u8>>(L::num_rows() << 2);
 
         let row_acc_challenges = self.alloc_challenge_array::<CubicRegister>(NUM_CHALLENGES);
 

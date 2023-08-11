@@ -56,6 +56,19 @@ impl<L: AirParameters> AirBuilder<L> {
         (result, carry)
     }
 
+    pub fn add_u32(
+        &mut self,
+        a: &U32Register,
+        b: &U32Register,
+        operations: &mut ByteLookupOperations,
+    ) -> U32Register
+    where
+        L::Instruction: From<ByteArrayAdd<4>> + From<ByteOperationInstruction>,
+    {
+        let (result, _) = self.carrying_add_u32(a, b, operations);
+        result
+    }
+
     pub fn set_add_u32(
         &mut self,
         a: &U32Register,

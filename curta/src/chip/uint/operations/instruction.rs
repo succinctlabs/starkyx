@@ -17,7 +17,7 @@ pub enum U32Instruction {
     Add(ByteArrayAdd<4>),
 }
 
-pub trait U32Instructions: ByteInstructions + From<U32Instruction> {}
+pub trait U32Instructions: ByteInstructions + From<U32Instruction> + From<ByteArrayAdd<4>> {}
 
 impl ByteInstructions for U32Instruction {}
 

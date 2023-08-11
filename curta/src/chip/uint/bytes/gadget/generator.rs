@@ -207,17 +207,24 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
         let mut table = self.table.lock().unwrap();
         table.write_table_entries(&writer);
         drop(table);
-        rayon::join(
-            || {
-                let mut table = self.table.lock().unwrap();
-                table.write_multiplicities(&writer)
-            },
-            || {
-                for i in 0..num_rows {
-                    writer.write_row_instructions(&self.air, i);
-                }
-            },
-        );
+
+        for i in 0..num_rows {
+            writer.write_row_instructions(&self.air, i);
+        }
+        assert!(false);
+        // let mut table = self.table.lock().unwrap();
+        // table.write_multiplicities(&writer);
+        // rayon::join(
+        //     || {
+        //         let mut table = self.table.lock().unwrap();
+        //         table.write_multiplicities(&writer)
+        //     },
+        //     || {
+        //         for i in 0..num_rows {
+        //             writer.write_row_instructions(&self.air, i);
+        //         }
+        //     },
+        // );
     }
 
     fn serialize(

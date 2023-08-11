@@ -1,11 +1,19 @@
 use super::cell::CellType;
 use super::memory::MemorySlice;
 use super::{Register, RegisterSerializable, RegisterSized};
+use crate::chip::arithmetic::expression::ArithmeticExpression;
+use crate::math::prelude::*;
 
 /// A register for a single element/column in the trace that is supposed to represent a bit. The
 /// value is automatically constrained to be 0 or 1 via the quadratic constraint x * (x - 1) == 0.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BitRegister(MemorySlice);
+
+impl BitRegister {
+    pub fn not_expr<F: Field>(&self) -> ArithmeticExpression<F> {
+        ArithmeticExpression::one() - self.expr()
+    }
+}
 
 impl RegisterSerializable for BitRegister {
     const CELL: CellType = CellType::Bit;
