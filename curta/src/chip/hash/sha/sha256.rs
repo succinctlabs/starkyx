@@ -1,5 +1,6 @@
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
+use crate::chip::instruction::cycle::Cycle;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::cubic::CubicRegister;
@@ -44,33 +45,60 @@ pub fn first_hash_value<F: Field>() -> [[F; 4]; 8] {
 #[allow(dead_code)]
 #[allow(unused_variables)]
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn sha_premessage(&mut self, 
-        w : &U32Register,
-        w_minus_2 : &U32Register,
-        w_minus_7 : &U32Register,
-        w_minus_15 : &U32Register,
-        w_minus_16 : &U32Register,
-        operations: &mut ByteLookupOperations)
-    where
+    pub fn sha_premessage(
+        &mut self,
+        w: &U32Register,
+        w_bit: &BitRegister,
+        w_minus_2: &U32Register,
+        w_minus_7: &U32Register,
+        w_minus_15: &U32Register,
+        w_minus_16: &U32Register,
+        cycle_64: &Cycle<L::Field>,
+        operations: &mut ByteLookupOperations,
+    ) where
         L::Instruction: U32Instructions,
     {
+        let cycle_16 = self.cycle(4);
 
+        // self.assert_expression_zero(w_bit.next().expr() - cycle_64.start_bit.expr());
+        // self.assert_expression_zero(w_bit.next().expr() - cycle_64.start_bit.expr());
+
+        // Calculate s_0 = w_i_minus_15.rotate_right(7) ^ w_i_minus_15.rotate_right(18) ^ (w_i_minus_15 >> 3);
+        let w_i_minus_15_rotate_7 = self.bit_rotate_right(&w_minus_15, 7, operations);
+        let w_i_minus_15_rotate_18 = self.bit_rotate_right(&w_minus_15, 18, operations);
+        let w_i_minus_15_shr_3 = self.bit_shr(&w_minus_15, 3, operations);
+
+        let mut s_0 = self.bitwise_xor(&w_i_minus_15_rotate_7, &w_i_minus_15_rotate_18, operations);
+        s_0 = self.bitwise_xor(&s_0, &w_i_minus_15_shr_3, operations);
+
+        // Calculate s_1 = w_i_minus_2.rotate_right(17) ^ w_i_minus_2.rotate_right(19) ^ (w_i_minus_2 >> 10);
+        let w_i_minus_2_rotate_17 = self.bit_rotate_right(&w_minus_2, 17, operations);
+        let w_i_minus_2_rotate_19 = self.bit_rotate_right(&w_minus_2, 19, operations);
+        let w_i_minus_2_shr_10 = self.bit_shr(&w_minus_2, 10, operations);
+
+        let mut s_1 = self.bitwise_xor(&w_i_minus_2_rotate_17, &w_i_minus_2_rotate_19, operations);
+        s_1 = self.bitwise_xor(&s_1, &w_i_minus_2_shr_10, operations);
+
+        // Calculate w_i = w_i_minus_16 + s_0 + w_i_minus_7 + s_1;
+        let mut w_i = self.add_u32(&w_minus_16, &s_0, operations);
+        w_i = self.add_u32(&w_i, &w_minus_7, operations);
+        w_i = self.add_u32(&w_i, &s_1, operations);
+        self.assert_expression_zero(w_bit.not_expr() * (w_i.expr() - w.expr()));
     }
 
     pub fn sha_256_step(
         &mut self,
         hash: &ArrayRegister<U32Register>,
-        hash_bit : &BitRegister,
+        hash_bit: &BitRegister,
         msg: &ArrayRegister<U32Register>,
         w: &U32Register,
         round_constant: &U32Register,
+        cycle_64: &Cycle<L::Field>,
         operations: &mut ByteLookupOperations,
     ) -> ArrayRegister<U32Register>
     where
         L::Instruction: U32Instructions,
     {
-        let cycle_64 = self.cycle(6);
-
         // The sha round
 
         // Initialize working variables
@@ -148,7 +176,7 @@ impl<L: AirParameters> AirBuilder<L> {
             self.set_add_u32(&hash.get(i), &msg_next[i], &hash_next.get(i), operations);
         }
 
-        hash_next 
+        hash_next
     }
 }
 
@@ -264,6 +292,24 @@ mod tests {
         sha_round(hash, &w, round_constants)
     }
 
+    fn pad_message(msg: &[u8]) -> [u32; 16] {
+        let mut padded_msg = [0u8; 64];
+        padded_msg[..msg.len()].copy_from_slice(msg);
+        padded_msg[msg.len()] = 1 << 7;
+
+        assert!(msg.len() + 1 < 56);
+        // add length as 64 bit number
+        let len = ((msg.len() * 8) as u64).to_be_bytes();
+        padded_msg[56..].copy_from_slice(&len);
+
+        padded_msg
+            .chunks_exact(4)
+            .map(|x| u32::from_be_bytes(x.try_into().unwrap()))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap()
+    }
+
     #[test]
     fn test_sha_256_stark() {
         type F = GoldilocksField;
@@ -279,17 +325,42 @@ mod tests {
         let (mut operations, mut table) = builder.byte_operations();
 
         let w = builder.alloc::<U32Register>();
+        let w_bit = builder.alloc::<BitRegister>();
         let msg_array = builder.alloc_array::<U32Register>(8);
         let hash = builder.alloc_array::<U32Register>(8);
         let round_constant = builder.alloc::<U32Register>();
         let hash_bit = builder.alloc::<BitRegister>();
+        let cycle_64 = builder.cycle(6);
 
-        let hash_next =
-            builder.sha_256_step(&hash, &hash_bit, &msg_array, &w, &round_constant, &mut operations);
+        let w_minus_2 = builder.alloc::<U32Register>();
+        let w_minus_7 = builder.alloc::<U32Register>();
+        let w_minus_15 = builder.alloc::<U32Register>();
+        let w_minus_16 = builder.alloc::<U32Register>();
 
-        // let dummy = builder.alloc::<ByteRegister>();
-        // let dummy_range = ByteOperation::Range(dummy);
-        // builder.set_byte_operation(&dummy_range, &mut operations);
+        builder.sha_premessage(
+            &w,
+            &w_bit,
+            &w_minus_2,
+            &w_minus_7,
+            &w_minus_15,
+            &w_minus_16,
+            &cycle_64,
+            &mut operations,
+        );
+
+        let hash_next = builder.sha_256_step(
+            &hash,
+            &hash_bit,
+            &msg_array,
+            &w,
+            &round_constant,
+            &cycle_64,
+            &mut operations,
+        );
+
+        let dummy = builder.alloc::<ByteRegister>();
+        let dummy_range = ByteOperation::Range(dummy);
+        builder.set_byte_operation(&dummy_range, &mut operations);
 
         builder.register_byte_lookup(operations, &mut table);
 
@@ -298,11 +369,16 @@ mod tests {
         let generator = ArithmeticGenerator::<L>::new(&air);
         let writer = generator.new_writer();
 
-        let empty_msg = b"";
-        let expected_digest = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+        // let msg = b"";
+        // let expected_digest = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-        let mut padded_msg = [0u32; 16];
-        padded_msg[0] = 1 << 31;
+        // let msg = b"plonky2";
+        // let expected_digest = "8943a85083f16e93dc92d6af455841daacdae5081aa3125b614a626df15461eb";
+
+        let msg = b"abc";
+        let expected_digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+        let padded_msg = pad_message(msg);
 
         let initial_hash = INITIAL_HASH;
         let round_constants = ROUND_CONSTANTS;
@@ -316,11 +392,26 @@ mod tests {
         for i in 0..1024 {
             writer.write_array(&msg_array, INITIAL_HASH.map(to_field), i * 64);
             writer.write_array(&hash, INITIAL_HASH.map(to_field), i * 64);
-            writer.write_array(&hash, INITIAL_HASH.map(to_field), i * 64 + 63); 
+            writer.write_array(&hash, INITIAL_HASH.map(to_field), i * 64 + 63);
             for j in 0..64 {
                 let row = i * 64 + j;
                 writer.write(&round_constant, &to_field(round_constants[j]), row);
                 writer.write(&w, &to_field(w_val[j]), row);
+                // writer.write(&w_bit,)
+                if j >= 2 {
+                    writer.write(&w_minus_2, &to_field(w_val[j - 2]), row);
+                }
+                if j >= 7 {
+                    writer.write(&w_minus_7, &to_field(w_val[j - 7]), row);
+                }
+                if j >= 15 {
+                    writer.write(&w_minus_15, &to_field(w_val[j - 15]), row);
+                }
+                if j >= 16 {
+                    writer.write(&w_minus_16, &to_field(w_val[j - 16]), row);
+                } else {
+                    writer.write(&w_bit, &F::ONE, row);
+                }
 
                 writer.write_row_instructions(&air, row);
             }
@@ -330,13 +421,6 @@ mod tests {
         let msg_val = |i| writer.read_array::<_, 8>(&msg_array, i).map(to_val);
         let hash_next_val = |i| writer.read_array::<_, 8>(&hash_next, i).map(to_val);
 
-        let exp_message = |i| {
-            let mut msg = initial_hash;
-            for j in 0..i {
-                msg = sha_step(msg, w_val[j], round_constants[j]);
-            }
-            msg
-        };
         assert_eq!(msg_val(0), initial_hash);
         // assert_eq!(msg_val(1), hash_next_val(0));
 

@@ -21,6 +21,7 @@ num = { version = "0.4", default-features = false }
 rand = "0.8.4"
 serde = { version = "1.0", features = ["derive"] }
 hex = "0.4.3"
+subtle-encoding = "0.5.1"
 
 [dev-dependencies]
 env_logger = { version = "0.9.0", default-features = false }
