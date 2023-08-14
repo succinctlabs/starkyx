@@ -60,8 +60,16 @@ impl<L: AirParameters> AirBuilder<L> {
     {
         let cycle_16 = self.cycle(4);
 
-        // self.assert_expression_zero(w_bit.next().expr() - cycle_64.start_bit.expr());
-        // self.assert_expression_zero(w_bit.next().expr() - cycle_64.start_bit.expr());
+        // Assert w_bit = 1 when start_bit = 1
+        self.assert_expression_zero(w_bit.not_expr() * cycle_64.start_bit.expr());
+        // Assert w_next = w whenever we are not at an end of a 16 loop
+        self.assert_expression_zero_transition(
+            (w_bit.expr() - w_bit.next().expr()) * cycle_16.end_bit.not_expr(),
+        );
+        // Assert w_next = 0 when we are at the end of a 16 loop but not a 64 loop
+        self.assert_expression_zero_transition(
+            w_bit.next().expr() * cycle_16.end_bit.expr() * cycle_64.end_bit.not_expr(),
+        );
 
         // Calculate s_0 = w_i_minus_15.rotate_right(7) ^ w_i_minus_15.rotate_right(18) ^ (w_i_minus_15 >> 3);
         let w_i_minus_15_rotate_7 = self.bit_rotate_right(&w_minus_15, 7, operations);
@@ -398,6 +406,9 @@ mod tests {
                 writer.write(&round_constant, &to_field(round_constants[j]), row);
                 writer.write(&w, &to_field(w_val[j]), row);
                 // writer.write(&w_bit,)
+                if j < 16 {
+                    writer.write(&w_bit, &F::ONE, row);
+                }
                 if j >= 2 {
                     writer.write(&w_minus_2, &to_field(w_val[j - 2]), row);
                 }
@@ -409,8 +420,6 @@ mod tests {
                 }
                 if j >= 16 {
                     writer.write(&w_minus_16, &to_field(w_val[j - 16]), row);
-                } else {
-                    writer.write(&w_bit, &F::ONE, row);
                 }
 
                 writer.write_row_instructions(&air, row);
