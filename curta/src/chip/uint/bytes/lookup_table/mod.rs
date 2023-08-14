@@ -1,5 +1,3 @@
-use std::sync::mpsc;
-
 use self::builder_operations::ByteLookupOperations;
 use self::table::ByteLookupTable;
 use super::bit_operations::and::And;
@@ -16,7 +14,6 @@ use crate::chip::register::bit::BitRegister;
 use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
-use crate::chip::uint::bytes::operations::value::ByteOperation;
 use crate::chip::uint::bytes::operations::NUM_CHALLENGES;
 use crate::chip::AirParameters;
 
@@ -53,12 +50,11 @@ impl<L: AirParameters> AirBuilder<L> {
             + From<SelectInstruction<BitRegister>>
             + From<ByteDecodeInstruction>,
     {
-        let (tx, rx) = mpsc::sync_channel::<ByteOperation<u8>>(L::num_rows() << 2);
-
         let row_acc_challenges = self.alloc_challenge_array::<CubicRegister>(NUM_CHALLENGES);
 
-        let lookup_table = self.new_byte_lookup_table(row_acc_challenges, rx);
-        let operations = ByteLookupOperations::new(tx, row_acc_challenges);
+        let lookup_table = self.new_byte_lookup_table(row_acc_challenges);
+        let operations =
+            ByteLookupOperations::new(lookup_table.multiplicity_data.clone(), row_acc_challenges);
 
         (operations, lookup_table)
     }
@@ -68,14 +64,18 @@ impl<L: AirParameters> AirBuilder<L> {
         operation_values: ByteLookupOperations,
         table: &mut ByteLookupTable<L::Field>,
     ) {
-        table.num_operations = Some(operation_values.num_operations);
-        let multiplicities = table.multiplicity_data.multiplicities();
+        let multiplicities = table
+            .multiplicity_data
+            .lock()
+            .unwrap()
+            .multiplicities()
+            .clone();
         let lookup_challenge = self.alloc_challenge::<CubicRegister>();
 
         let lookup_table = self.lookup_table_with_multiplicities(
             &lookup_challenge,
             &table.digests,
-            multiplicities,
+            &multiplicities,
         );
         let lookup_values = self.lookup_values(&lookup_challenge, &operation_values.values);
 
@@ -175,6 +175,7 @@ mod tests {
     pub use crate::chip::builder::tests::*;
     use crate::chip::builder::AirBuilder;
     use crate::chip::register::Register;
+    use crate::chip::uint::bytes::operations::value::ByteOperation;
     use crate::chip::uint::bytes::register::ByteRegister;
     use crate::chip::AirParameters;
     use crate::plonky2::field::Field;
@@ -334,45 +335,41 @@ mod tests {
         let public_inputs = public_write.clone();
         drop(public_write);
 
-        rayon::join(
-            || {
-                let mut rng = thread_rng();
-                for i in 0..L::num_rows() {
-                    for k in 0..NUM_VALS {
-                        let a_v = rng.gen::<u8>();
-                        let b_v = rng.gen::<u8>();
-                        writer.write(&a_vec[k], &F::from_canonical_u8(a_v), i);
-                        writer.write(&b_vec[k], &F::from_canonical_u8(b_v), i);
+        for i in 0..L::num_rows() {
+            let mut rng = thread_rng();
+            for k in 0..NUM_VALS {
+                let a_v = rng.gen::<u8>();
+                let b_v = rng.gen::<u8>();
+                writer.write(&a_vec[k], &F::from_canonical_u8(a_v), i);
+                writer.write(&b_vec[k], &F::from_canonical_u8(b_v), i);
 
-                        writer.write(&and_expected_vec[k], &F::from_canonical_u8(a_v & b_v), i);
-                        writer.write(&xor_expected_vec[k], &F::from_canonical_u8(a_v ^ b_v), i);
-                        writer.write(&not_expected_vec[k], &F::from_canonical_u8(!a_v), i);
-                        writer.write(
-                            &shr_expected_vec[k],
-                            &F::from_canonical_u8(a_v >> (b_v & 0x7)),
-                            i,
-                        );
-                        writer.write(
-                            &shr_const_expected_vec[k],
-                            &F::from_canonical_u8(a_v >> b_const_vec[k]),
-                            i,
-                        );
-                        writer.write(
-                            &rot_expected_vec[k],
-                            &F::from_canonical_u8(a_v.rotate_right((b_v & 0x7) as u32)),
-                            i,
-                        );
-                        writer.write(
-                            &rot_const_expected_vec[k],
-                            &F::from_canonical_u8(a_v.rotate_right(b_const_vec[k] as u32)),
-                            i,
-                        );
-                    }
-                    writer.write_row_instructions(&air, i);
-                }
-            },
-            || table.write_multiplicities(&writer),
-        );
+                writer.write(&and_expected_vec[k], &F::from_canonical_u8(a_v & b_v), i);
+                writer.write(&xor_expected_vec[k], &F::from_canonical_u8(a_v ^ b_v), i);
+                writer.write(&not_expected_vec[k], &F::from_canonical_u8(!a_v), i);
+                writer.write(
+                    &shr_expected_vec[k],
+                    &F::from_canonical_u8(a_v >> (b_v & 0x7)),
+                    i,
+                );
+                writer.write(
+                    &shr_const_expected_vec[k],
+                    &F::from_canonical_u8(a_v >> b_const_vec[k]),
+                    i,
+                );
+                writer.write(
+                    &rot_expected_vec[k],
+                    &F::from_canonical_u8(a_v.rotate_right((b_v & 0x7) as u32)),
+                    i,
+                );
+                writer.write(
+                    &rot_const_expected_vec[k],
+                    &F::from_canonical_u8(a_v.rotate_right(b_const_vec[k] as u32)),
+                    i,
+                );
+            }
+            writer.write_row_instructions(&air, i);
+        }
+        table.write_multiplicities(&writer);
 
         let stark = Starky::<_, { L::num_columns() }>::new(air);
         let config = SC::standard_fast_config(L::num_rows());

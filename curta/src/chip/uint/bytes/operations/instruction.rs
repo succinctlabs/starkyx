@@ -1,4 +1,5 @@
-use std::sync::mpsc::SyncSender;
+use alloc::sync::Arc;
+use std::sync::Mutex;
 
 use super::value::ByteOperation;
 use crate::air::parser::AirParser;
@@ -6,23 +7,28 @@ use crate::air::AirConstraint;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
+use crate::chip::uint::bytes::lookup_table::multiplicity_data::MultiplicityData;
 use crate::chip::uint::bytes::register::ByteRegister;
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct ByteOperationInstruction {
-    tx: SyncSender<ByteOperation<u8>>,
+    multiplicity_data: Arc<Mutex<MultiplicityData>>,
     inner: ByteOperation<ByteRegister>,
     global: bool,
 }
 
 impl ByteOperationInstruction {
     pub fn new(
-        tx: SyncSender<ByteOperation<u8>>,
+        multiplicity_data: Arc<Mutex<MultiplicityData>>,
         inner: ByteOperation<ByteRegister>,
         global: bool,
     ) -> Self {
-        ByteOperationInstruction { tx, inner, global }
+        ByteOperationInstruction {
+            multiplicity_data,
+            inner,
+            global,
+        }
     }
 }
 
@@ -44,6 +50,6 @@ impl<F: PrimeField64> Instruction<F> for ByteOperationInstruction {
             return;
         }
         let value = self.inner.write(writer, row_index);
-        self.tx.try_send(value).unwrap();
+        self.multiplicity_data.lock().unwrap().update(&value);
     }
 }

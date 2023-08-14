@@ -277,20 +277,16 @@ mod tests {
 
         table.write_table_entries(&writer);
         writer.write_array(&msg_array, INITIAL_HASH.map(to_field), 0);
-        rayon::join(
-            || {
-                for i in 0..1024 {
-                    for j in 0..64 {
-                        let row = i * 64 + j;
-                        writer.write(&round_constant, &to_field(round_constants[j]), row);
-                        writer.write(&w, &to_field(w_val[j]), row);
+        for i in 0..1024 {
+            for j in 0..64 {
+                let row = i * 64 + j;
+                writer.write(&round_constant, &to_field(round_constants[j]), row);
+                writer.write(&w, &to_field(w_val[j]), row);
 
-                        writer.write_row_instructions(&air, row);
-                    }
-                }
-            },
-            || table.write_multiplicities(&writer),
-        );
+                writer.write_row_instructions(&air, row);
+            }
+        }
+        table.write_multiplicities(&writer);
 
         let msg_val = |i| writer.read_array::<_, 8>(&msg_array, i).map(to_val);
         let msg_next_val = |i| msg_next.map(|r| writer.read(&r, i)).map(to_val);
@@ -319,6 +315,12 @@ mod tests {
             .unwrap();
 
         // assert_eq!(hash_val, expected_hash_u32);
+
+        let stark = Starky::<_, { L::num_columns() }>::new(air);
+        let config = SC::standard_fast_config(L::num_rows());
+
+        // Generate proof and verify as a stark
+        test_starky(&stark, &config, &generator, &[]);
 
         timing.print();
     }

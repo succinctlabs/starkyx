@@ -1,5 +1,6 @@
+use alloc::sync::Arc;
 use core::array::from_fn;
-use std::sync::mpsc::Receiver;
+use std::sync::Mutex;
 
 use itertools::Itertools;
 
@@ -36,16 +37,14 @@ pub struct ByteLookupTable<F> {
     a_bits: ArrayRegister<BitRegister>,
     b_bits: ArrayRegister<BitRegister>,
     results_bits: [ArrayRegister<BitRegister>; NUM_BIT_OPPS],
-    pub multiplicity_data: MultiplicityData<F>,
+    pub multiplicity_data: Arc<Mutex<MultiplicityData>>,
     pub digests: Vec<CubicRegister>,
-    pub num_operations: Option<usize>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
     pub fn new_byte_lookup_table(
         &mut self,
         row_acc_challenges: ArrayRegister<CubicRegister>,
-        rx: Receiver<ByteOperation<u8>>,
     ) -> ByteLookupTable<L::Field>
     where
         L::Instruction: From<ByteInstructionSet>
@@ -62,7 +61,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let b_bits = self.alloc_array::<BitRegister>(8);
         let results_bits = from_fn::<_, NUM_BIT_OPPS, _>(|_| self.alloc_array::<BitRegister>(8));
 
-        let multiplicity_data = MultiplicityData::new(L::num_rows(), rx, multiplicities);
+        let multiplicity_data = MultiplicityData::new(L::num_rows(), multiplicities);
 
         // Constrain the bit instructions
         for (k, &opcode) in OPCODE_INDICES.iter().enumerate() {
@@ -125,15 +124,20 @@ impl<L: AirParameters> AirBuilder<L> {
             a_bits,
             b_bits,
             results_bits,
-            multiplicity_data,
+            multiplicity_data: Arc::new(Mutex::new(multiplicity_data)),
             digests,
-            num_operations: None,
         }
     }
 }
 
 impl<F: PrimeField64> ByteLookupTable<F> {
     pub fn write_table_entries(&mut self, writer: &TraceWriter<F>) {
+        let operations_dict = self
+            .multiplicity_data
+            .lock()
+            .unwrap()
+            .operations_dict
+            .clone();
         // Write the lookup table entries
         writer
             .write_trace()
@@ -141,10 +145,7 @@ impl<F: PrimeField64> ByteLookupTable<F> {
             .rows_par_mut()
             .enumerate()
             .for_each(|(i, row)| {
-                for (k, operation) in self.multiplicity_data.operations_dict[&i]
-                    .iter()
-                    .enumerate()
-                {
+                for (k, operation) in operations_dict[&i].iter().enumerate() {
                     let as_field_bits = |&x| u8_to_bits_le(x).map(|b| F::from_canonical_u8(b));
                     let as_field = |&x| F::from_canonical_u8(x);
                     match operation {
@@ -187,11 +188,14 @@ impl<F: PrimeField64> ByteLookupTable<F> {
     }
 
     pub fn write_multiplicities(&mut self, writer: &TraceWriter<F>) {
-        let num_operations = self.num_operations.expect("num_operations not set");
+        // let num_operations = self.num_operations.expect("num_operations not set");
         // Collect the multiplicity values
-        self.multiplicity_data.collect_values(num_operations);
+        // self.multiplicity_data.collect_values(num_operations);
 
         // Assign multiplicities to the trace
-        self.multiplicity_data.write_multiplicities(writer);
+        self.multiplicity_data
+            .lock()
+            .unwrap()
+            .write_multiplicities(writer);
     }
 }
