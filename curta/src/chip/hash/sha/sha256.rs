@@ -44,16 +44,36 @@ pub fn first_hash_value<F: Field>() -> [[F; 4]; 8] {
 #[allow(dead_code)]
 #[allow(unused_variables)]
 impl<L: AirParameters> AirBuilder<L> {
+    pub fn sha_premessage(&mut self, 
+        w : &U32Register,
+        w_minus_2 : &U32Register,
+        w_minus_7 : &U32Register,
+        w_minus_15 : &U32Register,
+        w_minus_16 : &U32Register,
+        operations: &mut ByteLookupOperations)
+    where
+        L::Instruction: U32Instructions,
+    {
+
+    }
+
     pub fn sha_256_step(
         &mut self,
+        hash: &ArrayRegister<U32Register>,
+        hash_bit : &BitRegister,
         msg: &ArrayRegister<U32Register>,
         w: &U32Register,
         round_constant: &U32Register,
         operations: &mut ByteLookupOperations,
-    ) -> [U32Register; 8]
+    ) -> ArrayRegister<U32Register>
     where
         L::Instruction: U32Instructions,
     {
+        let cycle_64 = self.cycle(6);
+
+        // The sha round
+
+        // Initialize working variables
         let a = msg.get(0);
         let b = msg.get(1);
         let c = msg.get(2);
@@ -63,36 +83,43 @@ impl<L: AirParameters> AirBuilder<L> {
         let g = msg.get(6);
         let h = msg.get(7);
 
+        // Calculate sum_1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
         let e_rotate_6 = self.bit_rotate_right(&e, 6, operations);
         let e_rotate_11 = self.bit_rotate_right(&e, 11, operations);
         let e_rotate_25 = self.bit_rotate_right(&e, 25, operations);
         let mut sum_1 = self.bitwise_xor(&e_rotate_6, &e_rotate_11, operations);
         sum_1 = self.bitwise_xor(&sum_1, &e_rotate_25, operations);
 
+        // Calculate ch = (e & f) ^ (!e & g);
         let e_and_f = self.bitwise_and(&e, &f, operations);
         let not_e = self.bitwise_not(&e, operations);
         let not_e_and_g = self.bitwise_and(&not_e, &g, operations);
         let ch = self.bitwise_xor(&e_and_f, &not_e_and_g, operations);
 
+        // Calculate temp_1 = h + sum_1 +ch + round_constant + w;
         let mut temp_1 = self.add_u32(&h, &sum_1, operations);
         temp_1 = self.add_u32(&temp_1, &ch, operations);
         temp_1 = self.add_u32(&temp_1, &round_constant, operations);
         temp_1 = self.add_u32(&temp_1, &w, operations);
 
+        // Calculate sum_0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
         let a_rotate_2 = self.bit_rotate_right(&a, 2, operations);
         let a_rotate_13 = self.bit_rotate_right(&a, 13, operations);
         let a_rotate_22 = self.bit_rotate_right(&a, 22, operations);
         let mut sum_0 = self.bitwise_xor(&a_rotate_2, &a_rotate_13, operations);
         sum_0 = self.bitwise_xor(&sum_0, &a_rotate_22, operations);
 
+        // Calculate maj = (a & b) ^ (a & c) ^ (b & c);
         let a_and_b = self.bitwise_and(&a, &b, operations);
         let a_and_c = self.bitwise_and(&a, &c, operations);
         let b_and_c = self.bitwise_and(&b, &c, operations);
         let mut maj = self.bitwise_xor(&a_and_b, &a_and_c, operations);
         maj = self.bitwise_xor(&maj, &b_and_c, operations);
 
+        // Calculate temp_2 = sum_0 + maj;
         let temp_2 = self.add_u32(&sum_0, &maj, operations);
 
+        // Calculate the next cycle values
         let a_next = self.add_u32(&temp_1, &temp_2, operations);
         let b_next = a;
         let c_next = b;
@@ -102,18 +129,26 @@ impl<L: AirParameters> AirBuilder<L> {
         let g_next = f;
         let h_next = g;
 
-        self.set_to_expression_transition(&a.next(), a_next.expr());
-        self.set_to_expression_transition(&b.next(), b_next.expr());
-        self.set_to_expression_transition(&c.next(), c_next.expr());
-        self.set_to_expression_transition(&d.next(), d_next.expr());
-        self.set_to_expression_transition(&e.next(), e_next.expr());
-        self.set_to_expression_transition(&f.next(), f_next.expr());
-        self.set_to_expression_transition(&g.next(), g_next.expr());
-        self.set_to_expression_transition(&h.next(), h_next.expr());
-
-        [
+        let msg_next = [
             a_next, b_next, c_next, d_next, e_next, f_next, g_next, h_next,
-        ]
+        ];
+
+        // Assign next values to the next row registers based on the cycle bit
+        let bit = cycle_64.end_bit;
+        for i in 0..8 {
+            self.set_to_expression_transition(
+                &msg.get(i).next(),
+                msg_next[i].expr() * bit.not_expr() + hash.get(i).next().expr() * bit.expr(),
+            );
+        }
+
+        // Assign the hash values in the end of the round
+        let hash_next = self.alloc_array::<U32Register>(8);
+        for i in 0..8 {
+            self.set_add_u32(&hash.get(i), &msg_next[i], &hash_next.get(i), operations);
+        }
+
+        hash_next 
     }
 }
 
@@ -247,8 +282,10 @@ mod tests {
         let msg_array = builder.alloc_array::<U32Register>(8);
         let hash = builder.alloc_array::<U32Register>(8);
         let round_constant = builder.alloc::<U32Register>();
+        let hash_bit = builder.alloc::<BitRegister>();
 
-        let msg_next = builder.sha_256_step(&msg_array, &w, &round_constant, &mut operations);
+        let hash_next =
+            builder.sha_256_step(&hash, &hash_bit, &msg_array, &w, &round_constant, &mut operations);
 
         // let dummy = builder.alloc::<ByteRegister>();
         // let dummy_range = ByteOperation::Range(dummy);
@@ -276,8 +313,10 @@ mod tests {
         let w_val = sha_256_pre(padded_msg);
 
         table.write_table_entries(&writer);
-        writer.write_array(&msg_array, INITIAL_HASH.map(to_field), 0);
         for i in 0..1024 {
+            writer.write_array(&msg_array, INITIAL_HASH.map(to_field), i * 64);
+            writer.write_array(&hash, INITIAL_HASH.map(to_field), i * 64);
+            writer.write_array(&hash, INITIAL_HASH.map(to_field), i * 64 + 63); 
             for j in 0..64 {
                 let row = i * 64 + j;
                 writer.write(&round_constant, &to_field(round_constants[j]), row);
@@ -289,7 +328,7 @@ mod tests {
         table.write_multiplicities(&writer);
 
         let msg_val = |i| writer.read_array::<_, 8>(&msg_array, i).map(to_val);
-        let msg_next_val = |i| msg_next.map(|r| writer.read(&r, i)).map(to_val);
+        let hash_next_val = |i| writer.read_array::<_, 8>(&hash_next, i).map(to_val);
 
         let exp_message = |i| {
             let mut msg = initial_hash;
@@ -299,22 +338,23 @@ mod tests {
             msg
         };
         assert_eq!(msg_val(0), initial_hash);
-        assert_eq!(msg_val(1), msg_next_val(0));
+        // assert_eq!(msg_val(1), hash_next_val(0));
 
-        assert_eq!(exp_message(1), msg_next_val(0));
+        // assert_eq!(exp_message(1), hash_next_val(0));
 
-        assert_eq!(msg_val(64), exp_message(64));
+        // assert_eq!(hash_next_val(63), exp_message(64));
         let hash_val = sha_round(initial_hash, &w_val, round_constants);
+        assert_eq!(hash_next_val(63), hash_val);
 
-        let expected_hash = hex::decode(expected_digest).unwrap();
-        let expected_hash_u32: [u32; 8] = expected_hash
+        let expected_hash: [u32; 8] = hex::decode(expected_digest)
+            .unwrap()
             .chunks_exact(4)
             .map(|x| u32::from_be_bytes(x.try_into().unwrap()))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
 
-        // assert_eq!(hash_val, expected_hash_u32);
+        assert_eq!(hash_val, expected_hash);
 
         let stark = Starky::<_, { L::num_columns() }>::new(air);
         let config = SC::standard_fast_config(L::num_rows());
