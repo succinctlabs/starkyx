@@ -1,3 +1,4 @@
+use core::sync::atomic::{AtomicUsize, Ordering};
 use std::collections::HashMap;
 
 use itertools::Itertools;
@@ -14,8 +15,8 @@ use crate::chip::uint::bytes::operations::{
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 
-#[derive(Debug, Clone)]
-pub struct MultiplicityValues(Vec<[u32; NUM_BIT_OPPS + 1]>);
+#[derive(Debug)]
+pub struct MultiplicityValues(Vec<[AtomicUsize; NUM_BIT_OPPS + 1]>);
 
 #[derive(Debug)]
 pub struct MultiplicityData {
@@ -27,11 +28,18 @@ pub struct MultiplicityData {
 
 impl MultiplicityValues {
     pub fn new(num_rows: usize) -> Self {
-        Self(vec![[0u32; NUM_BIT_OPPS + 1]; num_rows])
+        // let mut values = Vec::with_capacity((NUM_BIT_OPPS + 1) * num_rows);
+        Self(
+            (0..num_rows)
+                .into_iter()
+                .map(|_| core::array::from_fn(|_| AtomicUsize::new(0)))
+                .collect(),
+        )
+        // Self(vec![[AtomicUsize::new(0); NUM_BIT_OPPS + 1]; num_rows])
     }
 
-    pub fn update(&mut self, row: usize, col: usize) {
-        self.0[row][col] += 1;
+    pub fn update(&self, row: usize, col: usize) {
+        self.0[row][col].fetch_add(1, Ordering::Relaxed);
     }
 }
 
@@ -73,7 +81,7 @@ impl MultiplicityData {
     //     }
     // }
 
-    pub fn update(&mut self, operation: &ByteOperation<u8>) {
+    pub fn update(&self, operation: &ByteOperation<u8>) {
         let (row, col) = self.operations_multipcitiy_dict[operation];
         self.multiplicities_values.update(row, col);
     }
@@ -88,12 +96,11 @@ impl MultiplicityData {
             .write_trace()
             .unwrap()
             .rows_par_mut()
-            .zip_eq(
-                self.multiplicities_values
-                    .0
-                    .par_iter()
-                    .map(|x| x.map(F::from_canonical_u32)),
-            )
+            .zip_eq(self.multiplicities_values.0.par_iter().map(|arr| {
+                core::array::from_fn::<_, { NUM_BIT_OPPS + 1 }, _>(|i| {
+                    F::from_canonical_usize(arr[i].load(Ordering::Relaxed))
+                })
+            }))
             .for_each(|(row, multiplicities)| {
                 multiplicities_array.assign_to_raw_slice(row, &multiplicities);
             });

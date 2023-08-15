@@ -1,5 +1,4 @@
 use alloc::sync::Arc;
-use std::sync::Mutex;
 
 use super::value::ByteOperation;
 use crate::air::parser::AirParser;
@@ -13,14 +12,14 @@ use crate::math::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct ByteOperationInstruction {
-    multiplicity_data: Arc<Mutex<MultiplicityData>>,
+    multiplicity_data: Arc<MultiplicityData>,
     inner: ByteOperation<ByteRegister>,
     global: bool,
 }
 
 impl ByteOperationInstruction {
     pub fn new(
-        multiplicity_data: Arc<Mutex<MultiplicityData>>,
+        multiplicity_data: Arc<MultiplicityData>,
         inner: ByteOperation<ByteRegister>,
         global: bool,
     ) -> Self {
@@ -50,6 +49,6 @@ impl<F: PrimeField64> Instruction<F> for ByteOperationInstruction {
             return;
         }
         let value = self.inner.write(writer, row_index);
-        self.multiplicity_data.lock().unwrap().update(&value);
+        self.multiplicity_data.update(&value);
     }
 }

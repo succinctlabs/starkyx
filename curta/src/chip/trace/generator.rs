@@ -18,20 +18,6 @@ pub struct ArithmeticGenerator<L: AirParameters> {
 }
 
 impl<L: ~const AirParameters> ArithmeticGenerator<L> {
-    // pub fn new(air: &Chip<L>) -> Self {
-    //     let num_public_inputs = air.num_public_inputs;
-    //     let num_global_values = air.num_global_values;
-    //      Self {
-    //         writer: TraceWriter::new_with_value(
-    //             L::Field::ZERO,
-    //             L::num_columns(),
-    //             L::num_rows(),
-    //             num_public_inputs,
-    //             num_global_values,
-    //         ),
-    //     }
-    // }
-
     pub fn new(air_data: AirTraceData<L>) -> Self {
         let num_public_inputs = air_data.num_public_inputs;
         let num_global_values = air_data.num_global_values;

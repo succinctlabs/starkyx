@@ -64,12 +64,7 @@ impl<L: AirParameters> AirBuilder<L> {
         operation_values: ByteLookupOperations,
         table: &mut ByteLookupTable<L::Field>,
     ) {
-        let multiplicities = table
-            .multiplicity_data
-            .lock()
-            .unwrap()
-            .multiplicities()
-            .clone();
+        let multiplicities = table.multiplicity_data.multiplicities();
         let lookup_challenge = self.alloc_challenge::<CubicRegister>();
 
         let lookup_table = self.lookup_table_with_multiplicities(

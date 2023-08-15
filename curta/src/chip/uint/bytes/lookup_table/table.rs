@@ -1,6 +1,5 @@
 use alloc::sync::Arc;
 use core::array::from_fn;
-use std::sync::Mutex;
 
 use itertools::Itertools;
 
@@ -37,7 +36,7 @@ pub struct ByteLookupTable<F> {
     a_bits: ArrayRegister<BitRegister>,
     b_bits: ArrayRegister<BitRegister>,
     results_bits: [ArrayRegister<BitRegister>; NUM_BIT_OPPS],
-    pub multiplicity_data: Arc<Mutex<MultiplicityData>>,
+    pub multiplicity_data: Arc<MultiplicityData>,
     pub digests: Vec<CubicRegister>,
 }
 
@@ -124,7 +123,7 @@ impl<L: AirParameters> AirBuilder<L> {
             a_bits,
             b_bits,
             results_bits,
-            multiplicity_data: Arc::new(Mutex::new(multiplicity_data)),
+            multiplicity_data: Arc::new(multiplicity_data),
             digests,
         }
     }
@@ -132,12 +131,7 @@ impl<L: AirParameters> AirBuilder<L> {
 
 impl<F: PrimeField64> ByteLookupTable<F> {
     pub fn write_table_entries(&self, writer: &TraceWriter<F>) {
-        let operations_dict = self
-            .multiplicity_data
-            .lock()
-            .unwrap()
-            .operations_dict
-            .clone();
+        let operations_dict = self.multiplicity_data.operations_dict.clone();
         // Write the lookup table entries
         writer
             .write_trace()
@@ -189,9 +183,6 @@ impl<F: PrimeField64> ByteLookupTable<F> {
 
     pub fn write_multiplicities(&self, writer: &TraceWriter<F>) {
         // Assign multiplicities to the trace
-        self.multiplicity_data
-            .lock()
-            .unwrap()
-            .write_multiplicities(writer);
+        self.multiplicity_data.write_multiplicities(writer);
     }
 }
