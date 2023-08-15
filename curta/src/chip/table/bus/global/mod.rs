@@ -26,6 +26,8 @@ pub struct Bus<E> {
     channels: Vec<CubicRegister>,
     // Public inputs to the bus
     global_inputs: Vec<CubicRegister>,
+    // Public outputs from the pus
+    global_outputs: Vec<CubicRegister>,
     // The challenge used
     challenge: CubicRegister,
     _marker: PhantomData<E>,
@@ -37,6 +39,7 @@ impl<L: AirParameters> AirBuilder<L> {
         Bus {
             channels: Vec::new(),
             global_inputs: Vec::new(),
+            global_outputs: Vec::new(),
             challenge,
             _marker: PhantomData,
         }
@@ -68,6 +71,18 @@ impl<E: Clone> Bus<E> {
             }
             MemorySlice::Public(..) => {
                 self.global_inputs.push(*register);
+            }
+            _ => panic!("Expected public or global register"),
+        }
+    }
+
+    pub fn output_global_value(&mut self, register: &CubicRegister) {
+        match register.register() {
+            MemorySlice::Global(..) => {
+                self.global_outputs.push(*register);
+            }
+            MemorySlice::Public(..) => {
+                self.global_outputs.push(*register);
             }
             _ => panic!("Expected public or global register"),
         }
@@ -104,12 +119,14 @@ mod tests {
     }
 
     #[test]
-    fn test_bus() {
+    fn test_bus_global() {
         type L = BusTest;
         type F = GoldilocksField;
         type SC = PoseidonGoldilocksStarkConfig;
 
-        let num_public_vals = 1000;
+        let num_public_in = 100;
+        let num_public_out = 50;
+        assert!(num_public_out < num_public_in);
 
         let mut builder = AirBuilder::<L>::new();
         let x_1 = builder.alloc::<CubicRegister>();
@@ -123,9 +140,13 @@ mod tests {
         builder.input_to_bus_filtered(channel_idx, x_1, bit.expr());
         builder.output_from_bus(channel_idx, x_2);
 
-        let x_pub = builder.alloc_array_public::<CubicRegister>(num_public_vals);
-        for x in x_pub.iter() {
+        let x_in_pub = builder.alloc_array_public::<CubicRegister>(num_public_in);
+        let x_out_pub = builder.alloc_array_public::<CubicRegister>(num_public_out);
+        for x in x_in_pub.iter() {
             bus.insert_global_value(&x);
+        }
+        for x in x_out_pub.iter() {
+            bus.output_global_value(&x);
         }
 
         builder.constrain_bus(bus);
@@ -135,13 +156,18 @@ mod tests {
         let generator = ArithmeticGenerator::<L>::new(&air);
         let writer = generator.new_writer();
 
-        for (i, x) in x_pub.iter().enumerate() {
+        for (i, x) in x_in_pub.iter().enumerate() {
             let x_pub_val = CubicElement([GoldilocksField::rand(); 3]);
             writer.write(&x, &x_pub_val, 0);
-            writer.write(&x_2, &x_pub_val, L::num_rows() - i - 1);
-            writer.write(&bit, &F::ZERO, i);
+            if i < num_public_out {
+                writer.write(&x_out_pub.get(i), &x_pub_val, 0);
+            } else {
+                let row = i - num_public_out;
+                writer.write(&x_2, &x_pub_val, L::num_rows() - row - 1);
+                writer.write(&bit, &F::ZERO, row);
+            }
         }
-        for i in num_public_vals..L::num_rows() {
+        for i in (num_public_in - num_public_out)..L::num_rows() {
             let a = CubicElement([GoldilocksField::rand(); 3]);
             writer.write(&bit, &F::ONE, i);
             writer.write(&x_1, &a, i);

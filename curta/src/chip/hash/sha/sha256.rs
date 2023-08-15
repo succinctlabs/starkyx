@@ -4,7 +4,9 @@ use crate::chip::instruction::cycle::Cycle;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::cubic::CubicRegister;
+use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
+use crate::chip::table::bus::channel;
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
 use crate::chip::uint::bytes::lookup_table::table::ByteLookupTable;
 use crate::chip::uint::operations::instruction::U32Instructions;
@@ -47,6 +49,7 @@ pub fn first_hash_value<F: Field>() -> [[F; 4]; 8] {
 impl<L: AirParameters> AirBuilder<L> {
     pub fn sha_premessage(
         &mut self,
+        clk: &ElementRegister,
         w: &U32Register,
         w_bit: &BitRegister,
         w_minus_2: &U32Register,
@@ -55,6 +58,7 @@ impl<L: AirParameters> AirBuilder<L> {
         w_minus_16: &U32Register,
         cycle_64: &Cycle<L::Field>,
         operations: &mut ByteLookupOperations,
+        channel_idx: usize,
     ) where
         L::Instruction: U32Instructions,
     {
@@ -96,6 +100,7 @@ impl<L: AirParameters> AirBuilder<L> {
 
     pub fn sha_256_step(
         &mut self,
+        clk: &ElementRegister,
         hash: &ArrayRegister<U32Register>,
         hash_bit: &BitRegister,
         msg: &ArrayRegister<U32Register>,
@@ -103,6 +108,7 @@ impl<L: AirParameters> AirBuilder<L> {
         round_constant: &U32Register,
         cycle_64: &Cycle<L::Field>,
         operations: &mut ByteLookupOperations,
+        channel_idx: usize,
     ) -> ArrayRegister<U32Register>
     where
         L::Instruction: U32Instructions,
@@ -329,6 +335,7 @@ mod tests {
         let mut timing = TimingTree::new("Sha256 test", log::Level::Debug);
 
         let mut builder = AirBuilder::<L>::new();
+        let clk = builder.clock();
 
         let (mut operations, mut table) = builder.byte_operations();
 
@@ -345,7 +352,58 @@ mod tests {
         let w_minus_15 = builder.alloc::<U32Register>();
         let w_minus_16 = builder.alloc::<U32Register>();
 
+        // Initialize the bus
+        let mut bus = builder.new_bus();
+        let channel_idx = bus.new_channel(&mut builder);
+
+        // Public w values
+        let public_w = builder.alloc_array_public::<U32Register>(16);
+        // for w_pub in public_w.iter() {
+        //     builder.input_to_bus(channel_idx, w_pub);
+        // }
+
+        // output values from the bus
+
+        // Insert values to the bus
+        let w_challenges = builder.alloc_challenge_array(U32Register::size_of() + 1);
+        let clk_w = builder.accumulate_expressions(&w_challenges, &[clk.expr(), w.expr()]);
+        let clk_plus_two_w = builder.accumulate_expressions(
+            &w_challenges,
+            &[clk.expr() + F::from_canonical_u8(2), w.expr()],
+        );
+        let clk_plus_seven_w = builder.accumulate_expressions(
+            &w_challenges,
+            &[clk.expr() + F::from_canonical_u8(7), w.expr()],
+        );
+        let clk_plus_fifteen_w = builder.accumulate_expressions(
+            &w_challenges,
+            &[clk.expr() + F::from_canonical_u8(15), w.expr()],
+        );
+        let clk_plus_sixteen_w = builder.accumulate_expressions(
+            &w_challenges,
+            &[clk.expr() + F::from_canonical_u8(16), w.expr()],
+        );
+        // builder.input_to_bus(channel_idx, clk_w);
+        builder.input_to_bus(channel_idx, clk_plus_two_w);
+        // builder.input_to_bus(channel_idx, clk_plus_seven_w);
+        // builder.input_to_bus(channel_idx, clk_plus_fifteen_w);
+        // builder.input_to_bus(channel_idx, clk_plus_sixteen_w);
+
+        let clk_w_minus_2 =
+            builder.accumulate_expressions(&w_challenges, &[clk.expr(), w_minus_2.expr()]);
+        let clk_w_minus_7 =
+            builder.accumulate_expressions(&w_challenges, &[clk.expr(), w_minus_7.expr()]);
+        let clk_w_minus_15 =
+            builder.accumulate_expressions(&w_challenges, &[clk.expr(), w_minus_15.expr()]);
+        let clk_w_minus_16 =
+            builder.accumulate_expressions(&w_challenges, &[clk.expr(), w_minus_16.expr()]);
+        builder.output_from_bus(channel_idx, clk_w_minus_2);
+        builder.output_from_bus(channel_idx, clk_w_minus_7);
+        // builder.output_from_bus(channel_idx, clk_w_minus_15);
+        // builder.output_from_bus(channel_idx, clk_w_minus_16);
+
         builder.sha_premessage(
+            &clk,
             &w,
             &w_bit,
             &w_minus_2,
@@ -354,9 +412,11 @@ mod tests {
             &w_minus_16,
             &cycle_64,
             &mut operations,
+            channel_idx,
         );
 
         let hash_next = builder.sha_256_step(
+            &clk,
             &hash,
             &hash_bit,
             &msg_array,
@@ -364,6 +424,7 @@ mod tests {
             &round_constant,
             &cycle_64,
             &mut operations,
+            channel_idx,
         );
 
         let dummy = builder.alloc::<ByteRegister>();
@@ -371,6 +432,7 @@ mod tests {
         builder.set_byte_operation(&dummy_range, &mut operations);
 
         builder.register_byte_lookup(operations, &mut table);
+        builder.constrain_bus(bus);
 
         let air = builder.build();
 
@@ -449,11 +511,16 @@ mod tests {
 
         assert_eq!(hash_val, expected_hash);
 
+        let public_inputs = writer.0.public.read().unwrap().clone();
         let stark = Starky::<_, { L::num_columns() }>::new(air);
         let config = SC::standard_fast_config(L::num_rows());
 
         // Generate proof and verify as a stark
-        test_starky(&stark, &config, &generator, &[]);
+        timed!(
+            timing,
+            "Stark proof and verify",
+            test_starky(&stark, &config, &generator, &public_inputs)
+        );
 
         timing.print();
     }

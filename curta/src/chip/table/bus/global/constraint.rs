@@ -16,11 +16,20 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP> for Bu
             acc_prod = parser.mul_extension(acc_prod, beta_minus_value);
         }
 
+        // Accumulate global outputs
+        let mut acc_global_outputs = parser.one_extension();
+        for register in self.global_outputs.iter() {
+            let value = register.eval(parser);
+            let beta_minus_value = parser.sub_extension(beta, value);
+            acc_global_outputs = parser.mul_extension(acc_global_outputs, beta_minus_value);
+        }
+
         for channel in self.channels.iter() {
             let value = channel.eval(parser);
             acc_prod = parser.mul_extension(acc_prod, value);
         }
-        let one = parser.one_extension();
-        parser.assert_eq_extension(acc_prod, one);
+
+        // Final consistency constraint
+        parser.assert_eq_extension(acc_prod, acc_global_outputs);
     }
 }
