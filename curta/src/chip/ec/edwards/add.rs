@@ -153,8 +153,8 @@ mod tests {
 
         let _gadget = builder.ed_add::<E>(&p, &q);
 
-        let air = builder.build();
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let (air, trace_data) = builder.build();
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
 
         let base = E::generator();
         let mut rng = thread_rng();
@@ -166,7 +166,7 @@ mod tests {
         (0..L::num_rows()).into_par_iter().for_each(|i| {
             writer.write_ec_point(&p, &p_int, i);
             writer.write_ec_point(&q, &q_int, i);
-            writer.write_row_instructions(&air, i);
+            writer.write_row_instructions(&generator.air_data, i);
         });
 
         let stark = Starky::<_, { L::num_columns() }>::new(air);

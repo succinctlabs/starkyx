@@ -230,8 +230,8 @@ mod tests {
         let scalar_bit = builder.alloc::<BitRegister>();
         let _scalar_mul_gadget = builder.ed_scalar_mul::<E>(&scalar_bit, &res, &temp);
 
-        let air = builder.build();
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let (air, trace_data) = builder.build();
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
 
         let writer = generator.new_writer();
         let nb_bits = E::nb_scalar_bits();
@@ -250,7 +250,7 @@ mod tests {
                 for (i, bit) in scalar_bits.iter().enumerate() {
                     let f_bit = F::from_canonical_u8(*bit as u8);
                     writer.write(&scalar_bit, &f_bit, starting_row + i);
-                    writer.write_row_instructions(&air, starting_row + i);
+                    writer.write_row_instructions(&generator.air_data, starting_row + i);
                 }
             });
         });

@@ -138,9 +138,9 @@ mod tests {
 
     //     let z = builder.select(&bit, &x, &y);
 
-    //     let air = builder.build();
+    //     let (air, trace_data) = builder.build();
 
-    //     let generator = ArithmeticGenerator::<L>::new(&air);
+    //     let generator = ArithmeticGenerator::<L>::new(trace_data);
 
     //     let (tx, rx) = channel();
     //     for i in 0..L::num_rows() {
@@ -154,7 +154,7 @@ mod tests {
     //             writer.write(&bit, &fbit, i);
     //             writer.write(&x, &x_i, i);
     //             writer.write(&y, &y_i, i);
-    //             writer.write_row_instructions(&air, i);
+    //             writer.write_row_instructions(&generator.air_data, i);
 
     //             handle.send(1).unwrap();
     //         });

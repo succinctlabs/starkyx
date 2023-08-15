@@ -326,9 +326,9 @@ mod tests {
 
         let multiplicities = builder.lookup_log_derivative_no_index(&table_values, &values);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
         let writer = generator.new_writer();
 
         // Set the table vals
@@ -401,9 +401,9 @@ mod tests {
 
         let multiplicities = builder.lookup_cubic_log_derivative(&table_values, &values);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
         let writer = generator.new_writer();
 
         // Set the table vals
@@ -485,9 +485,9 @@ mod tests {
         let multiplicities = lookup_table.multiplicities;
         builder.cubic_lookup_from_table_and_values(lookup_table, lookup_values);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
         let writer = generator.new_writer();
 
         // Set the table vals

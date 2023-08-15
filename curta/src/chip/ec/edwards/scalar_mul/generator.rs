@@ -83,7 +83,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
     where
         C::Hasher: AlgebraicHasher<F>,
     {
-        let (air, gadget, scalars_limbs_input, input_points, output_points, (set_last, set_bit)) =
+        let (air, trace_data, gadget, scalars_limbs_input, input_points, output_points, (set_last, set_bit)) =
             ScalarMulEd25519::<F, E>::air();
 
         let mut public_input_target_option = vec![None as Option<Target>; 256 * (8 + 2 * 32)];
@@ -138,20 +138,19 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
             StarkyConfig::<F, C, D>::standard_fast_config(ScalarMulEd25519::<F, E>::num_rows());
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
 
-        let trace_generator = ArithmeticGenerator::<ScalarMulEd25519<F, E>>::new(&stark.air);
+        let trace_generator = ArithmeticGenerator::<ScalarMulEd25519<F, E>>::new(trace_data);
 
         self.verify_stark_proof(&config, &stark, virtual_proof.clone(), &public_input_target);
 
         let stark_generator = SimpleStarkWitnessGenerator::new(
             config,
-            stark.clone(),
+            stark,
             virtual_proof,
             public_input_target,
             trace_generator.clone(),
         );
 
         let generator = SimpleScalarMulEd25519Generator::<F, E, C, D> {
-            stark,
             gadget,
             points: points.to_vec(),
             scalars: scalars.to_vec(),
@@ -232,7 +231,6 @@ pub struct SimpleScalarMulEd25519Generator<
     // S,
     const D: usize,
 > {
-    stark: EdDSAStark<F, E>,
     gadget: EdScalarMulGadget<F, Ed25519>,
     points: Vec<AffinePointTarget>,
     scalars: Vec<Vec<Target>>, // 32-byte limbs
@@ -253,7 +251,6 @@ impl<
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        stark: EdDSAStark<F, E>,
         gadget: EdScalarMulGadget<F, Ed25519>,
         points: Vec<AffinePointTarget>,
         scalars: Vec<Vec<Target>>,
@@ -263,7 +260,6 @@ impl<
         trace_generator: ArithmeticGenerator<ScalarMulEd25519<F, E>>,
     ) -> Self {
         Self {
-            stark,
             gadget,
             points,
             scalars,
@@ -345,7 +341,7 @@ where
             for (i, bit) in scalar_bits.iter().enumerate() {
                 let f_bit = F::from_canonical_u8(*bit as u8);
                 writer.write(&scalar_bit, &f_bit, starting_row + i);
-                writer.write_row_instructions(&self.stark.air, starting_row + i);
+                writer.write_row_instructions(&trace_generator.air_data, starting_row + i);
             }
             tx.send((k, &points[k] * &scalars[k])).unwrap();
         });

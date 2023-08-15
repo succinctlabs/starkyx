@@ -94,9 +94,9 @@ pub mod tests {
         let not = Not { a, result };
         builder.register_instruction(not);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
         let writer = generator.new_writer();
 
         let mut rng = thread_rng();

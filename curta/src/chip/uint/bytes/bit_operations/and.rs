@@ -99,9 +99,9 @@ pub mod tests {
         let and = And { a, b, result };
         builder.register_instruction(and);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
         let writer = generator.new_writer();
 
         let mut rng = thread_rng();
@@ -116,7 +116,7 @@ pub mod tests {
 
             writer.write_array(&a, a_bits.map(|b| F::from_canonical_u8(b as u8)), i);
             writer.write_array(&b, b_bits.map(|b| F::from_canonical_u8(b as u8)), i);
-            writer.write_row_instructions(&air, i);
+            writer.write_row_instructions(&generator.air_data, i);
         }
 
         let stark = Starky::<_, { L::num_columns() }>::new(air);
@@ -149,9 +149,9 @@ pub mod tests {
         let and = And { a, b, result };
         builder.register_instruction_with_filter(and, filter.expr());
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
         let writer = generator.new_writer();
 
         let mut rng = thread_rng();
@@ -168,7 +168,7 @@ pub mod tests {
             writer.write_array(&a, a_bits.map(|b| F::from_canonical_u8(b as u8)), i);
             writer.write_array(&b, b_bits.map(|b| F::from_canonical_u8(b as u8)), i);
             writer.write(&filter, &F::from_canonical_u8(filter_val as u8), i);
-            writer.write_row_instructions(&air, i);
+            writer.write_row_instructions(&generator.air_data, i);
         }
 
         let stark = Starky::<_, { L::num_columns() }>::new(air);

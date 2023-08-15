@@ -1,11 +1,5 @@
 use self::constraint::Constraint;
-use self::instruction::set::AirInstruction;
 use self::instruction::Instruction;
-use self::register::element::ElementRegister;
-use self::table::accumulator::Accumulator;
-use self::table::bus::channel::BusChannel;
-use self::table::evaluation::Evaluation;
-use self::table::lookup::Lookup;
 use crate::math::extension::cubic::parameters::CubicParameters;
 use crate::math::prelude::*;
 use crate::plonky2::stark::Starky;
@@ -64,12 +58,6 @@ pub struct Chip<L: AirParameters> {
     num_challenges: usize,
     num_public_inputs: usize,
     num_global_values: usize,
-    instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
-    accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
-    lookup_data: Vec<Lookup<L::Field, L::CubicParams>>,
-    bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
-    evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
-    range_table: Option<ElementRegister>,
 }
 
 impl<L: ~const AirParameters> Starky<Chip<L>, { L::num_columns() }> {

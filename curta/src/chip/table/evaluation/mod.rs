@@ -203,9 +203,9 @@ mod tests {
         builder.evaluation(&[x_0, x_1], cycle.start_bit.expr(), acc_0);
         builder.evaluation(&[x_0, x_1], bit.expr(), acc_1);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
 
         let (tx, rx) = channel();
         for i in 0..L::num_rows() {
@@ -254,13 +254,13 @@ mod tests {
 
         builder.evaluation(&[x_0, x_1], cycle.start_bit.expr(), digest);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
         let public_inputs = (0..256)
             .flat_map(|i| vec![F::ONE, F::from_canonical_usize(256 * i)])
             .collect::<Vec<_>>();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
 
         let (tx, rx) = channel();
         for i in 0..L::num_rows() {

@@ -186,9 +186,9 @@ mod tests {
         let mut builder = AirBuilder::<L>::new();
         let cycle = builder.cycle(4);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
         let (tx, rx) = channel();
         for i in 0..L::num_rows() {
             let writer = generator.new_writer();

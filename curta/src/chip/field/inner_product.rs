@@ -222,9 +222,9 @@ mod tests {
         let d = builder.alloc::<Fp>();
         let quad = builder.fp_inner_product(&vec![a, b], &vec![c, d]);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
 
         let (tx, rx) = channel();
 

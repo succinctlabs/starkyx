@@ -206,9 +206,9 @@ mod tests {
 
         let mul_const_insr = builder.fp_mul_const(&a, c);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
 
         let (tx, rx) = channel();
 

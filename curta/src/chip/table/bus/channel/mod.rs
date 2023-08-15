@@ -182,9 +182,9 @@ mod tests {
         builder.assert_expressions_equal(c_1.expr(), zero.clone());
         builder.assert_expressions_equal(c_2.expr(), zero);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
         let writer = generator.new_writer();
         for i in 0..L::num_rows() {
             let a = CubicElement([GoldilocksField::rand(); 3]);

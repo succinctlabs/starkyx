@@ -384,9 +384,9 @@ mod tests {
         builder.register_byte_lookup(operations, &mut table);
         builder.constrain_bus(bus);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
         let writer = generator.new_writer();
 
         // let msg = b"";
@@ -422,7 +422,7 @@ mod tests {
                     let w_pub = public_w.get(i * 16 + j);
                     writer.write(&w_pub, &to_field(w_val[j]), row);
                 }
-                writer.write_row_instructions(&air, row);
+                writer.write_row_instructions(&generator.air_data, row);
             }
         }
         table.write_multiplicities(&writer);

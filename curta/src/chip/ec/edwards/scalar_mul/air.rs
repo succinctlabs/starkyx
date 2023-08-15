@@ -1,7 +1,7 @@
 use plonky2::field::goldilocks_field::GoldilocksField;
 
 use super::gadget::EdScalarMulGadget;
-use crate::chip::builder::AirBuilder;
+use crate::chip::builder::{AirBuilder, AirTraceData};
 use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
 use crate::chip::ec::gadget::EllipticCurveGadget;
 use crate::chip::ec::point::AffinePointRegister;
@@ -47,6 +47,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
     #[allow(clippy::type_complexity)]
     pub fn air() -> (
         Chip<Self>,
+        AirTraceData<Self>,
         EdScalarMulGadget<F, Ed25519>,
         Vec<ArrayRegister<ElementRegister>>,
         Vec<AffinePointRegister<Ed25519>>,
@@ -117,10 +118,11 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
             output_point_digest,
         );
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
         (
             air,
+            trace_data,
             scalar_mul_gadget,
             scalars_limbs,
             input_points,

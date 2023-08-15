@@ -224,9 +224,9 @@ mod tests {
         let b = builder.alloc::<FieldRegister<P>>();
         let _add_insr = builder.fp_add(&a, &b);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
 
         let trace_initial = (0..L::num_rows())
             .into_par_iter()
@@ -249,7 +249,7 @@ mod tests {
 
                 writer.write_slice(&a, p_a.coefficients(), i);
                 writer.write_slice(&b, p_b.coefficients(), i);
-                writer.write_row_instructions(&air, i);
+                writer.write_row_instructions(&generator.air_data, i);
             });
 
         let stark = Starky::<_, { L::num_columns() }>::new(air);

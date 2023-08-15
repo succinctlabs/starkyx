@@ -191,9 +191,9 @@ pub mod tests {
             builder.assert_expressions_equal(a.expr(), b.clone());
         }
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
 
         let writer = generator.new_writer();
         for i in 0..L::num_rows() {
@@ -259,13 +259,13 @@ pub mod tests {
             builder.assert_expressions_equal(a.expr(), b.clone());
         }
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
 
         let writer = generator.new_writer();
         for i in 0..L::num_rows() {
-            writer.write_row_instructions(&air, i);
+            writer.write_row_instructions(&generator.air_data, i);
         }
 
         let public_inputs = vec![GoldilocksField::rand(); 2];

@@ -151,9 +151,9 @@ mod tests {
 
         builder.constrain_bus(bus);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
         let writer = generator.new_writer();
 
         for (i, x) in x_in_pub.iter().enumerate() {

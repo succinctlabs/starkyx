@@ -4,11 +4,12 @@ use core::ops::Deref;
 use std::sync::{LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::chip::arithmetic::expression::ArithmeticExpression;
+use crate::chip::builder::AirTraceData;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
-use crate::chip::{AirParameters, Chip};
+use crate::chip::AirParameters;
 use crate::math::prelude::*;
 use crate::trace::window::TraceWindow;
 use crate::trace::window_parser::TraceWindowParser;
@@ -245,11 +246,21 @@ impl<F: Field> TraceWriter<F> {
     #[inline]
     pub fn write_row_instructions<L: AirParameters<Field = F>>(
         &self,
-        air: &Chip<L>,
+        air_data: &AirTraceData<L>,
         row_index: usize,
     ) {
-        for instruction in air.instructions.iter() {
+        for instruction in air_data.instructions.iter() {
             self.write_instruction(instruction, row_index);
+        }
+    }
+
+    #[inline]
+    pub fn write_global_instructions<L: AirParameters<Field = F>>(
+        &self,
+        air_data: &AirTraceData<L>,
+    ) {
+        for instruction in air_data.global_instructions.iter() {
+            self.write_instruction(instruction, 0);
         }
     }
 }

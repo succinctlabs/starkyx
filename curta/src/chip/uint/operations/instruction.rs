@@ -178,9 +178,9 @@ mod tests {
 
         builder.register_byte_lookup(operations, &mut table);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
         let writer = generator.new_writer();
 
         table.write_table_entries(&writer);
@@ -217,7 +217,7 @@ mod tests {
                 writer.write(&rot_expected_vec[k], &to_field(rot_val), i);
             }
 
-            writer.write_row_instructions(&air, i);
+            writer.write_row_instructions(&generator.air_data, i);
         }
         table.write_multiplicities(&writer);
 

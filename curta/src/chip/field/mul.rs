@@ -196,9 +196,9 @@ mod tests {
         let b = builder.alloc::<FieldRegister<P>>();
         let mul_insr = builder.fp_mul(&a, &b);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
 
         let (tx, rx) = channel();
 

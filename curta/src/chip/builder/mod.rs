@@ -139,7 +139,7 @@ impl<L: AirParameters> AirBuilder<L> {
         clk
     }
 
-    pub fn build(mut self) -> Chip<L> {
+    pub fn build(mut self) -> (Chip<L>, AirTraceData<L>) {
         // constrain all bus channels
         for channel in self.bus_channels.iter() {
             self.constraints.push(channel.clone().into());
@@ -204,20 +204,27 @@ impl<L: AirParameters> AirBuilder<L> {
         }
 
         let execution_trace_length = self.local_index;
-        Chip {
+        (Chip {
             constraints: self.constraints,
             global_constraints: self.global_constraints,
             num_challenges: self.shared_memory.challenge_index(),
             execution_trace_length,
             num_public_inputs: self.shared_memory.public_index(),
             num_global_values: self.shared_memory.global_index(),
+        },
+
+        AirTraceData{
+            num_challenges: self.shared_memory.challenge_index(),
+            num_public_inputs: self.shared_memory.public_index(),
+            num_global_values: self.shared_memory.global_index(),
             instructions: self.instructions,
+            global_instructions : self.global_instructions,
             accumulators: self.accumulators,
             bus_channels: self.bus_channels,
             lookup_data: self.lookup_data,
             evaluation_data: self.evaluation_data,
             range_table: self.range_table,
-        }
+        })
     }
 }
 
@@ -272,8 +279,9 @@ pub(crate) mod tests {
         // x1' <- x0 + x1
         let constr_2 = builder.set_to_expression_transition(&x_1.next(), x_0.expr() + x_1.expr());
 
-        let mut air = builder.build();
+        let (mut air, mut air_data) = builder.build();
         air.num_public_inputs = 3;
+        air_data.num_public_inputs = 3;
 
         let public_inputs = [
             F::ZERO,
@@ -281,7 +289,7 @@ pub(crate) mod tests {
             FibonacciAir::fibonacci(L::num_rows() - 1, F::ZERO, F::ONE),
         ];
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(air_data);
 
         let writer = generator.new_writer();
 
@@ -323,10 +331,11 @@ pub(crate) mod tests {
             FibonacciAir::fibonacci(L::num_rows() - 1, F::ZERO, F::ONE),
         ];
 
-        let mut air = builder.build();
+        let (mut air, mut air_data) = builder.build();
         air.num_public_inputs = 3;
+        air_data.num_public_inputs = 3;
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(air_data);
 
         let writer = generator.new_writer();
 
@@ -378,8 +387,8 @@ pub(crate) mod tests {
 
         builder.assert_equal(&clk, &clk_expected);
 
-        let air = builder.build();
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let (air, trace_data) = builder.build();
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
 
         let (tx, rx) = channel();
         for i in 0..L::num_rows() {
@@ -389,7 +398,7 @@ pub(crate) mod tests {
             writer.write(&x_0, &F::ZERO, i);
             writer.write(&x_1, &F::from_canonical_usize(0), i);
             writer.write(&clk_expected, &F::from_canonical_usize(i), i);
-            writer.write_row_instructions(&air, i);
+            writer.write_row_instructions(&generator.air_data, i);
             handle.send(1).unwrap();
             // });
         }

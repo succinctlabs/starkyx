@@ -172,9 +172,9 @@ pub mod tests {
 
         builder.assert_expressions_equal(result.expr(), expected.expr());
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
         let writer = generator.new_writer();
 
         let mut rng = thread_rng();
@@ -199,7 +199,7 @@ pub mod tests {
             writer.write_array(&a, a_bits.map(F::from_canonical_u8), i);
             writer.write_array(&b, b_bits.map(F::from_canonical_u8), i);
             writer.write_array(&expected, expected_bits.map(F::from_canonical_u8), i);
-            writer.write_row_instructions(&air, i);
+            writer.write_row_instructions(&generator.air_data, i);
         }
 
         let trace = generator.trace_clone();
@@ -236,9 +236,9 @@ pub mod tests {
 
         builder.assert_expressions_equal(result.expr(), expected.expr());
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&air);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
         let writer = generator.new_writer();
 
         let mut rng = thread_rng();
@@ -254,7 +254,7 @@ pub mod tests {
             writer.write_array(&a, a_bits.map(F::from_canonical_u8), i);
             writer.write_array(&b, b_bits.map(F::from_canonical_u8), i);
             writer.write_array(&expected, expected_bits.map(F::from_canonical_u8), i);
-            writer.write_row_instructions(&air, i);
+            writer.write_row_instructions(&generator.air_data, i);
         }
 
         let trace = generator.trace_clone();
