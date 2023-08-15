@@ -512,9 +512,6 @@ mod tests {
 
         let padded_msg = pad_message(msg);
 
-        let initial_hash_val = INITIAL_HASH;
-        let round_constants_val = ROUND_CONSTANTS;
-
         let w_val = sha_256_first_stage(padded_msg);
 
         let mut w_val_vec: Vec<[u32; 64]> = vec![];
@@ -524,19 +521,14 @@ mod tests {
 
         timed!(timing, "Write the execusion trace", {
             table.write_table_entries(&writer);
-            writer.write_array(
-                &initial_state,
-                initial_hash_val.map(u32_to_le_field_bytes),
-                0,
-            );
+            writer.write_array(&initial_state, INITIAL_HASH.map(u32_to_le_field_bytes), 0);
             writer.write_array(
                 &round_constants_public,
-                round_constants_val.map(u32_to_le_field_bytes),
+                ROUND_CONSTANTS.map(u32_to_le_field_bytes),
                 0,
             );
             for i in 0..1024 {
-                let hash_val =
-                    sha_compress_round(initial_hash_val, &w_val_vec[i], round_constants_val);
+                let hash_val = sha_compress_round(INITIAL_HASH, &w_val_vec[i], ROUND_CONSTANTS);
                 writer.write_array(
                     &hash_state.get_subarray(i * 8..i * 8 + 8),
                     hash_val.map(u32_to_le_field_bytes),
@@ -546,7 +538,7 @@ mod tests {
                     let row = i * 64 + j;
                     writer.write(
                         &round_constant,
-                        &u32_to_le_field_bytes(round_constants_val[j]),
+                        &u32_to_le_field_bytes(ROUND_CONSTANTS[j]),
                         row,
                     );
                     writer.write(
@@ -567,7 +559,7 @@ mod tests {
 
         // let hash_next_val = |i| writer.read_array::<_, 8>(&hash_next, i).map(to_val);
 
-        let hash_val = sha_compress_round(initial_hash_val, &w_val, round_constants_val);
+        let hash_val = sha_compress_round(INITIAL_HASH, &w_val, ROUND_CONSTANTS);
         // assert_eq!(hash_next_val(63), hash_val);
 
         let expected_hash: [u32; 8] = hex::decode(expected_digest)
