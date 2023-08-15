@@ -97,6 +97,16 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 
     /// Registers an custom instruction with the builder.
+    pub fn register_global_instruction<I>(&mut self, instruction: I)
+    where
+        L::Instruction: From<I>,
+    {
+        let instr = L::Instruction::from(instruction);
+        self.register_global_air_instruction_internal(AirInstruction::from(instr))
+            .unwrap();
+    }
+
+    /// Registers an custom instruction with the builder.
     pub fn register_instruction_with_filter<I>(
         &mut self,
         instruction: I,
@@ -111,7 +121,7 @@ impl<L: AirParameters> AirBuilder<L> {
             .unwrap();
     }
 
-    /// Register an instrucgtion into the builder.
+    /// Register an instruction into the builder.
     pub(crate) fn register_air_instruction_internal(
         &mut self,
         instruction: AirInstruction<L::Field, L::Instruction>,
@@ -120,6 +130,20 @@ impl<L: AirParameters> AirBuilder<L> {
         self.instructions.push(instruction.clone());
         // Add the constraints
         self.constraints
+            .push(Constraint::from_instruction_set(instruction));
+
+        Ok(())
+    }
+
+    /// Register a global instruction into the builder.
+    pub(crate) fn register_global_air_instruction_internal(
+        &mut self,
+        instruction: AirInstruction<L::Field, L::Instruction>,
+    ) -> Result<()> {
+        // Add the instruction to the list
+        self.global_instructions.push(instruction.clone());
+        // Add the constraints
+        self.global_constraints
             .push(Constraint::from_instruction_set(instruction));
 
         Ok(())

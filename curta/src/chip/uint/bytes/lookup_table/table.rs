@@ -29,7 +29,7 @@ use crate::chip::AirParameters;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ByteLookupTable<F> {
     pub a: ByteRegister,
     pub b: ByteRegister,
@@ -131,7 +131,7 @@ impl<L: AirParameters> AirBuilder<L> {
 }
 
 impl<F: PrimeField64> ByteLookupTable<F> {
-    pub fn write_table_entries(&mut self, writer: &TraceWriter<F>) {
+    pub fn write_table_entries(&self, writer: &TraceWriter<F>) {
         let operations_dict = self
             .multiplicity_data
             .lock()
@@ -187,11 +187,7 @@ impl<F: PrimeField64> ByteLookupTable<F> {
             });
     }
 
-    pub fn write_multiplicities(&mut self, writer: &TraceWriter<F>) {
-        // let num_operations = self.num_operations.expect("num_operations not set");
-        // Collect the multiplicity values
-        // self.multiplicity_data.collect_values(num_operations);
-
+    pub fn write_multiplicities(&self, writer: &TraceWriter<F>) {
         // Assign multiplicities to the trace
         self.multiplicity_data
             .lock()
