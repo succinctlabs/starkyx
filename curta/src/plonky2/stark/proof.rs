@@ -14,8 +14,7 @@ use plonky2::plonk::config::GenericConfig;
 
 use super::config::StarkyConfig;
 use super::Starky;
-use crate::air::parser::AirParser;
-use crate::air::RAir;
+use crate::air::{RAir, RAirData};
 use crate::maybe_rayon::*;
 use crate::plonky2::challenger::{Plonky2Challenger, Plonky2RecursiveChallenger};
 use crate::plonky2::parser::RecursiveStarkParser;
@@ -46,7 +45,7 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> S
         lde_bits - config.fri_config.rate_bits
     }
 
-    pub(crate) fn get_challenges<AP: AirParser, A: RAir<AP>, const COLUMNS: usize>(
+    pub(crate) fn get_challenges<A: RAirData, const COLUMNS: usize>(
         &self,
         config: &StarkyConfig<F, C, D>,
         stark: &Starky<A, COLUMNS>,

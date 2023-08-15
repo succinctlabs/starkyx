@@ -1,19 +1,9 @@
 use super::constraint::Constraint;
 use super::{AirParameters, Chip};
 use crate::air::parser::AirParser;
-use crate::air::{AirConstraint, RAir, RoundDatum};
+use crate::air::{AirConstraint, RAir, RoundDatum, RAirData};
 
-impl<AP: AirParser, L: AirParameters<Field = AP::Field>> RAir<AP> for Chip<L>
-where
-    Constraint<L>: AirConstraint<AP>,
-{
-    /// Evaluation of the vanishing polynomials.
-    fn eval(&self, parser: &mut AP) {
-        for constraint in self.constraints.iter() {
-            constraint.eval(parser);
-        }
-    }
-
+impl<L : AirParameters> RAirData for Chip<L> {
     /// The maximal constraint degree
     fn constraint_degree(&self) -> usize {
         3
@@ -44,5 +34,17 @@ where
 
     fn width(&self) -> usize {
         L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS
+    }
+}
+
+impl<AP: AirParser, L: AirParameters<Field = AP::Field>> RAir<AP> for Chip<L>
+where
+    Constraint<L>: AirConstraint<AP>,
+{
+    /// Evaluation of the vanishing polynomials.
+    fn eval(&self, parser: &mut AP) {
+        for constraint in self.constraints.iter() {
+            constraint.eval(parser);
+        }
     }
 }

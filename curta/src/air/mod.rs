@@ -22,10 +22,7 @@ pub trait AirConstraint<AP: AirParser> {
     fn eval(&self, parser: &mut AP);
 }
 
-pub trait RAir<AP: AirParser> {
-    /// Evaluation of the vanishing polynomials.
-    fn eval(&self, parser: &mut AP);
-
+pub trait RAirData {
     fn width(&self) -> usize;
 
     /// The maximal constraint degree
@@ -49,7 +46,12 @@ pub trait RAir<AP: AirParser> {
 
     fn quotient_degree_factor(&self) -> usize {
         1.max(self.constraint_degree() - 1)
-    }
+    } 
+}
+
+pub trait RAir<AP: AirParser> : RAirData {
+    /// Evaluation of the vanishing polynomials.
+    fn eval(&self, parser: &mut AP);
 }
 
 impl RoundDatum {

@@ -16,7 +16,7 @@ use plonky2::plonk::config::GenericConfig;
 use self::config::StarkyConfig;
 use super::parser::{RecursiveStarkParser, StarkParser};
 use crate::air::parser::AirParser;
-use crate::air::RAir;
+use crate::air::{RAir, RAirData};
 use crate::stark::Stark;
 
 pub mod config;
@@ -43,7 +43,6 @@ impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
     }
 
     fn num_quotient_polys<
-        AP: AirParser,
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F>,
         const D: usize,
@@ -52,14 +51,13 @@ impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
         config: &StarkyConfig<F, C, D>,
     ) -> usize
     where
-        A: RAir<AP>,
+        A: RAirData,
     {
         self.air().quotient_degree_factor() * config.num_challenges
     }
 
     /// Computes the FRI instance used to prove this Stark.
     fn fri_instance<
-        AP: AirParser,
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F>,
         const D: usize,
@@ -70,7 +68,7 @@ impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
         config: &StarkyConfig<F, C, D>,
     ) -> FriInstanceInfo<F, D>
     where
-        A: RAir<AP>,
+        A: RAirData,
     {
         let mut oracles = vec![];
         let mut trace_info: Vec<FriPolynomialInfo> = vec![];

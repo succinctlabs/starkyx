@@ -19,8 +19,9 @@ use super::config::StarkyConfig;
 use super::proof::{StarkOpeningSet, StarkOpeningSetTarget, StarkProof, StarkProofTarget};
 use super::Starky;
 use crate::air::parser::AirParser;
-use crate::air::RAir;
+use crate::air::{RAir, RAirData};
 use crate::plonky2::parser::consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
+use crate::plonky2::parser::global::GlobalStarkParser;
 use crate::plonky2::parser::{RecursiveStarkParser, StarkParser};
 
 #[derive(Debug, Clone)]
@@ -38,7 +39,7 @@ where
         public_inputs: &[F],
     ) -> Result<()>
     where
-        A: for<'a> RAir<StarkParser<'a, F, C::FE, C::FE, D, D>>,
+        A: for<'a> RAir<StarkParser<'a, F, C::FE, C::FE, D, D>>, //+ for<'a> RAir<GlobalStarkParser<'a, F, F, F, D, 1>>,
     {
         let degree_bits = proof.recover_degree_bits(config);
         let challenges = proof.get_challenges(config, stark, public_inputs, degree_bits);
@@ -50,6 +51,14 @@ where
             next_values,
             quotient_polys,
         } = &proof.openings;
+
+        // Verify the global constraints
+        let mut global_parser = GlobalStarkParser {
+            global_vars: &proof.global_values,
+            public_vars: public_inputs,
+            challenges: &challenges.stark_betas,
+        };
+        // stark.air().eval(&mut global_parser);
 
         let global_values_ext = proof
             .global_values
@@ -131,7 +140,7 @@ where
         Ok(())
     }
 
-    pub fn validate_proof_shape<AP: AirParser, A: RAir<AP>, const COLUMNS: usize>(
+    pub fn validate_proof_shape<A: RAirData, const COLUMNS: usize>(
         config: &StarkyConfig<F, C, D>,
         stark: &Starky<A, COLUMNS>,
         proof: &StarkProof<F, C, D>,

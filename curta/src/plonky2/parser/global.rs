@@ -1,7 +1,6 @@
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
-use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
@@ -24,7 +23,193 @@ where
 
 pub struct GlobalRecursiveStarkParser<'a, F: RichField + Extendable<D>, const D: usize> {
     pub(crate) builder: &'a mut CircuitBuilder<F, D>,
-    pub(crate) global_vars: &'a [ExtensionTarget<D>],
+    pub(crate) global_vars: &'a [Target],
     pub(crate) public_vars: &'a [Target],
     pub(crate) challenges: &'a [Target],
+}
+
+impl<'a, F, FE, P, const D: usize, const D2: usize> AirParser
+    for GlobalStarkParser<'a, F, FE, P, D, D2>
+where
+    F: RichField + Extendable<D>,
+    FE: FieldExtension<D2, BaseField = F>,
+    P: PackedField<Scalar = FE>,
+{
+    type Field = F;
+    type Var = P;
+
+    fn local_slice(&self) -> &[Self::Var] {
+        unreachable!("local_slice not implemented for GlobalStarkParser");
+    }
+
+    fn next_slice(&self) -> &[Self::Var] {
+        unreachable!("next_slice not implemented for GlobalStarkParser");
+    }
+
+    fn challenge_slice(&self) -> &[Self::Var] {
+        self.challenges
+    }
+
+    fn global_slice(&self) -> &[Self::Var] {
+        self.global_vars
+    }
+
+    fn public_slice(&self) -> &[Self::Var] {
+        self.public_vars
+    }
+
+    fn constant(&mut self, value: Self::Field) -> Self::Var {
+        P::from(FE::from_basefield(value))
+    }
+
+    fn constraint(&mut self, constraint: Self::Var) {
+        assert_eq!(constraint.as_slice(), P::ZEROS.as_slice());
+    }
+
+    fn constraint_transition(&mut self, constraint: Self::Var) {
+        assert_eq!(constraint.as_slice(), P::ZEROS.as_slice());
+    }
+
+    fn constraint_first_row(&mut self, constraint: Self::Var) {
+        assert_eq!(constraint.as_slice(), P::ZEROS.as_slice());
+    }
+
+    fn constraint_last_row(&mut self, constraint: Self::Var) {
+        assert_eq!(constraint.as_slice(), P::ZEROS.as_slice());
+    }
+
+    fn add(&mut self, a: Self::Var, b: Self::Var) -> Self::Var {
+        a + b
+    }
+
+    fn sub(&mut self, a: Self::Var, b: Self::Var) -> Self::Var {
+        a - b
+    }
+
+    fn neg(&mut self, a: Self::Var) -> Self::Var {
+        -a
+    }
+    fn mul(&mut self, a: Self::Var, b: Self::Var) -> Self::Var {
+        a * b
+    }
+
+    fn zero(&mut self) -> Self::Var {
+        P::ZEROS
+    }
+
+    fn one(&mut self) -> Self::Var {
+        P::ONES
+    }
+
+    fn mul_const(&mut self, a: Self::Var, b: Self::Field) -> Self::Var {
+        a * FE::from_basefield(b)
+    }
+
+    fn add_const(&mut self, a: Self::Var, b: Self::Field) -> Self::Var {
+        a + FE::from_basefield(b)
+    }
+}
+
+impl<'a, F, FE, P, const D: usize, const D2: usize> PolynomialParser
+    for GlobalStarkParser<'a, F, FE, P, D, D2>
+where
+    F: RichField + Extendable<D>,
+    FE: FieldExtension<D2, BaseField = F>,
+    P: PackedField<Scalar = FE>,
+{
+}
+
+impl<'a, F, FE, E: CubicParameters<F>, P, const D: usize, const D2: usize> CubicParser<E>
+    for GlobalStarkParser<'a, F, FE, P, D, D2>
+where
+    F: RichField + Extendable<D>,
+    FE: FieldExtension<D2, BaseField = F>,
+    P: PackedField<Scalar = FE>,
+{
+}
+
+impl<'a, F: RichField + Extendable<D>, const D: usize> AirParser
+    for GlobalRecursiveStarkParser<'a, F, D>
+{
+    type Field = F;
+    type Var = Target;
+
+    fn constant(&mut self, value: Self::Field) -> Self::Var {
+        self.builder.constant(value)
+    }
+
+    fn local_slice(&self) -> &[Self::Var] {
+        unreachable!("local_slice not implemented for GlobalRecursiveStarkParser");
+    }
+
+    fn next_slice(&self) -> &[Self::Var] {
+        unreachable!("next_slice not implemented for GlobalRecursiveStarkParser");
+    }
+
+    fn challenge_slice(&self) -> &[Self::Var] {
+        self.challenges
+    }
+
+    fn global_slice(&self) -> &[Self::Var] {
+        self.global_vars
+    }
+
+    fn public_slice(&self) -> &[Self::Var] {
+        self.public_vars
+    }
+
+    fn constraint(&mut self, constraint: Self::Var) {
+        self.builder.assert_zero(constraint);
+    }
+
+    fn constraint_transition(&mut self, constraint: Self::Var) {
+        self.builder.assert_zero(constraint);
+    }
+
+    fn constraint_first_row(&mut self, constraint: Self::Var) {
+        self.builder.assert_zero(constraint);
+    }
+
+    fn constraint_last_row(&mut self, constraint: Self::Var) {
+        self.builder.assert_zero(constraint);
+    }
+
+    fn add(&mut self, a: Self::Var, b: Self::Var) -> Self::Var {
+        self.builder.add(a, b)
+    }
+
+    fn sub(&mut self, a: Self::Var, b: Self::Var) -> Self::Var {
+        self.builder.sub(a, b)
+    }
+
+    fn neg(&mut self, a: Self::Var) -> Self::Var {
+        let zero = self.zero();
+        self.builder.sub(zero, a)
+    }
+
+    fn mul(&mut self, a: Self::Var, b: Self::Var) -> Self::Var {
+        self.builder.mul(a, b)
+    }
+
+    fn zero(&mut self) -> Self::Var {
+        self.builder.zero()
+    }
+
+    fn one(&mut self) -> Self::Var {
+        self.builder.one()
+    }
+
+    fn mul_const(&mut self, a: Self::Var, b: Self::Field) -> Self::Var {
+        self.builder.mul_const(b, a)
+    }
+}
+
+impl<'a, F: RichField + Extendable<D>, const D: usize> PolynomialParser
+    for GlobalRecursiveStarkParser<'a, F, D>
+{
+}
+
+impl<'a, F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> CubicParser<E>
+    for GlobalRecursiveStarkParser<'a, F, D>
+{
 }

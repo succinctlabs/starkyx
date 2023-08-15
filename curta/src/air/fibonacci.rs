@@ -1,5 +1,5 @@
 use super::parser::AirParser;
-use super::RAir;
+use super::{RAir, RAirData};
 use crate::air::RoundDatum;
 use crate::math::prelude::*;
 use crate::trace::AirTrace;
@@ -37,6 +37,24 @@ impl Default for FibonacciAir {
     }
 }
 
+impl RAirData for FibonacciAir {
+    fn constraint_degree(&self) -> usize {
+        1
+    }
+
+    fn width(&self) -> usize {
+        2
+    }
+
+    fn round_data(&self) -> Vec<RoundDatum> {
+        vec![RoundDatum::new(self.width(), (0, 3), 0)]
+    }
+
+    fn num_public_inputs(&self) -> usize {
+        3
+    } 
+}
+
 impl<AP: AirParser> RAir<AP> for FibonacciAir {
     fn eval(&self, parser: &mut AP) {
         // Check public inputs.
@@ -58,22 +76,6 @@ impl<AP: AirParser> RAir<AP> for FibonacciAir {
             parser.sub(tmp, parser.local_slice()[1])
         };
         parser.constraint_transition(second_col_constraint);
-    }
-
-    fn constraint_degree(&self) -> usize {
-        1
-    }
-
-    fn width(&self) -> usize {
-        2
-    }
-
-    fn round_data(&self) -> Vec<RoundDatum> {
-        vec![RoundDatum::new(RAir::<AP>::width(self), (0, 3), 0)]
-    }
-
-    fn num_public_inputs(&self) -> usize {
-        3
     }
 }
 
