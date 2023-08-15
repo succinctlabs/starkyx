@@ -3,6 +3,7 @@ use alloc::sync::Arc;
 use anyhow::{Error, Result};
 
 use super::writer::TraceWriter;
+use crate::chip::builder::AirTraceData;
 use crate::chip::table::lookup::Lookup;
 use crate::chip::{AirParameters, Chip};
 use crate::math::prelude::*;
@@ -13,6 +14,7 @@ use crate::trace::AirTrace;
 #[derive(Debug, Clone)]
 pub struct ArithmeticGenerator<L: AirParameters> {
     writer: TraceWriter<L::Field>,
+    // air_data: AirTraceData<L>,
 }
 
 impl<L: ~const AirParameters> ArithmeticGenerator<L> {
@@ -29,6 +31,21 @@ impl<L: ~const AirParameters> ArithmeticGenerator<L> {
             ),
         }
     }
+
+    // pub fn new(air_data: AirTraceData<L>) -> Self {
+    //     let num_public_inputs = air_data.num_public_inputs;
+    //     let num_global_values = air_data.num_global_values;
+    //     Self {
+    //         writer: TraceWriter::new_with_value(
+    //             L::Field::ZERO,
+    //             L::num_columns(),
+    //             L::num_rows(),
+    //             num_public_inputs,
+    //             num_global_values,
+    //         ),
+    //     air_data,
+    //     }
+    // }
 
     pub fn new_writer(&self) -> TraceWriter<L::Field> {
         self.writer.clone()

@@ -29,6 +29,7 @@ pub struct AirBuilder<L: AirParameters> {
     extended_index: usize,
     shared_memory: SharedMemory,
     pub(crate) instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
+    pub (crate) global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub(crate) constraints: Vec<Constraint<L>>,
     pub(crate) global_constraints: Vec<Constraint<L>>,
     pub(crate) accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
@@ -36,6 +37,20 @@ pub struct AirBuilder<L: AirParameters> {
     pub(crate) lookup_data: Vec<Lookup<L::Field, L::CubicParams>>,
     pub(crate) evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
     range_table: Option<ElementRegister>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AirTraceData<L : AirParameters> {
+    pub num_challenges: usize,
+    pub num_public_inputs: usize,
+    pub num_global_values: usize,
+    pub instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
+    pub global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>, 
+    pub accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
+    pub bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
+    pub lookup_data: Vec<Lookup<L::Field, L::CubicParams>>,
+    pub evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
+    pub range_table: Option<ElementRegister>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
@@ -52,6 +67,7 @@ impl<L: AirParameters> AirBuilder<L> {
             extended_index: L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS,
             shared_memory,
             instructions: Vec::new(),
+            global_instructions: Vec::new(),
             constraints: Vec::new(),
             global_constraints: Vec::new(),
             accumulators: Vec::new(),
