@@ -1,3 +1,5 @@
+pub mod generator;
+
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::cycle::Cycle;
@@ -256,8 +258,6 @@ impl<L: AirParameters> AirBuilder<L> {
     where
         L::Instruction: U32Instructions,
     {
-        // The sha round
-
         // Initialize working variables
         let a = msg.get(0);
         let b = msg.get(1);
@@ -346,38 +346,8 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-
-    use plonky2::timed;
-    use plonky2::util::timing::TimingTree;
-
-    use super::*;
-    pub use crate::chip::builder::tests::*;
-    use crate::chip::builder::AirBuilder;
-    use crate::chip::uint::operations::instruction::U32Instruction;
-    use crate::chip::uint::util::u32_to_le_field_bytes;
-    use crate::chip::AirParameters;
-
-    #[derive(Debug, Clone, Copy)]
-    pub struct SHA256Test;
-
-    impl const AirParameters for SHA256Test {
-        type Field = GoldilocksField;
-        type CubicParams = GoldilocksCubicParameters;
-
-        type Instruction = U32Instruction;
-
-        const NUM_FREE_COLUMNS: usize = 551;
-        const EXTENDED_COLUMNS: usize = 945;
-        const NUM_ARITHMETIC_COLUMNS: usize = 0;
-
-        fn num_rows_bits() -> usize {
-            16
-        }
-    }
-
-    fn sha_256_first_stage(chunk: [u32; 16]) -> [u32; 64] {
+impl SHA256Gadget {
+    fn process_inputs(chunk: [u32; 16]) -> [u32; 64] {
         let mut w = [0u32; 64];
 
         for i in 0..16 {
@@ -396,10 +366,10 @@ mod tests {
         w
     }
 
-    fn sha_compress_round(hash: [u32; 8], w: &[u32], round_constants: [u32; 64]) -> [u32; 8] {
+    fn compress_round(hash: [u32; 8], w: &[u32], round_constants: [u32; 64]) -> [u32; 8] {
         let mut msg = hash;
         for i in 0..64 {
-            msg = sha_step(msg, w[i], round_constants[i]);
+            msg = SHA256Gadget::step(msg, w[i], round_constants[i]);
         }
 
         [
@@ -414,7 +384,7 @@ mod tests {
         ]
     }
 
-    fn sha_step(msg: [u32; 8], w_i: u32, round_constant: u32) -> [u32; 8] {
+    pub fn step(msg: [u32; 8], w_i: u32, round_constant: u32) -> [u32; 8] {
         let mut a = msg[0];
         let mut b = msg[1];
         let mut c = msg[2];
@@ -447,7 +417,7 @@ mod tests {
         [a, b, c, d, e, f, g, h]
     }
 
-    fn pad_message(msg: &[u8]) -> [u32; 16] {
+    pub fn pad(msg: &[u8]) -> [u32; 16] {
         let mut padded_msg = [0u8; 64];
         padded_msg[..msg.len()].copy_from_slice(msg);
         padded_msg[msg.len()] = 1 << 7;
@@ -463,6 +433,38 @@ mod tests {
             .collect::<Vec<_>>()
             .try_into()
             .unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use plonky2::timed;
+    use plonky2::util::timing::TimingTree;
+
+    use super::*;
+    pub use crate::chip::builder::tests::*;
+    use crate::chip::builder::AirBuilder;
+    use crate::chip::uint::operations::instruction::U32Instruction;
+    use crate::chip::uint::util::u32_to_le_field_bytes;
+    use crate::chip::AirParameters;
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct SHA256Test;
+
+    impl const AirParameters for SHA256Test {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
+
+        type Instruction = U32Instruction;
+
+        const NUM_FREE_COLUMNS: usize = 551;
+        const EXTENDED_COLUMNS: usize = 945;
+        const NUM_ARITHMETIC_COLUMNS: usize = 0;
+
+        fn num_rows_bits() -> usize {
+            16
+        }
     }
 
     #[test]
@@ -510,9 +512,9 @@ mod tests {
         let msg = b"abc";
         let expected_digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 
-        let padded_msg = pad_message(msg);
+        let padded_msg = SHA256Gadget::pad(msg);
 
-        let w_val = sha_256_first_stage(padded_msg);
+        let w_val = SHA256Gadget::process_inputs(padded_msg);
 
         let mut w_val_vec: Vec<[u32; 64]> = vec![];
         for _ in 0..1024 {
@@ -527,8 +529,9 @@ mod tests {
                 ROUND_CONSTANTS.map(u32_to_le_field_bytes),
                 0,
             );
-            for i in 0..1024 {
-                let hash_val = sha_compress_round(INITIAL_HASH, &w_val_vec[i], ROUND_CONSTANTS);
+            (0..1024).into_par_iter().for_each(|i| {
+                let hash_val =
+                    SHA256Gadget::compress_round(INITIAL_HASH, &w_val_vec[i], ROUND_CONSTANTS);
                 writer.write_array(
                     &hash_state.get_subarray(i * 8..i * 8 + 8),
                     hash_val.map(u32_to_le_field_bytes),
@@ -551,15 +554,17 @@ mod tests {
                         let w_pub = public_w.get(i * 16 + j);
                         writer.write(&w_pub, &u32_to_le_field_bytes(w_val_vec[i][j]), row);
                     }
-                    writer.write_row_instructions(&generator.air_data, row);
                 }
+            });
+            for i in 0..L::num_rows() {
+                writer.write_row_instructions(&generator.air_data, i);
             }
             table.write_multiplicities(&writer);
         });
 
         // let hash_next_val = |i| writer.read_array::<_, 8>(&hash_next, i).map(to_val);
 
-        let hash_val = sha_compress_round(INITIAL_HASH, &w_val, ROUND_CONSTANTS);
+        let hash_val = SHA256Gadget::compress_round(INITIAL_HASH, &w_val, ROUND_CONSTANTS);
         // assert_eq!(hash_next_val(63), hash_val);
 
         let expected_hash: [u32; 8] = hex::decode(expected_digest)
