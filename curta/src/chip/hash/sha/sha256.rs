@@ -340,23 +340,23 @@ mod tests {
         let public_w = builder.alloc_array_public::<U32Register>(16 * 1024);
 
         // Get the w value from the bus
-        // let w_challenges =
-        //     builder.alloc_challenge_array::<CubicRegister>(U32Register::size_of() + 1);
-        // let clk_w =
-        //     builder.accumulate_expressions(&w_challenges, &[clk.expr(), w_window.get(0).expr()]);
-        // builder.output_from_bus_filtered(channel_idx, clk_w, w_bit.expr());
+        let w_challenges =
+            builder.alloc_challenge_array::<CubicRegister>(U32Register::size_of() + 1);
+        let clk_w =
+            builder.accumulate_expressions(&w_challenges, &[clk.expr(), w_window.get(0).expr()]);
+        builder.output_from_bus_filtered(channel_idx, clk_w, w_bit.expr());
 
         // Put public values in the bus
-        // for i in 0..1024 {
-        //     for k in 0..16 {
-        //         let w = public_w.get(i * 16 + k);
-        //         let clk_expr =
-        //             ArithmeticExpression::from_constant(F::from_canonical_usize(i * 64 + k));
-        //         let digest =
-        //             builder.accumulate_public_expressions(&w_challenges, &[clk_expr, w.expr()]);
-        //         bus.insert_global_value(&digest);
-        //     }
-        // }
+        for i in 0..1024 {
+            for k in 0..16 {
+                let w = public_w.get(i * 16 + k);
+                let clk_expr =
+                    ArithmeticExpression::from_constant(F::from_canonical_usize(i * 64 + k));
+                let digest =
+                    builder.accumulate_public_expressions(&w_challenges, &[clk_expr, w.expr()]);
+                bus.insert_global_value(&digest);
+            }
+        }
 
         builder.sha_premessage(&clk, &w_window, &w_bit, &cycle_64, &mut operations);
 

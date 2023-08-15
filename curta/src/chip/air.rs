@@ -1,9 +1,9 @@
 use super::constraint::Constraint;
 use super::{AirParameters, Chip};
 use crate::air::parser::AirParser;
-use crate::air::{AirConstraint, RAir, RoundDatum, RAirData};
+use crate::air::{AirConstraint, RAir, RAirData, RoundDatum};
 
-impl<L : AirParameters> RAirData for Chip<L> {
+impl<L: AirParameters> RAirData for Chip<L> {
     /// The maximal constraint degree
     fn constraint_degree(&self) -> usize {
         3
@@ -41,9 +41,14 @@ impl<AP: AirParser, L: AirParameters<Field = AP::Field>> RAir<AP> for Chip<L>
 where
     Constraint<L>: AirConstraint<AP>,
 {
-    /// Evaluation of the vanishing polynomials.
     fn eval(&self, parser: &mut AP) {
         for constraint in self.constraints.iter() {
+            constraint.eval(parser);
+        }
+    }
+
+    fn eval_global(&self, parser: &mut AP) {
+        for constraint in self.global_constraints.iter() {
             constraint.eval(parser);
         }
     }

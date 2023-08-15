@@ -46,7 +46,7 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 
     pub fn constrain_bus(&mut self, bus: Bus<L::CubicParams>) {
-        self.constraints.push(bus.into());
+        self.global_constraints.push(bus.into());
     }
 }
 

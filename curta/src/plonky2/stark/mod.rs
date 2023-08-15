@@ -15,7 +15,6 @@ use plonky2::plonk::config::GenericConfig;
 
 use self::config::StarkyConfig;
 use super::parser::{RecursiveStarkParser, StarkParser};
-use crate::air::parser::AirParser;
 use crate::air::{RAir, RAirData};
 use crate::stark::Stark;
 
@@ -57,11 +56,7 @@ impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
     }
 
     /// Computes the FRI instance used to prove this Stark.
-    fn fri_instance<
-        F: RichField + Extendable<D>,
-        C: GenericConfig<D, F = F>,
-        const D: usize,
-    >(
+    fn fri_instance<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
         &self,
         zeta: F::Extension,
         g: F,
@@ -105,7 +100,6 @@ impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
 
     /// Computes the FRI instance used to prove this Stark.
     fn fri_instance_target<
-        AP: AirParser,
         C: GenericConfig<D, F = F>,
         F: RichField + Extendable<D>,
         const D: usize,
@@ -117,7 +111,7 @@ impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
         config: &StarkyConfig<F, C, D>,
     ) -> FriInstanceInfoTarget<D>
     where
-        A: RAir<AP>,
+        A: RAirData,
     {
         let mut oracles = vec![];
         let mut trace_info: Vec<FriPolynomialInfo> = vec![];
@@ -206,6 +200,7 @@ pub(crate) mod tests {
     use super::*;
     use crate::air::fibonacci::FibonacciAir;
     use crate::math::prelude::*;
+    use crate::plonky2::parser::global::{GlobalRecursiveStarkParser, GlobalStarkParser};
     use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
     use crate::plonky2::stark::gadget::StarkGadget;
     use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
@@ -228,7 +223,8 @@ pub(crate) mod tests {
         public_inputs: &[F],
     ) where
         A: for<'a> RAir<StarkParser<'a, F, C::FE, C::FE, D, D>>
-            + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
+            + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>
+            + for<'a> RAir<GlobalStarkParser<'a, F, F, F, D, 1>>,
         T: TraceGenerator<F, A>,
         T::Error: Into<anyhow::Error>,
     {
@@ -260,7 +256,8 @@ pub(crate) mod tests {
     ) where
         C::Hasher: AlgebraicHasher<F>,
         A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
-            + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
+            + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>
+            + for<'a> RAir<GlobalRecursiveStarkParser<'a, F, D>>,
         T: Clone + Debug + Send + Sync + 'static + TraceGenerator<F, A>,
         T::Error: Into<anyhow::Error>,
     {

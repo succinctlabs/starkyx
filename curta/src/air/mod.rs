@@ -46,12 +46,15 @@ pub trait RAirData {
 
     fn quotient_degree_factor(&self) -> usize {
         1.max(self.constraint_degree() - 1)
-    } 
+    }
 }
 
-pub trait RAir<AP: AirParser> : RAirData {
+pub trait RAir<AP: AirParser>: RAirData {
     /// Evaluation of the vanishing polynomials.
     fn eval(&self, parser: &mut AP);
+
+    // Evaluation of global vanishing constraints
+    fn eval_global(&self, parser: &mut AP);
 }
 
 impl RoundDatum {

@@ -38,6 +38,7 @@ impl<L: AirParameters> AirBuilder<L> {
         challenges: &ArrayRegister<CubicRegister>,
         values: &[ArithmeticExpression<L::Field>],
         digest: &CubicRegister,
+        global: bool,
     ) {
         let total_length = values.iter().map(|data| data.size).sum::<usize>();
         assert_eq!(
@@ -54,7 +55,11 @@ impl<L: AirParameters> AirBuilder<L> {
         };
 
         self.accumulators.push(accumulator.clone());
-        self.constraints.push(accumulator.into());
+        if global {
+            self.global_constraints.push(accumulator.into());
+        } else {
+            self.constraints.push(accumulator.into());
+        }
     }
 
     pub fn accumulate_expressions(
@@ -70,7 +75,7 @@ impl<L: AirParameters> AirBuilder<L> {
         );
 
         let digest = self.alloc_extended::<CubicRegister>();
-        self.set_accumulate_expressions(challenges, values, &digest);
+        self.set_accumulate_expressions(challenges, values, &digest, false);
 
         digest
     }
@@ -88,7 +93,7 @@ impl<L: AirParameters> AirBuilder<L> {
         );
 
         let digest = self.alloc_global::<CubicRegister>();
-        self.set_accumulate_expressions(challenges, values, &digest);
+        self.set_accumulate_expressions(challenges, values, &digest, true);
 
         digest
     }

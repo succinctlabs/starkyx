@@ -52,7 +52,7 @@ impl RAirData for FibonacciAir {
 
     fn num_public_inputs(&self) -> usize {
         3
-    } 
+    }
 }
 
 impl<AP: AirParser> RAir<AP> for FibonacciAir {
@@ -77,6 +77,8 @@ impl<AP: AirParser> RAir<AP> for FibonacciAir {
         };
         parser.constraint_transition(second_col_constraint);
     }
+
+    fn eval_global(&self, parser: &mut AP) {}
 }
 
 #[cfg(test)]

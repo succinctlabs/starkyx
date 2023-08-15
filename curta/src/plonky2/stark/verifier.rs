@@ -18,10 +18,9 @@ use plonky2::util::reducing::ReducingFactorTarget;
 use super::config::StarkyConfig;
 use super::proof::{StarkOpeningSet, StarkOpeningSetTarget, StarkProof, StarkProofTarget};
 use super::Starky;
-use crate::air::parser::AirParser;
 use crate::air::{RAir, RAirData};
 use crate::plonky2::parser::consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
-use crate::plonky2::parser::global::GlobalStarkParser;
+use crate::plonky2::parser::global::{GlobalRecursiveStarkParser, GlobalStarkParser};
 use crate::plonky2::parser::{RecursiveStarkParser, StarkParser};
 
 #[derive(Debug, Clone)]
@@ -39,7 +38,8 @@ where
         public_inputs: &[F],
     ) -> Result<()>
     where
-        A: for<'a> RAir<StarkParser<'a, F, C::FE, C::FE, D, D>>, //+ for<'a> RAir<GlobalStarkParser<'a, F, F, F, D, 1>>,
+        A: for<'a> RAir<StarkParser<'a, F, C::FE, C::FE, D, D>>
+            + for<'a> RAir<GlobalStarkParser<'a, F, F, F, D, 1>>,
     {
         let degree_bits = proof.recover_degree_bits(config);
         let challenges = proof.get_challenges(config, stark, public_inputs, degree_bits);
@@ -58,7 +58,7 @@ where
             public_vars: public_inputs,
             challenges: &challenges.stark_betas,
         };
-        // stark.air().eval(&mut global_parser);
+        stark.air().eval_global(&mut global_parser);
 
         let global_values_ext = proof
             .global_values
@@ -196,7 +196,8 @@ where
         public_inputs: &[Target],
     ) where
         C::Hasher: AlgebraicHasher<F>,
-        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
+        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
+            + for<'a> RAir<GlobalRecursiveStarkParser<'a, F, D>>,
     {
         let StarkOpeningSetTarget {
             local_values,
@@ -229,6 +230,15 @@ where
             l_0,
             l_last,
         );
+
+        // verify global constraints
+        let mut global_parser = GlobalRecursiveStarkParser {
+            builder,
+            global_vars: &proof.global_values,
+            public_vars: public_inputs,
+            challenges: &challenges.stark_betas,
+        };
+        stark.air().eval_global(&mut global_parser);
 
         let global_vals_ext = proof
             .global_values
