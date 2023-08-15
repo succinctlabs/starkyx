@@ -9,9 +9,9 @@ use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::register::{Register, RegisterSerializable};
+use crate::math::extension::cubic::element::CubicElement;
+use crate::math::extension::CubicParameters;
 use crate::math::prelude::*;
-use crate::plonky2::field::cubic::element::CubicElement;
-use crate::plonky2::field::CubicParameters;
 
 impl<F: Field, E: CubicParameters<F>> Digest<F, E> {
     fn eval_digest<AP: CubicParser<E, Field = F>>(

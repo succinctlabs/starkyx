@@ -50,15 +50,10 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn sha_premessage(
         &mut self,
         clk: &ElementRegister,
-        w: &U32Register,
+        w_window: &ArrayRegister<U32Register>,
         w_bit: &BitRegister,
-        w_minus_2: &U32Register,
-        w_minus_7: &U32Register,
-        w_minus_15: &U32Register,
-        w_minus_16: &U32Register,
         cycle_64: &Cycle<L::Field>,
         operations: &mut ByteLookupOperations,
-        channel_idx: usize,
     ) where
         L::Instruction: U32Instructions,
     {
@@ -76,26 +71,26 @@ impl<L: AirParameters> AirBuilder<L> {
         );
 
         // Calculate s_0 = w_i_minus_15.rotate_right(7) ^ w_i_minus_15.rotate_right(18) ^ (w_i_minus_15 >> 3);
-        let w_i_minus_15_rotate_7 = self.bit_rotate_right(&w_minus_15, 7, operations);
-        let w_i_minus_15_rotate_18 = self.bit_rotate_right(&w_minus_15, 18, operations);
-        let w_i_minus_15_shr_3 = self.bit_shr(&w_minus_15, 3, operations);
+        let w_i_minus_15_rotate_7 = self.bit_rotate_right(&w_window.get(15), 7, operations);
+        let w_i_minus_15_rotate_18 = self.bit_rotate_right(&w_window.get(15), 18, operations);
+        let w_i_minus_15_shr_3 = self.bit_shr(&w_window.get(15), 3, operations);
 
         let mut s_0 = self.bitwise_xor(&w_i_minus_15_rotate_7, &w_i_minus_15_rotate_18, operations);
         s_0 = self.bitwise_xor(&s_0, &w_i_minus_15_shr_3, operations);
 
         // Calculate s_1 = w_i_minus_2.rotate_right(17) ^ w_i_minus_2.rotate_right(19) ^ (w_i_minus_2 >> 10);
-        let w_i_minus_2_rotate_17 = self.bit_rotate_right(&w_minus_2, 17, operations);
-        let w_i_minus_2_rotate_19 = self.bit_rotate_right(&w_minus_2, 19, operations);
-        let w_i_minus_2_shr_10 = self.bit_shr(&w_minus_2, 10, operations);
+        let w_i_minus_2_rotate_17 = self.bit_rotate_right(&w_window.get(2), 17, operations);
+        let w_i_minus_2_rotate_19 = self.bit_rotate_right(&w_window.get(2), 19, operations);
+        let w_i_minus_2_shr_10 = self.bit_shr(&w_window.get(2), 10, operations);
 
         let mut s_1 = self.bitwise_xor(&w_i_minus_2_rotate_17, &w_i_minus_2_rotate_19, operations);
         s_1 = self.bitwise_xor(&s_1, &w_i_minus_2_shr_10, operations);
 
         // Calculate w_i = w_i_minus_16 + s_0 + w_i_minus_7 + s_1;
-        let mut w_i = self.add_u32(&w_minus_16, &s_0, operations);
-        w_i = self.add_u32(&w_i, &w_minus_7, operations);
+        let mut w_i = self.add_u32(&w_window.get(16), &s_0, operations);
+        w_i = self.add_u32(&w_i, &w_window.get(7), operations);
         w_i = self.add_u32(&w_i, &s_1, operations);
-        self.assert_expression_zero(w_bit.not_expr() * (w_i.expr() - w.expr()));
+        self.assert_expression_zero(w_bit.not_expr() * (w_i.expr() - w_window.get(0).expr()));
     }
 
     pub fn sha_256_step(
@@ -104,11 +99,10 @@ impl<L: AirParameters> AirBuilder<L> {
         hash: &ArrayRegister<U32Register>,
         hash_bit: &BitRegister,
         msg: &ArrayRegister<U32Register>,
-        w: &U32Register,
+        w_window: &ArrayRegister<U32Register>,
         round_constant: &U32Register,
         cycle_64: &Cycle<L::Field>,
         operations: &mut ByteLookupOperations,
-        channel_idx: usize,
     ) -> ArrayRegister<U32Register>
     where
         L::Instruction: U32Instructions,
@@ -142,7 +136,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let mut temp_1 = self.add_u32(&h, &sum_1, operations);
         temp_1 = self.add_u32(&temp_1, &ch, operations);
         temp_1 = self.add_u32(&temp_1, &round_constant, operations);
-        temp_1 = self.add_u32(&temp_1, &w, operations);
+        temp_1 = self.add_u32(&temp_1, &w_window.get(0), operations);
 
         // Calculate sum_0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
         let a_rotate_2 = self.bit_rotate_right(&a, 2, operations);
@@ -199,7 +193,6 @@ mod tests {
 
     use plonky2::timed;
     use plonky2::util::timing::TimingTree;
-    use rand::{thread_rng, Rng};
 
     use super::*;
     pub use crate::chip::builder::tests::*;
@@ -208,10 +201,8 @@ mod tests {
     use crate::chip::uint::bytes::operations::value::ByteOperation;
     use crate::chip::uint::bytes::register::ByteRegister;
     use crate::chip::uint::operations::instruction::U32Instruction;
-    use crate::chip::uint::register::ByteArrayRegister;
     use crate::chip::AirParameters;
-    use crate::math::prelude::*;
-    use crate::plonky2::field::Field;
+    use crate::math::field::Field;
 
     #[derive(Debug, Clone, Copy)]
     pub struct SHA256Test;
@@ -222,7 +213,7 @@ mod tests {
 
         type Instruction = U32Instruction;
 
-        const NUM_FREE_COLUMNS: usize = 512;
+        const NUM_FREE_COLUMNS: usize = 551;
         const EXTENDED_COLUMNS: usize = 945;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
@@ -301,11 +292,6 @@ mod tests {
         [a, b, c, d, e, f, g, h]
     }
 
-    fn sha_256_process(chunk: [u32; 16], hash: [u32; 8], round_constants: [u32; 64]) -> [u32; 8] {
-        let mut w = sha_256_pre(chunk);
-        sha_round(hash, &w, round_constants)
-    }
-
     fn pad_message(msg: &[u8]) -> [u32; 16] {
         let mut padded_msg = [0u8; 64];
         padded_msg[..msg.len()].copy_from_slice(msg);
@@ -339,7 +325,7 @@ mod tests {
 
         let (mut operations, mut table) = builder.byte_operations();
 
-        let w = builder.alloc::<U32Register>();
+        let w_window = builder.alloc_array::<U32Register>(17);
         let w_bit = builder.alloc::<BitRegister>();
         let msg_array = builder.alloc_array::<U32Register>(8);
         let hash = builder.alloc_array::<U32Register>(8);
@@ -347,84 +333,48 @@ mod tests {
         let hash_bit = builder.alloc::<BitRegister>();
         let cycle_64 = builder.cycle(6);
 
-        let w_minus_2 = builder.alloc::<U32Register>();
-        let w_minus_7 = builder.alloc::<U32Register>();
-        let w_minus_15 = builder.alloc::<U32Register>();
-        let w_minus_16 = builder.alloc::<U32Register>();
-
-        // Initialize the bus
         let mut bus = builder.new_bus();
         let channel_idx = bus.new_channel(&mut builder);
 
         // Public w values
-        let public_w = builder.alloc_array_public::<U32Register>(16);
-        // for w_pub in public_w.iter() {
-        //     builder.input_to_bus(channel_idx, w_pub);
+        let public_w = builder.alloc_array_public::<U32Register>(16 * 1024);
+
+        // Get the w value from the bus
+        // let w_challenges =
+        //     builder.alloc_challenge_array::<CubicRegister>(U32Register::size_of() + 1);
+        // let clk_w =
+        //     builder.accumulate_expressions(&w_challenges, &[clk.expr(), w_window.get(0).expr()]);
+        // builder.output_from_bus_filtered(channel_idx, clk_w, w_bit.expr());
+
+        // Put public values in the bus
+        // for i in 0..1024 {
+        //     for k in 0..16 {
+        //         let w = public_w.get(i * 16 + k);
+        //         let clk_expr =
+        //             ArithmeticExpression::from_constant(F::from_canonical_usize(i * 64 + k));
+        //         let digest =
+        //             builder.accumulate_public_expressions(&w_challenges, &[clk_expr, w.expr()]);
+        //         bus.insert_global_value(&digest);
+        //     }
         // }
 
-        // output values from the bus
+        builder.sha_premessage(&clk, &w_window, &w_bit, &cycle_64, &mut operations);
 
-        // Insert values to the bus
-        let w_challenges = builder.alloc_challenge_array(U32Register::size_of() + 1);
-        let clk_w = builder.accumulate_expressions(&w_challenges, &[clk.expr(), w.expr()]);
-        let clk_plus_two_w = builder.accumulate_expressions(
-            &w_challenges,
-            &[clk.expr() + F::from_canonical_u8(2), w.expr()],
-        );
-        let clk_plus_seven_w = builder.accumulate_expressions(
-            &w_challenges,
-            &[clk.expr() + F::from_canonical_u8(7), w.expr()],
-        );
-        let clk_plus_fifteen_w = builder.accumulate_expressions(
-            &w_challenges,
-            &[clk.expr() + F::from_canonical_u8(15), w.expr()],
-        );
-        let clk_plus_sixteen_w = builder.accumulate_expressions(
-            &w_challenges,
-            &[clk.expr() + F::from_canonical_u8(16), w.expr()],
-        );
-        // builder.input_to_bus(channel_idx, clk_w);
-        builder.input_to_bus(channel_idx, clk_plus_two_w);
-        // builder.input_to_bus(channel_idx, clk_plus_seven_w);
-        // builder.input_to_bus(channel_idx, clk_plus_fifteen_w);
-        // builder.input_to_bus(channel_idx, clk_plus_sixteen_w);
-
-        let clk_w_minus_2 =
-            builder.accumulate_expressions(&w_challenges, &[clk.expr(), w_minus_2.expr()]);
-        let clk_w_minus_7 =
-            builder.accumulate_expressions(&w_challenges, &[clk.expr(), w_minus_7.expr()]);
-        let clk_w_minus_15 =
-            builder.accumulate_expressions(&w_challenges, &[clk.expr(), w_minus_15.expr()]);
-        let clk_w_minus_16 =
-            builder.accumulate_expressions(&w_challenges, &[clk.expr(), w_minus_16.expr()]);
-        builder.output_from_bus(channel_idx, clk_w_minus_2);
-        builder.output_from_bus(channel_idx, clk_w_minus_7);
-        // builder.output_from_bus(channel_idx, clk_w_minus_15);
-        // builder.output_from_bus(channel_idx, clk_w_minus_16);
-
-        builder.sha_premessage(
-            &clk,
-            &w,
-            &w_bit,
-            &w_minus_2,
-            &w_minus_7,
-            &w_minus_15,
-            &w_minus_16,
-            &cycle_64,
-            &mut operations,
-            channel_idx,
-        );
+        // Set the window values
+        for i in 1..17 {
+            builder
+                .set_to_expression_transition(&w_window.get(i).next(), w_window.get(i - 1).expr());
+        }
 
         let hash_next = builder.sha_256_step(
             &clk,
             &hash,
             &hash_bit,
             &msg_array,
-            &w,
+            &w_window,
             &round_constant,
             &cycle_64,
             &mut operations,
-            channel_idx,
         );
 
         let dummy = builder.alloc::<ByteRegister>();
@@ -442,11 +392,11 @@ mod tests {
         // let msg = b"";
         // let expected_digest = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-        // let msg = b"plonky2";
-        // let expected_digest = "8943a85083f16e93dc92d6af455841daacdae5081aa3125b614a626df15461eb";
+        let msg = b"plonky2";
+        let expected_digest = "8943a85083f16e93dc92d6af455841daacdae5081aa3125b614a626df15461eb";
 
-        let msg = b"abc";
-        let expected_digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        // let msg = b"abc";
+        // let expected_digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 
         let padded_msg = pad_message(msg);
 
@@ -466,38 +416,19 @@ mod tests {
             for j in 0..64 {
                 let row = i * 64 + j;
                 writer.write(&round_constant, &to_field(round_constants[j]), row);
-                writer.write(&w, &to_field(w_val[j]), row);
-                // writer.write(&w_bit,)
+                writer.write(&w_window.get(0), &to_field(w_val[j]), row);
                 if j < 16 {
                     writer.write(&w_bit, &F::ONE, row);
+                    let w_pub = public_w.get(i * 16 + j);
+                    writer.write(&w_pub, &to_field(w_val[j]), row);
                 }
-                if j >= 2 {
-                    writer.write(&w_minus_2, &to_field(w_val[j - 2]), row);
-                }
-                if j >= 7 {
-                    writer.write(&w_minus_7, &to_field(w_val[j - 7]), row);
-                }
-                if j >= 15 {
-                    writer.write(&w_minus_15, &to_field(w_val[j - 15]), row);
-                }
-                if j >= 16 {
-                    writer.write(&w_minus_16, &to_field(w_val[j - 16]), row);
-                }
-
                 writer.write_row_instructions(&air, row);
             }
         }
         table.write_multiplicities(&writer);
 
-        let msg_val = |i| writer.read_array::<_, 8>(&msg_array, i).map(to_val);
         let hash_next_val = |i| writer.read_array::<_, 8>(&hash_next, i).map(to_val);
 
-        assert_eq!(msg_val(0), initial_hash);
-        // assert_eq!(msg_val(1), hash_next_val(0));
-
-        // assert_eq!(exp_message(1), hash_next_val(0));
-
-        // assert_eq!(hash_next_val(63), exp_message(64));
         let hash_val = sha_round(initial_hash, &w_val, round_constants);
         assert_eq!(hash_next_val(63), hash_val);
 

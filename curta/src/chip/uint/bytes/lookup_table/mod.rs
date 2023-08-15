@@ -178,7 +178,7 @@ mod tests {
     use crate::chip::uint::bytes::operations::value::ByteOperation;
     use crate::chip::uint::bytes::register::ByteRegister;
     use crate::chip::AirParameters;
-    use crate::plonky2::field::Field;
+    use crate::math::field::Field;
 
     #[derive(Debug, Clone)]
     struct ByteOpTest<const N: usize>;

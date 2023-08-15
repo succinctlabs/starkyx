@@ -1,4 +1,5 @@
 pub mod consumer;
+pub mod global;
 
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
@@ -7,9 +8,9 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use self::consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
-use super::field::cubic::parameters::CubicParameters;
 use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::AirParser;
+use crate::math::extension::cubic::parameters::CubicParameters;
 use crate::polynomial::parser::PolynomialParser;
 
 pub struct StarkParser<'a, F, FE, P, const D: usize, const D2: usize>

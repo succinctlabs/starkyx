@@ -30,6 +30,7 @@ pub struct AirBuilder<L: AirParameters> {
     shared_memory: SharedMemory,
     pub(crate) instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub(crate) constraints: Vec<Constraint<L>>,
+    pub(crate) global_constraints: Vec<Constraint<L>>,
     pub(crate) accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
     pub(crate) bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
     pub(crate) lookup_data: Vec<Lookup<L::Field, L::CubicParams>>,
@@ -52,6 +53,7 @@ impl<L: AirParameters> AirBuilder<L> {
             shared_memory,
             instructions: Vec::new(),
             constraints: Vec::new(),
+            global_constraints: Vec::new(),
             accumulators: Vec::new(),
             bus_channels: Vec::new(),
             lookup_data: Vec::new(),
@@ -188,6 +190,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let execution_trace_length = self.local_index;
         Chip {
             constraints: self.constraints,
+            global_constraints: self.global_constraints,
             num_challenges: self.shared_memory.challenge_index(),
             execution_trace_length,
             num_public_inputs: self.shared_memory.public_index(),

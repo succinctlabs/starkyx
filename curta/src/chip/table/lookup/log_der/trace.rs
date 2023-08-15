@@ -4,9 +4,9 @@ use super::{LogLookup, LogLookupValues, LookupTable};
 use crate::chip::register::cubic::EvalCubic;
 use crate::chip::register::Register;
 use crate::chip::trace::writer::TraceWriter;
+use crate::math::extension::cubic::extension::CubicExtension;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
-use crate::plonky2::field::cubic::extension::CubicExtension;
 
 impl<F: PrimeField> TraceWriter<F> {
     pub(crate) fn write_multiplicities_from_fn<E: CubicParameters<F>, T: Register>(

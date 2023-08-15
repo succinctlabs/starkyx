@@ -1,7 +1,7 @@
 use crate::air::parser::AirParser;
+use crate::math::extension::cubic::element::CubicElement;
+use crate::math::extension::cubic::extension::CubicExtension;
 use crate::math::extension::cubic::parameters::CubicParameters;
-use crate::plonky2::field::cubic::element::CubicElement;
-use crate::plonky2::field::cubic::extension::CubicExtension;
 
 pub trait CubicParser<E: CubicParameters<Self::Field>>: AirParser {
     fn element_from_base_field(&mut self, value: Self::Var) -> CubicElement<Self::Var> {

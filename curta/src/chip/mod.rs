@@ -6,6 +6,8 @@ use self::table::accumulator::Accumulator;
 use self::table::bus::channel::BusChannel;
 use self::table::evaluation::Evaluation;
 use self::table::lookup::Lookup;
+use crate::air::parser::AirParser;
+use crate::air::AirConstraint;
 use crate::math::extension::cubic::parameters::CubicParameters;
 use crate::math::prelude::*;
 use crate::plonky2::stark::Starky;
@@ -59,6 +61,7 @@ pub trait AirParameters {
 #[derive(Debug, Clone)]
 pub struct Chip<L: AirParameters> {
     constraints: Vec<Constraint<L>>,
+    global_constraints: Vec<Constraint<L>>,
     execution_trace_length: usize,
     num_challenges: usize,
     num_public_inputs: usize,
@@ -69,6 +72,17 @@ pub struct Chip<L: AirParameters> {
     bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
     evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
     range_table: Option<ElementRegister>,
+}
+
+impl<L: AirParameters> Chip<L> {
+    pub fn eval_global<AP: AirParser>(&self, parser: &mut AP)
+    where
+        Constraint<L>: AirConstraint<AP>,
+    {
+        for constraint in self.global_constraints.iter() {
+            constraint.eval(parser);
+        }
+    }
 }
 
 impl<L: ~const AirParameters> Starky<Chip<L>, { L::num_columns() }> {

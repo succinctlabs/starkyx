@@ -4,9 +4,9 @@ use super::entry::Entry;
 use super::BusChannel;
 use crate::chip::register::Register;
 use crate::chip::trace::writer::TraceWriter;
+use crate::math::extension::cubic::extension::CubicExtension;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
-use crate::plonky2::field::cubic::extension::CubicExtension;
 
 impl<F: PrimeField> TraceWriter<F> {
     pub fn read_entry<E: CubicParameters<F>>(

@@ -4,7 +4,7 @@ use super::Accumulator;
 use crate::air::extension::cubic::CubicParser;
 use crate::air::AirConstraint;
 use crate::chip::register::Register;
-use crate::plonky2::field::CubicParameters;
+use crate::math::extension::CubicParameters;
 
 impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
     for Accumulator<AP::Field, E>

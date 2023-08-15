@@ -8,7 +8,7 @@ use crate::chip::field::mul::FpMulInstruction;
 use crate::chip::field::mul_const::FpMulConstInstruction;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::AirParameters;
-use crate::plonky2::field::PrimeField64;
+use crate::math::prelude::*;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]

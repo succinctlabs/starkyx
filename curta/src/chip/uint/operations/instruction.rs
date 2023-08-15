@@ -94,7 +94,7 @@ mod tests {
     use crate::chip::builder::AirBuilder;
     use crate::chip::uint::register::ByteArrayRegister;
     use crate::chip::AirParameters;
-    use crate::plonky2::field::Field;
+    use crate::math::field::Field;
 
     #[derive(Debug, Clone)]
     struct U32OpTest;

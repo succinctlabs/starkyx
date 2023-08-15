@@ -9,7 +9,7 @@ use crate::chip::register::bit::BitRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::AirParameters;
-use crate::plonky2::field::PrimeField64;
+use crate::math::field::PrimeField64;
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]

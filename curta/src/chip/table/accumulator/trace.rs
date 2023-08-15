@@ -2,9 +2,9 @@ use super::Accumulator;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::trace::writer::TraceWriter;
+use crate::math::extension::cubic::element::CubicElement;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
-use crate::plonky2::field::cubic::element::CubicElement;
 
 impl<F: PrimeField> TraceWriter<F> {
     pub(crate) fn write_accumulation<E: CubicParameters<F>>(
