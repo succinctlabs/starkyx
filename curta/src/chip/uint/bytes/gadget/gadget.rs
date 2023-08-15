@@ -190,12 +190,8 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
             .collect::<Vec<_>>();
 
         // Initialize the byte operation generator
-        let byte_generator = BytesLookupGenerator::new(
-            operations,
-            air_operations,
-            trace_generator.clone(),
-            table,
-        );
+        let byte_generator =
+            BytesLookupGenerator::new(operations, air_operations, trace_generator.clone(), table);
         self.add_simple_generator(byte_generator);
 
         let stark = Starky::<_, NUM_BYTE_GADGET_COLUMNS>::new(air);

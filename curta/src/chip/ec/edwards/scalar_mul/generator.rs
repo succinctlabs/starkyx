@@ -83,8 +83,15 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
     where
         C::Hasher: AlgebraicHasher<F>,
     {
-        let (air, trace_data, gadget, scalars_limbs_input, input_points, output_points, (set_last, set_bit)) =
-            ScalarMulEd25519::<F, E>::air();
+        let (
+            air,
+            trace_data,
+            gadget,
+            scalars_limbs_input,
+            input_points,
+            output_points,
+            (set_last, set_bit),
+        ) = ScalarMulEd25519::<F, E>::air();
 
         let mut public_input_target_option = vec![None as Option<Target>; 256 * (8 + 2 * 32)];
         for (scalar_register, scalar_target) in scalars_limbs_input.iter().zip_eq(scalars.iter()) {
