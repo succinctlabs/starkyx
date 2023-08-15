@@ -7,9 +7,7 @@ use crate::chip::field::instruction::FromFieldInstruction;
 use crate::chip::instruction::cycle::Cycle;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::{Register, RegisterSerializable};
-use crate::chip::trace::writer::TraceWriter;
 use crate::chip::AirParameters;
-use crate::math::field::PrimeField64;
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -21,8 +19,6 @@ pub struct EdDoubleAndAddGadget<E: EdwardsParameters> {
     temp_next: AffinePointRegister<E>,
     add_gadget: EdAddGadget<E>,
     double_gadget: EdAddGadget<E>,
-    // select_x_ins: SelectInstruction<FieldRegister<E::BaseField>>,
-    // select_y_ins: SelectInstruction<FieldRegister<E::BaseField>>,
 }
 
 #[derive(Debug, Clone)]
@@ -133,50 +129,9 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 }
 
-impl<F: PrimeField64> TraceWriter<F> {
-    // pub fn write_ed_double_and_add<E: EdwardsParameters>(
-    //     &self,
-    //     scalar: &BigUint,
-    //     point: &AffinePoint<E>,
-    //     gadget: &EdDoubleAndAddGadget<E>,
-    //     starting_row: usize,
-    // ) -> AffinePoint<E> {
-    //     let nb_bits = E::nb_scalar_bits();
-    //     let scalar_bits = biguint_to_bits_le(scalar, nb_bits);
-
-    //     let mut res = E::neutral();
-    //     self.write_ec_point(&gadget.result, &res, starting_row);
-    //     let mut temp = point.clone();
-    //     self.write_ec_point(&gadget.temp, &temp, starting_row);
-
-    //     for (i, bit) in scalar_bits.iter().enumerate() {
-    //         let f_bit = F::from_canonical_u8(*bit as u8);
-    //         self.write(&gadget.bit, &f_bit, starting_row + i);
-    //         let result_plus_temp = &res + &temp;
-    //         self.write_ed_add(&gadget.add_gadget, starting_row + i);
-    //         temp = &temp + &temp;
-    //         self.write_ed_add(&gadget.double_gadget, starting_row + i);
-
-    //         res = if *bit { result_plus_temp } else { res };
-
-    //         if i == nb_bits - 1 {
-    //             break;
-    //         }
-    //         self.write_ec_point(&gadget.result, &res, starting_row + i + 1);
-    //         self.write_ec_point(&gadget.temp, &temp, starting_row + i + 1);
-    //     }
-    //     res
-    // }
-}
-
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
-    use plonky2::field::packable::Packable;
-    use plonky2::iop::witness::PartialWitness;
-    use plonky2::plonk::circuit_builder::CircuitBuilder;
-    use plonky2::plonk::circuit_data::CircuitConfig;
-    use plonky2::plonk::config::PoseidonGoldilocksConfig;
     use plonky2::timed;
     use plonky2::util::timing::TimingTree;
     use rand::thread_rng;
@@ -188,10 +143,6 @@ mod tests {
     use crate::chip::field::instruction::FpInstruction;
     use crate::chip::utils::biguint_to_bits_le;
     use crate::math::prelude::*;
-    use crate::plonky2::stark::gadget::StarkGadget;
-    use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
-    use crate::plonky2::stark::prover::StarkyProver;
-    use crate::plonky2::stark::verifier::StarkyVerifier;
 
     #[derive(Clone, Debug, Copy)]
     pub struct Ed25519ScalarMulTest;
@@ -215,8 +166,6 @@ mod tests {
         type F = GoldilocksField;
         type L = Ed25519ScalarMulTest;
         type SC = PoseidonGoldilocksStarkConfig;
-        type C = PoseidonGoldilocksConfig;
-        const D: usize = 2;
         type E = Ed25519;
 
         let _ = env_logger::builder().is_test(true).try_init();
@@ -258,46 +207,18 @@ mod tests {
         let config = SC::standard_fast_config(L::num_rows());
 
         // Generate proof and verify as a stark
-        // test_starky(&stark, &config, &generator, &[]);
-        let proof = timed!(
+        timed!(
             timing,
-            "Stark proof generagtion",
-            StarkyProver::<F, C, F, <F as Packable>::Packing, D, 1>::prove(
-                &config,
-                &stark,
-                &generator,
-                &[],
-            )
-            .unwrap()
+            "Stark proof and verify",
+            test_starky(&stark, &config, &generator, &[])
         );
 
-        // Verify the proof as a stark
-        StarkyVerifier::verify(&config, &stark, proof, &[]).unwrap();
-
-        // Test the recursive proof.
-        // test_recursive_starky(stark, config, generator, &[]);
-        let config_rec = CircuitConfig::standard_recursion_config();
-        let mut builder = CircuitBuilder::<F, D>::new(config_rec);
-        let virtual_proof = builder.add_virtual_stark_proof(&stark, &config);
-
-        builder.print_gate_counts(0);
-        let pw = PartialWitness::new();
-        // Set public inputs.
-        builder.verify_stark_proof(&config, &stark, virtual_proof.clone(), &[]);
-
-        let generator =
-            SimpleStarkWitnessGenerator::new(config, stark, virtual_proof, vec![], generator);
-        builder.add_simple_generator(generator);
-
-        let data = builder.build::<C>();
-        let recursive_proof = timed!(
+        // Generate recursive proof
+        timed!(
             timing,
-            "Total proof with a recursive envelope",
-            plonky2::plonk::prover::prove(&data.prover_only, &data.common, pw, &mut timing)
-                .unwrap()
+            "Recursive proof generation and verification",
+            test_recursive_starky(stark, config, generator, &[])
         );
-        timing.print();
-        data.verify(recursive_proof).unwrap();
 
         timing.print();
     }

@@ -347,7 +347,7 @@ impl<L: AirParameters> AirBuilder<L> {
 }
 
 impl SHA256Gadget {
-    fn process_inputs(chunk: [u32; 16]) -> [u32; 64] {
+    pub fn process_inputs(chunk: [u32; 16]) -> [u32; 64] {
         let mut w = [0u32; 64];
 
         for i in 0..16 {
@@ -366,7 +366,7 @@ impl SHA256Gadget {
         w
     }
 
-    fn compress_round(hash: [u32; 8], w: &[u32], round_constants: [u32; 64]) -> [u32; 8] {
+    pub fn compress_round(hash: [u32; 8], w: &[u32], round_constants: [u32; 64]) -> [u32; 8] {
         let mut msg = hash;
         for i in 0..64 {
             msg = SHA256Gadget::step(msg, w[i], round_constants[i]);
