@@ -1,5 +1,7 @@
 pub mod generator;
 
+use core::borrow::Borrow;
+
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::cycle::Cycle;
@@ -9,19 +11,28 @@ use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
 use crate::chip::table::bus::global::Bus;
+use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
 use crate::chip::uint::bytes::operations::value::ByteOperation;
 use crate::chip::uint::bytes::register::ByteRegister;
+use crate::chip::uint::operations::add::ByteArrayAdd;
 use crate::chip::uint::operations::instruction::U32Instructions;
 use crate::chip::uint::register::U32Register;
+use crate::chip::uint::util::u32_to_le_field_bytes;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct SHA256Gadget {
+    /// The input chunks processed into 16-words of U32 values
     pub public_word: ArrayRegister<U32Register>,
+    /// The hash states at all 1024 rounds
     pub state: ArrayRegister<U32Register>,
+    /// The window of 16 w-values
     pub w_window: ArrayRegister<U32Register>,
+    /// Signifies when to reset the state to the initial hash
+    pub end_bit: BitRegister,
+    pub(crate) end_bits_public: ArrayRegister<BitRegister>,
     pub(crate) w_bit: BitRegister,
     pub(crate) initial_state: ArrayRegister<U32Register>,
     pub(crate) round_constant: U32Register,
@@ -43,12 +54,6 @@ const INITIAL_HASH: [u32; 8] = [
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
 ];
 
-pub fn round_constants<F: Field>() -> [[F; 4]; 64] {
-    ROUND_CONSTANTS
-        .map(u32::to_le_bytes)
-        .map(|x| x.map(F::from_canonical_u8))
-}
-
 pub fn first_hash_value<F: Field>() -> [[F; 4]; 8] {
     [
         0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
@@ -61,7 +66,7 @@ pub fn first_hash_value<F: Field>() -> [[F; 4]; 8] {
 #[allow(dead_code)]
 #[allow(unused_variables)]
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn sha_256_batch(
+    pub fn process_sha_256_batch(
         &mut self,
         clk: &ElementRegister,
         bus: &mut Bus<L::CubicParams>,
@@ -74,6 +79,7 @@ impl<L: AirParameters> AirBuilder<L> {
         // Registers to be written to
         let w_window = self.alloc_array::<U32Register>(17);
         let w_bit = self.alloc::<BitRegister>();
+        let end_bit = self.alloc::<BitRegister>();
         let msg_array = self.alloc_array::<U32Register>(8);
         let round_constant = self.alloc::<U32Register>();
         let cycle_64 = self.cycle(6);
@@ -83,6 +89,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let initial_state = self.alloc_array_public::<U32Register>(8);
         let round_constants_public = self.alloc_array_public::<U32Register>(64);
         let hash_state = self.alloc_array_public::<U32Register>(8 * 1024);
+        let end_bits_public = self.alloc_array_public::<BitRegister>(1024);
 
         // Get the w value from the bus
         let w_challenges = self.alloc_challenge_array::<CubicRegister>(U32Register::size_of() + 1);
@@ -93,6 +100,18 @@ impl<L: AirParameters> AirBuilder<L> {
         // Get hash state challenges
         let state_challenges =
             self.alloc_challenge_array::<CubicRegister>(U32Register::size_of() * 8 + 1);
+
+        // Get a challenge for the end bit
+        let end_bit_challenge = self.alloc_challenge_array::<CubicRegister>(2);
+
+        // Put end bit values into the bus
+        let clk_end_bit =
+            self.accumulate_expressions(&end_bit_challenge, &[clk.expr(), end_bit.expr()]);
+
+        // Put the end_bit in the bus at the end of each round
+        self.input_to_bus_filtered(bus_channel_idx, clk_end_bit, cycle_64.end_bit.expr());
+        // Constrain all other values of end_bit to zero
+        self.assert_expression_zero(end_bit.expr() * cycle_64.end_bit.not_expr());
 
         // Put public w values and hash state in the bus
         for i in 0..1024 {
@@ -106,6 +125,17 @@ impl<L: AirParameters> AirBuilder<L> {
                 ],
             );
             bus.output_global_value(&state_digest);
+
+            let bit_digest = self.accumulate_public_expressions(
+                &end_bit_challenge,
+                &[
+                    ArithmeticExpression::from_constant(L::Field::from_canonical_usize(
+                        i * 64 + 63,
+                    )),
+                    end_bits_public.get(i).expr(),
+                ],
+            );
+            bus.output_global_value(&bit_digest);
 
             for k in 0..16 {
                 let w = public_w.get(i * 16 + k);
@@ -168,20 +198,35 @@ impl<L: AirParameters> AirBuilder<L> {
             self.set_to_expression_transition(&w_window.get(i).next(), w_window.get(i - 1).expr());
         }
 
+        let hash = self.alloc_array::<U32Register>(8);
+        for (h, init) in hash.iter().zip(initial_state.iter()) {
+            self.set_to_expression_first_row(&h, init.expr());
+        }
         // The SHA step phase
         let hash_next = self.sha_256_step(
+            &hash,
             &clk,
             &msg_array,
             &w_window,
             &initial_state,
             &round_constant,
             &cycle_64,
+            &end_bit,
             operations,
         );
 
-        let hash_next_digest =
+        // Connect hash to hash next depending on end_bit
+        for i in 0..8 {
+            self.set_to_expression_transition(
+                &hash.get(i).next(),
+                hash.get(i).expr() * cycle_64.end_bit.not_expr()
+                    + msg_array.get(i).next().expr() * cycle_64.end_bit.expr(),
+            );
+        }
+
+        let clk_hash_next =
             self.accumulate_expressions(&state_challenges, &[clk.expr(), hash_next.expr()]);
-        self.input_to_bus_filtered(bus_channel_idx, hash_next_digest, cycle_64.end_bit.expr());
+        self.input_to_bus_filtered(bus_channel_idx, clk_hash_next, cycle_64.end_bit.expr());
 
         // Dummy operation because of an odd number of operations
         let dummy = self.alloc::<ByteRegister>();
@@ -191,11 +236,13 @@ impl<L: AirParameters> AirBuilder<L> {
         SHA256Gadget {
             public_word: public_w,
             state: hash_state,
+            end_bit,
             w_window,
             w_bit,
             initial_state,
             round_constant,
             round_constants_public,
+            end_bits_public,
         }
     }
 
@@ -247,12 +294,14 @@ impl<L: AirParameters> AirBuilder<L> {
 
     fn sha_256_step(
         &mut self,
+        hash: &ArrayRegister<U32Register>,
         clk: &ElementRegister,
         msg: &ArrayRegister<U32Register>,
         w_window: &ArrayRegister<U32Register>,
         initial_state: &ArrayRegister<U32Register>,
         round_constant: &U32Register,
         cycle_64: &Cycle<L::Field>,
+        end_bit: &BitRegister,
         operations: &mut ByteLookupOperations,
     ) -> ArrayRegister<U32Register>
     where
@@ -325,12 +374,14 @@ impl<L: AirParameters> AirBuilder<L> {
         // Assign the hash values in the end of the round
         let hash_next = self.alloc_array::<U32Register>(8);
         for i in 0..8 {
-            self.set_add_u32(
-                &initial_state.get(i),
-                &msg_next[i],
-                &hash_next.get(i),
-                operations,
-            );
+            let carry = self.alloc::<BitRegister>();
+            let add = ByteArrayAdd::<4>::new(hash.get(i), msg_next[i], hash_next.get(i), carry);
+            self.register_instruction(add);
+
+            for byte in hash_next.get(i).to_le_bytes() {
+                let result_range = ByteOperation::Range(byte);
+                self.set_byte_operation(&result_range, operations);
+            }
         }
 
         // Assign next values to the next row registers based on the cycle bit
@@ -338,7 +389,10 @@ impl<L: AirParameters> AirBuilder<L> {
         for i in 0..8 {
             self.set_to_expression_transition(
                 &msg.get(i).next(),
-                msg_next[i].expr() * bit.not_expr() + initial_state.get(i).expr() * bit.expr(),
+                msg_next[i].expr() * bit.not_expr()
+                    + (hash_next.get(i).expr() * end_bit.not_expr()
+                        + initial_state.get(i).expr() * end_bit.expr())
+                        * bit.expr(),
             );
         }
 
@@ -347,7 +401,76 @@ impl<L: AirParameters> AirBuilder<L> {
 }
 
 impl SHA256Gadget {
-    pub fn process_inputs(chunk: [u32; 16]) -> [u32; 64] {
+    pub fn write<F: Field, I: IntoIterator>(
+        &self,
+        padded_messages: I,
+        initial_state: [u32; 8],
+        round_constants: [u32; 64],
+        writer: &TraceWriter<F>,
+    ) where
+        I::Item: Borrow<[u32]>,
+    {
+        let mut w_values = Vec::new();
+        let mut end_bits_values = Vec::new();
+        let mut hash_values = Vec::new();
+        let mut public_w_values = Vec::new();
+
+        padded_messages.into_iter().for_each(|padded_msg| {
+            let padded_msg = padded_msg.borrow();
+            let num_chunks = padded_msg.len() / 16;
+            end_bits_values.extend_from_slice(&vec![F::ZERO; num_chunks - 1]);
+            end_bits_values.push(F::ONE);
+
+            let mut state = initial_state;
+            for chunk in padded_msg.chunks_exact(16) {
+                let w_val = SHA256Gadget::process_inputs(chunk);
+                public_w_values.extend(chunk.iter().map(|x| u32_to_le_field_bytes::<F>(*x)));
+                w_values.extend_from_slice(&w_val);
+                state = SHA256Gadget::compress_round(state, &w_val, round_constants);
+                hash_values.extend_from_slice(&state.map(u32_to_le_field_bytes::<F>));
+            }
+        });
+        assert!(
+            w_values.len() == 1024 * 64,
+            "Padded messages lengths do not add up"
+        );
+
+        writer.write_array(
+            &self.initial_state,
+            initial_state.map(u32_to_le_field_bytes),
+            0,
+        );
+        writer.write_array(
+            &self.round_constants_public,
+            round_constants.map(u32_to_le_field_bytes),
+            0,
+        );
+        writer.write_array(&self.state, &hash_values, 0);
+        writer.write_array(&self.end_bits_public, &end_bits_values, 0);
+        writer.write_array(&self.public_word, &public_w_values, 0);
+        (0..1024).into_iter().for_each(|i| {
+            writer.write(&self.end_bit, &end_bits_values[i], i * 64 + 63);
+            for j in 0..64 {
+                let row = i * 64 + j;
+                writer.write(
+                    &self.round_constant,
+                    &u32_to_le_field_bytes(round_constants[j]),
+                    row,
+                );
+                writer.write(
+                    &self.w_window.get(0),
+                    &u32_to_le_field_bytes(w_values[i * 64 + j]),
+                    row,
+                );
+                if j < 16 {
+                    writer.write(&self.w_bit, &F::ONE, row);
+                }
+            }
+        });
+    }
+
+    pub fn process_inputs(chunk: &[u32]) -> [u32; 64] {
+        assert_eq!(chunk.len(), 16);
         let mut w = [0u32; 64];
 
         for i in 0..16 {
@@ -362,11 +485,10 @@ impl SHA256Gadget {
                 .wrapping_add(w[i - 7])
                 .wrapping_add(s1);
         }
-
         w
     }
 
-    pub fn compress_round(hash: [u32; 8], w: &[u32], round_constants: [u32; 64]) -> [u32; 8] {
+    pub fn compress_round(hash: [u32; 8], w: &[u32; 64], round_constants: [u32; 64]) -> [u32; 8] {
         let mut msg = hash;
         for i in 0..64 {
             msg = SHA256Gadget::step(msg, w[i], round_constants[i]);
@@ -417,22 +539,26 @@ impl SHA256Gadget {
         [a, b, c, d, e, f, g, h]
     }
 
-    pub fn pad(msg: &[u8]) -> [u32; 16] {
-        let mut padded_msg = [0u8; 64];
-        padded_msg[..msg.len()].copy_from_slice(msg);
-        padded_msg[msg.len()] = 1 << 7;
+    pub fn pad(msg: &[u8]) -> Vec<u32> {
+        let mut padded_msg = Vec::new();
+        padded_msg.extend_from_slice(msg);
+        padded_msg.push(1 << 7);
 
-        assert!(msg.len() + 1 < 56);
+        // Find number of zeros
+        let mdi = msg.len() % 64;
+        assert!(mdi < 120);
+        let padlen = if mdi < 56 { 55 - mdi } else { 119 - mdi };
+        // Pad with zeros
+        padded_msg.extend_from_slice(&vec![0u8; padlen]);
+
         // add length as 64 bit number
         let len = ((msg.len() * 8) as u64).to_be_bytes();
-        padded_msg[56..].copy_from_slice(&len);
+        padded_msg.extend_from_slice(&len);
 
         padded_msg
             .chunks_exact(4)
             .map(|x| u32::from_be_bytes(x.try_into().unwrap()))
             .collect::<Vec<_>>()
-            .try_into()
-            .unwrap()
     }
 }
 
@@ -441,6 +567,7 @@ mod tests {
 
     use plonky2::timed;
     use plonky2::util::timing::TimingTree;
+    use subtle_encoding::hex::decode;
 
     use super::*;
     pub use crate::chip::builder::tests::*;
@@ -485,15 +612,8 @@ mod tests {
         let mut bus = builder.new_bus();
         let channel_idx = bus.new_channel(&mut builder);
 
-        let SHA256Gadget {
-            public_word: public_w,
-            state: hash_state,
-            w_window,
-            w_bit,
-            initial_state,
-            round_constant,
-            round_constants_public,
-        } = builder.sha_256_batch(&clk, &mut bus, channel_idx, &mut operations);
+        let sha_gadget =
+            builder.process_sha_256_batch(&clk, &mut bus, channel_idx, &mut operations);
 
         builder.register_byte_lookup(operations, &mut table);
         builder.constrain_bus(bus);
@@ -503,79 +623,64 @@ mod tests {
         let generator = ArithmeticGenerator::<L>::new(trace_data);
         let writer = generator.new_writer();
 
-        // let msg = b"";
-        // let expected_digest = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+        let short_msg_1 = decode("").unwrap();
+        let expected_digest_1 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-        // let msg = b"plonky2";
+        // let short_msg_1 = b"plonky2".to_vec();
         // let expected_digest = "8943a85083f16e93dc92d6af455841daacdae5081aa3125b614a626df15461eb";
 
-        let msg = b"abc";
-        let expected_digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        let short_msg_2 = b"abc".to_vec();
+        let expected_digest_2 = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 
-        let padded_msg = SHA256Gadget::pad(msg);
+        let long_msg = decode("243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89452821e638d01377be5466cf34e90c6cc0ac29b7c97c50dd3f84d5b5b5470917").unwrap();
+        let expected_digest_long =
+            "aca16131a2e4c4c49e656d35aac1f0e689b3151bb108fa6cf5bcc3ac08a09bf9";
 
-        let w_val = SHA256Gadget::process_inputs(padded_msg);
+        let messages = (0..256)
+            .flat_map(|_| [short_msg_1.clone(), long_msg.clone(), short_msg_2.clone()])
+            .collect::<Vec<_>>();
+        let padded_messages = messages
+            .iter()
+            .map(|m| SHA256Gadget::pad(m))
+            .collect::<Vec<_>>();
 
-        let mut w_val_vec: Vec<[u32; 64]> = vec![];
-        for _ in 0..1024 {
-            w_val_vec.push(w_val);
-        }
+        let expected_digests: Vec<[u32; 8]> = (0..256)
+            .flat_map(|_| {
+                [
+                    expected_digest_1.clone(),
+                    expected_digest_long.clone(),
+                    expected_digest_2.clone(),
+                ]
+            })
+            .map(|digest| {
+                hex::decode(digest)
+                    .unwrap()
+                    .chunks_exact(4)
+                    .map(|x| u32::from_be_bytes(x.try_into().unwrap()))
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(expected_digests.len(), padded_messages.len());
 
+        let mut digest_iter = expected_digests.into_iter();
         timed!(timing, "Write the execusion trace", {
             table.write_table_entries(&writer);
-            writer.write_array(&initial_state, INITIAL_HASH.map(u32_to_le_field_bytes), 0);
-            writer.write_array(
-                &round_constants_public,
-                ROUND_CONSTANTS.map(u32_to_le_field_bytes),
-                0,
-            );
-            (0..1024).into_par_iter().for_each(|i| {
-                let hash_val =
-                    SHA256Gadget::compress_round(INITIAL_HASH, &w_val_vec[i], ROUND_CONSTANTS);
-                writer.write_array(
-                    &hash_state.get_subarray(i * 8..i * 8 + 8),
-                    hash_val.map(u32_to_le_field_bytes),
-                    0,
-                );
-                for j in 0..64 {
-                    let row = i * 64 + j;
-                    writer.write(
-                        &round_constant,
-                        &u32_to_le_field_bytes(ROUND_CONSTANTS[j]),
-                        row,
-                    );
-                    writer.write(
-                        &w_window.get(0),
-                        &u32_to_le_field_bytes(w_val_vec[i][j]),
-                        row,
-                    );
-                    if j < 16 {
-                        writer.write(&w_bit, &F::ONE, row);
-                        let w_pub = public_w.get(i * 16 + j);
-                        writer.write(&w_pub, &u32_to_le_field_bytes(w_val_vec[i][j]), row);
-                    }
-                }
-            });
+            sha_gadget.write(padded_messages, INITIAL_HASH, ROUND_CONSTANTS, &writer);
             for i in 0..L::num_rows() {
                 writer.write_row_instructions(&generator.air_data, i);
+                let end_bit = writer.read(&sha_gadget.end_bit, i);
+                if end_bit == F::ONE {
+                    let j = (i-63) / 64;
+                    let hash = writer
+                        .read_array(&sha_gadget.state.get_subarray(j*8..j*8 + 8), 0);
+                    let digest = digest_iter.next().unwrap();
+                    assert_eq!(hash, digest.map(u32_to_le_field_bytes));
+                }
             }
             table.write_multiplicities(&writer);
         });
-
-        // let hash_next_val = |i| writer.read_array::<_, 8>(&hash_next, i).map(to_val);
-
-        let hash_val = SHA256Gadget::compress_round(INITIAL_HASH, &w_val, ROUND_CONSTANTS);
-        // assert_eq!(hash_next_val(63), hash_val);
-
-        let expected_hash: [u32; 8] = hex::decode(expected_digest)
-            .unwrap()
-            .chunks_exact(4)
-            .map(|x| u32::from_be_bytes(x.try_into().unwrap()))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
-        assert_eq!(hash_val, expected_hash);
 
         let public_inputs = writer.0.public.read().unwrap().clone();
         let stark = Starky::<_, { L::num_columns() }>::new(air);
