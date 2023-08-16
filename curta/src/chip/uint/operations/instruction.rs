@@ -123,7 +123,7 @@ mod tests {
 
         let mut builder = AirBuilder::<L>::new();
 
-        let (mut operations, mut table) = builder.byte_operations();
+        let (mut operations, table) = builder.byte_operations();
 
         let a = builder.alloc::<ByteArrayRegister<N>>();
         let b = builder.alloc::<ByteArrayRegister<N>>();
@@ -176,7 +176,7 @@ mod tests {
             builder.set_bit_rotate_right(&a, shift, &a_rot_second, &mut operations);
         }
 
-        builder.register_byte_lookup(operations, &mut table);
+        builder.register_byte_lookup(operations, &table);
 
         let (air, trace_data) = builder.build();
 

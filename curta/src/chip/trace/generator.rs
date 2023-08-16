@@ -76,7 +76,7 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
 
                 // Write multiplicities for lookup table with search functions
                 for data in self.air_data.lookup_data.iter() {
-                    if let Lookup::LogDerivative(log_data) = data {
+                    if let Lookup::Element(log_data) = data {
                         if let Some(table_index) = log_data.table_index {
                             self.writer.write_multiplicities_from_fn(
                                 num_rows,

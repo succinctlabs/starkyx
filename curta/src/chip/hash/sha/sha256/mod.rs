@@ -191,7 +191,7 @@ impl<L: AirParameters> AirBuilder<L> {
         self.input_to_bus(bus_channel_idx, round_constant_input);
 
         // The premessage state
-        self.sha_premessage(&clk, &w_window, &w_bit, &cycle_64, operations);
+        self.sha_premessage(clk, &w_window, &w_bit, &cycle_64, operations);
 
         // Set the window values
         for i in 1..17 {
@@ -205,7 +205,7 @@ impl<L: AirParameters> AirBuilder<L> {
         // The SHA step phase
         let hash_next = self.sha_256_step(
             &hash,
-            &clk,
+            clk,
             &msg_array,
             &w_window,
             &initial_state,
@@ -292,6 +292,7 @@ impl<L: AirParameters> AirBuilder<L> {
         self.assert_expression_zero(w_bit.not_expr() * (w_i.expr() - w_window.get(0).expr()));
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn sha_256_step(
         &mut self,
         hash: &ArrayRegister<U32Register>,
@@ -337,7 +338,7 @@ impl<L: AirParameters> AirBuilder<L> {
         // Calculate temp_1 = h + sum_1 +ch + round_constant + w;
         let mut temp_1 = self.add_u32(&h, &sum_1, operations);
         temp_1 = self.add_u32(&temp_1, &ch, operations);
-        temp_1 = self.add_u32(&temp_1, &round_constant, operations);
+        temp_1 = self.add_u32(&temp_1, round_constant, operations);
         temp_1 = self.add_u32(&temp_1, &w_window.get(0), operations);
 
         // Calculate sum_0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
@@ -373,12 +374,12 @@ impl<L: AirParameters> AirBuilder<L> {
 
         // Assign the hash values in the end of the round
         let hash_next = self.alloc_array::<U32Register>(8);
-        for i in 0..8 {
+        for ((h, m_next), h_next) in hash.iter().zip(msg_next.iter()).zip(hash_next.iter()) {
             let carry = self.alloc::<BitRegister>();
-            let add = ByteArrayAdd::<4>::new(hash.get(i), msg_next[i], hash_next.get(i), carry);
+            let add = ByteArrayAdd::<4>::new(h, *m_next, h_next, carry);
             self.register_instruction(add);
 
-            for byte in hash_next.get(i).to_le_bytes() {
+            for byte in h_next.to_le_bytes() {
                 let result_range = ByteOperation::Range(byte);
                 self.set_byte_operation(&result_range, operations);
             }
@@ -386,12 +387,16 @@ impl<L: AirParameters> AirBuilder<L> {
 
         // Assign next values to the next row registers based on the cycle bit
         let bit = cycle_64.end_bit;
-        for i in 0..8 {
+        for (((m, m_next), h_next), init) in msg
+            .iter()
+            .zip(msg_next.iter())
+            .zip(hash_next.iter())
+            .zip(initial_state.iter())
+        {
             self.set_to_expression_transition(
-                &msg.get(i).next(),
-                msg_next[i].expr() * bit.not_expr()
-                    + (hash_next.get(i).expr() * end_bit.not_expr()
-                        + initial_state.get(i).expr() * end_bit.expr())
+                &m.next(),
+                m_next.expr() * bit.not_expr()
+                    + (h_next.expr() * end_bit.not_expr() + init.expr() * end_bit.expr())
                         * bit.expr(),
             );
         }
@@ -448,7 +453,7 @@ impl SHA256Gadget {
         writer.write_array(&self.state, &hash_values, 0);
         writer.write_array(&self.end_bits_public, &end_bits_values, 0);
         writer.write_array(&self.public_word, &public_w_values, 0);
-        (0..1024).into_iter().for_each(|i| {
+        (0..1024).for_each(|i| {
             writer.write(&self.end_bit, &end_bits_values[i], i * 64 + 63);
             for j in 0..64 {
                 let row = i * 64 + j;
@@ -473,9 +478,7 @@ impl SHA256Gadget {
         assert_eq!(chunk.len(), 16);
         let mut w = [0u32; 64];
 
-        for i in 0..16 {
-            w[i] = chunk[i];
-        }
+        w[..16].copy_from_slice(&chunk[..16]);
 
         for i in 16..64 {
             let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
@@ -607,7 +610,7 @@ mod tests {
         let mut builder = AirBuilder::<L>::new();
         let clk = builder.clock();
 
-        let (mut operations, mut table) = builder.byte_operations();
+        let (mut operations, table) = builder.byte_operations();
 
         let mut bus = builder.new_bus();
         let channel_idx = bus.new_channel(&mut builder);
@@ -615,7 +618,7 @@ mod tests {
         let sha_gadget =
             builder.process_sha_256_batch(&clk, &mut bus, channel_idx, &mut operations);
 
-        builder.register_byte_lookup(operations, &mut table);
+        builder.register_byte_lookup(operations, &table);
         builder.constrain_bus(bus);
 
         let (air, trace_data) = builder.build();
@@ -672,9 +675,9 @@ mod tests {
                 writer.write_row_instructions(&generator.air_data, i);
                 let end_bit = writer.read(&sha_gadget.end_bit, i);
                 if end_bit == F::ONE {
-                    let j = (i-63) / 64;
-                    let hash = writer
-                        .read_array(&sha_gadget.state.get_subarray(j*8..j*8 + 8), 0);
+                    let j = (i - 63) / 64;
+                    let hash =
+                        writer.read_array(&sha_gadget.state.get_subarray(j * 8..j * 8 + 8), 0);
                     let digest = digest_iter.next().unwrap();
                     assert_eq!(hash, digest.map(u32_to_le_field_bytes));
                 }

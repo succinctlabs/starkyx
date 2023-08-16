@@ -11,6 +11,7 @@ use crate::chip::register::cubic::{CubicRegister, EvalCubic};
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::Register;
+use crate::chip::table::lookup::log_der::constraint::LookupConstraint;
 use crate::chip::table::lookup::Lookup;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
@@ -38,6 +39,8 @@ pub struct LogLookupValues<T: EvalCubic, F: Field, E: CubicParameters<F>> {
     pub(crate) row_accumulators: ArrayRegister<CubicRegister>,
     pub(crate) global_accumulators: ArrayRegister<CubicRegister>,
     pub(crate) log_lookup_accumulator: CubicRegister,
+    pub local_digest: CubicRegister,
+    pub global_digest: Option<CubicRegister>,
     pub digest: CubicRegister,
     _marker: core::marker::PhantomData<(F, E)>,
 }
@@ -113,6 +116,7 @@ impl<L: AirParameters> AirBuilder<L> {
             0,
             "Only even number of values supported"
         );
+
         assert_eq!(
             public_values.len() % 2,
             0,
@@ -122,9 +126,12 @@ impl<L: AirParameters> AirBuilder<L> {
         let global_accumulators = self.alloc_array_global::<CubicRegister>(public_values.len() / 2);
         let log_lookup_accumulator = self.alloc_extended::<CubicRegister>();
 
-        let digest = match public_values.len() {
-            0 => log_lookup_accumulator,
-            _ => self.alloc_global::<CubicRegister>(),
+        let (digest, global_digest) = match public_values.len() {
+            0 => (log_lookup_accumulator, None),
+            _ => (
+                self.alloc_global::<CubicRegister>(),
+                Some(self.alloc_global::<CubicRegister>()),
+            ),
         };
 
         LogLookupValues {
@@ -134,12 +141,14 @@ impl<L: AirParameters> AirBuilder<L> {
             row_accumulators,
             global_accumulators,
             log_lookup_accumulator,
+            local_digest: log_lookup_accumulator,
             digest,
+            global_digest,
             _marker: PhantomData,
         }
     }
 
-    pub fn lookup_from_table_and_values(
+    pub fn element_lookup_from_table_and_values(
         &mut self,
         table_data: LookupTable<ElementRegister, L::Field, L::CubicParams>,
         values_data: LogLookupValues<ElementRegister, L::Field, L::CubicParams>,
@@ -150,16 +159,40 @@ impl<L: AirParameters> AirBuilder<L> {
             table_challenge, values_challenge,
             "Challenges must be equal"
         );
-        let lookup_data = Lookup::LogDerivative(LogLookup {
-            table_data,
-            values_data,
+        let lookup_data = Lookup::Element(LogLookup {
+            table_data: table_data.clone(),
+            values_data: values_data.clone(),
             table_index: None,
             _marker: core::marker::PhantomData,
         });
 
         // Add the lookup constraints
+        // Digest constraints
+        self.constraints.push(Constraint::lookup(
+            LookupConstraint::<ElementRegister, _, _>::Digest(
+                table_data.digest,
+                values_data.digest,
+            )
+            .into(),
+        ));
+        // table constraints
+        self.constraints.push(Constraint::lookup(
+            LookupConstraint::Table(table_data).into(),
+        ));
+        // Values constraints
         self.constraints
-            .push(Constraint::lookup(lookup_data.clone()));
+            .push(Constraint::lookup(values_data.digest_constraint().into()));
+        self.constraints.push(Constraint::lookup(
+            LookupConstraint::<ElementRegister, _, _>::ValuesLocal(values_data.clone()).into(),
+        ));
+        if values_data.global_digest.is_some() {
+            self.global_constraints.push(Constraint::lookup(
+                LookupConstraint::<ElementRegister, _, _>::ValuesGlobal(values_data.clone()).into(),
+            ));
+        }
+
+        // self.constraints
+        //     .push(Constraint::lookup(lookup_data.clone()));
 
         // Add the lookup to the list of lookups
         self.lookup_data.push(lookup_data);
@@ -176,16 +209,39 @@ impl<L: AirParameters> AirBuilder<L> {
             table_challenge, values_challenge,
             "Challenges must be equal"
         );
-        let lookup_data = Lookup::CubicLog(LogLookup {
-            table_data,
-            values_data,
+        let lookup_data = Lookup::CubicElement(LogLookup {
+            table_data: table_data.clone(),
+            values_data: values_data.clone(),
             table_index: None,
             _marker: core::marker::PhantomData,
         });
 
         // Add the lookup constraints
+
+        // Digest constraints
+        self.constraints.push(Constraint::lookup(
+            LookupConstraint::<CubicRegister, _, _>::Digest(table_data.digest, values_data.digest)
+                .into(),
+        ));
+
+        // table constraints
+        self.constraints.push(Constraint::lookup(
+            LookupConstraint::Table(table_data).into(),
+        ));
+        // Values constraints
         self.constraints
-            .push(Constraint::lookup(lookup_data.clone()));
+            .push(Constraint::lookup(values_data.digest_constraint().into()));
+        self.constraints.push(Constraint::lookup(
+            LookupConstraint::<CubicRegister, _, _>::ValuesLocal(values_data.clone()).into(),
+        ));
+        if values_data.global_digest.is_some() {
+            self.global_constraints.push(Constraint::lookup(
+                LookupConstraint::<CubicRegister, _, _>::ValuesGlobal(values_data.clone()).into(),
+            ));
+        }
+
+        // self.constraints
+        //     .push(Constraint::lookup(lookup_data.clone()));
 
         // Add the lookup to the list of lookups
         self.lookup_data.push(lookup_data);
@@ -201,21 +257,62 @@ impl<L: AirParameters> AirBuilder<L> {
         let challenge = self.alloc_challenge::<CubicRegister>();
 
         let table_data = self.lookup_table(&challenge, &[*table]);
-        let value_data = self.lookup_values(&challenge, values);
+        let values_data = self.lookup_values(&challenge, values);
 
-        let lookup_data = Lookup::LogDerivative(LogLookup {
-            table_data,
-            values_data: value_data,
+        let lookup_data = Lookup::Element(LogLookup {
+            table_data: table_data.clone(),
+            values_data: values_data.clone(),
             table_index: Some(table_index),
             _marker: core::marker::PhantomData,
         });
 
+        // self.element_lookup_from_table_and_values(table_data, value_data);
         // Add the lookup constraints
+        // Digest constraints
+        self.constraints.push(Constraint::lookup(
+            LookupConstraint::<ElementRegister, _, _>::Digest(
+                table_data.digest,
+                values_data.digest,
+            )
+            .into(),
+        ));
+
+        // table constraints
+        self.constraints.push(Constraint::lookup(
+            LookupConstraint::Table(table_data).into(),
+        ));
+
+        // Values constraints
         self.constraints
-            .push(Constraint::lookup(lookup_data.clone()));
+            .push(Constraint::lookup(values_data.digest_constraint().into()));
+        self.constraints.push(Constraint::lookup(
+            LookupConstraint::<ElementRegister, _, _>::ValuesLocal(values_data.clone()).into(),
+        ));
+        if values_data.global_digest.is_some() {
+            self.global_constraints.push(Constraint::lookup(
+                LookupConstraint::<ElementRegister, _, _>::ValuesGlobal(values_data.clone()).into(),
+            ));
+        }
+
+        // self.constraints
+        //     .push(Constraint::lookup(lookup_data.clone()));
 
         // Add the lookup to the list of lookups
         self.lookup_data.push(lookup_data);
+
+        // let lookup_data = Lookup::Element(LogLookup {
+        //     table_data,
+        //     values_data: value_data,
+        //     table_index: Some(table_index),
+        //     _marker: core::marker::PhantomData,
+        // });
+
+        // // Add the lookup constraints
+        // self.constraints
+        //     .push(Constraint::lookup(lookup_data.clone()));
+
+        // // Add the lookup to the list of lookups
+        // self.lookup_data.push(lookup_data);
     }
 
     pub fn lookup_log_derivative_no_index(
@@ -227,22 +324,24 @@ impl<L: AirParameters> AirBuilder<L> {
         let challenge = self.alloc_challenge::<CubicRegister>();
 
         let table_data = self.lookup_table(&challenge, table);
-        let value_data = self.lookup_values(&challenge, values);
+        let values_data = self.lookup_values(&challenge, values);
         let multiplicities = table_data.multiplicities;
 
-        let lookup_data = Lookup::LogDerivative(LogLookup {
-            table_data,
-            values_data: value_data,
-            table_index: None,
-            _marker: core::marker::PhantomData,
-        });
+        self.element_lookup_from_table_and_values(table_data, values_data);
 
-        // Add the lookup constraints
-        self.constraints
-            .push(Constraint::lookup(lookup_data.clone()));
+        // let lookup_data = Lookup::Element(LogLookup {
+        //     table_data,
+        //     values_data: value_data,
+        //     table_index: None,
+        //     _marker: core::marker::PhantomData,
+        // });
 
-        // Add the lookup to the list of lookups
-        self.lookup_data.push(lookup_data);
+        // // Add the lookup constraints
+        // self.constraints
+        //     .push(Constraint::lookup(lookup_data.clone()));
+
+        // // Add the lookup to the list of lookups
+        // self.lookup_data.push(lookup_data);
 
         multiplicities
     }
@@ -256,23 +355,25 @@ impl<L: AirParameters> AirBuilder<L> {
         let challenge = self.alloc_challenge::<CubicRegister>();
 
         let table_data = self.lookup_table(&challenge, table);
-        let value_data = self.lookup_values(&challenge, values);
+        let values_data = self.lookup_values(&challenge, values);
 
         let multiplicities = table_data.multiplicities;
 
-        let lookup_data = Lookup::CubicLog(LogLookup {
-            table_data,
-            values_data: value_data,
-            table_index: None,
-            _marker: core::marker::PhantomData,
-        });
+        self.cubic_lookup_from_table_and_values(table_data, values_data);
 
-        // Add the lookup constraints
-        self.constraints
-            .push(Constraint::lookup(lookup_data.clone()));
+        // let lookup_data = Lookup::CubicElement(LogLookup {
+        //     table_data,
+        //     values_data: value_data,
+        //     table_index: None,
+        //     _marker: core::marker::PhantomData,
+        // });
 
-        // Add the lookup to the list of lookups
-        self.lookup_data.push(lookup_data);
+        // // Add the lookup constraints
+        // self.constraints
+        //     .push(Constraint::lookup(lookup_data.clone()));
+
+        // // Add the lookup to the list of lookups
+        // self.lookup_data.push(lookup_data);
 
         multiplicities
     }
@@ -513,20 +614,20 @@ mod tests {
 
         // Set the public values
         let mut public_inputs: Vec<F> = vec![F::ZERO; air.num_public_inputs];
-        for i in 0..PUB {
+        for public_value in public_values.iter() {
             let j = rng.gen_range(0..L::num_rows());
             let k = rng.gen_range(0..N);
             let val = writer.read(&table_values[k], j);
-            public_values[i].assign_to_raw_slice(&mut public_inputs, &val);
+            public_value.assign_to_raw_slice(&mut public_inputs, &val);
             let mult_value = writer.read(&multiplicities.get(k), j);
             writer.write(&multiplicities.get(k), &(mult_value + F::ONE), j);
         }
 
-        for i in 0..GLOB {
+        for global_value in global_values.iter() {
             let j = rng.gen_range(0..L::num_rows());
             let k = rng.gen_range(0..N);
             let val = writer.read(&table_values[k], j);
-            writer.write(&global_values[i], &val, 0);
+            writer.write(global_value, &val, 0);
             let mult_value = writer.read(&multiplicities.get(k), j);
             writer.write(&multiplicities.get(k), &(mult_value + F::ONE), j);
         }

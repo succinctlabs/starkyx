@@ -1,50 +1,60 @@
 use itertools::Itertools;
 
-use super::{LogLookup, LogLookupValues, LookupTable};
+use super::{LogLookupValues, LookupTable};
 use crate::air::extension::cubic::CubicParser;
+use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::register::cubic::{CubicRegister, EvalCubic};
-use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone)]
-pub enum LookupConstraint<F: Field, E: CubicParameters<F>> {
-    Table(LookupTable<ElementRegister, F, E>),
-    CubicTable(LookupTable<CubicRegister, F, E>),
-    Log(LogLookup<ElementRegister, F, E>),
-    CubicLog(LogLookup<CubicRegister, F, E>),
-    Global(CubicRegister, CubicRegister),
+pub enum LookupConstraint<T: EvalCubic, F: Field, E: CubicParameters<F>> {
+    Table(LookupTable<T, F, E>),
+    ValuesLocal(LogLookupValues<T, F, E>),
+    ValuesGlobal(LogLookupValues<T, F, E>),
+    ValuesDigest(CubicRegister, CubicRegister, Option<CubicRegister>),
+    Digest(CubicRegister, CubicRegister),
 }
+
+// impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
+//     for LogLookup<T, AP::Field, E>
+// {
+//     fn eval(&self, parser: &mut AP) {
+//         // Table constraints
+//         self.table_data.eval(parser);
+
+//         // Values and multiplicity constraints
+//         self.values_data.eval(parser);
+
+//         // Digest matching constraint
+//         let lookup_digest = self.values_data.digest.eval(parser);
+//         let table_digest = self.table_data.digest.eval(parser);
+//         let digest_constraint = parser.sub_extension(lookup_digest, table_digest);
+//         parser.constraint_extension_last_row(digest_constraint);
+//     }
+// }
 
 impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
-    for LogLookup<T, AP::Field, E>
-{
-    fn eval(&self, parser: &mut AP) {
-        // Table constraints
-        self.table_data.eval(parser);
-
-        // Values and multiplicity constraints
-        self.values_data.eval(parser);
-
-        // Digest matching constraint
-        let lookup_digest = self.values_data.digest.eval(parser);
-        let table_digest = self.table_data.digest.eval(parser);
-        let digest_constraint = parser.sub_extension(lookup_digest, table_digest);
-        parser.constraint_extension_last_row(digest_constraint);
-    }
-}
-
-impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
-    for LookupConstraint<AP::Field, E>
+    for LookupConstraint<T, AP::Field, E>
 {
     fn eval(&self, parser: &mut AP) {
         match self {
             LookupConstraint::Table(table) => table.eval(parser),
-            LookupConstraint::CubicTable(table) => table.eval(parser),
-            LookupConstraint::Log(log) => log.eval(parser),
-            LookupConstraint::CubicLog(log) => log.eval(parser),
-            LookupConstraint::Global(a, b) => {
+            LookupConstraint::ValuesLocal(values) => values.eval(parser),
+            LookupConstraint::ValuesGlobal(values) => values.eval_global(parser),
+            LookupConstraint::ValuesDigest(digest, local_digest, global_digest) => {
+                let digest = digest.eval(parser);
+                let local_digest = local_digest.eval(parser);
+                let global_digest = global_digest
+                    .map(|d| d.eval(parser))
+                    .unwrap_or_else(|| parser.zero_extension());
+
+                let mut digest_constraint = parser.add_extension(local_digest, global_digest);
+                digest_constraint = parser.sub_extension(digest_constraint, digest);
+                parser.constraint_extension_last_row(digest_constraint);
+            }
+            LookupConstraint::Digest(a, b) => {
                 let a = a.eval_cubic(parser);
                 let b = b.eval_cubic(parser);
                 let difference = parser.sub_extension(a, b);
@@ -123,10 +133,11 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
     }
 }
 
-impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
-    for LogLookupValues<T, AP::Field, E>
-{
-    fn eval(&self, parser: &mut AP) {
+impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupValues<T, F, E> {
+    fn eval<AP: CubicParser<E>>(&self, parser: &mut AP)
+    where
+        AP: AirParser<Field = F>,
+    {
         let beta = self.challenge.eval(parser);
 
         let mut prev = parser.zero_extension();
@@ -165,6 +176,18 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
             parser.sub_extension(log_lookup_accumulator, accumulated_value);
         parser.constraint_extension_first_row(acc_first_row_constraint);
 
+        // Add digest constraint
+        let lookup_digest = self.local_digest.eval(parser);
+        let lookup_digest_constraint = parser.sub_extension(lookup_digest, log_lookup_accumulator);
+        parser.constraint_extension_last_row(lookup_digest_constraint);
+    }
+
+    fn eval_global<AP: CubicParser<E>>(&self, parser: &mut AP)
+    where
+        AP: AirParser<Field = F>,
+    {
+        let beta = self.challenge.eval(parser);
+
         // Constrain the public accumulation
         let mut prev = parser.zero_extension();
         for (chunk, row_acc) in self
@@ -185,11 +208,17 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
             parser.constraint_extension(constraint);
             prev = acc;
         }
-        let lookup_total_value = parser.add_extension(prev, log_lookup_accumulator);
+        let lookup_total_value = prev;
 
         // Add digest constraint
-        let lookup_digest = self.digest.eval(parser);
-        let lookup_digest_constraint = parser.sub_extension(lookup_digest, lookup_total_value);
-        parser.constraint_extension_last_row(lookup_digest_constraint);
+        if let Some(digest) = self.global_digest {
+            let lookup_digest = digest.eval(parser);
+            let lookup_digest_constraint = parser.sub_extension(lookup_digest, lookup_total_value);
+            parser.constraint_extension_last_row(lookup_digest_constraint);
+        }
+    }
+
+    pub(crate) fn digest_constraint(&self) -> LookupConstraint<T, F, E> {
+        LookupConstraint::ValuesDigest(self.digest, self.local_digest, self.global_digest)
     }
 }

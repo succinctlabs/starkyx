@@ -123,6 +123,8 @@ impl<F: PrimeField> TraceWriter<F> {
             value += acc;
             self.write(&log_lookup, &value.0, i);
         }
+        // Write the local digest
+        self.write(&values_data.local_digest, &value.0, num_rows - 1);
 
         // Accumulate lookups for public inputs
         let mut global_accumumulator = CubicExtension::ZERO;
@@ -135,6 +137,11 @@ impl<F: PrimeField> TraceWriter<F> {
             global_accumumulator += beta_minus_a.inverse() + beta_minus_b.inverse();
             self.write(&global_accumulators.get(k), &global_accumumulator.0, 0);
         }
+        // Write the global digest if exists
+        if let Some(global_digest) = values_data.global_digest {
+            self.write(&global_digest, &global_accumumulator.0, 0);
+        }
+
         value += global_accumumulator;
 
         // Write the digest value

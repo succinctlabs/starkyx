@@ -62,7 +62,7 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn register_byte_lookup(
         &mut self,
         operation_values: ByteLookupOperations,
-        table: &mut ByteLookupTable<L::Field>,
+        table: &ByteLookupTable<L::Field>,
     ) {
         let multiplicities = table.multiplicity_data.multiplicities();
         let lookup_challenge = self.alloc_challenge::<CubicRegister>();
@@ -70,7 +70,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let lookup_table = self.lookup_table_with_multiplicities(
             &lookup_challenge,
             &table.digests,
-            &multiplicities,
+            multiplicities,
         );
         let lookup_values = self.lookup_values(&lookup_challenge, &operation_values.values);
 
@@ -202,7 +202,7 @@ mod tests {
 
         let mut builder = AirBuilder::<L>::new();
 
-        let (mut operations, mut table) = builder.byte_operations();
+        let (mut operations, table) = builder.byte_operations();
 
         let mut a_vec = Vec::new();
         let mut b_vec = Vec::new();
@@ -300,7 +300,7 @@ mod tests {
         let not = ByteOperation::Not(b_pub, b_not);
         builder.set_public_inputs_byte_operation(&not, &mut operations);
 
-        builder.register_byte_lookup(operations, &mut table);
+        builder.register_byte_lookup(operations, &table);
 
         let (air, trace_data) = builder.build();
 

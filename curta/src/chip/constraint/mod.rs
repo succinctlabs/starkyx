@@ -4,7 +4,7 @@ use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
 use super::table::bus::global::Bus;
 use super::table::evaluation::Evaluation;
-use super::table::lookup::Lookup;
+use super::table::lookup::LookupChipConstraint;
 use super::AirParameters;
 use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::{AirParser, MulParser};
@@ -17,7 +17,7 @@ pub enum Constraint<L: AirParameters> {
     Accumulator(Accumulator<L::Field, L::CubicParams>),
     BusChannel(BusChannel<L::Field, L::CubicParams>),
     Bus(Bus<L::CubicParams>),
-    Lookup(Box<Lookup<L::Field, L::CubicParams>>),
+    Lookup(LookupChipConstraint<L::Field, L::CubicParams>),
     Evaluation(Evaluation<L::Field, L::CubicParams>),
 }
 
@@ -35,8 +35,8 @@ impl<L: AirParameters> Constraint<L> {
         Self::Instruction(AirInstruction::CustomInstruction(instruction.into()))
     }
 
-    pub fn lookup(lookup: Lookup<L::Field, L::CubicParams>) -> Self {
-        Self::Lookup(Box::new(lookup))
+    pub fn lookup(lookup: LookupChipConstraint<L::Field, L::CubicParams>) -> Self {
+        Self::Lookup(lookup)
     }
 
     pub fn evaluation(evalutaion: Evaluation<L::Field, L::CubicParams>) -> Self {

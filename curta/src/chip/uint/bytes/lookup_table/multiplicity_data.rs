@@ -28,14 +28,11 @@ pub struct MultiplicityData {
 
 impl MultiplicityValues {
     pub fn new(num_rows: usize) -> Self {
-        // let mut values = Vec::with_capacity((NUM_BIT_OPPS + 1) * num_rows);
         Self(
             (0..num_rows)
-                .into_iter()
                 .map(|_| core::array::from_fn(|_| AtomicUsize::new(0)))
                 .collect(),
         )
-        // Self(vec![[AtomicUsize::new(0); NUM_BIT_OPPS + 1]; num_rows])
     }
 
     pub fn update(&self, row: usize, col: usize) {
@@ -73,13 +70,6 @@ impl MultiplicityData {
             operations_multipcitiy_dict,
         }
     }
-
-    // pub fn collect_values(&mut self, num_operations: usize) {
-    //     for operation in self.rx.iter().take(num_operations) {
-    //         let (row, col) = self.operations_multipcitiy_dict[&operation];
-    //         self.multiplicities_values.update(row, col);
-    //     }
-    // }
 
     pub fn update(&self, operation: &ByteOperation<u8>) {
         let (row, col) = self.operations_multipcitiy_dict[operation];

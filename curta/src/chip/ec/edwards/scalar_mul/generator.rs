@@ -338,7 +338,7 @@ where
         let temp = self.gadget.double_and_add_gadget.temp;
         let scalar_bit = self.gadget.double_and_add_gadget.bit;
         let nb_bits = Ed25519::nb_scalar_bits();
-        let tx_vec = (0..256).into_iter().map(|_| tx.clone()).collect::<Vec<_>>();
+        let tx_vec = (0..256).map(|_| tx.clone()).collect::<Vec<_>>();
         tx_vec.into_par_iter().enumerate().for_each(|(k, tx)| {
             let starting_row = 256 * k;
             // let gadget = self.gadget.clone();

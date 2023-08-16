@@ -19,7 +19,7 @@ impl<F: PrimeField> TraceWriter<F> {
                 let acc = accumulator
                     .values
                     .iter()
-                    .flat_map(|x| self.read_expression(&x, 0))
+                    .flat_map(|x| self.read_expression(x, 0))
                     .zip(challenges.iter())
                     .map(|(val, alpha)| *alpha * val)
                     .sum::<CubicElement<F>>();
