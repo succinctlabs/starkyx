@@ -64,7 +64,7 @@ impl<L: AirParameters> AirBuilder<L> {
         );
 
         let instr = ByteOperationInstruction::new(mult_data, *op, true);
-        self.register_instruction(instr);
+        self.register_global_instruction(instr);
         lookup_values.values.push(digest);
     }
 }

@@ -78,7 +78,7 @@ impl<AP: AirParser> RAir<AP> for FibonacciAir {
         parser.constraint_transition(second_col_constraint);
     }
 
-    fn eval_global(&self, parser: &mut AP) {}
+    fn eval_global(&self, _parser: &mut AP) {}
 }
 
 #[cfg(test)]

@@ -24,6 +24,10 @@ pub struct BytesLookupGenerator<F: RichField + Extendable<D>, E: CubicParameters
     table: ByteLookupTable<F>,
 }
 
+pub struct ByteOperationGenerator {
+
+}
+
 impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
     BytesLookupGenerator<F, E, D>
 {
@@ -196,7 +200,9 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
 
         // Write the operations and table multiplicities
         self.table.write_table_entries(&writer);
-
+        for i in 0..(1<<16) {
+            writer.write_row_instructions(&self.trace_generator.air_data, i);
+        }
         writer.write_global_instructions(&self.trace_generator.air_data);
         self.table.write_multiplicities(&writer);
     }

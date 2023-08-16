@@ -364,6 +364,7 @@ mod tests {
             }
             writer.write_row_instructions(&generator.air_data, i);
         }
+        writer.write_global_instructions(&generator.air_data);
         table.write_multiplicities(&writer);
 
         let stark = Starky::<_, { L::num_columns() }>::new(air);
