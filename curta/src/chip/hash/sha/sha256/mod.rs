@@ -589,7 +589,7 @@ mod tests {
         type Instruction = U32Instruction;
 
         const NUM_FREE_COLUMNS: usize = 551;
-        const EXTENDED_COLUMNS: usize = 945;
+        const EXTENDED_COLUMNS: usize = 927;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
         fn num_rows_bits() -> usize {
