@@ -18,12 +18,13 @@ use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
 use crate::plonky2::stark::Starky;
 
 #[derive(Debug, Clone, Copy)]
-pub struct CurtaU32Array<const N: usize>(pub [Target; N]);
+pub struct CurtaBytes<const N: usize>(pub [Target; N]);
 
 #[derive(Debug, Clone)]
 pub struct SHA256BuilderGadget<F, E, const D: usize> {
     pub padded_messages: Vec<Target>,
-    chunk_sizes: Vec<Target>,
+    pub digests: Vec<Target>,
+    chunk_sizes: Vec<usize>,
     _marker: PhantomData<(F, E)>,
 }
 
@@ -34,9 +35,9 @@ pub trait SHA256Builder<F: RichField + Extendable<D>, E: CubicParameters<F>, con
 
     fn sha_256<const N: usize>(
         &mut self,
-        padded_message: &CurtaU32Array<N>,
+        padded_message: &CurtaBytes<N>,
         gadget: &mut Self::Gadget,
-    );
+    ) -> CurtaBytes<32>;
 
     fn constrain_sha_256_gadget<C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone>(
         &mut self,
@@ -53,6 +54,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
     fn init_sha_256(&mut self) -> Self::Gadget {
         SHA256BuilderGadget {
             padded_messages: Vec::new(),
+            digests: Vec::new(),
             chunk_sizes: Vec::new(),
             _marker: PhantomData,
         }
@@ -60,11 +62,14 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
 
     fn sha_256<const N: usize>(
         &mut self,
-        padded_message: &CurtaU32Array<N>,
+        padded_message: &CurtaBytes<N>,
         gadget: &mut Self::Gadget,
-    ) {
+    ) -> CurtaBytes<32> {
         gadget.padded_messages.extend_from_slice(&padded_message.0);
-        gadget.chunk_sizes.push(self.constant(F::ONE));
+        let digest_bytes = self.add_virtual_target_arr::<32>();
+        gadget.digests.extend_from_slice(&digest_bytes);
+        gadget.chunk_sizes.push(N / 64);
+        CurtaBytes(digest_bytes)
     }
 
     fn constrain_sha_256_gadget<C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone>(
@@ -74,7 +79,8 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
         C::Hasher: AlgebraicHasher<F>,
     {
         // Allocate public input targets
-        let public_sha_targets = SHA256PublicData::add_virtual(self);
+        let public_sha_targets =
+            SHA256PublicData::add_virtual(self, &gadget.digests, &gadget.chunk_sizes);
 
         // Make the air
         let mut air_builder = AirBuilder::<SHA256AirParameters<F, E>>::new();
@@ -139,11 +145,7 @@ mod tests {
 
     use super::*;
     pub use crate::chip::builder::tests::*;
-    use crate::chip::builder::AirBuilder;
     use crate::chip::hash::sha::sha256::SHA256Gadget;
-    use crate::chip::uint::operations::instruction::U32Instruction;
-    use crate::chip::uint::util::u32_to_le_field_bytes;
-    use crate::chip::AirParameters;
 
     #[test]
     fn test_sha_256_plonky_gadget() {
@@ -161,12 +163,35 @@ mod tests {
 
         let mut gadget: SHA256BuilderGadget<F, E, D> = builder.init_sha_256();
 
-        let padded_msg_targets = (0..1024)
-            .map(|_| CurtaU32Array(builder.add_virtual_target_arr::<16>()))
+        let long_padded_msg_targets = (0..256)
+            .map(|_| CurtaBytes(builder.add_virtual_target_arr::<128>()))
             .collect::<Vec<_>>();
 
-        for padded_msg in padded_msg_targets.iter() {
-            builder.sha_256(padded_msg, &mut gadget);
+        let short_padded_msg_targets = (0..512)
+            .map(|_| CurtaBytes(builder.add_virtual_target_arr::<64>()))
+            .collect::<Vec<_>>();
+
+        let mut digest_targets = Vec::new();
+        let mut expected_digests = Vec::new();
+
+        for long_padded_msg in long_padded_msg_targets.iter() {
+            let digest = builder.sha_256(long_padded_msg, &mut gadget);
+            digest_targets.push(digest);
+            let expected_digest = CurtaBytes(builder.add_virtual_target_arr::<32>());
+            expected_digests.push(expected_digest);
+        }
+
+        for padded_msg in short_padded_msg_targets.iter() {
+            let digest = builder.sha_256(padded_msg, &mut gadget);
+            digest_targets.push(digest);
+            let expected_digest = CurtaBytes(builder.add_virtual_target_arr::<32>());
+            expected_digests.push(expected_digest);
+        }
+
+        for (digest, expected) in digest_targets.iter().zip(expected_digests.iter()) {
+            for (d, e) in digest.0.iter().zip(expected.0.iter()) {
+                builder.connect(*d, *e);
+            }
         }
 
         builder.constrain_sha_256_gadget::<C>(gadget);
@@ -187,41 +212,72 @@ mod tests {
         let expected_digest_long =
             "aca16131a2e4c4c49e656d35aac1f0e689b3151bb108fa6cf5bcc3ac08a09bf9";
 
-        let messages = (0..1024).map(|_| short_msg_1.clone()).collect::<Vec<_>>();
-        let padded_messages = messages
+        let long_messages = (0..256).map(|_| long_msg.clone()).collect::<Vec<_>>();
+        let padded_long_messages = long_messages
             .iter()
             .map(|m| {
                 SHA256Gadget::pad(m)
                     .into_iter()
-                    .map(F::from_canonical_u32)
+                    .map(F::from_canonical_u8)
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
 
-        // let expected_digests: Vec<[u32; 8]> = (0..256)
-        //     .flat_map(|_| {
-        //         [
-        //             expected_digest_1.clone(),
-        //             expected_digest_long.clone(),
-        //             expected_digest_2.clone(),
-        //         ]
-        //     })
-        //     .map(|digest| {
-        //         hex::decode(digest)
-        //             .unwrap()
-        //             .chunks_exact(4)
-        //             .map(|x| u32::from_be_bytes(x.try_into().unwrap()))
-        //             .collect::<Vec<_>>()
-        //             .try_into()
-        //             .unwrap()
-        //     })
-        //     .collect::<Vec<_>>();
-        // assert_eq!(expected_digests.len(), padded_messages.len());
+        let short_messages = (0..256)
+            .flat_map(|_| [short_msg_1.clone(), short_msg_2.clone()])
+            .collect::<Vec<_>>();
+        assert_eq!(short_messages.len(), 512);
+        let padded_short_messages = short_messages
+            .iter()
+            .map(|m| {
+                SHA256Gadget::pad(m)
+                    .into_iter()
+                    .map(F::from_canonical_u8)
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
 
-        // let mut digest_iter = expected_digests.into_iter();
+        let expected_digests_long_message = (0..256)
+            .map(|_| expected_digest_long)
+            .map(|digest| {
+                hex::decode(digest)
+                    .unwrap()
+                    .into_iter()
+                    .map(F::from_canonical_u8)
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
 
-        for (msg_target, msg) in padded_msg_targets.iter().zip(padded_messages.iter()) {
-            pw.set_target_arr(&msg_target.0, msg);
+        let expected_digests_short_messages = (0..256)
+            .flat_map(|_| [expected_digest_1, expected_digest_2])
+            .map(|digest| {
+                hex::decode(digest)
+                    .unwrap()
+                    .into_iter()
+                    .map(F::from_canonical_u8)
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        let mut expected_digests_values = expected_digests_long_message;
+        expected_digests_values.extend(expected_digests_short_messages);
+
+        for (msg_target, long_msg) in long_padded_msg_targets
+            .iter()
+            .zip(padded_long_messages.iter())
+        {
+            pw.set_target_arr(&msg_target.0, long_msg);
+        }
+
+        for (msg_target, short_msg) in short_padded_msg_targets
+            .iter()
+            .zip(padded_short_messages.iter())
+        {
+            pw.set_target_arr(&msg_target.0, short_msg);
+        }
+
+        for (digest, value) in expected_digests.iter().zip(expected_digests_values.iter()) {
+            pw.set_target_arr(&digest.0, value);
         }
 
         let recursive_proof = timed!(

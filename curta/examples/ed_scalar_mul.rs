@@ -29,12 +29,13 @@ use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CircuitConfig;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
+use plonky2::plonk::prover::prove;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use rand::thread_rng;
 
 fn main() {
-    // Devlarying some type aliases for convenience
+    // Define some type aliases for convenience
     type F = GoldilocksField;
     type E = GoldilocksCubicParameters;
     type C = PoseidonGoldilocksConfig;
@@ -150,12 +151,15 @@ fn main() {
         }
     );
 
-    let recursive_proof = timed!(
+    // Generate the proof
+    let proof = timed!(
         timing,
         "Generate proof",
-        plonky2::plonk::prover::prove(&data.prover_only, &data.common, pw, &mut timing)
+        prove(&data.prover_only, &data.common, pw, &mut timing)
     )
     .unwrap();
     timing.print();
-    data.verify(recursive_proof).unwrap();
+
+    // Verify the proof
+    data.verify(proof).unwrap();
 }

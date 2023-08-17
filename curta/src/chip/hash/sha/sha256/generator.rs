@@ -28,11 +28,17 @@ pub type U32Target = <U32Register as Register>::Value<Target>;
 pub const SHA256_COLUMNS: usize = 551 + 927;
 
 #[derive(Debug, Clone)]
+pub struct MessageChunks {
+    pub values: Vec<u8>,
+    pub chunk_sizes: Vec<usize>,
+}
+
+#[derive(Debug, Clone)]
 pub struct SHA256Generator<F: PrimeField64, E: CubicParameters<F>> {
     pub gadget: SHA256Gadget,
     pub table: ByteLookupTable<F>,
     pub padded_messages: Vec<Target>,
-    pub chunk_sizes: Vec<Target>,
+    pub chunk_sizes: Vec<usize>,
     pub trace_generator: ArithmeticGenerator<SHA256AirParameters<F, E>>,
     pub pub_values_target: SHA256PublicData<Target>,
 }
@@ -78,37 +84,22 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
     }
 
     fn dependencies(&self) -> Vec<Target> {
-        self.padded_messages
-            .iter()
-            .chain(self.chunk_sizes.iter())
-            .copied()
-            .collect()
+        self.padded_messages.clone()
     }
 
     fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
         let padded_messages = self
             .padded_messages
             .iter()
-            .map(|x| witness.get_target(*x).as_canonical_u64() as u32)
+            .map(|x| witness.get_target(*x).as_canonical_u64() as u8)
             .collect::<Vec<_>>();
-        let chunk_sizes = witness.get_targets(&self.chunk_sizes);
-        assert_eq!(padded_messages.len(), 1024 * 16);
+        assert_eq!(padded_messages.len(), 1024 * 64);
 
-        let mut message_chunks = Vec::new();
-        let mut idx = 0;
-        for size in chunk_sizes {
-            let size = size.as_canonical_u64() as usize;
-            let chunk = padded_messages[idx..idx + 16 * size].to_vec();
-            message_chunks.push(chunk);
-            idx += 16 * size;
-        }
-
-        // let message_chunks = chunk_sizes.into_iter().scan(0usize, |idx, size| {
-        //     let size = size.as_canonical_u64() as usize;
-        //     let current_idx = *idx;
-        //     *idx += 16 * size;
-        //     Some(&padded_messages[current_idx..current_idx + 16 * size])
-        // });
+        let message_chunks = self.chunk_sizes.iter().scan(0, |idx, size| {
+            let chunk = padded_messages[*idx..*idx + 64 * size].to_vec();
+            *idx += 64 * size;
+            Some(chunk)
+        });
 
         // Write trace values
         let writer = self.trace_generator.new_writer();
@@ -128,14 +119,34 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
 impl SHA256PublicData<Target> {
     pub fn add_virtual<F: RichField + Extendable<D>, const D: usize>(
         builder: &mut CircuitBuilder<F, D>,
+        digests: &[Target],
+        chunk_sizes: &[usize],
     ) -> Self {
         let public_w_targets = (0..16 * 1024)
             .map(|_| builder.add_virtual_target_arr::<{ U32Register::size_of() }>())
             .collect::<Vec<_>>();
-        let hash_state_targets = (0..8 * 1024)
-            .map(|_| builder.add_virtual_target_arr::<{ U32Register::size_of() }>())
-            .collect::<Vec<_>>();
-        let end_bits_targets = builder.add_virtual_targets(1024);
+
+        // let end_bits_targets = builder.add_virtual_targets(1024);
+        let mut end_bits_targets = Vec::new();
+        let mut hash_state_targets = Vec::new();
+
+        for (digest, chunk_size) in digests.chunks_exact(32).zip_eq(chunk_sizes.iter()) {
+            end_bits_targets.extend((0..(chunk_size - 1)).map(|_| builder.zero()));
+            end_bits_targets.push(builder.one());
+
+            hash_state_targets.extend(
+                (0..8 * (chunk_size - 1))
+                    .map(|_| builder.add_virtual_target_arr::<{ U32Register::size_of() }>()),
+            );
+
+            // Convert digest to little endian u32 chunks
+            let u32_digest = digest.chunks_exact(4).map(|arr| {
+                let mut array: [Target; 4] = arr.try_into().unwrap();
+                array.reverse();
+                array
+            });
+            hash_state_targets.extend(u32_digest);
+        }
 
         SHA256PublicData {
             public_w: public_w_targets,
@@ -154,10 +165,6 @@ impl SHA256PublicData<Target> {
         }
         for (hash_target, hash_value) in self.hash_state.iter().zip_eq(values.hash_state.iter()) {
             out_buffer.set_target_arr(hash_target, hash_value);
-        }
-        for (end_bits_target, end_bits_value) in self.end_bits.iter().zip_eq(values.end_bits.iter())
-        {
-            out_buffer.set_target(*end_bits_target, *end_bits_value);
         }
     }
 

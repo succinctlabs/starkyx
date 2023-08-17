@@ -422,7 +422,7 @@ impl SHA256Gadget {
         writer: &TraceWriter<F>,
     ) -> SHA256PublicData<F>
     where
-        I::Item: Borrow<[u32]>,
+        I::Item: Borrow<[u8]>,
     {
         let mut w_values = Vec::new();
         let mut end_bits_values = Vec::new();
@@ -431,14 +431,15 @@ impl SHA256Gadget {
 
         padded_messages.into_iter().for_each(|padded_msg| {
             let padded_msg = padded_msg.borrow();
-            let num_chunks = padded_msg.len() / 16;
+            let num_chunks = padded_msg.len() / 64;
             end_bits_values.extend_from_slice(&vec![F::ZERO; num_chunks - 1]);
             end_bits_values.push(F::ONE);
 
             let mut state = INITIAL_HASH;
-            for chunk in padded_msg.chunks_exact(16) {
+            for chunk in padded_msg.chunks_exact(64) {
                 let w_val = SHA256Gadget::process_inputs(chunk);
-                public_w_values.extend(chunk.iter().map(|x| u32_to_le_field_bytes::<F>(*x)));
+                public_w_values.extend(w_val[0..16].iter().map(|x| u32_to_le_field_bytes::<F>(*x)));
+                // public_w_values.extend(chunk.iter().map(|x| u32_to_le_field_bytes::<F>(*x)));
                 state = SHA256Gadget::compress_round(state, &w_val, ROUND_CONSTANTS);
                 w_values.extend_from_slice(&w_val.map(u32_to_le_field_bytes::<F>));
                 hash_values.extend_from_slice(&state.map(u32_to_le_field_bytes::<F>));
@@ -485,11 +486,14 @@ impl SHA256Gadget {
         }
     }
 
-    pub fn process_inputs(chunk: &[u32]) -> [u32; 64] {
-        assert_eq!(chunk.len(), 16);
+    pub fn process_inputs(chunk: &[u8]) -> [u32; 64] {
+        let chunk_u32 = chunk
+            .chunks_exact(4)
+            .map(|x| u32::from_be_bytes(x.try_into().unwrap()))
+            .collect::<Vec<_>>();
         let mut w = [0u32; 64];
 
-        w[..16].copy_from_slice(&chunk[..16]);
+        w[..16].copy_from_slice(&chunk_u32[..16]);
 
         for i in 16..64 {
             let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
@@ -553,7 +557,7 @@ impl SHA256Gadget {
         [a, b, c, d, e, f, g, h]
     }
 
-    pub fn pad(msg: &[u8]) -> Vec<u32> {
+    pub fn pad(msg: &[u8]) -> Vec<u8> {
         let mut padded_msg = Vec::new();
         padded_msg.extend_from_slice(msg);
         padded_msg.push(1 << 7);
@@ -570,9 +574,9 @@ impl SHA256Gadget {
         padded_msg.extend_from_slice(&len);
 
         padded_msg
-            .chunks_exact(4)
-            .map(|x| u32::from_be_bytes(x.try_into().unwrap()))
-            .collect::<Vec<_>>()
+        // .chunks_exact(4)
+        // .map(|x| u32::from_be_bytes(x.try_into().unwrap()))
+        // .collect::<Vec<_>>()
     }
 }
 
