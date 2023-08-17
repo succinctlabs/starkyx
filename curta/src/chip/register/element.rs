@@ -18,7 +18,7 @@ impl RegisterSerializable for ElementRegister {
     }
 }
 
-impl RegisterSized for ElementRegister {
+impl const RegisterSized for ElementRegister {
     fn size_of() -> usize {
         1
     }

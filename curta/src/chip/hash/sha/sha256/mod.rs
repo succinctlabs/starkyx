@@ -1,3 +1,4 @@
+pub mod builder_gadget;
 pub mod generator;
 
 use core::borrow::Borrow;
@@ -22,6 +23,8 @@ use crate::chip::uint::util::u32_to_le_field_bytes;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
+pub type U32Value<T> = <U32Register as Register>::Value<T>;
+
 #[derive(Debug, Clone)]
 pub struct SHA256Gadget {
     /// The input chunks processed into 16-words of U32 values
@@ -39,7 +42,14 @@ pub struct SHA256Gadget {
     pub round_constants_public: ArrayRegister<U32Register>,
 }
 
-pub const ROUND_CONSTANTS: [u32; 64] = [
+#[derive(Debug, Clone)]
+pub struct SHA256PublicData<T> {
+    pub public_w: Vec<U32Value<T>>,
+    pub hash_state: Vec<U32Value<T>>,
+    pub end_bits: Vec<T>,
+}
+
+const ROUND_CONSTANTS: [u32; 64] = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
     0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
     0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
@@ -50,7 +60,7 @@ pub const ROUND_CONSTANTS: [u32; 64] = [
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ];
 
-pub const INITIAL_HASH: [u32; 8] = [
+const INITIAL_HASH: [u32; 8] = [
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
 ];
 
@@ -409,10 +419,9 @@ impl SHA256Gadget {
     pub fn write<F: Field, I: IntoIterator>(
         &self,
         padded_messages: I,
-        initial_state: [u32; 8],
-        round_constants: [u32; 64],
         writer: &TraceWriter<F>,
-    ) where
+    ) -> SHA256PublicData<F>
+    where
         I::Item: Borrow<[u32]>,
     {
         let mut w_values = Vec::new();
@@ -426,12 +435,12 @@ impl SHA256Gadget {
             end_bits_values.extend_from_slice(&vec![F::ZERO; num_chunks - 1]);
             end_bits_values.push(F::ONE);
 
-            let mut state = initial_state;
+            let mut state = INITIAL_HASH;
             for chunk in padded_msg.chunks_exact(16) {
                 let w_val = SHA256Gadget::process_inputs(chunk);
                 public_w_values.extend(chunk.iter().map(|x| u32_to_le_field_bytes::<F>(*x)));
-                w_values.extend_from_slice(&w_val);
-                state = SHA256Gadget::compress_round(state, &w_val, round_constants);
+                state = SHA256Gadget::compress_round(state, &w_val, ROUND_CONSTANTS);
+                w_values.extend_from_slice(&w_val.map(u32_to_le_field_bytes::<F>));
                 hash_values.extend_from_slice(&state.map(u32_to_le_field_bytes::<F>));
             }
         });
@@ -442,12 +451,12 @@ impl SHA256Gadget {
 
         writer.write_array(
             &self.initial_state,
-            initial_state.map(u32_to_le_field_bytes),
+            INITIAL_HASH.map(u32_to_le_field_bytes),
             0,
         );
         writer.write_array(
             &self.round_constants_public,
-            round_constants.map(u32_to_le_field_bytes),
+            ROUND_CONSTANTS.map(u32_to_le_field_bytes),
             0,
         );
         writer.write_array(&self.state, &hash_values, 0);
@@ -459,19 +468,21 @@ impl SHA256Gadget {
                 let row = i * 64 + j;
                 writer.write(
                     &self.round_constant,
-                    &u32_to_le_field_bytes(round_constants[j]),
+                    &u32_to_le_field_bytes(ROUND_CONSTANTS[j]),
                     row,
                 );
-                writer.write(
-                    &self.w_window.get(0),
-                    &u32_to_le_field_bytes(w_values[i * 64 + j]),
-                    row,
-                );
+                writer.write(&self.w_window.get(0), &w_values[i * 64 + j], row);
                 if j < 16 {
                     writer.write(&self.w_bit, &F::ONE, row);
                 }
             }
         });
+
+        SHA256PublicData {
+            public_w: public_w_values,
+            hash_state: hash_values,
+            end_bits: end_bits_values,
+        }
     }
 
     pub fn process_inputs(chunk: &[u32]) -> [u32; 64] {
@@ -670,7 +681,7 @@ mod tests {
         let mut digest_iter = expected_digests.into_iter();
         timed!(timing, "Write the execusion trace", {
             table.write_table_entries(&writer);
-            sha_gadget.write(padded_messages, INITIAL_HASH, ROUND_CONSTANTS, &writer);
+            sha_gadget.write(padded_messages, &writer);
             for i in 0..L::num_rows() {
                 writer.write_row_instructions(&generator.air_data, i);
                 let end_bit = writer.read(&sha_gadget.end_bit, i);

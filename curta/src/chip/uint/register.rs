@@ -29,7 +29,7 @@ impl<const N: usize> RegisterSerializable for ByteArrayRegister<N> {
     }
 }
 
-impl<const N: usize> RegisterSized for ByteArrayRegister<N> {
+impl<const N: usize> const RegisterSized for ByteArrayRegister<N> {
     fn size_of() -> usize {
         N
     }

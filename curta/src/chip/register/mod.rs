@@ -34,6 +34,7 @@ where
 }
 
 /// Ensures that the register has a fixed size.
+#[const_trait]
 pub trait RegisterSized {
     /// Returns the expected size of the register in cells.
     fn size_of() -> usize;

@@ -2,8 +2,6 @@ pub mod air;
 pub mod generator;
 pub mod operation;
 
-
-
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::Target;
