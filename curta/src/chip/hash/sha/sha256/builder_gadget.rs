@@ -31,15 +31,15 @@ pub struct SHA256BuilderGadget<F, E, const D: usize> {
 pub trait SHA256Builder<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> {
     type Gadget;
 
-    fn init_sha_256(&mut self) -> Self::Gadget;
+    fn init_sha256(&mut self) -> Self::Gadget;
 
-    fn sha_256<const N: usize>(
+    fn sha256<const N: usize>(
         &mut self,
         padded_message: &CurtaBytes<N>,
         gadget: &mut Self::Gadget,
     ) -> CurtaBytes<32>;
 
-    fn constrain_sha_256_gadget<C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone>(
+    fn constrain_sha256_gadget<C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone>(
         &mut self,
         gadget: Self::Gadget,
     ) where
@@ -51,7 +51,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
 {
     type Gadget = SHA256BuilderGadget<F, E, D>;
 
-    fn init_sha_256(&mut self) -> Self::Gadget {
+    fn init_sha256(&mut self) -> Self::Gadget {
         SHA256BuilderGadget {
             padded_messages: Vec::new(),
             digests: Vec::new(),
@@ -60,7 +60,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
         }
     }
 
-    fn sha_256<const N: usize>(
+    fn sha256<const N: usize>(
         &mut self,
         padded_message: &CurtaBytes<N>,
         gadget: &mut Self::Gadget,
@@ -72,7 +72,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
         CurtaBytes(digest_bytes)
     }
 
-    fn constrain_sha_256_gadget<C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone>(
+    fn constrain_sha256_gadget<C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone>(
         &mut self,
         gadget: Self::Gadget,
     ) where
@@ -161,7 +161,7 @@ mod tests {
         let config = CircuitConfig::standard_recursion_config();
         let mut builder = CircuitBuilder::<F, D>::new(config);
 
-        let mut gadget: SHA256BuilderGadget<F, E, D> = builder.init_sha_256();
+        let mut gadget: SHA256BuilderGadget<F, E, D> = builder.init_sha256();
 
         let long_padded_msg_targets = (0..256)
             .map(|_| CurtaBytes(builder.add_virtual_target_arr::<128>()))
@@ -175,14 +175,14 @@ mod tests {
         let mut expected_digests = Vec::new();
 
         for long_padded_msg in long_padded_msg_targets.iter() {
-            let digest = builder.sha_256(long_padded_msg, &mut gadget);
+            let digest = builder.sha256(long_padded_msg, &mut gadget);
             digest_targets.push(digest);
             let expected_digest = CurtaBytes(builder.add_virtual_target_arr::<32>());
             expected_digests.push(expected_digest);
         }
 
         for padded_msg in short_padded_msg_targets.iter() {
-            let digest = builder.sha_256(padded_msg, &mut gadget);
+            let digest = builder.sha256(padded_msg, &mut gadget);
             digest_targets.push(digest);
             let expected_digest = CurtaBytes(builder.add_virtual_target_arr::<32>());
             expected_digests.push(expected_digest);
@@ -194,7 +194,7 @@ mod tests {
             }
         }
 
-        builder.constrain_sha_256_gadget::<C>(gadget);
+        builder.constrain_sha256_gadget::<C>(gadget);
 
         let data = builder.build::<C>();
         let mut pw = PartialWitness::new();

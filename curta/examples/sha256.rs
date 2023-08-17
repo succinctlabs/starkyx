@@ -5,17 +5,17 @@
 //!
 //! To run, use:
 //! ```
-//! cargo run --release --example sha_256
+//! cargo run --release --example sha256
 //! ```
 //!
 //!  To see the timing print, use:
 //! ```
-//! RUST_LOG="debug" cargo run --release --example sha_256
+//! RUST_LOG="debug" cargo run --release --example sha256
 //! ```
 //!
 //! For maximum performence, set the compiler flag to optimize for your CPU architecture:
 //! ```
-//! RUST_LOG="debug" RUSTFLAGS=-Ctarget-cpu=native cargo run --release --example sha_256
+//! RUST_LOG="debug" RUSTFLAGS=-Ctarget-cpu=native cargo run --release --example sha256
 //! ```
 //!
 
@@ -52,7 +52,7 @@ fn main() {
     let mut builder = CircuitBuilder::<F, D>::new(config);
 
     // Initialize the SHA gadget
-    let mut gadget: SHA256BuilderGadget<F, E, D> = builder.init_sha_256();
+    let mut gadget: SHA256BuilderGadget<F, E, D> = builder.init_sha256();
 
     // We will hash 256 messages of padded length 128 bytes and 512 messages of padded length 64 bytes.
 
@@ -70,7 +70,7 @@ fn main() {
 
     for long_padded_msg in long_padded_msg_targets.iter() {
         // Get the hash of the padded message
-        let digest = builder.sha_256(long_padded_msg, &mut gadget);
+        let digest = builder.sha256(long_padded_msg, &mut gadget);
         digest_targets.push(digest);
         let expected_digest = CurtaBytes(builder.add_virtual_target_arr::<32>());
         expected_digests.push(expected_digest);
@@ -78,7 +78,7 @@ fn main() {
 
     for padded_msg in short_padded_msg_targets.iter() {
         // Get the hash of the padded message
-        let digest = builder.sha_256(padded_msg, &mut gadget);
+        let digest = builder.sha256(padded_msg, &mut gadget);
         digest_targets.push(digest);
         let expected_digest = CurtaBytes(builder.add_virtual_target_arr::<32>());
         expected_digests.push(expected_digest);
@@ -92,7 +92,7 @@ fn main() {
     }
 
     // Register the SHA constraints in the builder
-    builder.constrain_sha_256_gadget::<C>(gadget);
+    builder.constrain_sha256_gadget::<C>(gadget);
 
     // Build the circuit
     let data = builder.build::<C>();
