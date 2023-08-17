@@ -15,8 +15,7 @@ use plonky2::plonk::config::GenericConfig;
 
 use self::config::StarkyConfig;
 use super::parser::{RecursiveStarkParser, StarkParser};
-use crate::air::parser::AirParser;
-use crate::air::RAir;
+use crate::air::{RAir, RAirData};
 use crate::stark::Stark;
 
 pub mod config;
@@ -28,7 +27,7 @@ pub mod verifier;
 
 #[derive(Debug, Clone)]
 pub struct Starky<A, const COLUMNS: usize> {
-    air: A,
+    pub air: A,
 }
 
 impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
@@ -43,7 +42,6 @@ impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
     }
 
     fn num_quotient_polys<
-        AP: AirParser,
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F>,
         const D: usize,
@@ -52,30 +50,26 @@ impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
         config: &StarkyConfig<F, C, D>,
     ) -> usize
     where
-        A: RAir<AP>,
+        A: RAirData,
     {
         self.air().quotient_degree_factor() * config.num_challenges
     }
 
     /// Computes the FRI instance used to prove this Stark.
-    fn fri_instance<
-        AP: AirParser,
-        F: RichField + Extendable<D>,
-        C: GenericConfig<D, F = F>,
-        const D: usize,
-    >(
+    fn fri_instance<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
         &self,
         zeta: F::Extension,
         g: F,
         config: &StarkyConfig<F, C, D>,
     ) -> FriInstanceInfo<F, D>
     where
-        A: RAir<AP>,
+        A: RAirData,
     {
         let mut oracles = vec![];
         let mut trace_info: Vec<FriPolynomialInfo> = vec![];
 
-        for length in self.air().round_lengths() {
+        for round in self.air().round_data() {
+            let length = round.num_columns;
             let round_info = FriPolynomialInfo::from_range(oracles.len(), 0..length);
             trace_info.extend(round_info);
             oracles.push(FriOracleInfo {
@@ -106,7 +100,6 @@ impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
 
     /// Computes the FRI instance used to prove this Stark.
     fn fri_instance_target<
-        AP: AirParser,
         C: GenericConfig<D, F = F>,
         F: RichField + Extendable<D>,
         const D: usize,
@@ -118,12 +111,13 @@ impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
         config: &StarkyConfig<F, C, D>,
     ) -> FriInstanceInfoTarget<D>
     where
-        A: RAir<AP>,
+        A: RAirData,
     {
         let mut oracles = vec![];
         let mut trace_info: Vec<FriPolynomialInfo> = vec![];
 
-        for length in self.air().round_lengths() {
+        for round in self.air().round_data() {
+            let length = round.num_columns;
             let round_info = FriPolynomialInfo::from_range(oracles.len(), 0..length);
             trace_info.extend(round_info);
             oracles.push(FriOracleInfo {
@@ -206,6 +200,7 @@ pub(crate) mod tests {
     use super::*;
     use crate::air::fibonacci::FibonacciAir;
     use crate::math::prelude::*;
+    use crate::plonky2::parser::global::{GlobalRecursiveStarkParser, GlobalStarkParser};
     use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
     use crate::plonky2::stark::gadget::StarkGadget;
     use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
@@ -228,7 +223,8 @@ pub(crate) mod tests {
         public_inputs: &[F],
     ) where
         A: for<'a> RAir<StarkParser<'a, F, C::FE, C::FE, D, D>>
-            + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
+            + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>
+            + for<'a> RAir<GlobalStarkParser<'a, F, F, F, D, 1>>,
         T: TraceGenerator<F, A>,
         T::Error: Into<anyhow::Error>,
     {
@@ -260,7 +256,8 @@ pub(crate) mod tests {
     ) where
         C::Hasher: AlgebraicHasher<F>,
         A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
-            + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>,
+            + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>
+            + for<'a> RAir<GlobalRecursiveStarkParser<'a, F, D>>,
         T: Clone + Debug + Send + Sync + 'static + TraceGenerator<F, A>,
         T::Error: Into<anyhow::Error>,
     {

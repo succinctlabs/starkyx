@@ -1,4 +1,5 @@
 pub mod consumer;
+pub mod global;
 
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
@@ -7,9 +8,9 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use self::consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
-use super::field::cubic::parameters::CubicParameters;
 use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::AirParser;
+use crate::math::extension::cubic::parameters::CubicParameters;
 use crate::polynomial::parser::PolynomialParser;
 
 pub struct StarkParser<'a, F, FE, P, const D: usize, const D2: usize>
@@ -20,7 +21,8 @@ where
 {
     pub(crate) local_vars: &'a [P],
     pub(crate) next_vars: &'a [P],
-    pub(crate) public_inputs: &'a [P],
+    pub(crate) global_vars: &'a [P],
+    pub(crate) public_vars: &'a [P],
     pub(crate) challenges: &'a [P],
     pub(crate) consumer: &'a mut ConstraintConsumer<P>,
 }
@@ -29,7 +31,8 @@ pub struct RecursiveStarkParser<'a, F: RichField + Extendable<D>, const D: usize
     pub(crate) builder: &'a mut CircuitBuilder<F, D>,
     pub(crate) local_vars: &'a [ExtensionTarget<D>],
     pub(crate) next_vars: &'a [ExtensionTarget<D>],
-    pub(crate) public_inputs: &'a [ExtensionTarget<D>],
+    pub(crate) global_vars: &'a [ExtensionTarget<D>],
+    pub(crate) public_vars: &'a [ExtensionTarget<D>],
     pub(crate) challenges: &'a [ExtensionTarget<D>],
     pub(crate) consumer: &'a mut RecursiveConstraintConsumer<F, D>,
 }
@@ -55,8 +58,12 @@ where
         self.challenges
     }
 
+    fn global_slice(&self) -> &[Self::Var] {
+        self.global_vars
+    }
+
     fn public_slice(&self) -> &[Self::Var] {
-        self.public_inputs
+        self.public_vars
     }
 
     fn constant(&mut self, value: Self::Field) -> Self::Var {
@@ -151,8 +158,12 @@ impl<'a, F: RichField + Extendable<D>, const D: usize> AirParser
         self.challenges
     }
 
+    fn global_slice(&self) -> &[Self::Var] {
+        self.global_vars
+    }
+
     fn public_slice(&self) -> &[Self::Var] {
-        self.public_inputs
+        self.public_vars
     }
 
     fn constraint(&mut self, constraint: Self::Var) {

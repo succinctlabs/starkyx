@@ -2,8 +2,6 @@
 //!
 //! To understand the implementation, it may be useful to refer to `mod.rs`.
 
-use std::collections::HashSet;
-
 use num::{BigUint, Zero};
 
 use super::parameters::FieldParameters;
@@ -104,7 +102,7 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpInnerProductInstr
         ]
     }
 
-    fn inputs(&self) -> HashSet<MemorySlice> {
+    fn inputs(&self) -> Vec<MemorySlice> {
         self.a
             .iter()
             .map(|x| *x.register())
@@ -196,7 +194,8 @@ mod tests {
         type CubicParams = GoldilocksCubicParameters;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 156;
-        const EXTENDED_COLUMNS: usize = 242;
+        const NUM_FREE_COLUMNS: usize = 2;
+        const EXTENDED_COLUMNS: usize = 243;
 
         type Instruction = FpInnerProductInstruction<Fp25519>;
 
@@ -223,9 +222,9 @@ mod tests {
         let d = builder.alloc::<Fp>();
         let quad = builder.fp_inner_product(&vec![a, b], &vec![c, d]);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&[]);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
 
         let (tx, rx) = channel();
 
@@ -244,10 +243,10 @@ mod tests {
                 let p_c = Polynomial::<F>::from_biguint_field(&c_int, 16, 16);
                 let p_d = Polynomial::<F>::from_biguint_field(&d_int, 16, 16);
 
-                writer.write(&a, p_a.coefficients(), i);
-                writer.write(&b, p_b.coefficients(), i);
-                writer.write(&c, p_c.coefficients(), i);
-                writer.write(&d, p_d.coefficients(), i);
+                writer.write(&a, &p_a, i);
+                writer.write(&b, &p_b, i);
+                writer.write(&c, &p_c, i);
+                writer.write(&d, &p_d, i);
 
                 writer.write_instruction(&quad, i);
 

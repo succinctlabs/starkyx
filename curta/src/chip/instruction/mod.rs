@@ -1,6 +1,5 @@
 use core::fmt::Debug;
 use core::hash::Hash;
-use std::collections::HashSet;
 
 use super::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
@@ -27,11 +26,9 @@ pub trait Instruction<F: Field>: 'static + Send + Sync + Clone + Debug {
 
     /// Returns a vector of memory slices or contiguous memory regions of the row in the trace that
     /// specifies the inputs to the instruction.
-    fn inputs(&self) -> HashSet<MemorySlice>;
+    fn inputs(&self) -> Vec<MemorySlice>;
 
     /// Writes the instruction to the trace.
-    ///
-    /// This method is called after all the inputs returned from `inputs` have been written to the trace.
     fn write(&self, writer: &TraceWriter<F>, row_index: usize);
 
     fn constraint_degree(&self) -> usize {
@@ -51,8 +48,8 @@ impl<F: Field, C: ConstraintInstruction> Instruction<F> for C {
         vec![]
     }
 
-    fn inputs(&self) -> HashSet<MemorySlice> {
-        HashSet::new()
+    fn inputs(&self) -> Vec<MemorySlice> {
+        Vec::new()
     }
 
     fn write(&self, _writer: &TraceWriter<F>, _row_index: usize) {}

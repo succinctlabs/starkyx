@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use super::parameters::FieldParameters;
 use super::register::FieldRegister;
 use super::util;
@@ -117,11 +115,8 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpAddInstruction<P>
         ]
     }
 
-    fn inputs(&self) -> HashSet<MemorySlice> {
-        let mut set = HashSet::new();
-        set.insert(*self.a.register());
-        set.insert(*self.b.register());
-        set
+    fn inputs(&self) -> Vec<MemorySlice> {
+        vec![*self.a.register(), *self.b.register()]
     }
 
     fn constraint_degree(&self) -> usize {
@@ -204,7 +199,8 @@ mod tests {
         type CubicParams = GoldilocksCubicParameters;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 140;
-        const EXTENDED_COLUMNS: usize = 218;
+        const NUM_FREE_COLUMNS: usize = 2;
+        const EXTENDED_COLUMNS: usize = 219;
 
         type Instruction = FpAddInstruction<Fp25519>;
 
@@ -226,35 +222,36 @@ mod tests {
 
         let a = builder.alloc::<FieldRegister<P>>();
         let b = builder.alloc::<FieldRegister<P>>();
-        let add_insr = builder.fp_add(&a, &b);
+        let _add_insr = builder.fp_add(&a, &b);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&[]);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
 
-        let (tx, rx) = channel();
+        let trace_initial = (0..L::num_rows())
+            .into_par_iter()
+            .map(|_| {
+                let mut rng = thread_rng();
+                let writer = generator.new_writer();
+                // let handle = tx.clone();
+                let a_int: BigUint = rng.gen_biguint(256) % &p;
+                let b_int = rng.gen_biguint(256) % &p;
+                (writer, a_int, b_int)
+            })
+            .collect::<Vec<_>>();
 
-        let mut rng = thread_rng();
-        for i in 0..L::num_rows() {
-            let writer = generator.new_writer();
-            let handle = tx.clone();
-            let a_int: BigUint = rng.gen_biguint(256) % &p;
-            let b_int = rng.gen_biguint(256) % &p;
-            rayon::spawn(move || {
+        trace_initial
+            .into_par_iter()
+            .enumerate()
+            .for_each(|(i, (writer, a_int, b_int))| {
                 let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
                 let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
 
-                writer.write(&a, p_a.coefficients(), i);
-                writer.write(&b, p_b.coefficients(), i);
-                writer.write_instruction(&add_insr, i);
-
-                handle.send(1).unwrap();
+                writer.write_slice(&a, p_a.coefficients(), i);
+                writer.write_slice(&b, p_b.coefficients(), i);
+                writer.write_row_instructions(&generator.air_data, i);
             });
-        }
-        drop(tx);
-        for msg in rx.iter() {
-            assert!(msg == 1);
-        }
+
         let stark = Starky::<_, { L::num_columns() }>::new(air);
         let config = SC::standard_fast_config(L::num_rows());
 

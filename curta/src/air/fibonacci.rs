@@ -1,5 +1,6 @@
 use super::parser::AirParser;
-use super::RAir;
+use super::{RAir, RAirData};
+use crate::air::RoundDatum;
 use crate::math::prelude::*;
 use crate::trace::AirTrace;
 
@@ -36,13 +37,31 @@ impl Default for FibonacciAir {
     }
 }
 
+impl RAirData for FibonacciAir {
+    fn constraint_degree(&self) -> usize {
+        1
+    }
+
+    fn width(&self) -> usize {
+        2
+    }
+
+    fn round_data(&self) -> Vec<RoundDatum> {
+        vec![RoundDatum::new(self.width(), (0, 3), 0)]
+    }
+
+    fn num_public_inputs(&self) -> usize {
+        3
+    }
+}
+
 impl<AP: AirParser> RAir<AP> for FibonacciAir {
     fn eval(&self, parser: &mut AP) {
         // Check public inputs.
         let pis_constraints = [
             parser.sub(parser.local_slice()[0], parser.public_slice()[0]),
             parser.sub(parser.local_slice()[1], parser.public_slice()[1]),
-            // parser.sub(parser.local_slice()[1], parser.public_slice()[2]),
+            // parser.sub(parser.local_slice()[1], parser.global_slice()[2]),
         ];
         parser.constraint_first_row(pis_constraints[0]);
         parser.constraint_first_row(pis_constraints[1]);
@@ -59,21 +78,7 @@ impl<AP: AirParser> RAir<AP> for FibonacciAir {
         parser.constraint_transition(second_col_constraint);
     }
 
-    fn constraint_degree(&self) -> usize {
-        1
-    }
-
-    fn width(&self) -> usize {
-        2
-    }
-
-    fn round_lengths(&self) -> Vec<usize> {
-        vec![RAir::<AP>::width(self)]
-    }
-
-    fn num_challenges(&self, _round: usize) -> usize {
-        0
-    }
+    fn eval_global(&self, _parser: &mut AP) {}
 }
 
 #[cfg(test)]
@@ -81,7 +86,7 @@ mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField;
 
     use super::*;
-    use crate::air::parser::TraceWindowParser;
+    use crate::trace::window_parser::TraceWindowParser;
 
     #[test]
     fn test_fibonacci_air() {
@@ -99,7 +104,7 @@ mod tests {
 
         for window in trace.windows_iter() {
             assert_eq!(window.local_slice.len(), 2);
-            let mut window_parser = TraceWindowParser::new(window, &[], &public_inputs);
+            let mut window_parser = TraceWindowParser::new(window, &[], &[], &public_inputs);
             assert_eq!(window_parser.local_slice().len(), 2);
             air.eval(&mut window_parser);
         }

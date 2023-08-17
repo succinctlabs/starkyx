@@ -1,125 +1,162 @@
-use super::LogLookup;
-use crate::chip::register::RegisterSerializable;
+use itertools::Itertools;
+
+use super::{LogLookup, LogLookupValues, LookupTable};
+use crate::chip::register::cubic::EvalCubic;
+use crate::chip::register::Register;
 use crate::chip::trace::writer::TraceWriter;
+use crate::math::extension::cubic::extension::CubicExtension;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
-use crate::plonky2::field::cubic::extension::CubicExtension;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct SplitData {
-    mid: usize,
-    values_range: (usize, usize),
-    acc_range: (usize, usize),
-}
-
-impl SplitData {
-    pub fn new(mid: usize, values_range: (usize, usize), acc_range: (usize, usize)) -> Self {
-        Self {
-            mid,
-            values_range,
-            acc_range,
-        }
-    }
-    pub(crate) fn split<'a, T>(&self, trace_row: &'a mut [T]) -> (&'a [T], &'a mut [T]) {
-        let (left, right) = trace_row.split_at_mut(self.mid);
-        (
-            &left[self.values_range.0..self.values_range.1],
-            &mut right[self.acc_range.0..self.acc_range.1],
-        )
-    }
-
-    pub(crate) fn split_log_data<F: Field, E: CubicParameters<F>>(
-        log_data: &LogLookup<F, E, 1>,
-    ) -> Self {
-        let values_idx = log_data.values.register().get_range();
-        let acc_idx = log_data.row_accumulators.register().get_range();
-        assert!(
-            values_idx.0 < acc_idx.0,
-            "Illegal memory pattern, expected values indices \
-        to be to the right of accumulator indices, \
-        instead got: values_idx: {values_idx:?}, acc_idx: {acc_idx:?}"
-        );
-        SplitData::new(
-            values_idx.1,
-            (values_idx.0, values_idx.1),
-            (acc_idx.0 - values_idx.1, acc_idx.1 - values_idx.1),
-        )
-    }
-}
 
 impl<F: PrimeField> TraceWriter<F> {
-    pub(crate) fn write_log_lookup<E: CubicParameters<F>>(
+    pub(crate) fn write_multiplicities_from_fn<E: CubicParameters<F>, T: Register>(
         &self,
         num_rows: usize,
-        lookup_data: &LogLookup<F, E, 1>,
-        beta: CubicExtension<F, E>,
+        table_data: &LookupTable<T, F, E>,
+        table_index: impl Fn(T::Value<F>) -> usize,
+        values: &[T],
     ) {
-        let table_index = lookup_data.table_index;
-        let values_idx = lookup_data.values.register().get_range();
-
         // Calculate multiplicities
         let mut multiplicities = vec![F::ZERO; num_rows];
 
-        let trace = self.read_trace().unwrap().clone();
+        let trace = self.read_trace().unwrap();
 
         for row in trace.rows() {
-            for value in row[values_idx.0..values_idx.1].iter() {
-                let index = table_index(*value);
+            for value in values.iter() {
+                let val = value.read_from_slice(row);
+                let index = table_index(val);
                 assert!(index < num_rows);
                 multiplicities[index] += F::ONE;
             }
         }
+        drop(trace);
 
         // Write multiplicities into the trace
-        let multiplicity = lookup_data.multiplicities.get(0);
+        let multiplicity = table_data.multiplicities.get(0);
         for (i, mult) in multiplicities.iter().enumerate() {
-            self.write(&multiplicity, &[*mult], i);
+            self.write(&multiplicity, mult, i);
         }
+    }
 
-        // Write multiplicity inverse constraint
-        let mult_table_log_entries = multiplicities
-            .par_iter()
-            .enumerate()
-            .map(|(i, x)| {
-                let table = CubicExtension::from(F::from_canonical_usize(i));
-                CubicExtension::from(*x) / (beta - table)
+    /// Writte the table inverses and accumulate
+    /// Assumes table multiplicities have been written
+    pub(crate) fn write_log_lookup_table<T: EvalCubic, E: CubicParameters<F>>(
+        &self,
+        num_rows: usize,
+        table_data: &LookupTable<T, F, E>,
+    ) -> Vec<CubicExtension<F, E>> {
+        let beta = CubicExtension::<F, E>::from(self.read(&table_data.challenge, 0));
+        assert_eq!(
+            table_data.table.len(),
+            table_data.multiplicities_table_log.len()
+        );
+        assert_eq!(table_data.table.len(), table_data.multiplicities.len());
+        let mult_table_log_entries = self
+            .write_trace()
+            .unwrap()
+            .rows_par_mut()
+            .map(|row| {
+                let mut sum = CubicExtension::ZERO;
+                for ((table, multiplicity), table_log_register) in table_data
+                    .table
+                    .iter()
+                    .zip_eq(table_data.multiplicities.iter())
+                    .zip_eq(table_data.multiplicities_table_log.iter())
+                {
+                    let table_val = table.read_from_slice(row);
+                    let mult_val = multiplicity.read_from_slice(row);
+                    let table = CubicExtension::from(T::trace_value_as_cubic(table_val));
+                    let mult = CubicExtension::from(mult_val);
+                    let table_log = mult / (beta - table);
+                    table_log_register.assign_to_raw_slice(row, &table_log.0);
+                    sum += table_log;
+                }
+                sum
             })
             .collect::<Vec<_>>();
 
-        let mult_table_log = lookup_data.multiplicity_table_log;
-        for (i, value) in mult_table_log_entries.iter().enumerate() {
-            self.write(&mult_table_log, value.as_base_slice(), i);
+        // Write accumulation
+        let mut acc = CubicExtension::ZERO;
+        for (i, mult_table) in mult_table_log_entries.iter().enumerate() {
+            acc += *mult_table;
+            self.write(&table_data.table_accumulator, &acc.0, i);
         }
 
-        // Log accumulator
-        let mut value = CubicExtension::ZERO;
-        let split_data = SplitData::split_log_data(lookup_data);
+        // Write the digest value
+        self.write(&table_data.digest, &acc.0, num_rows - 1);
+
+        mult_table_log_entries
+    }
+
+    pub(crate) fn write_log_lookup_values<T: EvalCubic, E: CubicParameters<F>>(
+        &self,
+        num_rows: usize,
+        values_data: &LogLookupValues<T, F, E>,
+    ) {
+        let beta = CubicExtension::<F, E>::from(self.read(&values_data.challenge, 0));
+
+        // Accumulate lookup values in the trace
         let accumulators = self
             .write_trace()
             .unwrap()
             .rows_par_mut()
             .map(|row| {
-                let (values, accumulators) = split_data.split(row);
                 let mut accumumulator = CubicExtension::ZERO;
-                for (k, pair) in values.chunks(2).enumerate() {
-                    let beta_minus_a = beta - CubicExtension::from(pair[0]);
-                    let beta_minus_b = beta - CubicExtension::from(pair[1]);
+                let accumulators = values_data.row_accumulators;
+                for (k, pair) in values_data.values.chunks_exact(2).enumerate() {
+                    let a = T::trace_value_as_cubic(pair[0].read_from_slice(row));
+                    let b = T::trace_value_as_cubic(pair[1].read_from_slice(row));
+                    let beta_minus_a = beta - CubicExtension::from(a);
+                    let beta_minus_b = beta - CubicExtension::from(b);
                     accumumulator += beta_minus_a.inverse() + beta_minus_b.inverse();
-                    accumulators[3 * k..3 * k + 3].copy_from_slice(accumumulator.as_base_slice());
+                    accumulators
+                        .get(k)
+                        .assign_to_raw_slice(row, &accumumulator.0);
                 }
                 accumumulator
             })
             .collect::<Vec<_>>();
 
-        let log_lookup_next = lookup_data.log_lookup_accumulator.next();
-        for (i, (acc, mult_table)) in accumulators
-            .into_iter()
-            .zip(mult_table_log_entries)
-            .enumerate()
-            .filter(|(i, _)| *i != num_rows - 1)
-        {
-            value += acc - mult_table;
-            self.write(&log_lookup_next, value.as_base_slice(), i);
+        let log_lookup = values_data.log_lookup_accumulator;
+        let mut value = CubicExtension::ZERO;
+        for (i, acc) in accumulators.into_iter().enumerate() {
+            value += acc;
+            self.write(&log_lookup, &value.0, i);
         }
+        // Write the local digest
+        self.write(&values_data.local_digest, &value.0, num_rows - 1);
+
+        // Accumulate lookups for public inputs
+        let mut global_accumumulator = CubicExtension::ZERO;
+        let global_accumulators = values_data.global_accumulators;
+        for (k, pair) in values_data.public_values.chunks_exact(2).enumerate() {
+            let a = T::trace_value_as_cubic(self.read(&pair[0], 0));
+            let b = T::trace_value_as_cubic(self.read(&pair[1], 0));
+            let beta_minus_a = beta - CubicExtension::from(a);
+            let beta_minus_b = beta - CubicExtension::from(b);
+            global_accumumulator += beta_minus_a.inverse() + beta_minus_b.inverse();
+            self.write(&global_accumulators.get(k), &global_accumumulator.0, 0);
+        }
+        // Write the global digest if exists
+        if let Some(global_digest) = values_data.global_digest {
+            self.write(&global_digest, &global_accumumulator.0, 0);
+        }
+
+        value += global_accumumulator;
+
+        // Write the digest value
+        self.write(&values_data.digest, &value.0, num_rows - 1);
+    }
+
+    pub(crate) fn write_log_lookup<T: EvalCubic, E: CubicParameters<F>>(
+        &self,
+        num_rows: usize,
+        lookup_data: &LogLookup<T, F, E>,
+    ) {
+        // Write multiplicity inverse constraints
+        self.write_log_lookup_table(num_rows, &lookup_data.table_data);
+
+        // Write the value data accumulating 1/(beta-value)
+        self.write_log_lookup_values(num_rows, &lookup_data.values_data);
     }
 }

@@ -9,9 +9,9 @@ use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::register::{Register, RegisterSerializable};
+use crate::math::extension::cubic::element::CubicElement;
+use crate::math::extension::CubicParameters;
 use crate::math::prelude::*;
-use crate::plonky2::field::cubic::element::CubicElement;
-use crate::plonky2::field::CubicParameters;
 
 impl<F: Field, E: CubicParameters<F>> Digest<F, E> {
     fn eval_digest<AP: CubicParser<E, Field = F>>(
@@ -24,7 +24,7 @@ impl<F: Field, E: CubicParameters<F>> Digest<F, E> {
         match self {
             Digest::None => {}
             Digest::Extended(register) => {
-                let digest = register.eval_extension(parser);
+                let digest = register.eval(parser);
                 let constraint = parser.sub_extension(digest, digest_val);
                 parser.constraint_extension_last_row(constraint);
             }
@@ -66,8 +66,8 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
         let not_filter = parser.element_from_base_field(not_filter_base);
 
         // Constrain the running evaluation powers
-        let beta = self.beta.eval_extension(parser);
-        let beta_powers = self.beta_powers.eval_extension(parser);
+        let beta = self.beta.eval(parser);
+        let beta_powers = self.beta_powers.eval(parser);
 
         let one = parser.one_extension();
         let powers_minus_one = parser.sub_extension(beta_powers, one);
@@ -75,7 +75,7 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
 
         // Constraint
         // (Beta_next - beta * beta_local) * filter
-        let beta_powers_next = self.beta_powers.next().eval_extension(parser);
+        let beta_powers_next = self.beta_powers.next().eval(parser);
         let beta_powers_times_beta = parser.mul_extension(beta_powers, beta);
         let beta_powers_next_filter = parser.mul_extension(beta_powers_times_beta, filter);
 
@@ -90,17 +90,12 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
         // Constrain the accumulation
 
         // Constrain first row value
-        let accumulator = self.accumulator.eval_extension(parser);
+        let accumulator = self.accumulator.eval(parser);
         parser.constraint_extension_first_row(accumulator);
 
         // Calculate the accumulated value of the row
         // acc = beta_powers * (\sum_i alpha_i * value_i)
-        let alphas = self
-            .alphas
-            .eval_vec(parser)
-            .into_iter()
-            .map(CubicElement)
-            .collect::<Vec<_>>();
+        let alphas = self.alphas.eval_vec(parser).into_iter().collect::<Vec<_>>();
         assert_eq!(
             alphas.len(),
             self.values.len(),
@@ -114,12 +109,12 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
         }
         // constrain row accumulator
         let row_beta_powers = parser.mul_extension(beta_powers, row_acc);
-        let row_accumulator = self.row_accumulator.eval_extension(parser);
+        let row_accumulator = self.row_accumulator.eval(parser);
         let row_acc_constraint = parser.sub_extension(row_accumulator, row_beta_powers);
         parser.constraint_extension(row_acc_constraint);
 
         // Constrain the transition
-        let accumulator_next = self.accumulator.next().eval_extension(parser);
+        let accumulator_next = self.accumulator.next().eval(parser);
         let acc_next_filter_val = parser.add_extension(accumulator, row_accumulator);
         let acc_next_filter = parser.mul_extension(acc_next_filter_val, filter);
 
@@ -133,33 +128,3 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
             .eval_digest(parser, accumulator_next_value, &alphas, beta);
     }
 }
-
-// impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
-//     for BitEvaluation<AP::Field, E>
-// {
-//     fn eval(&self, parser: &mut AP) {
-//         // Constrain the running evaluation powers and cycle
-//         self.cycle.eval(parser);
-//         self.evaluation.eval(parser);
-
-//         // Constrain the u32 bit accumulation
-//         let bit = self.bit.eval(parser);
-//         let u32_acc = self.u32_acc.eval(parser);
-//         let u32_acc_next = self.u32_acc.next().eval(parser);
-//         let end_bit = self.cycle.end_bit.eval(parser);
-//         let one = parser.one();
-//         let one_minus_end_bit = parser.sub(one, end_bit);
-
-//         // When end_bit = 0, u32_acc_next = 2 * bit + u32_acc
-//         // When end_bit = 1, u32_acc_next = 0
-//         let two_bit = parser.mul_const(bit, AP::Field::from_canonical_u8(2));
-//         let two_bit_plus_acc = parser.add(two_bit, u32_acc);
-//         let bit_0_constraint_val = parser.sub(u32_acc_next, two_bit_plus_acc);
-//         let bit_0_constraint = parser.mul(bit_0_constraint_val, one_minus_end_bit);
-
-//         let bit_1_constraint = parser.mul(u32_acc_next, end_bit);
-
-//         let bit_constraint = parser.add(bit_0_constraint, bit_1_constraint);
-//         parser.constraint_transition(bit_constraint);
-//     }
-// }

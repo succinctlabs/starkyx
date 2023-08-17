@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use super::set::AirInstruction;
 use super::Instruction;
 use crate::air::parser::AirParser;
@@ -19,8 +17,8 @@ pub struct Cycle<F> {
     pub end_bit: BitRegister,
     num_cycles: usize,
     element: ElementRegister,
-    start_counter: ElementRegister,
-    end_counter: ElementRegister,
+    pub start_counter: ElementRegister,
+    pub end_counter: ElementRegister,
     group: Vec<F>,
 }
 
@@ -98,7 +96,7 @@ impl<AP: AirParser<Field = F>, F: Field> AirConstraint<AP> for Cycle<F> {
         let end_bit_constraint = parser.mul(end_bit, elem_minus_one);
         parser.constraint(end_bit_constraint);
 
-        // Impose start_counter constraints, to verify that end_bit = 1 every time element = gen_inv
+        // Impose end_counter constraints, to verify that end_bit = 1 every time element = gen_inv
         let end_counter = self.end_counter.eval(parser);
         parser.constraint_first_row(end_counter);
         let end_counter_next = self.end_counter.next().eval(parser);
@@ -123,8 +121,8 @@ impl<F: Field> Instruction<F> for Cycle<F> {
         ]
     }
 
-    fn inputs(&self) -> HashSet<MemorySlice> {
-        HashSet::new()
+    fn inputs(&self) -> Vec<MemorySlice> {
+        Vec::new()
     }
 
     fn constraint_degree(&self) -> usize {
@@ -133,40 +131,25 @@ impl<F: Field> Instruction<F> for Cycle<F> {
 
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let cycle = row_index % self.group.len();
-        writer.write_value(&self.element, &self.group[cycle], row_index);
+        writer.write(&self.element, &self.group[cycle], row_index);
         let counter = F::from_canonical_usize(row_index / self.group.len());
 
         if cycle == 0 {
-            writer.write_value(&self.start_bit, &F::ONE, row_index);
-            writer.write_value(&self.end_bit, &F::ZERO, row_index);
-            writer.write_value(&self.start_counter, &(counter), row_index);
-            writer.write_value(&self.end_counter, &counter, row_index);
+            writer.write(&self.start_bit, &F::ONE, row_index);
+            writer.write(&self.end_bit, &F::ZERO, row_index);
+            writer.write(&self.start_counter, &(counter), row_index);
+            writer.write(&self.end_counter, &counter, row_index);
         } else if cycle == self.group.len() - 1 {
-            writer.write_value(&self.start_bit, &F::ZERO, row_index);
-            writer.write_value(&self.end_bit, &F::ONE, row_index);
-            writer.write_value(&self.start_counter, &(counter + F::ONE), row_index);
-            writer.write_value(&self.end_counter, &counter, row_index);
+            writer.write(&self.start_bit, &F::ZERO, row_index);
+            writer.write(&self.end_bit, &F::ONE, row_index);
+            writer.write(&self.start_counter, &(counter + F::ONE), row_index);
+            writer.write(&self.end_counter, &counter, row_index);
         } else {
-            writer.write_value(&self.start_bit, &F::ZERO, row_index);
-            writer.write_value(&self.end_bit, &F::ZERO, row_index);
-            writer.write_value(&self.start_counter, &(counter + F::ONE), row_index);
-            writer.write_value(&self.end_counter, &counter, row_index);
+            writer.write(&self.start_bit, &F::ZERO, row_index);
+            writer.write(&self.end_bit, &F::ZERO, row_index);
+            writer.write(&self.start_counter, &(counter + F::ONE), row_index);
+            writer.write(&self.end_counter, &counter, row_index);
         }
-
-        // if cycle == 0 {
-        //     writer.write_value(&self.start_bit, &F::ONE, row_index);
-        //     writer.write_value(&self.start_counter, &(counter), row_index);
-        // } else {
-        //     writer.write_value(&self.start_bit, &F::ZERO, row_index);
-        //     writer.write_value(&self.start_counter, &counter, row_index);
-        // }
-        // if cycle == self.group.len() - 1 {
-        //     writer.write_value(&self.end_bit, &F::ONE, row_index);
-        //     writer.write_value(&self.end_counter, &(counter + F::ONE), row_index);
-        // } else {
-        //     writer.write_value(&self.end_bit, &F::ZERO, row_index);
-        //     writer.write_value(&self.end_counter, &counter, row_index);
-        // }
     }
 }
 
@@ -176,6 +159,7 @@ mod tests {
 
     use super::*;
     use crate::chip::builder::tests::*;
+    use crate::trace::window_parser::TraceWindowParser;
 
     #[derive(Clone, Debug)]
     pub struct CycleTest;
@@ -202,9 +186,9 @@ mod tests {
         let mut builder = AirBuilder::<L>::new();
         let cycle = builder.cycle(4);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&[]);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
         let (tx, rx) = channel();
         for i in 0..L::num_rows() {
             let writer = generator.new_writer();
@@ -223,7 +207,7 @@ mod tests {
         let trace = generator.trace_clone();
 
         for window in trace.windows_iter() {
-            let mut window_parser = TraceWindowParser::new(window, &[], &[]);
+            let mut window_parser = TraceWindowParser::new(window, &[], &[], &[]);
             assert_eq!(window_parser.local_slice().len(), L::num_columns());
             air.eval(&mut window_parser);
         }

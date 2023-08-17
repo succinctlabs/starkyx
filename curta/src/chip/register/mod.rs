@@ -1,15 +1,15 @@
 use self::cell::CellType;
 use self::memory::MemorySlice;
-use super::constraint::arithmetic::expression::ArithmeticExpression;
-use super::constraint::arithmetic::expression_slice::ArithmeticExpressionSlice;
+use super::arithmetic::expression::ArithmeticExpression;
+use super::arithmetic::expression_slice::ArithmeticExpressionSlice;
 use crate::air::parser::AirParser;
 use crate::math::prelude::*;
 
 pub mod array;
 pub mod bit;
 pub mod cell;
+pub mod cubic;
 pub mod element;
-pub mod extension;
 pub mod memory;
 pub mod u16;
 
@@ -34,6 +34,7 @@ where
 }
 
 /// Ensures that the register has a fixed size.
+#[const_trait]
 pub trait RegisterSized {
     /// Returns the expected size of the register in cells.
     fn size_of() -> usize;
@@ -48,7 +49,15 @@ pub trait Register:
 {
     type Value<T>;
 
-    fn eval<AP: AirParser>(&self, parser: &AP) -> Self::Value<AP::Var>;
+    // Determins the layout of Value<T> as a slice that can be assigned to the trace.
+    fn align<T>(value: &Self::Value<T>) -> &[T];
+
+    // Gets a new value from a slice.
+    fn value_from_slice<T: Copy>(slice: &[T]) -> Self::Value<T>;
+
+    fn eval<AP: AirParser>(&self, parser: &AP) -> Self::Value<AP::Var> {
+        Self::value_from_slice(self.register().eval_slice(parser))
+    }
 
     /// Initializes the register given a memory slice with checks on length.
     fn from_register(register: MemorySlice) -> Self {
@@ -58,14 +67,21 @@ pub trait Register:
         Self::from_register_unsafe(register)
     }
 
+    fn assign_to_raw_slice<T: Copy>(&self, slice: &mut [T], value: &Self::Value<T>) {
+        self.register()
+            .assign_to_raw_slice(slice, Self::align(value))
+    }
+
+    fn read_from_slice<T: Copy>(&self, slice: &[T]) -> Self::Value<T> {
+        Self::value_from_slice(self.register().read_from_slice(slice))
+    }
+
     fn expr<F: Field>(&self) -> ArithmeticExpression<F> {
         ArithmeticExpression {
             expression: ArithmeticExpressionSlice::from_raw_register(*self.register()),
             size: Self::size_of(),
         }
     }
-
-    fn align<T>(value: &Self::Value<T>) -> &[T];
 }
 
 impl RegisterSerializable for MemorySlice {

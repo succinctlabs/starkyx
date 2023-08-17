@@ -1,7 +1,7 @@
 use crate::air::parser::AirParser;
+use crate::math::extension::cubic::element::CubicElement;
+use crate::math::extension::cubic::extension::CubicExtension;
 use crate::math::extension::cubic::parameters::CubicParameters;
-use crate::plonky2::field::cubic::element::CubicElement;
-use crate::plonky2::field::cubic::extension::CubicExtension;
 
 pub trait CubicParser<E: CubicParameters<Self::Field>>: AirParser {
     fn element_from_base_field(&mut self, value: Self::Var) -> CubicElement<Self::Var> {
@@ -117,5 +117,37 @@ pub trait CubicParser<E: CubicParameters<Self::Field>>: AirParser {
         for a in a_arr {
             self.constraint_last_row(a);
         }
+    }
+
+    fn assert_eq_extension(&mut self, a: CubicElement<Self::Var>, b: CubicElement<Self::Var>) {
+        let c = self.sub_extension(a, b);
+        self.constraint_extension(c);
+    }
+
+    fn assert_eq_extension_first_row(
+        &mut self,
+        a: CubicElement<Self::Var>,
+        b: CubicElement<Self::Var>,
+    ) {
+        let c = self.sub_extension(a, b);
+        self.constraint_extension_first_row(c);
+    }
+
+    fn assert_eq_extension_last_row(
+        &mut self,
+        a: CubicElement<Self::Var>,
+        b: CubicElement<Self::Var>,
+    ) {
+        let c = self.sub_extension(a, b);
+        self.constraint_extension_last_row(c);
+    }
+
+    fn assert_eq_extension_transition(
+        &mut self,
+        a: CubicElement<Self::Var>,
+        b: CubicElement<Self::Var>,
+    ) {
+        let c = self.sub_extension(a, b);
+        self.constraint_extension_transition(c);
     }
 }

@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use super::parameters::FieldParameters;
 use super::register::FieldRegister;
 use super::util;
@@ -89,11 +87,8 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpMulInstruction<P>
         ]
     }
 
-    fn inputs(&self) -> HashSet<MemorySlice> {
-        let mut set = HashSet::new();
-        set.insert(*self.a.register());
-        set.insert(*self.b.register());
-        set
+    fn inputs(&self) -> Vec<MemorySlice> {
+        vec![*self.a.register(), *self.b.register()]
     }
 
     fn constraint_degree(&self) -> usize {
@@ -176,7 +171,8 @@ mod tests {
         type CubicParams = GoldilocksCubicParameters;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 140;
-        const EXTENDED_COLUMNS: usize = 218;
+        const NUM_FREE_COLUMNS: usize = 2;
+        const EXTENDED_COLUMNS: usize = 219;
 
         type Instruction = FpMulInstruction<Fp25519>;
 
@@ -200,9 +196,9 @@ mod tests {
         let b = builder.alloc::<FieldRegister<P>>();
         let mul_insr = builder.fp_mul(&a, &b);
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(&[]);
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
 
         let (tx, rx) = channel();
 
@@ -216,8 +212,8 @@ mod tests {
                 let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
                 let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
 
-                writer.write(&a, p_a.coefficients(), i);
-                writer.write(&b, p_b.coefficients(), i);
+                writer.write(&a, &p_a, i);
+                writer.write(&b, &p_b, i);
                 writer.write_instruction(&mul_insr, i);
 
                 handle.send(1).unwrap();

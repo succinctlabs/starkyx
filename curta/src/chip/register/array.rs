@@ -1,8 +1,12 @@
 use core::marker::PhantomData;
+use core::ops::Range;
 
 use super::memory::MemorySlice;
 use super::{CellType, Register, RegisterSerializable};
 use crate::air::parser::AirParser;
+use crate::chip::arithmetic::expression::ArithmeticExpression;
+use crate::chip::arithmetic::expression_slice::ArithmeticExpressionSlice;
+use crate::math::field::Field;
 
 /// A helper struct for representing an array of registers. In particular, it makes it easier
 /// to access the memory slice as well as converting from a memory slice to the struct.
@@ -47,32 +51,86 @@ impl<T: Register> ArrayRegister<T> {
     #[inline]
     pub fn get(&self, idx: usize) -> T {
         if idx >= self.len() {
-            panic!("Index out of bounds");
+            panic!(
+                "Index {} out of bounds for an array of length {}",
+                idx,
+                self.len()
+            );
         }
         self.get_unchecked(idx)
+    }
+
+    #[inline]
+    pub fn get_subarray(&self, range: Range<usize>) -> Self {
+        if range.end > self.len() {
+            panic!(
+                "End index {} out of bounds for an array of length {}",
+                range.end,
+                self.len()
+            );
+        }
+        self.get_subarray_unchecked(range)
     }
 
     #[inline]
     fn get_unchecked(&self, idx: usize) -> T {
         let offset = T::size_of() * idx;
         match self.register {
-            MemorySlice::Local(col, _) => {
-                T::from_register(MemorySlice::Local(col + offset, T::size_of()))
+            MemorySlice::Local(index, _) => {
+                T::from_register(MemorySlice::Local(index + offset, T::size_of()))
             }
-            MemorySlice::Next(col, _) => {
-                T::from_register(MemorySlice::Next(col + offset, T::size_of()))
+            MemorySlice::Next(index, _) => {
+                T::from_register(MemorySlice::Next(index + offset, T::size_of()))
             }
-            MemorySlice::Public(col, _) => {
-                T::from_register(MemorySlice::Public(col + offset, T::size_of()))
+            MemorySlice::Global(index, _) => {
+                T::from_register(MemorySlice::Global(index + offset, T::size_of()))
             }
-            MemorySlice::Challenge(col, _) => {
-                T::from_register(MemorySlice::Challenge(col + offset, T::size_of()))
+            MemorySlice::Public(index, _) => {
+                T::from_register(MemorySlice::Public(index + offset, T::size_of()))
+            }
+            MemorySlice::Challenge(index, _) => {
+                T::from_register(MemorySlice::Challenge(index + offset, T::size_of()))
             }
         }
     }
 
+    #[inline]
+    fn get_subarray_unchecked(&self, range: Range<usize>) -> Self {
+        let offset = T::size_of() * range.start;
+        let length = range.end - range.start;
+        match self.register {
+            MemorySlice::Local(index, _) => Self::from_register_unsafe(MemorySlice::Local(
+                index + offset,
+                length * T::size_of(),
+            )),
+            MemorySlice::Next(index, _) => {
+                Self::from_register_unsafe(MemorySlice::Next(index + offset, length * T::size_of()))
+            }
+            MemorySlice::Global(index, _) => Self::from_register_unsafe(MemorySlice::Global(
+                index + offset,
+                length * T::size_of(),
+            )),
+            MemorySlice::Public(index, _) => Self::from_register_unsafe(MemorySlice::Public(
+                index + offset,
+                length * T::size_of(),
+            )),
+            MemorySlice::Challenge(index, _) => Self::from_register_unsafe(MemorySlice::Challenge(
+                index + offset,
+                length * T::size_of(),
+            )),
+        }
+    }
+
+    #[inline]
     pub fn iter(&self) -> ArrayIterator<T> {
         self.into_iter()
+    }
+
+    pub fn expr<F: Field>(&self) -> ArithmeticExpression<F> {
+        ArithmeticExpression {
+            expression: ArithmeticExpressionSlice::from_raw_register(*self.register()),
+            size: self.len() * T::size_of(),
+        }
     }
 
     #[inline]
@@ -101,6 +159,16 @@ impl<T: Register> ArrayRegister<T> {
         );
         let elem_fn = |i| self.get(i).eval(parser);
         core::array::from_fn(elem_fn)
+    }
+
+    #[inline]
+    pub fn assign_to_raw_slice<F: Copy>(&self, slice: &mut [F], value: &[T::Value<F>]) {
+        let values = value
+            .iter()
+            .flat_map(|v| T::align(v))
+            .copied()
+            .collect::<Vec<_>>();
+        self.register().assign_to_raw_slice(slice, &values)
     }
 }
 

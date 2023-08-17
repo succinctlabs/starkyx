@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use num::BigUint;
 
 use super::parameters::FieldParameters;
@@ -105,8 +103,8 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpDenInstruction<P>
         ]
     }
 
-    fn inputs(&self) -> HashSet<MemorySlice> {
-        HashSet::from([*self.a.register(), *self.b.register()])
+    fn inputs(&self) -> Vec<MemorySlice> {
+        vec![*self.a.register(), *self.b.register()]
     }
 
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
@@ -192,7 +190,8 @@ mod tests {
         type CubicParams = GoldilocksCubicParameters;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 140;
-        const EXTENDED_COLUMNS: usize = 218;
+        const NUM_FREE_COLUMNS: usize = 2;
+        const EXTENDED_COLUMNS: usize = 219;
 
         type Instruction = FpDenInstruction<Fp25519>;
 
@@ -218,8 +217,8 @@ mod tests {
         let sign = false;
         let den_ins = builder.fp_den(&a, &b, sign);
 
-        let air = builder.build();
-        let generator = ArithmeticGenerator::<L>::new(&[]);
+        let (air, trace_data) = builder.build();
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
 
         let (tx, rx) = channel();
         let mut rng = thread_rng();
@@ -232,8 +231,8 @@ mod tests {
                 let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
                 let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
 
-                writer.write(&a, p_a.coefficients(), i);
-                writer.write(&b, p_b.coefficients(), i);
+                writer.write(&a, &p_a, i);
+                writer.write(&b, &p_b, i);
                 writer.write_instruction(&den_ins, i);
 
                 handle.send(1).unwrap();

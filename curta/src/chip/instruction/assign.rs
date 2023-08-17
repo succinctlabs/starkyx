@@ -1,11 +1,9 @@
-use std::collections::HashSet;
-
 use itertools::Itertools;
 
 use super::Instruction;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
-use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
+use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
@@ -74,7 +72,7 @@ impl<F: Field> Instruction<F> for AssignInstruction<F> {
         vec![self.target]
     }
 
-    fn inputs(&self) -> HashSet<MemorySlice> {
+    fn inputs(&self) -> Vec<MemorySlice> {
         self.source.registers().into_iter().collect()
     }
 
@@ -83,24 +81,24 @@ impl<F: Field> Instruction<F> for AssignInstruction<F> {
             AssignType::First => {
                 if row_index == 0 {
                     let value = writer.read_expression(&self.source, row_index);
-                    writer.write(&self.target, &value, 0);
+                    writer.write_slice(&self.target, &value, 0);
                 }
             }
             AssignType::Last => {
                 if row_index == writer.height() - 1 {
                     let value = writer.read_expression(&self.source, row_index);
-                    writer.write(&self.target, &value, row_index);
+                    writer.write_slice(&self.target, &value, row_index);
                 }
             }
             AssignType::Transition => {
                 if row_index < writer.height() - 1 {
                     let value = writer.read_expression(&self.source, row_index);
-                    writer.write(&self.target, &value, row_index);
+                    writer.write_slice(&self.target, &value, row_index);
                 }
             }
             AssignType::All => {
                 let value = writer.read_expression(&self.source, row_index);
-                writer.write(&self.target, &value, row_index);
+                writer.write_slice(&self.target, &value, row_index);
             }
         }
     }

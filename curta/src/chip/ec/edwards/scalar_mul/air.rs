@@ -1,7 +1,7 @@
 use plonky2::field::goldilocks_field::GoldilocksField;
 
 use super::gadget::EdScalarMulGadget;
-use crate::chip::builder::AirBuilder;
+use crate::chip::builder::{AirBuilder, AirTraceData};
 use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
 use crate::chip::ec::gadget::EllipticCurveGadget;
 use crate::chip::ec::point::AffinePointRegister;
@@ -12,12 +12,17 @@ use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
-use crate::chip::table::evaluation::{BitEvaluation, Digest};
+use crate::chip::table::evaluation::Digest;
 use crate::chip::{AirParameters, Chip};
 use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
 use crate::math::prelude::*;
 
 pub type EdScalarMulGoldilocks = ScalarMulEd25519<GoldilocksField, GoldilocksCubicParameters>;
+
+const NUM_ARITHMETIC_COLUMNS: usize = 1504;
+const NUM_FREE_COLUMNS: usize = 77;
+const EXTENDED_COLUMNS: usize = 2293;
+pub const ED_NUM_COLUMNS: usize = NUM_ARITHMETIC_COLUMNS + NUM_FREE_COLUMNS + EXTENDED_COLUMNS;
 
 #[derive(Debug, Clone)]
 pub struct ScalarMulEd25519<F: PrimeField64, E: CubicParameters<F>>(
@@ -28,9 +33,9 @@ impl<F: PrimeField64, E: CubicParameters<F>> const AirParameters for ScalarMulEd
     type Field = F;
     type CubicParams = E;
 
-    const NUM_ARITHMETIC_COLUMNS: usize = 1504;
-    const NUM_FREE_COLUMNS: usize = 75;
-    const EXTENDED_COLUMNS: usize = 2292;
+    const NUM_ARITHMETIC_COLUMNS: usize = NUM_ARITHMETIC_COLUMNS;
+    const NUM_FREE_COLUMNS: usize = NUM_FREE_COLUMNS;
+    const EXTENDED_COLUMNS: usize = EXTENDED_COLUMNS;
     type Instruction = FpInstruction<Ed25519BaseField>;
 
     fn num_rows_bits() -> usize {
@@ -38,18 +43,16 @@ impl<F: PrimeField64, E: CubicParameters<F>> const AirParameters for ScalarMulEd
     }
 }
 
-pub const ED_NUM_COLUMNS: usize = 1504 + 75 + 2292;
-
 impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
     #[allow(clippy::type_complexity)]
     pub fn air() -> (
         Chip<Self>,
+        AirTraceData<Self>,
         EdScalarMulGadget<F, Ed25519>,
         Vec<ArrayRegister<ElementRegister>>,
         Vec<AffinePointRegister<Ed25519>>,
         Vec<AffinePointRegister<Ed25519>>,
         (
-            BitEvaluation<F>,
             AirInstruction<F, FpInstruction<Ed25519BaseField>>,
             AirInstruction<F, FpInstruction<Ed25519BaseField>>,
         ),
@@ -77,7 +80,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
 
         let scalar_digest = Digest::from_values(scalars_u32);
         // let (bit_eval, write_first, set_bit) = builder.bit_evaluation(&[scalar_bit], ArithmeticExpression::one(), scalar_digest);
-        let (bit_eval, set_last, set_bit) = builder.bit_evaluation(&scalar_bit, scalar_digest);
+        let (_, set_last, set_bit) = builder.bit_evaluation(&scalar_bit, scalar_digest);
 
         let input_point_values = input_points
             .iter()
@@ -115,15 +118,16 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
             output_point_digest,
         );
 
-        let air = builder.build();
+        let (air, trace_data) = builder.build();
 
         (
             air,
+            trace_data,
             scalar_mul_gadget,
             scalars_limbs,
             input_points,
             output_points,
-            (bit_eval, set_last, set_bit),
+            (set_last, set_bit),
         )
     }
 }

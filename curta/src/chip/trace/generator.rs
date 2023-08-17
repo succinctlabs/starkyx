@@ -3,29 +3,33 @@ use alloc::sync::Arc;
 use anyhow::{Error, Result};
 
 use super::writer::TraceWriter;
-use crate::chip::register::RegisterSerializable;
+use crate::chip::builder::AirTraceData;
 use crate::chip::table::lookup::Lookup;
 use crate::chip::{AirParameters, Chip};
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
-use crate::plonky2::field::cubic::extension::CubicExtension;
 use crate::trace::generator::TraceGenerator;
 use crate::trace::AirTrace;
 
 #[derive(Debug, Clone)]
 pub struct ArithmeticGenerator<L: AirParameters> {
     writer: TraceWriter<L::Field>,
+    pub air_data: AirTraceData<L>,
 }
 
 impl<L: ~const AirParameters> ArithmeticGenerator<L> {
-    pub fn new(public_inputs: &[L::Field]) -> Self {
+    pub fn new(air_data: AirTraceData<L>) -> Self {
+        let num_public_inputs = air_data.num_public_inputs;
+        let num_global_values = air_data.num_global_values;
         Self {
             writer: TraceWriter::new_with_value(
+                L::Field::ZERO,
                 L::num_columns(),
                 L::num_rows(),
-                L::Field::ZERO,
-                public_inputs.to_vec(),
+                num_public_inputs,
+                num_global_values,
             ),
+            air_data,
         }
     }
 
@@ -50,10 +54,40 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
         air: &Chip<L>,
         round: usize,
         challenges: &[L::Field],
-        _public_inputs: &[L::Field],
+        global_values: &mut [L::Field],
+        public_inputs: &[L::Field],
     ) -> Result<AirTrace<L::Field>> {
         match round {
             0 => {
+                let (id_0, id_1) = (0, self.air_data.num_public_inputs);
+                let mut public_write = self.writer.0.public.write().unwrap();
+                public_write[id_0..id_1].copy_from_slice(&public_inputs[id_0..id_1]);
+                drop(public_write);
+
+                let num_rows = L::num_rows();
+
+                // Write the range check table and multiplicitiies
+                if let Some(table) = &self.air_data.range_table {
+                    for i in 0..num_rows {
+                        self.writer
+                            .write(table, &L::Field::from_canonical_usize(i), i);
+                    }
+                }
+
+                // Write multiplicities for lookup table with search functions
+                for data in self.air_data.lookup_data.iter() {
+                    if let Lookup::Element(log_data) = data {
+                        if let Some(table_index) = log_data.table_index {
+                            self.writer.write_multiplicities_from_fn(
+                                num_rows,
+                                &log_data.table_data,
+                                table_index,
+                                &log_data.values_data.values,
+                            );
+                        }
+                    }
+                }
+
                 let trace = self.trace_clone();
                 let execution_trace_values = trace
                     .rows_par()
@@ -67,37 +101,29 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
             1 => {
                 let num_rows = L::num_rows();
 
-                // Write the range check table
-                if let Some(table) = &air.range_table {
-                    for i in 0..num_rows {
-                        self.writer
-                            .write(table, &[L::Field::from_canonical_usize(i)], i);
-                    }
+                // Insert the challenges into the generator
+                let writer = self.new_writer();
+                let mut challenges_write = writer.challenges.write().unwrap();
+                challenges_write.extend_from_slice(challenges);
+                drop(challenges_write);
+
+                // Write accumulations
+                for acc in self.air_data.accumulators.iter() {
+                    self.writer.write_accumulation(acc);
+                }
+
+                for channel in self.air_data.bus_channels.iter() {
+                    self.writer.write_bus_channel(num_rows, channel);
                 }
 
                 // Write lookup proofs
-                for data in air.lookup_data.iter() {
-                    match data {
-                        Lookup::LogDerivative(data) => {
-                            let (b_idx_0, b_idx_1) = data.challenge.register().get_range();
-                            let beta =
-                                CubicExtension::from_base_slice(&challenges[b_idx_0..b_idx_1]);
-                            self.writer.write_log_lookup(num_rows, data, beta);
-                        }
-                    }
+                for data in self.air_data.lookup_data.iter() {
+                    self.writer.write_lookup(num_rows, data);
                 }
 
                 // Write evaluation proofs
-                for eval in air.evaluation_data.iter() {
-                    let (b_idx_0, b_idx_1) = eval.beta.register().get_range();
-                    let beta = CubicExtension::from_base_slice(&challenges[b_idx_0..b_idx_1]);
-                    let mut alphas = vec![];
-                    for alpha in eval.alphas.iter() {
-                        let (a_idx_0, a_idx_1) = alpha.register().get_range();
-                        let alpha = CubicExtension::from_base_slice(&challenges[a_idx_0..a_idx_1]);
-                        alphas.push(alpha);
-                    }
-                    self.writer.write_evaluation(num_rows, eval, beta, &alphas);
+                for eval in self.air_data.evaluation_data.iter() {
+                    self.writer.write_evaluation(num_rows, eval);
                 }
 
                 let trace = self.trace_clone();
@@ -105,6 +131,11 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                     .rows_par()
                     .flat_map(|row| row[air.execution_trace_length..].to_vec())
                     .collect::<Vec<_>>();
+
+                let new_global = self.writer.0.global.read().unwrap();
+                let (id_0, id_1) = (0, air.num_global_values);
+                global_values[id_0..id_1].copy_from_slice(&new_global[id_0..id_1]);
+                drop(new_global);
                 Ok(AirTrace {
                     values: extended_trace_values,
                     width: L::num_columns() - air.execution_trace_length,

@@ -1,21 +1,22 @@
 use self::constraint::Constraint;
 use self::instruction::Instruction;
-use self::register::element::ElementRegister;
-use self::table::evaluation::Evaluation;
-use self::table::lookup::Lookup;
 use crate::math::extension::cubic::parameters::CubicParameters;
 use crate::math::prelude::*;
+use crate::plonky2::stark::Starky;
 
 pub mod air;
+pub mod arithmetic;
 pub mod bool;
 pub mod builder;
 pub mod constraint;
 pub mod ec;
 pub mod field;
+pub mod hash;
 pub mod instruction;
 pub mod register;
 pub mod table;
 pub mod trace;
+pub mod uint;
 pub mod utils;
 
 #[const_trait]
@@ -52,9 +53,15 @@ pub trait AirParameters {
 #[derive(Debug, Clone)]
 pub struct Chip<L: AirParameters> {
     constraints: Vec<Constraint<L>>,
+    global_constraints: Vec<Constraint<L>>,
     execution_trace_length: usize,
     num_challenges: usize,
-    lookup_data: Vec<Lookup<L::Field, L::CubicParams, 1>>,
-    evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
-    range_table: Option<ElementRegister>,
+    num_public_inputs: usize,
+    num_global_values: usize,
+}
+
+impl<L: ~const AirParameters> Starky<Chip<L>, { L::num_columns() }> {
+    pub fn from_chip(chip: Chip<L>) -> Self {
+        Self::new(chip)
+    }
 }

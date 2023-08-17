@@ -1,8 +1,8 @@
 use super::{Digest, Evaluation};
 use crate::chip::trace::writer::TraceWriter;
+use crate::math::extension::cubic::extension::CubicExtension;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
-use crate::plonky2::field::cubic::extension::CubicExtension;
 
 impl<F: PrimeField> TraceWriter<F> {
     #[inline]
@@ -14,7 +14,7 @@ impl<F: PrimeField> TraceWriter<F> {
     ) {
         match digest {
             Digest::Extended(register) => {
-                self.write_value(register, &value.base_field_array(), num_rows - 1);
+                self.write(register, &value.0, num_rows - 1);
             }
             Digest::Values(_) => {}
             _ => unimplemented!(),
@@ -25,9 +25,9 @@ impl<F: PrimeField> TraceWriter<F> {
         &self,
         num_rows: usize,
         evaluation_data: &Evaluation<F, E>,
-        beta: CubicExtension<F, E>,
-        alphas: &[CubicExtension<F, E>],
     ) {
+        let beta = CubicExtension::<F, E>::from(self.read(&evaluation_data.beta, 0));
+        let alphas = self.read_vec(&evaluation_data.alphas, 0);
         let filters = (0..num_rows)
             .into_par_iter()
             .map(|i| self.read_expression(&evaluation_data.filter, i)[0])
@@ -41,7 +41,7 @@ impl<F: PrimeField> TraceWriter<F> {
                     .values
                     .iter()
                     .zip(alphas.iter())
-                    .map(|(v, a)| *a * self.read(v, i))
+                    .map(|(v, a)| CubicExtension::from(*a) * self.read(v, i))
                     .sum::<CubicExtension<F, E>>();
                 value
             })
@@ -50,19 +50,11 @@ impl<F: PrimeField> TraceWriter<F> {
         let mut beta_power = CubicExtension::<F, E>::ONE;
         let mut acc = CubicExtension::<F, E>::ZERO;
         for (i, &f) in filters.iter().enumerate() {
-            self.write_value(
-                &evaluation_data.beta_powers,
-                &beta_power.base_field_array(),
-                i,
-            );
+            self.write(&evaluation_data.beta_powers, &beta_power.0, i);
             let row_acc_beta_val = acc_values[i] * beta_power;
-            self.write_value(
-                &evaluation_data.row_accumulator,
-                &row_acc_beta_val.base_field_array(),
-                i,
-            );
+            self.write(&evaluation_data.row_accumulator, &row_acc_beta_val.0, i);
 
-            self.write_value(&evaluation_data.accumulator, &acc.base_field_array(), i);
+            self.write(&evaluation_data.accumulator, &acc.0, i);
 
             if f {
                 let value = acc_values[i];

@@ -3,7 +3,7 @@ use plonky2::field::types::{
     Sample as Plonky2Sample,
 };
 
-pub use crate::math::prelude::*;
+use crate::math::prelude::*;
 
 impl<F: Plonky2Field> Ring for F {
     const ONE: Self = F::ONE;

@@ -47,6 +47,10 @@ impl<F: Field> ArithmeticExpression<F> {
         Self::from_constant(F::ONE)
     }
 
+    pub fn read_from_slice(&self, slice: &[F]) -> Vec<F> {
+        self.expression.read_from_slice(slice)
+    }
+
     pub fn eval<AP: AirParser<Field = F>>(&self, parser: &mut AP) -> Vec<AP::Var> {
         self.expression.eval(parser)
     }
@@ -71,6 +75,12 @@ impl<F: Field> Add for ArithmeticExpression<F> {
             ),
             size: self.size,
         }
+    }
+}
+
+impl<F: Field> From<F> for ArithmeticExpression<F> {
+    fn from(f: F) -> Self {
+        Self::from_constant(f)
     }
 }
 
@@ -155,7 +165,7 @@ impl<F: Field> Mul<F> for ArithmeticExpression<F> {
 
     fn mul(self, rhs: F) -> Self::Output {
         Self {
-            expression: ArithmeticExpressionSlice::ScalarMul(rhs, Arc::new(self.expression)),
+            expression: ArithmeticExpressionSlice::ConstMul(rhs, Arc::new(self.expression)),
             size: self.size,
         }
     }
@@ -167,16 +177,16 @@ impl<F: Field> Mul for ArithmeticExpression<F> {
     fn mul(self, rhs: Self) -> Self::Output {
         match (self.size, rhs.size) {
             (1, _) => Self {
-                expression: ArithmeticExpressionSlice::Mul(
+                expression: ArithmeticExpressionSlice::ScalarMul(
                     Arc::new(self.expression),
                     Arc::new(rhs.expression),
                 ),
                 size: rhs.size,
             },
             (_, 1) => Self {
-                expression: ArithmeticExpressionSlice::Mul(
-                    Arc::new(self.expression),
+                expression: ArithmeticExpressionSlice::ScalarMul(
                     Arc::new(rhs.expression),
+                    Arc::new(self.expression),
                 ),
                 size: self.size,
             },

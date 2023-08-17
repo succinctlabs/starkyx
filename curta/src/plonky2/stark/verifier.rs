@@ -18,9 +18,9 @@ use plonky2::util::reducing::ReducingFactorTarget;
 use super::config::StarkyConfig;
 use super::proof::{StarkOpeningSet, StarkOpeningSetTarget, StarkProof, StarkProofTarget};
 use super::Starky;
-use crate::air::parser::AirParser;
-use crate::air::RAir;
+use crate::air::{RAir, RAirData};
 use crate::plonky2::parser::consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
+use crate::plonky2::parser::global::{GlobalRecursiveStarkParser, GlobalStarkParser};
 use crate::plonky2::parser::{RecursiveStarkParser, StarkParser};
 
 #[derive(Debug, Clone)]
@@ -38,7 +38,8 @@ where
         public_inputs: &[F],
     ) -> Result<()>
     where
-        A: for<'a> RAir<StarkParser<'a, F, C::FE, C::FE, D, D>>,
+        A: for<'a> RAir<StarkParser<'a, F, C::FE, C::FE, D, D>>
+            + for<'a> RAir<GlobalStarkParser<'a, F, F, F, D, 1>>,
     {
         let degree_bits = proof.recover_degree_bits(config);
         let challenges = proof.get_challenges(config, stark, public_inputs, degree_bits);
@@ -51,6 +52,19 @@ where
             quotient_polys,
         } = &proof.openings;
 
+        // Verify the global constraints
+        let mut global_parser = GlobalStarkParser {
+            global_vars: &proof.global_values,
+            public_vars: public_inputs,
+            challenges: &challenges.stark_betas,
+        };
+        stark.air().eval_global(&mut global_parser);
+
+        let global_values_ext = proof
+            .global_values
+            .iter()
+            .map(|x| F::Extension::from_basefield(*x))
+            .collect::<Vec<_>>();
         let public_inputs_ext = public_inputs
             .iter()
             .map(|x| F::Extension::from_basefield(*x))
@@ -78,7 +92,8 @@ where
         let mut parser = StarkParser {
             local_vars: local_values,
             next_vars: next_values,
-            public_inputs: &public_inputs_ext,
+            global_vars: &global_values_ext,
+            public_vars: &public_inputs_ext,
             challenges: &challenges_ext,
             consumer: &mut consumer,
         };
@@ -108,7 +123,7 @@ where
             .trace_caps
             .into_iter()
             .chain(once(proof.quotient_polys_cap))
-            .collect_vec();
+            .collect::<Vec<_>>();
 
         verify_fri_proof::<F, C, D>(
             &stark.fri_instance(
@@ -125,7 +140,7 @@ where
         Ok(())
     }
 
-    pub fn validate_proof_shape<AP: AirParser, A: RAir<AP>, const COLUMNS: usize>(
+    pub fn validate_proof_shape<A: RAirData, const COLUMNS: usize>(
         config: &StarkyConfig<F, C, D>,
         stark: &Starky<A, COLUMNS>,
         proof: &StarkProof<F, C, D>,
@@ -137,6 +152,7 @@ where
             trace_caps,
             quotient_polys_cap,
             openings,
+            global_values,
             // The shape of the opening proof will be checked in the FRI verifier (see
             // validate_fri_proof_shape), so we ignore it here.
             opening_proof: _,
@@ -152,7 +168,7 @@ where
             ensure!(cap.height() == cap_height);
         }
         ensure!(quotient_polys_cap.height() == cap_height);
-
+        ensure!(global_values.len() == stark.air().num_global_values());
         ensure!(local_values.len() == COLUMNS);
         ensure!(next_values.len() == COLUMNS);
         ensure!(quotient_polys.len() == stark.num_quotient_polys(config));
@@ -180,7 +196,8 @@ where
         public_inputs: &[Target],
     ) where
         C::Hasher: AlgebraicHasher<F>,
-        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
+        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
+            + for<'a> RAir<GlobalRecursiveStarkParser<'a, F, D>>,
     {
         let StarkOpeningSetTarget {
             local_values,
@@ -214,6 +231,20 @@ where
             l_last,
         );
 
+        // verify global constraints
+        let mut global_parser = GlobalRecursiveStarkParser {
+            builder,
+            global_vars: &proof.global_values,
+            public_vars: public_inputs,
+            challenges: &challenges.stark_betas,
+        };
+        stark.air().eval_global(&mut global_parser);
+
+        let global_vals_ext = proof
+            .global_values
+            .iter()
+            .map(|x| builder.convert_to_ext(*x))
+            .collect::<Vec<_>>();
         let public_inputs_ext = public_inputs
             .iter()
             .map(|x| builder.convert_to_ext(*x))
@@ -228,7 +259,8 @@ where
             builder,
             local_vars: local_values,
             next_vars: next_values,
-            public_inputs: &public_inputs_ext,
+            global_vars: &global_vals_ext,
+            public_vars: &public_inputs_ext,
             challenges: &challenges_ext,
             consumer: &mut consumer,
         };
@@ -250,7 +282,7 @@ where
             .trace_caps
             .into_iter()
             .chain(once(proof.quotient_polys_cap))
-            .collect_vec();
+            .collect::<Vec<_>>();
 
         let fri_instance = stark.fri_instance_target(
             builder,
@@ -307,21 +339,25 @@ where
 
     let num_leaves_per_oracle = stark
         .air()
-        .round_lengths()
+        .round_data()
         .into_iter()
+        .map(|x| x.num_columns)
         .chain(once(
             stark.air().quotient_degree_factor() * config.num_challenges,
         ))
-        .collect_vec();
+        .collect::<Vec<_>>();
 
     let num_rounds = stark.air().num_rounds();
+    let num_global_values = stark.air().num_global_values();
+    let global_values_target = builder.add_virtual_targets(num_global_values);
     let trace_caps = (0..num_rounds)
         .map(|_| builder.add_virtual_cap(cap_height))
-        .collect_vec();
+        .collect::<Vec<_>>();
     StarkProofTarget {
         trace_caps,
         quotient_polys_cap: builder.add_virtual_cap(cap_height),
         openings: add_stark_opening_set_target(builder, stark, config),
+        global_values: global_values_target,
         opening_proof: builder.add_virtual_fri_proof(&num_leaves_per_oracle, &fri_params),
     }
 }
@@ -366,6 +402,14 @@ pub fn set_stark_proof_target<F, C: GenericConfig<D, F = F>, W, const D: usize>(
         witness.set_cap_target(target_cap, cap);
     }
     witness.set_cap_target(&proof_target.quotient_polys_cap, &proof.quotient_polys_cap);
+
+    for (target, value) in proof_target
+        .global_values
+        .iter()
+        .zip_eq(proof.global_values.iter())
+    {
+        witness.set_target(*target, *value);
+    }
 
     witness.set_fri_openings(
         &proof_target.openings.to_fri_openings(),

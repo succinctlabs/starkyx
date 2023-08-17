@@ -22,7 +22,12 @@ pub enum ArithmeticExpressionSlice<F> {
         Arc<ArithmeticExpressionSlice<F>>,
     ),
     /// The scalar multiplication of an arithmetic expression by a field element.
-    ScalarMul(F, Arc<ArithmeticExpressionSlice<F>>),
+    ConstMul(F, Arc<ArithmeticExpressionSlice<F>>),
+    /// The scalar multiplication of an arithmetic expression by an arithmetic expression of size 1
+    ScalarMul(
+        Arc<ArithmeticExpressionSlice<F>>,
+        Arc<ArithmeticExpressionSlice<F>>,
+    ),
     /// The multiplication of two arithmetic expressions.
     Mul(
         Arc<ArithmeticExpressionSlice<F>>,
@@ -63,12 +68,59 @@ impl<F: Field> ArithmeticExpressionSlice<F> {
                 left.append(&mut right);
                 left
             }
-            ArithmeticExpressionSlice::ScalarMul(_, expr) => expr.registers(),
+            ArithmeticExpressionSlice::ConstMul(_, expr) => expr.registers(),
+            ArithmeticExpressionSlice::ScalarMul(left, right) => {
+                let mut left = left.registers();
+                let mut right = right.registers();
+                left.append(&mut right);
+                left
+            }
             ArithmeticExpressionSlice::Mul(left, right) => {
                 let mut left = left.registers();
                 let mut right = right.registers();
                 left.append(&mut right);
                 left
+            }
+        }
+    }
+
+    pub(crate) fn read_from_slice(&self, slice: &[F]) -> Vec<F> {
+        match self {
+            ArithmeticExpressionSlice::Input(input) => input.read_from_slice(slice).to_vec(),
+            ArithmeticExpressionSlice::Const(constants) => constants.clone(),
+            ArithmeticExpressionSlice::Add(left, right) => {
+                let left = left.read_from_slice(slice);
+                let right = right.read_from_slice(slice);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| *l + *r)
+                    .collect()
+            }
+            ArithmeticExpressionSlice::Sub(left, right) => {
+                let left = left.read_from_slice(slice);
+                let right = right.read_from_slice(slice);
+                left.iter()
+                    .zip(right.iter())
+                    .map(|(l, r)| *l - *r)
+                    .collect()
+            }
+            ArithmeticExpressionSlice::ConstMul(scalar, expr) => {
+                let expr_val = expr.read_from_slice(slice);
+                expr_val.iter().map(|x| *x * *scalar).collect()
+            }
+            ArithmeticExpressionSlice::ScalarMul(scalar, expr) => {
+                let scalar_val = scalar.read_from_slice(slice)[0];
+                let expr_val = expr.read_from_slice(slice);
+                expr_val.iter().map(|x| *x * scalar_val).collect()
+            }
+            ArithmeticExpressionSlice::Mul(left, right) => {
+                let left_vals = left.read_from_slice(slice);
+                let right_vals = right.read_from_slice(slice);
+                left_vals
+                    .iter()
+                    .zip(right_vals.iter())
+                    .map(|(l, r)| *l * *r)
+                    .collect()
             }
         }
     }
@@ -95,11 +147,19 @@ impl<F: Field> ArithmeticExpressionSlice<F> {
                     .map(|(l, r)| parser.sub(*l, *r))
                     .collect()
             }
-            ArithmeticExpressionSlice::ScalarMul(scalar, expr) => {
+            ArithmeticExpressionSlice::ConstMul(scalar, expr) => {
                 let expr_val = expr.eval(parser);
                 expr_val
                     .iter()
                     .map(|x| parser.mul_const(*x, *scalar))
+                    .collect()
+            }
+            ArithmeticExpressionSlice::ScalarMul(scalar, expr) => {
+                let scalar_val = scalar.eval(parser)[0];
+                let expr_val = expr.eval(parser);
+                expr_val
+                    .iter()
+                    .map(|x| parser.mul(*x, scalar_val))
                     .collect()
             }
             ArithmeticExpressionSlice::Mul(left, right) => {

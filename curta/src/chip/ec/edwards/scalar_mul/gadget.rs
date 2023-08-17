@@ -1,21 +1,13 @@
-use num::BigUint;
-
-use crate::chip::bool::SelectInstruction;
+use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::ec::edwards::add::EdAddGadget;
 use crate::chip::ec::edwards::EdwardsParameters;
-use crate::chip::ec::gadget::EllipticCurveWriter;
-use crate::chip::ec::point::{AffinePoint, AffinePointRegister};
+use crate::chip::ec::point::AffinePointRegister;
 use crate::chip::field::instruction::FromFieldInstruction;
-use crate::chip::field::register::FieldRegister;
 use crate::chip::instruction::cycle::Cycle;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::{Register, RegisterSerializable};
-use crate::chip::trace::writer::TraceWriter;
-use crate::chip::utils::biguint_to_bits_le;
 use crate::chip::AirParameters;
-use crate::math::prelude::*;
-use crate::plonky2::field::PrimeField64;
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -27,8 +19,6 @@ pub struct EdDoubleAndAddGadget<E: EdwardsParameters> {
     temp_next: AffinePointRegister<E>,
     add_gadget: EdAddGadget<E>,
     double_gadget: EdAddGadget<E>,
-    select_x_ins: SelectInstruction<FieldRegister<E::BaseField>>,
-    select_y_ins: SelectInstruction<FieldRegister<E::BaseField>>,
 }
 
 #[derive(Debug, Clone)]
@@ -73,9 +63,9 @@ impl<L: AirParameters> AirBuilder<L> {
         let double_gadget = self.ed_double(temp);
 
         // result = if bit == 1 then result + temp else result.
-        let select_x_ins = self.select(bit, &add_gadget.result.x, &result.x);
-        let select_y_ins = self.select(bit, &add_gadget.result.y, &result.y);
-        let result_next = AffinePointRegister::new(select_x_ins.result, select_y_ins.result);
+        let select_x = self.select(bit, &add_gadget.result.x, &result.x);
+        let select_y = self.select(bit, &add_gadget.result.y, &result.y);
+        let result_next = AffinePointRegister::new(select_x, select_y);
 
         EdDoubleAndAddGadget {
             bit: *bit,
@@ -85,8 +75,8 @@ impl<L: AirParameters> AirBuilder<L> {
             temp_next: double_gadget.result,
             add_gadget,
             double_gadget,
-            select_x_ins,
-            select_y_ins,
+            // select_x_ins,
+            // select_y_ins,
         }
     }
 
@@ -114,22 +104,23 @@ impl<L: AirParameters> AirBuilder<L> {
         // Note that result and result_next live on the same row.
         // if log_generator(cursor[LOCAL]) % 2^8 == 0 then result[NEXT] <= result_next[LOCAL].
 
-        // (cyclic_counter.expr() - generator_inv)
-        let result_x_copy_constraint = (cycle.start_bit.next().expr() - L::Field::ONE)
-            * (result.x.next().expr() - result_next.x.expr());
-        self.assert_expression_zero(result_x_copy_constraint);
-        let result_y_copy_constraint = (cycle.start_bit.next().expr() - L::Field::ONE)
-            * (result.y.next().expr() - result_next.y.expr());
-        self.assert_expression_zero(result_y_copy_constraint);
+        let flag_bit = cycle.start_bit.next().expr::<L::Field>();
 
-        // Note that temp and temp_next live on the same row.
-        // if log_generator(cursor[LOCAL]) % 2^8 == 0 then temp[NEXT] <= temp_next[LOCAL]
-        let temp_x_copy_constraint = (cycle.start_bit.next().expr() - L::Field::ONE)
-            * (temp.x.next().expr() - temp_next.x.expr());
-        self.assert_expression_zero(temp_x_copy_constraint);
-        let temp_y_copy_constraint = (cycle.start_bit.next().expr() - L::Field::ONE)
-            * (temp.y.next().expr() - temp_next.y.expr());
-        self.assert_expression_zero(temp_y_copy_constraint);
+        let result_x_next_val = flag_bit.clone() * result.x.next().expr()
+            + (ArithmeticExpression::one() - flag_bit.clone()) * result_next.x.expr();
+        self.set_to_expression_transition(&result.x.next(), result_x_next_val);
+
+        let result_y_next_val = flag_bit.clone() * result.y.next().expr()
+            + (ArithmeticExpression::one() - flag_bit.clone()) * result_next.y.expr();
+        self.set_to_expression_transition(&result.y.next(), result_y_next_val);
+
+        let temp_x_next_val = flag_bit.clone() * temp.x.next().expr()
+            + (ArithmeticExpression::one() - flag_bit.clone()) * temp_next.x.expr();
+        self.set_to_expression_transition(&temp.x.next(), temp_x_next_val);
+
+        let temp_y_next_val = flag_bit.clone() * temp.y.next().expr()
+            + (ArithmeticExpression::one() - flag_bit.clone()) * temp_next.y.expr();
+        self.set_to_expression_transition(&temp.y.next(), temp_y_next_val);
 
         EdScalarMulGadget {
             cycle,
@@ -138,53 +129,9 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 }
 
-impl<F: PrimeField64> TraceWriter<F> {
-    pub fn write_ed_double_and_add<E: EdwardsParameters>(
-        &self,
-        scalar: &BigUint,
-        point: &AffinePoint<E>,
-        gadget: &EdDoubleAndAddGadget<E>,
-        starting_row: usize,
-    ) -> AffinePoint<E> {
-        let nb_bits = E::nb_scalar_bits();
-        let scalar_bits = biguint_to_bits_le(scalar, nb_bits);
-
-        let mut res = E::neutral();
-        self.write_ec_point(&gadget.result, &res, starting_row);
-        let mut temp = point.clone();
-        self.write_ec_point(&gadget.temp, &temp, starting_row);
-
-        for (i, bit) in scalar_bits.iter().enumerate() {
-            let f_bit = F::from_canonical_u8(*bit as u8);
-            self.write_value(&gadget.bit, &f_bit, starting_row + i);
-            let result_plus_temp = &res + &temp;
-            self.write_ed_add(&gadget.add_gadget, starting_row + i);
-            temp = &temp + &temp;
-            self.write_ed_add(&gadget.double_gadget, starting_row + i);
-
-            res = if *bit { result_plus_temp } else { res };
-
-            self.write_instruction(&gadget.select_x_ins, starting_row + i);
-            self.write_instruction(&gadget.select_y_ins, starting_row + i);
-
-            if i == nb_bits - 1 {
-                break;
-            }
-            self.write_ec_point(&gadget.result, &res, starting_row + i + 1);
-            self.write_ec_point(&gadget.temp, &temp, starting_row + i + 1);
-        }
-        res
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
-    use plonky2::field::packable::Packable;
-    use plonky2::iop::witness::PartialWitness;
-    use plonky2::plonk::circuit_builder::CircuitBuilder;
-    use plonky2::plonk::circuit_data::CircuitConfig;
-    use plonky2::plonk::config::PoseidonGoldilocksConfig;
     use plonky2::timed;
     use plonky2::util::timing::TimingTree;
     use rand::thread_rng;
@@ -192,12 +139,10 @@ mod tests {
     use super::*;
     use crate::chip::builder::tests::*;
     use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
-    use crate::chip::ec::gadget::EllipticCurveGadget;
+    use crate::chip::ec::gadget::{EllipticCurveGadget, EllipticCurveWriter};
     use crate::chip::field::instruction::FpInstruction;
-    use crate::plonky2::stark::gadget::StarkGadget;
-    use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
-    use crate::plonky2::stark::prover::StarkyProver;
-    use crate::plonky2::stark::verifier::StarkyVerifier;
+    use crate::chip::utils::biguint_to_bits_le;
+    use crate::math::prelude::*;
 
     #[derive(Clone, Debug, Copy)]
     pub struct Ed25519ScalarMulTest;
@@ -207,8 +152,8 @@ mod tests {
         type CubicParams = GoldilocksCubicParameters;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 1504;
-        const NUM_FREE_COLUMNS: usize = 70;
-        const EXTENDED_COLUMNS: usize = 2264;
+        const NUM_FREE_COLUMNS: usize = 72;
+        const EXTENDED_COLUMNS: usize = 2265;
         type Instruction = FpInstruction<Ed25519BaseField>;
 
         fn num_rows_bits() -> usize {
@@ -221,8 +166,6 @@ mod tests {
         type F = GoldilocksField;
         type L = Ed25519ScalarMulTest;
         type SC = PoseidonGoldilocksStarkConfig;
-        type C = PoseidonGoldilocksConfig;
-        const D: usize = 2;
         type E = Ed25519;
 
         let _ = env_logger::builder().is_test(true).try_init();
@@ -234,87 +177,48 @@ mod tests {
         let res = builder.alloc_unchecked_ec_point();
         let temp = builder.alloc_unchecked_ec_point();
         let scalar_bit = builder.alloc::<BitRegister>();
-        let scalar_mul_gadget = builder.ed_scalar_mul::<E>(&scalar_bit, &res, &temp);
+        let _scalar_mul_gadget = builder.ed_scalar_mul::<E>(&scalar_bit, &res, &temp);
 
-        let air = builder.build();
-        let generator = ArithmeticGenerator::<L>::new(&[]);
-
-        let (tx, rx) = channel();
-        let mut rng = thread_rng();
+        let (air, trace_data) = builder.build();
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
 
         let writer = generator.new_writer();
-        for j in 0..L::num_rows() {
-            writer.write_instruction(&scalar_mul_gadget.cycle, j);
-        }
-
+        let nb_bits = E::nb_scalar_bits();
         timed!(timing, "generate trace", {
-            for i in 0..256usize {
-                let writer = generator.new_writer();
-                let handle = tx.clone();
-                let gadget = scalar_mul_gadget.clone();
+            (0..256usize).into_par_iter().for_each(|k| {
+                let starting_row = 256 * k;
+                // let writer = generator.new_writer();
+                let mut rng = thread_rng();
+                // let handle = tx.clone();
                 let a = rng.gen_biguint(256);
                 let point = E::generator() * a;
+                writer.write_ec_point(&res, &E::neutral(), starting_row);
+                writer.write_ec_point(&temp, &point, starting_row);
                 let scalar = rng.gen_biguint(256);
-                rayon::spawn(move || {
-                    let res = writer.write_ed_double_and_add(
-                        &scalar,
-                        &point,
-                        &gadget.double_and_add_gadget,
-                        256 * i,
-                    );
-                    assert_eq!(res, point * scalar);
-                    handle.send(1).unwrap();
-                });
-            }
-            drop(tx);
-            for msg in rx.iter() {
-                assert!(msg == 1);
-            }
+                let scalar_bits = biguint_to_bits_le(&scalar, nb_bits);
+                for (i, bit) in scalar_bits.iter().enumerate() {
+                    let f_bit = F::from_canonical_u8(*bit as u8);
+                    writer.write(&scalar_bit, &f_bit, starting_row + i);
+                    writer.write_row_instructions(&generator.air_data, starting_row + i);
+                }
+            });
         });
         let stark = Starky::<_, { L::num_columns() }>::new(air);
         let config = SC::standard_fast_config(L::num_rows());
 
         // Generate proof and verify as a stark
-        // test_starky(&stark, &config, &generator, &[]);
-        let proof = timed!(
+        timed!(
             timing,
-            "Stark proof generagtion",
-            StarkyProver::<F, C, F, <F as Packable>::Packing, D, 1>::prove(
-                &config,
-                &stark,
-                &generator,
-                &[],
-            )
-            .unwrap()
+            "Stark proof and verify",
+            test_starky(&stark, &config, &generator, &[])
         );
 
-        // Verify the proof as a stark
-        StarkyVerifier::verify(&config, &stark, proof, &[]).unwrap();
-
-        // Test the recursive proof.
-        // test_recursive_starky(stark, config, generator, &[]);
-        let config_rec = CircuitConfig::standard_recursion_config();
-        let mut builder = CircuitBuilder::<F, D>::new(config_rec);
-        let virtual_proof = builder.add_virtual_stark_proof(&stark, &config);
-
-        builder.print_gate_counts(0);
-        let pw = PartialWitness::new();
-        // Set public inputs.
-        builder.verify_stark_proof(&config, &stark, virtual_proof.clone(), &[]);
-
-        let generator =
-            SimpleStarkWitnessGenerator::new(config, stark, virtual_proof, vec![], generator);
-        builder.add_simple_generator(generator);
-
-        let data = builder.build::<C>();
-        let recursive_proof = timed!(
+        // Generate recursive proof
+        timed!(
             timing,
-            "Total proof with a recursive envelope",
-            plonky2::plonk::prover::prove(&data.prover_only, &data.common, pw, &mut timing)
-                .unwrap()
+            "Recursive proof generation and verification",
+            test_recursive_starky(stark, config, generator, &[])
         );
-        timing.print();
-        data.verify(recursive_proof).unwrap();
 
         timing.print();
     }

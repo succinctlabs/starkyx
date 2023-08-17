@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use super::Instruction;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
@@ -18,8 +16,8 @@ impl<F: Field> Instruction<F> for EmptyInstruction<F> {
         Vec::new()
     }
 
-    fn inputs(&self) -> HashSet<MemorySlice> {
-        HashSet::new()
+    fn inputs(&self) -> Vec<MemorySlice> {
+        Vec::new()
     }
 
     fn write(&self, _writer: &TraceWriter<F>, _row_index: usize) {}

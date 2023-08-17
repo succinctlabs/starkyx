@@ -21,6 +21,8 @@ pub trait EllipticCurveGadget<E: EllipticCurveParameters> {
         self.alloc_local_ec_point()
     }
 
+    fn alloc_global_ec_point(&mut self) -> AffinePointRegister<E>;
+
     fn alloc_public_ec_point(&mut self) -> AffinePointRegister<E>;
 }
 
@@ -59,6 +61,12 @@ impl<L: AirParameters, E: EllipticCurveParameters> EllipticCurveGadget<E> for Ai
         AffinePointRegister::new(x, y)
     }
 
+    fn alloc_global_ec_point(&mut self) -> AffinePointRegister<E> {
+        let x = self.alloc_global::<FieldRegister<E::BaseField>>();
+        let y = self.alloc_global::<FieldRegister<E::BaseField>>();
+        AffinePointRegister::new(x, y)
+    }
+
     fn alloc_public_ec_point(&mut self) -> AffinePointRegister<E> {
         let x = self.alloc_public::<FieldRegister<E::BaseField>>();
         let y = self.alloc_public::<FieldRegister<E::BaseField>>();
@@ -85,7 +93,7 @@ impl<F: PrimeField64, E: EllipticCurveParameters> EllipticCurveWriter<E> for Tra
     ) {
         let value_x = to_u16_le_limbs_polynomial::<F, E::BaseField>(&value.x);
         let value_y = to_u16_le_limbs_polynomial::<F, E::BaseField>(&value.y);
-        self.write_value(&data.x, &value_x, row_index);
-        self.write_value(&data.y, &value_y, row_index);
+        self.write(&data.x, &value_x, row_index);
+        self.write(&data.y, &value_y, row_index);
     }
 }

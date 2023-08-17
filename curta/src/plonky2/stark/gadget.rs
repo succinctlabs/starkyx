@@ -9,6 +9,7 @@ use super::proof::StarkProofTarget;
 use super::verifier::{add_virtual_stark_proof, StarkyVerifier};
 use super::Starky;
 use crate::air::RAir;
+use crate::plonky2::parser::global::GlobalRecursiveStarkParser;
 use crate::plonky2::parser::RecursiveStarkParser;
 
 pub trait StarkGadget<
@@ -34,7 +35,8 @@ pub trait StarkGadget<
         public_inputs: &[Target],
     ) where
         C::Hasher: AlgebraicHasher<F>,
-        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>;
+        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
+            + for<'a> RAir<GlobalRecursiveStarkParser<'a, F, D>>;
 }
 
 impl<
@@ -63,7 +65,8 @@ impl<
         public_inputs: &[Target],
     ) where
         C::Hasher: AlgebraicHasher<F>,
-        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
+        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
+            + for<'a> RAir<GlobalRecursiveStarkParser<'a, F, D>>,
     {
         StarkyVerifier::verify_circuit(self, config, stark, proof, public_inputs)
     }

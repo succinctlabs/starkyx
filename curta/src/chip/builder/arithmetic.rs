@@ -1,6 +1,6 @@
 use super::AirBuilder;
-use crate::chip::constraint::arithmetic::expression::ArithmeticExpression;
-use crate::chip::constraint::arithmetic::ArithmeticConstraint;
+use crate::chip::arithmetic::expression::ArithmeticExpression;
+use crate::chip::arithmetic::ArithmeticConstraint;
 use crate::chip::instruction::assign::{AssignInstruction, AssignType};
 use crate::chip::instruction::set::AirInstruction;
 use crate::chip::register::Register;
@@ -143,5 +143,25 @@ impl<L: AirParameters> AirBuilder<L> {
         self.register_air_instruction_internal(instr.clone())
             .unwrap();
         instr
+    }
+
+    #[inline]
+    pub fn assert_zero(&mut self, data: &impl Register) {
+        self.assert_expression_zero(data.expr());
+    }
+
+    #[inline]
+    pub fn assert_zero_first_row(&mut self, data: &impl Register) {
+        self.assert_expression_zero_first_row(data.expr());
+    }
+
+    #[inline]
+    pub fn assert_zero_last_row(&mut self, data: &impl Register) {
+        self.assert_expression_zero_last_row(data.expr());
+    }
+
+    #[inline]
+    pub fn assert_zero_transition(&mut self, data: &impl Register) {
+        self.assert_expression_zero_transition(data.expr());
     }
 }
