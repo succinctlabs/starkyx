@@ -663,13 +663,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         let expected_digests: Vec<[u32; 8]> = (0..256)
-            .flat_map(|_| {
-                [
-                    expected_digest_1.clone(),
-                    expected_digest_long.clone(),
-                    expected_digest_2.clone(),
-                ]
-            })
+            .flat_map(|_| [expected_digest_1, expected_digest_long, expected_digest_2])
             .map(|digest| {
                 hex::decode(digest)
                     .unwrap()
