@@ -44,7 +44,7 @@ pub trait ByteInstructions:
 impl ByteInstructions for ByteInstructionSet {}
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn byte_operations(&mut self) -> (ByteLookupOperations, ByteLookupTable<L::Field>)
+    pub fn byte_operations(&mut self) -> (ByteLookupOperations, ByteLookupTable)
     where
         L::Instruction: From<ByteInstructionSet>
             + From<SelectInstruction<BitRegister>>
@@ -62,7 +62,7 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn register_byte_lookup(
         &mut self,
         operation_values: ByteLookupOperations,
-        table: &ByteLookupTable<L::Field>,
+        table: &ByteLookupTable,
     ) {
         let multiplicities = table.multiplicity_data.multiplicities();
         let lookup_challenge = self.alloc_challenge::<CubicRegister>();
@@ -367,7 +367,7 @@ mod tests {
         writer.write_global_instructions(&generator.air_data);
         table.write_multiplicities(&writer);
 
-        let stark = Starky::<_, { L::num_columns() }>::new(air);
+        let stark = Starky::new(air);
         let config = SC::standard_fast_config(L::num_rows());
 
         // Generate proof and verify as a stark

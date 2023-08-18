@@ -21,21 +21,21 @@ use crate::plonky2::stark::Starky;
 use crate::trace::generator::TraceGenerator;
 
 #[derive(Debug, Clone)]
-pub struct SimpleStarkWitnessGenerator<A, T: Clone, F, C, P, const D: usize, const COLUMNS: usize> {
+pub struct SimpleStarkWitnessGenerator<A, T: Clone, F, C, P, const D: usize> {
     config: StarkyConfig<F, C, D>,
-    pub stark: Starky<A, COLUMNS>,
+    pub stark: Starky<A>,
     pub proof_target: StarkProofTarget<D>,
     pub public_input_targets: Vec<Target>,
     pub trace_generator: T,
     _marker: core::marker::PhantomData<P>,
 }
 
-impl<A, T: Clone, F: RichField, C, const D: usize, const COLUMNS: usize>
-    SimpleStarkWitnessGenerator<A, T, F, C, <F as Packable>::Packing, D, COLUMNS>
+impl<A, T: Clone, F: RichField, C, const D: usize>
+    SimpleStarkWitnessGenerator<A, T, F, C, <F as Packable>::Packing, D>
 {
     pub fn new(
         config: StarkyConfig<F, C, D>,
-        stark: Starky<A, COLUMNS>,
+        stark: Starky<A>,
         proof_target: StarkProofTarget<D>,
         public_input_targets: Vec<Target>,
         trace_generator: T,
@@ -51,8 +51,8 @@ impl<A, T: Clone, F: RichField, C, const D: usize, const COLUMNS: usize>
     }
 }
 
-impl<A: 'static + Debug + Send + Sync, T: Clone, F, C, P, const D: usize, const COLUMNS: usize>
-    SimpleGenerator<F, D> for SimpleStarkWitnessGenerator<A, T, F, C, P, D, COLUMNS>
+impl<A: 'static + Debug + Send + Sync, T: Clone, F, C, P, const D: usize> SimpleGenerator<F, D>
+    for SimpleStarkWitnessGenerator<A, T, F, C, P, D>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F> + 'static,

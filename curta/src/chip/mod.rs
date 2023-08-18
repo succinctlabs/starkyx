@@ -60,7 +60,7 @@ pub struct Chip<L: AirParameters> {
     num_global_values: usize,
 }
 
-impl<L: ~const AirParameters> Starky<Chip<L>, { L::num_columns() }> {
+impl<L: ~const AirParameters> Starky<Chip<L>> {
     pub fn from_chip(chip: Chip<L>) -> Self {
         Self::new(chip)
     }

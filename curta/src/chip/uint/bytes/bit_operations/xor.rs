@@ -123,7 +123,7 @@ pub mod tests {
             writer.write_instruction(&xor, i);
         }
 
-        let stark = Starky::<_, { L::num_columns() }>::new(air);
+        let stark = Starky::new(air);
         let config = SC::standard_fast_config(L::num_rows());
 
         // Generate proof and verify as a stark

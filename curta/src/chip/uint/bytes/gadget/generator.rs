@@ -21,7 +21,7 @@ pub struct BytesLookupGenerator<F: RichField + Extendable<D>, E: CubicParameters
     operations: Vec<ByteOperation<Target>>,
     air_operations: Vec<ByteOperation<ByteRegister>>,
     trace_generator: ArithmeticGenerator<ByteGadgetParameters<F, E, D>>,
-    table: ByteLookupTable<F>,
+    table: ByteLookupTable,
 }
 
 pub struct ByteOperationGenerator {}
@@ -34,7 +34,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
         operations: Vec<ByteOperation<Target>>,
         air_operations: Vec<ByteOperation<ByteRegister>>,
         trace_generator: ArithmeticGenerator<ByteGadgetParameters<F, E, D>>,
-        table: ByteLookupTable<F>,
+        table: ByteLookupTable,
     ) -> Self {
         Self {
             operations,

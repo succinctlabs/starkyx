@@ -12,7 +12,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 
-use super::air::{ScalarMulEd25519, ED_NUM_COLUMNS};
+use super::air::ScalarMulEd25519;
 use super::gadget::EdScalarMulGadget;
 use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
 use crate::chip::ec::edwards::EdwardsParameters;
@@ -33,7 +33,7 @@ use crate::plonky2::stark::gadget::StarkGadget;
 use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
 use crate::plonky2::stark::Starky;
 
-pub type EdDSAStark<F, E> = Starky<Chip<ScalarMulEd25519<F, E>>, ED_NUM_COLUMNS>;
+pub type EdDSAStark<F, E> = Starky<Chip<ScalarMulEd25519<F, E>>>;
 
 const AFFINE_POINT_TARGET_NUM_LIMBS: usize = 16;
 
@@ -140,7 +140,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
 
-        let stark = Starky::<_, ED_NUM_COLUMNS>::new(air);
+        let stark = Starky::new(air);
         let config =
             StarkyConfig::<F, C, D>::standard_fast_config(ScalarMulEd25519::<F, E>::num_rows());
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);

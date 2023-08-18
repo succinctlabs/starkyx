@@ -8,7 +8,7 @@ use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 
-use self::air::{ByteGadgetParameters, NUM_BYTE_GADGET_COLUMNS};
+use self::air::ByteGadgetParameters;
 use self::generator::BytesLookupGenerator;
 use crate::chip::builder::AirBuilder;
 use crate::chip::trace::generator::ArithmeticGenerator;
@@ -69,7 +69,7 @@ pub struct BytesGadget<F: RichField + Extendable<D>, E: CubicParameters<F>, cons
     operations: Vec<ByteOperation<Target>>,
     air_operations: Vec<ByteOperation<ByteRegister>>,
     lookup_operations: ByteLookupOperations,
-    table: ByteLookupTable<F>,
+    table: ByteLookupTable,
     air_builder: AirBuilder<ByteGadgetParameters<F, E, D>>,
 }
 
@@ -198,7 +198,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
             BytesLookupGenerator::new(operations, air_operations, trace_generator.clone(), table);
         self.add_simple_generator(byte_generator);
 
-        let stark = Starky::<_, NUM_BYTE_GADGET_COLUMNS>::new(air);
+        let stark = Starky::new(air);
         let config = StarkyConfig::<F, C, D>::standard_fast_config(
             ByteGadgetParameters::<F, E, D>::num_rows(),
         );

@@ -7,8 +7,6 @@ use crate::chip::uint::bytes::lookup_table::ByteInstructionSet;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
-pub(crate) const NUM_BYTE_GADGET_COLUMNS: usize = 103 + 51;
-
 #[derive(Debug, Clone, Copy)]
 pub struct ByteGadgetParameters<F, E, const D: usize>(PhantomData<(F, E)>);
 

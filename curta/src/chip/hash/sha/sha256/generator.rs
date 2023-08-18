@@ -36,7 +36,7 @@ pub struct MessageChunks {
 #[derive(Debug, Clone)]
 pub struct SHA256Generator<F: PrimeField64, E: CubicParameters<F>> {
     pub gadget: SHA256Gadget,
-    pub table: ByteLookupTable<F>,
+    pub table: ByteLookupTable,
     pub padded_messages: Vec<Target>,
     pub chunk_sizes: Vec<usize>,
     pub trace_generator: ArithmeticGenerator<SHA256AirParameters<F, E>>,
