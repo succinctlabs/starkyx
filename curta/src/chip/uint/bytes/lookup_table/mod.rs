@@ -178,7 +178,7 @@ mod tests {
     #[derive(Debug, Clone)]
     struct ByteOpTest<const N: usize>;
 
-    impl<const N: usize> const AirParameters for ByteOpTest<N> {
+    impl<const N: usize> AirParameters for ByteOpTest<N> {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 

@@ -10,7 +10,7 @@ use crate::math::prelude::*;
 #[derive(Debug, Clone, Copy)]
 pub struct ByteGadgetParameters<F, E, const D: usize>(PhantomData<(F, E)>);
 
-impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> const AirParameters
+impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> AirParameters
     for ByteGadgetParameters<F, E, D>
 {
     type Field = F;

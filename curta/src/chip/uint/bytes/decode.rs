@@ -60,7 +60,7 @@ mod tests {
     #[derive(Debug, Clone, Copy)]
     struct DecodeTest;
 
-    impl const AirParameters for DecodeTest {
+    impl AirParameters for DecodeTest {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 

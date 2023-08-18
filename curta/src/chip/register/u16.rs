@@ -20,7 +20,7 @@ impl RegisterSerializable for U16Register {
     }
 }
 
-impl const RegisterSized for U16Register {
+impl RegisterSized for U16Register {
     fn size_of() -> usize {
         1
     }

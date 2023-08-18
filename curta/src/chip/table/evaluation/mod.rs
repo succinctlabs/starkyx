@@ -170,7 +170,7 @@ mod tests {
     #[derive(Debug, Clone)]
     pub struct EvalTest;
 
-    impl const AirParameters for EvalTest {
+    impl AirParameters for EvalTest {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = EmptyInstruction<GoldilocksField>;

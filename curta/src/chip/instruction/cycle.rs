@@ -164,7 +164,7 @@ mod tests {
     #[derive(Clone, Debug)]
     pub struct CycleTest;
 
-    impl const AirParameters for CycleTest {
+    impl AirParameters for CycleTest {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 

@@ -278,7 +278,7 @@ pub(crate) mod tests {
     #[derive(Debug, Clone)]
     pub struct FibonacciParameters;
 
-    impl const AirParameters for FibonacciParameters {
+    impl AirParameters for FibonacciParameters {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = EmptyInstruction<GoldilocksField>;
@@ -384,7 +384,7 @@ pub(crate) mod tests {
     #[derive(Debug, Clone)]
     pub struct SimpleTestParameters;
 
-    impl const AirParameters for SimpleTestParameters {
+    impl AirParameters for SimpleTestParameters {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = EmptyInstruction<GoldilocksField>;

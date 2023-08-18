@@ -189,7 +189,7 @@ mod tests {
     #[derive(Clone, Debug, Copy)]
     struct FpInnerProductTest;
 
-    impl const AirParameters for FpInnerProductTest {
+    impl AirParameters for FpInnerProductTest {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 

@@ -126,7 +126,7 @@ mod tests {
     #[derive(Clone, Debug, Copy)]
     pub struct Ed25519AddTest;
 
-    impl const AirParameters for Ed25519AddTest {
+    impl AirParameters for Ed25519AddTest {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 

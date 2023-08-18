@@ -111,7 +111,7 @@ mod tests {
     #[derive(Debug, Clone, Copy)]
     pub struct SelectorTest;
 
-    impl const AirParameters for SelectorTest {
+    impl AirParameters for SelectorTest {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 

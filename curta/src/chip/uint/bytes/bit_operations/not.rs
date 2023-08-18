@@ -63,7 +63,7 @@ pub mod tests {
     #[derive(Debug, Clone)]
     pub struct NotTest<const N: usize>;
 
-    impl<const N: usize> const AirParameters for NotTest<N> {
+    impl<const N: usize> AirParameters for NotTest<N> {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 

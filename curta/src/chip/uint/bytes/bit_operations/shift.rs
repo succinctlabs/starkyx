@@ -142,7 +142,7 @@ pub mod tests {
     #[derive(Debug, Clone)]
     pub struct ShfitTest<const N: usize, const M: usize>;
 
-    impl<const N: usize, const M: usize> const AirParameters for ShfitTest<N, M> {
+    impl<const N: usize, const M: usize> AirParameters for ShfitTest<N, M> {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 

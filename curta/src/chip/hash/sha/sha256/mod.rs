@@ -597,7 +597,7 @@ mod tests {
     #[derive(Debug, Clone, Copy)]
     pub struct SHA256Test;
 
-    impl const AirParameters for SHA256Test {
+    impl AirParameters for SHA256Test {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 

@@ -39,7 +39,7 @@ impl RegisterSerializable for CubicRegister {
     }
 }
 
-impl const RegisterSized for CubicRegister {
+impl RegisterSized for CubicRegister {
     fn size_of() -> usize {
         3
     }

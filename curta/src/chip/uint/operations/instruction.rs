@@ -99,7 +99,7 @@ mod tests {
     #[derive(Debug, Clone)]
     struct U32OpTest;
 
-    impl const AirParameters for U32OpTest {
+    impl AirParameters for U32OpTest {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 

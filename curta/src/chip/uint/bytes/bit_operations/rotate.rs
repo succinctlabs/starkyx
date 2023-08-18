@@ -125,7 +125,7 @@ pub mod tests {
     #[derive(Debug, Clone)]
     pub struct RotateTest<const N: usize, const M: usize>;
 
-    impl<const N: usize, const M: usize> const AirParameters for RotateTest<N, M> {
+    impl<const N: usize, const M: usize> AirParameters for RotateTest<N, M> {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 

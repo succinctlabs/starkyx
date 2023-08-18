@@ -166,7 +166,7 @@ mod tests {
     #[derive(Clone, Debug, Copy)]
     struct FpMulTest;
 
-    impl const AirParameters for FpMulTest {
+    impl AirParameters for FpMulTest {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
