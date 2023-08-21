@@ -60,7 +60,7 @@ mod tests {
     #[derive(Debug, Clone, Copy)]
     struct DecodeTest;
 
-    impl const AirParameters for DecodeTest {
+    impl AirParameters for DecodeTest {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
@@ -100,7 +100,7 @@ mod tests {
                 writer.write(&bit, &F::from_canonical_u8(bit_val), i);
             }
         }
-        let stark = Starky::<_, { L::num_columns() }>::new(air);
+        let stark = Starky::new(air);
         let config = SC::standard_fast_config(L::num_rows());
 
         // Generate proof and verify as a stark

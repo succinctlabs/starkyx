@@ -24,7 +24,7 @@ impl RegisterSerializable for ByteRegister {
     }
 }
 
-impl const RegisterSized for ByteRegister {
+impl RegisterSized for ByteRegister {
     fn size_of() -> usize {
         1
     }

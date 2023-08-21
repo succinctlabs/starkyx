@@ -185,7 +185,7 @@ mod tests {
     #[derive(Clone, Debug, Copy)]
     struct DenTest;
 
-    impl const AirParameters for DenTest {
+    impl AirParameters for DenTest {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
@@ -242,7 +242,7 @@ mod tests {
         for msg in rx.iter() {
             assert!(msg == 1);
         }
-        let stark = Starky::<_, { L::num_columns() }>::new(air);
+        let stark = Starky::new(air);
         let config = SC::standard_fast_config(L::num_rows());
 
         // Generate proof and verify as a stark

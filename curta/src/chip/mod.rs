@@ -19,7 +19,6 @@ pub mod trace;
 pub mod uint;
 pub mod utils;
 
-#[const_trait]
 pub trait AirParameters {
     type Field: PrimeField64;
 
@@ -60,7 +59,7 @@ pub struct Chip<L: AirParameters> {
     num_global_values: usize,
 }
 
-impl<L: ~const AirParameters> Starky<Chip<L>, { L::num_columns() }> {
+impl<L: AirParameters> Starky<Chip<L>> {
     pub fn from_chip(chip: Chip<L>) -> Self {
         Self::new(chip)
     }

@@ -164,7 +164,7 @@ mod tests {
     #[derive(Clone, Debug)]
     pub struct CycleTest;
 
-    impl const AirParameters for CycleTest {
+    impl AirParameters for CycleTest {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
@@ -212,7 +212,7 @@ mod tests {
             air.eval(&mut window_parser);
         }
 
-        let stark = Starky::<_, { L::num_columns() }>::new(air);
+        let stark = Starky::new(air);
         let config = SC::standard_fast_config(L::num_rows());
 
         // Generate proof and verify as a stark

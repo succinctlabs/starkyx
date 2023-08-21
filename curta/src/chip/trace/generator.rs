@@ -17,7 +17,7 @@ pub struct ArithmeticGenerator<L: AirParameters> {
     pub air_data: AirTraceData<L>,
 }
 
-impl<L: ~const AirParameters> ArithmeticGenerator<L> {
+impl<L: AirParameters> ArithmeticGenerator<L> {
     pub fn new(air_data: AirTraceData<L>) -> Self {
         let num_public_inputs = air_data.num_public_inputs;
         let num_global_values = air_data.num_global_values;

@@ -45,10 +45,10 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> S
         lde_bits - config.fri_config.rate_bits
     }
 
-    pub(crate) fn get_challenges<A: RAirData, const COLUMNS: usize>(
+    pub(crate) fn get_challenges<A: RAirData>(
         &self,
         config: &StarkyConfig<F, C, D>,
-        stark: &Starky<A, COLUMNS>,
+        stark: &Starky<A>,
         public_inputs: &[F],
         degree_bits: usize,
     ) -> StarkProofChallenges<F, D> {
@@ -131,13 +131,12 @@ impl<const D: usize> StarkProofTarget<D> {
         F: RichField + Extendable<D>,
         A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
         C: GenericConfig<D, F = F>,
-        const COLUMNS: usize,
     >(
         &self,
         builder: &mut CircuitBuilder<F, D>,
         config: &StarkyConfig<F, C, D>,
         public_inputs: &[Target],
-        stark: &Starky<A, COLUMNS>,
+        stark: &Starky<A>,
     ) -> StarkProofChallengesTarget<D> {
         let StarkProofTarget {
             trace_caps,

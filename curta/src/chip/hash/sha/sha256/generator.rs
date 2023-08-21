@@ -11,7 +11,7 @@ use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::util::serialization::Buffer;
 
 use super::{SHA256Gadget, SHA256PublicData, INITIAL_HASH, ROUND_CONSTANTS};
-use crate::chip::register::{Register, RegisterSized};
+use crate::chip::register::Register;
 use crate::chip::trace::generator::ArithmeticGenerator;
 use crate::chip::uint::bytes::lookup_table::table::ByteLookupTable;
 use crate::chip::uint::operations::instruction::U32Instruction;
@@ -36,14 +36,14 @@ pub struct MessageChunks {
 #[derive(Debug, Clone)]
 pub struct SHA256Generator<F: PrimeField64, E: CubicParameters<F>> {
     pub gadget: SHA256Gadget,
-    pub table: ByteLookupTable<F>,
+    pub table: ByteLookupTable,
     pub padded_messages: Vec<Target>,
     pub chunk_sizes: Vec<usize>,
     pub trace_generator: ArithmeticGenerator<SHA256AirParameters<F, E>>,
     pub pub_values_target: SHA256PublicData<Target>,
 }
 
-impl<F: PrimeField64, E: CubicParameters<F>> const AirParameters for SHA256AirParameters<F, E> {
+impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for SHA256AirParameters<F, E> {
     type Field = F;
     type CubicParams = E;
 
@@ -123,7 +123,7 @@ impl SHA256PublicData<Target> {
         chunk_sizes: &[usize],
     ) -> Self {
         let public_w_targets = (0..16 * 1024)
-            .map(|_| builder.add_virtual_target_arr::<{ U32Register::size_of() }>())
+            .map(|_| builder.add_virtual_target_arr::<4>())
             .collect::<Vec<_>>();
 
         // let end_bits_targets = builder.add_virtual_targets(1024);
@@ -134,10 +134,8 @@ impl SHA256PublicData<Target> {
             end_bits_targets.extend((0..(chunk_size - 1)).map(|_| builder.zero()));
             end_bits_targets.push(builder.one());
 
-            hash_state_targets.extend(
-                (0..8 * (chunk_size - 1))
-                    .map(|_| builder.add_virtual_target_arr::<{ U32Register::size_of() }>()),
-            );
+            hash_state_targets
+                .extend((0..8 * (chunk_size - 1)).map(|_| builder.add_virtual_target_arr::<4>()));
 
             // Convert digest to little endian u32 chunks
             let u32_digest = digest.chunks_exact(4).map(|arr| {

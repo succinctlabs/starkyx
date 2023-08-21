@@ -99,7 +99,7 @@ mod tests {
     #[derive(Debug, Clone)]
     struct U32OpTest;
 
-    impl const AirParameters for U32OpTest {
+    impl AirParameters for U32OpTest {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
@@ -221,7 +221,7 @@ mod tests {
         }
         table.write_multiplicities(&writer);
 
-        let stark = Starky::<_, { L::num_columns() }>::new(air);
+        let stark = Starky::new(air);
         let config = SC::standard_fast_config(L::num_rows());
 
         // Generate proof and verify as a stark

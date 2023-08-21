@@ -6,7 +6,7 @@ use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 
-use super::generator::{SHA256AirParameters, SHA256Generator, SHA256_COLUMNS};
+use super::generator::{SHA256AirParameters, SHA256Generator};
 use super::SHA256PublicData;
 use crate::chip::builder::AirBuilder;
 use crate::chip::trace::generator::ArithmeticGenerator;
@@ -114,7 +114,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
 
         self.add_simple_generator(sha_generator);
 
-        let stark = Starky::<_, SHA256_COLUMNS>::new(air);
+        let stark = Starky::new(air);
         let config =
             StarkyConfig::<F, C, D>::standard_fast_config(SHA256AirParameters::<F, E>::num_rows());
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);

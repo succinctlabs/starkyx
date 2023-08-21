@@ -40,9 +40,9 @@ where
         Self(core::marker::PhantomData)
     }
 
-    pub fn prove<A, T, const COLUMNS: usize>(
+    pub fn prove<A, T>(
         config: &StarkyConfig<F, C, D>,
-        stark: &Starky<A, COLUMNS>,
+        stark: &Starky<A>,
         trace_generator: &T,
         public_inputs: &[F],
     ) -> Result<StarkProof<F, C, D>>
@@ -201,10 +201,10 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn quotient_polys<A, const COLUMNS: usize>(
+    fn quotient_polys<A>(
         degree_bits: usize,
         config: &StarkyConfig<F, C, D>,
-        stark: &Starky<A, COLUMNS>,
+        stark: &Starky<A>,
         trace_data: &[PolynomialBatch<F, C, D>],
         challenges_vars: &[P],
         global_vars: &[P],
@@ -237,15 +237,11 @@ where
         let z_h_on_coset = ZeroPolyOnCoset::<F>::new(degree_bits, quotient_degree_bits);
 
         // Retrieve the LDE values at index `i`.
-        let get_trace_values_packed = |i_start| -> [P; COLUMNS] {
-            let trace = trace_data
+        let get_trace_values_packed = |i_start| -> Vec<P> {
+            trace_data
                 .iter()
                 .flat_map(|commitment| commitment.get_lde_values_packed(i_start, step))
-                .collect::<Vec<_>>();
-            // .try_into()
-            // .expect("Invalid number of trace columns")
-            assert_eq!(trace.len(), COLUMNS);
-            trace.try_into().unwrap()
+                .collect()
         };
         // Last element of the subgroup.
         let last = F::primitive_root_of_unity(degree_bits).inverse();

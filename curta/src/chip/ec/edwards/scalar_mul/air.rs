@@ -29,7 +29,7 @@ pub struct ScalarMulEd25519<F: PrimeField64, E: CubicParameters<F>>(
     core::marker::PhantomData<(F, E)>,
 );
 
-impl<F: PrimeField64, E: CubicParameters<F>> const AirParameters for ScalarMulEd25519<F, E> {
+impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for ScalarMulEd25519<F, E> {
     type Field = F;
     type CubicParams = E;
 

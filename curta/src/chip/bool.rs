@@ -111,7 +111,7 @@ mod tests {
     #[derive(Debug, Clone, Copy)]
     pub struct SelectorTest;
 
-    impl const AirParameters for SelectorTest {
+    impl AirParameters for SelectorTest {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
@@ -163,7 +163,7 @@ mod tests {
     //     for msg in rx.iter() {
     //         assert!(msg == 1);
     //     }
-    //     let stark = Starky::<_, { L::num_columns() }>::new(air);
+    //     let stark = Starky::new(air);
     //     let config = SC::standard_fast_config(L::num_rows());
 
     //     // Generate proof and verify as a stark

@@ -278,7 +278,7 @@ pub(crate) mod tests {
     #[derive(Debug, Clone)]
     pub struct FibonacciParameters;
 
-    impl const AirParameters for FibonacciParameters {
+    impl AirParameters for FibonacciParameters {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = EmptyInstruction<GoldilocksField>;
@@ -371,7 +371,7 @@ pub(crate) mod tests {
             writer.write_instruction(&constr_1, i);
             writer.write_instruction(&constr_2, i);
         }
-        let stark = Starky::<_, { L::num_columns() }>::new(air);
+        let stark = Starky::new(air);
         let config = SC::standard_fast_config(L::num_rows());
 
         // Generate proof and verify as a stark
@@ -384,7 +384,7 @@ pub(crate) mod tests {
     #[derive(Debug, Clone)]
     pub struct SimpleTestParameters;
 
-    impl const AirParameters for SimpleTestParameters {
+    impl AirParameters for SimpleTestParameters {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = EmptyInstruction<GoldilocksField>;
@@ -431,7 +431,7 @@ pub(crate) mod tests {
         for msg in rx.iter() {
             assert!(msg == 1);
         }
-        let stark = Starky::<_, { L::num_columns() }>::new(air);
+        let stark = Starky::new(air);
         let config = SC::standard_fast_config(L::num_rows());
 
         // Generate proof and verify as a stark

@@ -18,19 +18,19 @@ pub trait StarkGadget<
     const D: usize,
 >
 {
-    fn add_virtual_stark_proof<A, const COLUMNS: usize>(
+    fn add_virtual_stark_proof<A>(
         &mut self,
-        stark: &Starky<A, COLUMNS>,
+        stark: &Starky<A>,
         config: &StarkyConfig<F, C, D>,
     ) -> StarkProofTarget<D>
     where
         C::Hasher: AlgebraicHasher<F>,
         A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>;
 
-    fn verify_stark_proof<A, const COLUMNS: usize>(
+    fn verify_stark_proof<A>(
         &mut self,
         config: &StarkyConfig<F, C, D>,
-        stark: &Starky<A, COLUMNS>,
+        stark: &Starky<A>,
         proof: StarkProofTarget<D>,
         public_inputs: &[Target],
     ) where
@@ -45,9 +45,9 @@ impl<
         const D: usize,
     > StarkGadget<F, C, D> for CircuitBuilder<F, D>
 {
-    fn add_virtual_stark_proof<A, const COLUMNS: usize>(
+    fn add_virtual_stark_proof<A>(
         &mut self,
-        stark: &Starky<A, COLUMNS>,
+        stark: &Starky<A>,
         config: &StarkyConfig<F, C, D>,
     ) -> StarkProofTarget<D>
     where
@@ -57,10 +57,10 @@ impl<
         add_virtual_stark_proof(self, stark, config)
     }
 
-    fn verify_stark_proof<A, const COLUMNS: usize>(
+    fn verify_stark_proof<A>(
         &mut self,
         config: &StarkyConfig<F, C, D>,
-        stark: &Starky<A, COLUMNS>,
+        stark: &Starky<A>,
         proof: StarkProofTarget<D>,
         public_inputs: &[Target],
     ) where

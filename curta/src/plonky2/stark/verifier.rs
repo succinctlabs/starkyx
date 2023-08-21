@@ -31,9 +31,9 @@ where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F, FE = F::Extension>,
 {
-    pub fn verify<A, const COLUMNS: usize>(
+    pub fn verify<A>(
         config: &StarkyConfig<F, C, D>,
-        stark: &Starky<A, COLUMNS>,
+        stark: &Starky<A>,
         proof: StarkProof<F, C, D>,
         public_inputs: &[F],
     ) -> Result<()>
@@ -140,9 +140,9 @@ where
         Ok(())
     }
 
-    pub fn validate_proof_shape<A: RAirData, const COLUMNS: usize>(
+    pub fn validate_proof_shape<A: RAirData>(
         config: &StarkyConfig<F, C, D>,
-        stark: &Starky<A, COLUMNS>,
+        stark: &Starky<A>,
         proof: &StarkProof<F, C, D>,
     ) -> Result<()> {
         let fri_params = config.fri_params();
@@ -169,8 +169,8 @@ where
         }
         ensure!(quotient_polys_cap.height() == cap_height);
         ensure!(global_values.len() == stark.air().num_global_values());
-        ensure!(local_values.len() == COLUMNS);
-        ensure!(next_values.len() == COLUMNS);
+        ensure!(local_values.len() == stark.air().num_columns());
+        ensure!(next_values.len() == stark.air().num_columns());
         ensure!(quotient_polys.len() == stark.num_quotient_polys(config));
 
         Ok(())
@@ -188,10 +188,10 @@ where
         (z_x * invs[0], z_x * invs[1])
     }
 
-    pub fn verify_circuit<A, const COLUMNS: usize>(
+    pub fn verify_circuit<A>(
         builder: &mut CircuitBuilder<F, D>,
         config: &StarkyConfig<F, C, D>,
-        stark: &Starky<A, COLUMNS>,
+        stark: &Starky<A>,
         proof: StarkProofTarget<D>,
         public_inputs: &[Target],
     ) where
@@ -325,10 +325,9 @@ pub fn add_virtual_stark_proof<
     A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
     C: GenericConfig<D, F = F>,
     const D: usize,
-    const COLUMNS: usize,
 >(
     builder: &mut CircuitBuilder<F, D>,
-    stark: &Starky<A, COLUMNS>,
+    stark: &Starky<A>,
     config: &StarkyConfig<F, C, D>,
 ) -> StarkProofTarget<D>
 where
@@ -367,10 +366,9 @@ pub(crate) fn add_stark_opening_set_target<
     A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
     C: GenericConfig<D, F = F>,
     const D: usize,
-    const COLUMNS: usize,
 >(
     builder: &mut CircuitBuilder<F, D>,
-    stark: &Starky<A, COLUMNS>,
+    stark: &Starky<A>,
     config: &StarkyConfig<F, C, D>,
 ) -> StarkOpeningSetTarget<D>
 where
@@ -378,8 +376,8 @@ where
 {
     let num_challenges = config.num_challenges;
     StarkOpeningSetTarget {
-        local_values: builder.add_virtual_extension_targets(COLUMNS),
-        next_values: builder.add_virtual_extension_targets(COLUMNS),
+        local_values: builder.add_virtual_extension_targets(stark.air().num_columns()),
+        next_values: builder.add_virtual_extension_targets(stark.air().num_columns()),
         quotient_polys: builder
             .add_virtual_extension_targets(stark.air().quotient_degree_factor() * num_challenges),
     }

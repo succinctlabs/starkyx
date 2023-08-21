@@ -31,6 +31,10 @@ pub trait RAirData {
     /// The data needed for each round
     fn round_data(&self) -> Vec<RoundDatum>;
 
+    fn num_columns(&self) -> usize {
+        self.round_data().iter().map(|d| d.num_columns).sum()
+    }
+
     fn num_public_inputs(&self) -> usize;
 
     fn num_rounds(&self) -> usize {

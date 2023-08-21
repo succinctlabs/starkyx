@@ -26,17 +26,17 @@ pub mod prover;
 pub mod verifier;
 
 #[derive(Debug, Clone)]
-pub struct Starky<A, const COLUMNS: usize> {
+pub struct Starky<A> {
     pub air: A,
 }
 
-impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
+impl<A> Starky<A> {
     pub fn new(air: A) -> Self {
         Self { air }
     }
 }
 
-impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
+impl<A> Starky<A> {
     fn air(&self) -> &A {
         &self.air
     }
@@ -149,17 +149,8 @@ impl<A, const COLUMNS: usize> Starky<A, COLUMNS> {
     }
 }
 
-impl<
-        'a,
-        A,
-        F,
-        C: GenericConfig<D, F = F>,
-        FE,
-        P,
-        const D: usize,
-        const D2: usize,
-        const COLUMNS: usize,
-    > Stark<StarkParser<'a, F, FE, P, D, D2>, StarkyConfig<F, C, D>> for Starky<A, COLUMNS>
+impl<'a, A, F, C: GenericConfig<D, F = F>, FE, P, const D: usize, const D2: usize>
+    Stark<StarkParser<'a, F, FE, P, D, D2>, StarkyConfig<F, C, D>> for Starky<A>
 where
     F: RichField + Extendable<D>,
     FE: FieldExtension<D2, BaseField = F>,
@@ -173,8 +164,8 @@ where
     }
 }
 
-impl<'a, A, F, C: GenericConfig<D, F = F>, const D: usize, const COLUMNS: usize>
-    Stark<RecursiveStarkParser<'a, F, D>, StarkyConfig<F, C, D>> for Starky<A, COLUMNS>
+impl<'a, A, F, C: GenericConfig<D, F = F>, const D: usize>
+    Stark<RecursiveStarkParser<'a, F, D>, StarkyConfig<F, C, D>> for Starky<A>
 where
     F: RichField + Extendable<D>,
     A: RAir<RecursiveStarkParser<'a, F, D>>,
@@ -215,9 +206,8 @@ pub(crate) mod tests {
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F, FE = F::Extension>,
         const D: usize,
-        const COLUMNS: usize,
     >(
-        stark: &Starky<A, COLUMNS>,
+        stark: &Starky<A>,
         config: &StarkyConfig<F, C, D>,
         trace_generator: &T,
         public_inputs: &[F],
@@ -247,9 +237,8 @@ pub(crate) mod tests {
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F, FE = F::Extension> + 'static,
         const D: usize,
-        const COLUMNS: usize,
     >(
-        stark: Starky<A, COLUMNS>,
+        stark: Starky<A>,
         config: StarkyConfig<F, C, D>,
         trace_generator: T,
         public_inputs: &[F],
@@ -304,7 +293,7 @@ pub(crate) mod tests {
 
         let num_rows = 1 << 5usize;
         let air = FibonacciAir::new();
-        let stark = Starky::<FibonacciAir, 2>::new(air);
+        let stark = Starky::<FibonacciAir>::new(air);
 
         let public_inputs = [
             F::ZERO,

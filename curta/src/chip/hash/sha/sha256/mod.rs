@@ -597,7 +597,7 @@ mod tests {
     #[derive(Debug, Clone, Copy)]
     pub struct SHA256Test;
 
-    impl const AirParameters for SHA256Test {
+    impl AirParameters for SHA256Test {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
@@ -663,13 +663,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         let expected_digests: Vec<[u32; 8]> = (0..256)
-            .flat_map(|_| {
-                [
-                    expected_digest_1.clone(),
-                    expected_digest_long.clone(),
-                    expected_digest_2.clone(),
-                ]
-            })
+            .flat_map(|_| [expected_digest_1, expected_digest_long, expected_digest_2])
             .map(|digest| {
                 hex::decode(digest)
                     .unwrap()
@@ -701,7 +695,7 @@ mod tests {
         });
 
         let public_inputs = writer.0.public.read().unwrap().clone();
-        let stark = Starky::<_, { L::num_columns() }>::new(air);
+        let stark = Starky::new(air);
         let config = SC::standard_fast_config(L::num_rows());
 
         // Generate proof and verify as a stark

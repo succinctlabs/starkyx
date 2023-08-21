@@ -1,10 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![allow(incomplete_features)]
-#![feature(generic_const_exprs)]
-#![feature(adt_const_params)]
-#![feature(test)]
-#![feature(const_trait_impl)]
-#![feature(specialization)]
 #![allow(clippy::new_without_default)]
 #![feature(bigint_helper_methods)]
 
