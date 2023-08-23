@@ -19,8 +19,8 @@ impl<F: PrimeField> TraceWriter<F> {
         // Calculate multiplicities
         let mut multiplicities = vec![F::ZERO; num_rows];
 
+        // Count the multiplicities in the trace
         let trace = self.read_trace().unwrap();
-
         for row in trace.rows() {
             for value in values.iter() {
                 let val = value.read_from_slice(row);

@@ -241,7 +241,7 @@ impl<L: AirParameters> AirBuilder<L> {
         self.lookup_data.push(lookup_data);
     }
 
-    pub fn lookup_log_derivative(
+    pub fn element_lookup_with_table_index(
         &mut self,
         table: &ElementRegister,
         values: &[ElementRegister],
@@ -290,7 +290,6 @@ impl<L: AirParameters> AirBuilder<L> {
 
         // Add the lookup to the list of lookups
         self.lookup_data.push(lookup_data);
-
     }
 
     pub fn lookup_log_derivative_no_index(

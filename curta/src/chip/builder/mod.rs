@@ -28,6 +28,7 @@ pub struct AirBuilder<L: AirParameters> {
     next_index: usize,
     extended_index: usize,
     shared_memory: SharedMemory,
+    global_arithmetic: Vec<ElementRegister>,
     pub(crate) instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub(crate) global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub(crate) constraints: Vec<Constraint<L>>,
@@ -65,6 +66,7 @@ impl<L: AirParameters> AirBuilder<L> {
             local_arithmetic_index: 0,
             next_arithmetic_index: 0,
             extended_index: L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS,
+            global_arithmetic: Vec::new(),
             shared_memory,
             instructions: Vec::new(),
             global_instructions: Vec::new(),
@@ -170,7 +172,7 @@ impl<L: AirParameters> AirBuilder<L> {
         }
 
         // Add the range checks
-        if L::NUM_ARITHMETIC_COLUMNS > 0 {
+        if L::NUM_ARITHMETIC_COLUMNS > 0 || self.global_arithmetic.len() > 0 {
             self.arithmetic_range_checks();
         }
 
@@ -264,7 +266,7 @@ pub(crate) mod tests {
     pub use crate::air::parser::AirParser;
     pub use crate::air::RAir;
     pub use crate::chip::instruction::empty::EmptyInstruction;
-    pub use crate::chip::register::element::ElementRegister;
+    use crate::chip::register::element::ElementRegister;
     pub use crate::chip::register::u16::U16Register;
     pub use crate::chip::register::RegisterSerializable;
     pub use crate::chip::trace::generator::ArithmeticGenerator;
@@ -439,5 +441,46 @@ pub(crate) mod tests {
 
         // Test the recursive proof.
         test_recursive_starky(stark, config, generator, &[]);
+    }
+
+    #[test]
+    fn test_builder_public_range_check() {
+        type F = GoldilocksField;
+        type L = SimpleTestParameters;
+        type SC = PoseidonGoldilocksStarkConfig;
+
+        let mut builder = AirBuilder::<L>::new();
+        let x_0 = builder.alloc::<U16Register>();
+        let x_1 = builder.alloc::<U16Register>();
+        let y_1 = builder.alloc_public::<U16Register>();
+        let y_2 = builder.alloc_public::<U16Register>();
+
+        let clk = builder.clock();
+        let clk_expected = builder.alloc::<ElementRegister>();
+
+        builder.assert_equal(&clk, &clk_expected);
+
+        let (air, trace_data) = builder.build();
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
+
+        let writer = generator.new_writer();
+        writer.write(&y_1, &F::from_canonical_u32(45),0);
+        writer.write(&y_2, &F::from_canonical_u32(45),0);
+        for i in 0..L::num_rows() {
+            writer.write(&x_0, &F::ZERO, i);
+            writer.write(&x_1, &F::from_canonical_usize(0), i);
+            writer.write(&clk_expected, &F::from_canonical_usize(i), i);
+            writer.write_row_instructions(&generator.air_data, i);
+        }
+
+        let stark = Starky::new(air);
+        let config = SC::standard_fast_config(L::num_rows());
+
+        let public_inputs = writer.public.read().unwrap().clone();
+        // Generate proof and verify as a stark
+        test_starky(&stark, &config, &generator, &public_inputs);
+
+        // Test the recursive proof.
+        test_recursive_starky(stark, config, generator, &public_inputs);
     }
 }
