@@ -34,7 +34,7 @@ pub struct LookupTable<T: Register, F: Field, E: CubicParameters<F>> {
 #[derive(Debug, Clone)]
 pub struct LogLookupValues<T: EvalCubic, F: Field, E: CubicParameters<F>> {
     pub(crate) challenge: CubicRegister,
-    pub(crate) values: Vec<T>,
+    pub(crate) trace_values: Vec<T>,
     pub(crate) public_values: Vec<T>,
     pub(crate) row_accumulators: ArrayRegister<CubicRegister>,
     pub(crate) global_accumulators: ArrayRegister<CubicRegister>,
@@ -136,7 +136,7 @@ impl<L: AirParameters> AirBuilder<L> {
 
         LogLookupValues {
             challenge: *challenge,
-            values: trace_values.to_vec(),
+            trace_values: trace_values.to_vec(),
             public_values: public_values.to_vec(),
             row_accumulators,
             global_accumulators,
@@ -530,7 +530,7 @@ mod tests {
         let challenge = builder.alloc_challenge::<CubicRegister>();
         let lookup_table = builder.lookup_table(&challenge, &table_values);
         let lookup_values = builder.lookup_values(&challenge, &values);
-        assert_eq!(lookup_values.values.len(), M);
+        assert_eq!(lookup_values.trace_values.len(), M);
         assert_eq!(lookup_values.public_values.len(), PUB + GLOB);
         let multiplicities = lookup_table.multiplicities;
         builder.cubic_lookup_from_table_and_values(lookup_table, lookup_values);

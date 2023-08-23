@@ -135,14 +135,7 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn alloc_global<T: Register>(&mut self) -> T {
         let register = match T::CELL {
             CellType::Element => self.get_global_memory(T::size_of()),
-            CellType::U16 => {
-                let register = self.get_global_memory(T::size_of());
-                let elements = ArrayRegister::<ElementRegister>::from_register_unsafe(register);
-                for element in elements {
-                    self.global_arithmetic.push(element);
-                }
-                register
-            }
+            CellType::U16 => unreachable!("Global U16 not supported"),
             CellType::Bit => self.get_global_memory(T::size_of()),
         };
         T::from_register(register)
@@ -152,14 +145,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let size_of = T::size_of() * length;
         let register = match T::CELL {
             CellType::Element => self.get_global_memory(size_of),
-            CellType::U16 => {
-                let register = self.get_global_memory(size_of);
-                let elements = ArrayRegister::<ElementRegister>::from_register_unsafe(register);
-                for element in elements {
-                    self.global_arithmetic.push(element);
-                }
-                register
-            }
+            CellType::U16 => unreachable!("Global U16 not supported"),
             CellType::Bit => self.get_global_memory(size_of),
         };
         ArrayRegister::<T>::from_register_unsafe(register)

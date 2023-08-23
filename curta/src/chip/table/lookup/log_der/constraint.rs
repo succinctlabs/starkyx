@@ -123,7 +123,7 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupValues<T, F, E> {
         let beta = self.challenge.eval(parser);
 
         let mut prev = parser.zero_extension();
-        for (chunk, row_acc) in self.values.chunks_exact(2).zip(self.row_accumulators) {
+        for (chunk, row_acc) in self.trace_values.chunks_exact(2).zip(self.row_accumulators) {
             let a = chunk[0].eval_cubic(parser);
             let b = chunk[1].eval_cubic(parser);
             let acc = row_acc.eval(parser);
