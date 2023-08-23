@@ -17,24 +17,6 @@ pub enum LookupConstraint<T: EvalCubic, F: Field, E: CubicParameters<F>> {
     Digest(CubicRegister, CubicRegister),
 }
 
-// impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
-//     for LogLookup<T, AP::Field, E>
-// {
-//     fn eval(&self, parser: &mut AP) {
-//         // Table constraints
-//         self.table_data.eval(parser);
-
-//         // Values and multiplicity constraints
-//         self.values_data.eval(parser);
-
-//         // Digest matching constraint
-//         let lookup_digest = self.values_data.digest.eval(parser);
-//         let table_digest = self.table_data.digest.eval(parser);
-//         let digest_constraint = parser.sub_extension(lookup_digest, table_digest);
-//         parser.constraint_extension_last_row(digest_constraint);
-//     }
-// }
-
 impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
     for LookupConstraint<T, AP::Field, E>
 {
