@@ -191,9 +191,6 @@ impl<L: AirParameters> AirBuilder<L> {
             ));
         }
 
-        // self.constraints
-        //     .push(Constraint::lookup(lookup_data.clone()));
-
         // Add the lookup to the list of lookups
         self.lookup_data.push(lookup_data);
     }
@@ -239,9 +236,6 @@ impl<L: AirParameters> AirBuilder<L> {
                 LookupConstraint::<CubicRegister, _, _>::ValuesGlobal(values_data.clone()).into(),
             ));
         }
-
-        // self.constraints
-        //     .push(Constraint::lookup(lookup_data.clone()));
 
         // Add the lookup to the list of lookups
         self.lookup_data.push(lookup_data);
@@ -294,25 +288,9 @@ impl<L: AirParameters> AirBuilder<L> {
             ));
         }
 
-        // self.constraints
-        //     .push(Constraint::lookup(lookup_data.clone()));
-
         // Add the lookup to the list of lookups
         self.lookup_data.push(lookup_data);
 
-        // let lookup_data = Lookup::Element(LogLookup {
-        //     table_data,
-        //     values_data: value_data,
-        //     table_index: Some(table_index),
-        //     _marker: core::marker::PhantomData,
-        // });
-
-        // // Add the lookup constraints
-        // self.constraints
-        //     .push(Constraint::lookup(lookup_data.clone()));
-
-        // // Add the lookup to the list of lookups
-        // self.lookup_data.push(lookup_data);
     }
 
     pub fn lookup_log_derivative_no_index(
@@ -328,20 +306,6 @@ impl<L: AirParameters> AirBuilder<L> {
         let multiplicities = table_data.multiplicities;
 
         self.element_lookup_from_table_and_values(table_data, values_data);
-
-        // let lookup_data = Lookup::Element(LogLookup {
-        //     table_data,
-        //     values_data: value_data,
-        //     table_index: None,
-        //     _marker: core::marker::PhantomData,
-        // });
-
-        // // Add the lookup constraints
-        // self.constraints
-        //     .push(Constraint::lookup(lookup_data.clone()));
-
-        // // Add the lookup to the list of lookups
-        // self.lookup_data.push(lookup_data);
 
         multiplicities
     }
@@ -360,20 +324,6 @@ impl<L: AirParameters> AirBuilder<L> {
         let multiplicities = table_data.multiplicities;
 
         self.cubic_lookup_from_table_and_values(table_data, values_data);
-
-        // let lookup_data = Lookup::CubicElement(LogLookup {
-        //     table_data,
-        //     values_data: value_data,
-        //     table_index: None,
-        //     _marker: core::marker::PhantomData,
-        // });
-
-        // // Add the lookup constraints
-        // self.constraints
-        //     .push(Constraint::lookup(lookup_data.clone()));
-
-        // // Add the lookup to the list of lookups
-        // self.lookup_data.push(lookup_data);
 
         multiplicities
     }
