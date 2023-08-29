@@ -34,6 +34,12 @@ pub struct MessageChunks {
 }
 
 #[derive(Debug, Clone)]
+pub struct SHA256HintGenerator {
+    padded_message: Vec<Target>,
+    digest_bytes: [Target; 32],
+}
+
+#[derive(Debug, Clone)]
 pub struct SHA256Generator<F: PrimeField64, E: CubicParameters<F>> {
     pub gadget: SHA256Gadget,
     pub table: ByteLookupTable,
@@ -189,5 +195,66 @@ impl SHA256PublicData<Target> {
             .chain(self.hash_state.iter().flatten().copied())
             .chain(self.end_bits.iter().copied())
             .collect()
+    }
+}
+
+impl SHA256HintGenerator {
+    pub fn new(padded_message: &[Target], digest_bytes: [Target; 32]) -> Self {
+        SHA256HintGenerator {
+            padded_message: padded_message.to_vec(),
+            digest_bytes,
+        }
+    }
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for SHA256HintGenerator {
+    fn id(&self) -> String {
+        "SHA256 hint generator".to_string()
+    }
+
+    fn dependencies(&self) -> Vec<Target> {
+        self.padded_message.clone()
+    }
+
+    fn serialize(
+        &self,
+        _dst: &mut Vec<u8>,
+        _common_data: &CommonCircuitData<F, D>,
+    ) -> plonky2::util::serialization::IoResult<()> {
+        unimplemented!("SHA256HintGenerator::serialize")
+    }
+
+    fn deserialize(
+        _src: &mut Buffer,
+        _common_data: &CommonCircuitData<F, D>,
+    ) -> plonky2::util::serialization::IoResult<Self>
+    where
+        Self: Sized,
+    {
+        unimplemented!("SHA256HintGenerator::deserialize")
+    }
+
+    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
+        let padded_message = witness
+            .get_targets(&self.padded_message)
+            .into_iter()
+            .map(|x| x.as_canonical_u64() as u8)
+            .collect::<Vec<_>>();
+
+        let mut state = INITIAL_HASH;
+        for chunk in padded_message.chunks_exact(64) {
+            let w_val = SHA256Gadget::process_inputs(chunk);
+            state = SHA256Gadget::compress_round(state, &w_val, ROUND_CONSTANTS);
+        }
+
+        let digest_bytes = state
+            .map(|x| {
+                let mut arr = u32_to_le_field_bytes::<F>(x);
+                arr.reverse();
+                arr
+            })
+            .concat();
+
+        out_buffer.set_target_arr(&self.digest_bytes, &digest_bytes);
     }
 }
