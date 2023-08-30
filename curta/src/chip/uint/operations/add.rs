@@ -20,22 +20,25 @@ use crate::math::prelude::*;
 pub struct ByteArrayAdd<const N: usize> {
     pub a: ByteArrayRegister<N>,
     pub b: ByteArrayRegister<N>,
+    in_carry : Option<BitRegister>,
     pub result: ByteArrayRegister<N>,
-    carry: BitRegister,
+    result_carry: BitRegister,
 }
 
 impl<const N: usize> ByteArrayAdd<N> {
     pub fn new(
         a: ByteArrayRegister<N>,
         b: ByteArrayRegister<N>,
+        in_carry : Option<BitRegister>,
         result: ByteArrayRegister<N>,
-        carry: BitRegister,
+        result_carry: BitRegister,
     ) -> Self {
         Self {
             a,
             b,
+            in_carry,
             result,
-            carry,
+            result_carry,
         }
     }
 }
@@ -51,7 +54,7 @@ impl<L: AirParameters> AirBuilder<L> {
         L::Instruction: From<ByteArrayAdd<4>> + From<ByteOperationInstruction>,
     {
         let result = self.alloc::<U32Register>();
-        let carry = self.set_add_u32(a, b, &result, operations);
+        let carry = self.set_add_u32(a, b, &None, &result, operations);
 
         (result, carry)
     }
@@ -73,14 +76,15 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         a: &U32Register,
         b: &U32Register,
+        in_carry : &Option<BitRegister>,
         result: &U32Register,
         operations: &mut ByteLookupOperations,
     ) -> BitRegister
     where
         L::Instruction: From<ByteArrayAdd<4>> + From<ByteOperationInstruction>,
     {
-        let carry = self.alloc::<BitRegister>();
-        let add = ByteArrayAdd::<4>::new(*a, *b, *result, carry);
+        let result_carry = self.alloc::<BitRegister>();
+        let add = ByteArrayAdd::<4>::new(*a, *b, *in_carry, *result, result_carry);
         self.register_instruction(add);
 
         for byte in result.to_le_bytes() {
@@ -88,16 +92,18 @@ impl<L: AirParameters> AirBuilder<L> {
             self.set_byte_operation(&result_range, operations);
         }
 
-        carry
+        result_carry
     }
 }
 
 impl<AP: AirParser, const N: usize> AirConstraint<AP> for ByteArrayAdd<N> {
     fn eval(&self, parser: &mut AP) {
+        assert!(N <= 4, "ByteArrayAdd<N> only supports N <= 4");
         let a = self.a.eval(parser);
         let b = self.b.eval(parser);
+        let in_carry = self.in_carry.map(|x| x.eval(parser));
         let result = self.result.eval(parser);
-        let carry = self.carry.eval(parser);
+        let result_carry = self.result_carry.eval(parser);
 
         let mut a_val = parser.zero();
         let mut b_val = parser.zero();
@@ -115,34 +121,44 @@ impl<AP: AirParser, const N: usize> AirConstraint<AP> for ByteArrayAdd<N> {
         }
 
         let a_plus_b = parser.add(a_val, b_val);
+        let a_plus_b_plus_carry = match in_carry {
+            Some(carry) => parser.add(a_plus_b, carry),
+            None => a_plus_b,
+        };   
         let two_power = AP::Field::from_canonical_u64(1 << (8 * N));
-        let carry_times_mod = parser.mul_const(carry, two_power);
+        let carry_times_mod = parser.mul_const(result_carry, two_power);
         let result_plus_carry = parser.add(result_val, carry_times_mod);
-        let constraint = parser.sub(a_plus_b, result_plus_carry);
+        let constraint = parser.sub(a_plus_b_plus_carry, result_plus_carry);
         parser.constraint(constraint);
     }
 }
 
 impl<F: PrimeField64> Instruction<F> for ByteArrayAdd<4> {
     fn inputs(&self) -> Vec<MemorySlice> {
-        vec![*self.a.register(), *self.b.register()]
+        let mut inputs = vec![*self.a.register(), *self.b.register()];
+        if let Some(carry) = self.in_carry {
+            inputs.push(*carry.register());
+        }
+        inputs
     }
 
     fn trace_layout(&self) -> Vec<MemorySlice> {
-        vec![*self.result.register(), *self.carry.register()]
+        vec![*self.result.register(), *self.result_carry.register()]
     }
 
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let a = writer.read(&self.a, row_index);
         let b = writer.read(&self.b, row_index);
+        let in_carry = self.in_carry.map(|x| writer.read(&x, row_index));
 
         let a_val = u32::from_le_bytes(a.map(|x| x.as_canonical_u64() as u8));
         let b_val = u32::from_le_bytes(b.map(|x| x.as_canonical_u64() as u8));
+        let in_carry_val = in_carry.map(|x| x.as_canonical_u64() as u8 ==1 ).unwrap_or(false);
 
-        let (result, carry) = a_val.carrying_add(b_val, false);
+        let (result, result_carry) = a_val.carrying_add(b_val, in_carry_val);
         let result_bytes = result.to_le_bytes().map(|x| F::from_canonical_u8(x));
 
         writer.write(&self.result, &result_bytes, row_index);
-        writer.write(&self.carry, &F::from_canonical_u8(carry as u8), row_index);
+        writer.write(&self.result_carry, &F::from_canonical_u8(result_carry as u8), row_index);
     }
 }
