@@ -6,7 +6,7 @@ use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 
-use super::generator::{SHA256AirParameters, SHA256Generator};
+use super::generator::{SHA256AirParameters, SHA256Generator, SHA256HintGenerator};
 use super::SHA256PublicData;
 use crate::chip::builder::AirBuilder;
 use crate::chip::trace::generator::ArithmeticGenerator;
@@ -67,6 +67,8 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
     ) -> CurtaBytes<32> {
         gadget.padded_messages.extend_from_slice(&padded_message.0);
         let digest_bytes = self.add_virtual_target_arr::<32>();
+        let hint = SHA256HintGenerator::new(&padded_message.0, digest_bytes);
+        self.add_simple_generator(hint);
         gadget.digests.extend_from_slice(&digest_bytes);
         gadget.chunk_sizes.push(N / 64);
         CurtaBytes(digest_bytes)

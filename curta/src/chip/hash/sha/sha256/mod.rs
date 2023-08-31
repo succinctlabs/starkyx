@@ -439,7 +439,6 @@ impl SHA256Gadget {
             for chunk in padded_msg.chunks_exact(64) {
                 let w_val = SHA256Gadget::process_inputs(chunk);
                 public_w_values.extend(w_val[0..16].iter().map(|x| u32_to_le_field_bytes::<F>(*x)));
-                // public_w_values.extend(chunk.iter().map(|x| u32_to_le_field_bytes::<F>(*x)));
                 state = SHA256Gadget::compress_round(state, &w_val, ROUND_CONSTANTS);
                 w_values.extend_from_slice(&w_val.map(u32_to_le_field_bytes::<F>));
                 hash_values.extend_from_slice(&state.map(u32_to_le_field_bytes::<F>));
