@@ -15,7 +15,7 @@ impl<F: PrimeField> TraceWriter<F> {
         table_data: &LookupTable<T, F, E>,
         table_index: impl Fn(T::Value<F>) -> usize,
         trace_values: &[T],
-        global_values : &[T],
+        global_values: &[T],
     ) {
         // Calculate multiplicities
         let mut multiplicities = vec![F::ZERO; num_rows];

@@ -172,7 +172,7 @@ impl<L: AirParameters> AirBuilder<L> {
         }
 
         // Add the range checks
-        if L::NUM_ARITHMETIC_COLUMNS > 0 || self.global_arithmetic.len() > 0 {
+        if L::NUM_ARITHMETIC_COLUMNS > 0 || !self.global_arithmetic.is_empty() {
             self.arithmetic_range_checks();
         }
 
@@ -464,8 +464,8 @@ pub(crate) mod tests {
         let generator = ArithmeticGenerator::<L>::new(trace_data);
 
         let writer = generator.new_writer();
-        writer.write(&y_1, &F::from_canonical_u32(45),0);
-        writer.write(&y_2, &F::from_canonical_u32(45),0);
+        writer.write(&y_1, &F::from_canonical_u32(45), 0);
+        writer.write(&y_2, &F::from_canonical_u32(45), 0);
         for i in 0..L::num_rows() {
             writer.write(&x_0, &F::ZERO, i);
             writer.write(&x_1, &F::from_canonical_usize(0), i);
