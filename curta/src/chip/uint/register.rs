@@ -47,3 +47,70 @@ impl<const N: usize> Register for ByteArrayRegister<N> {
         value
     }
 }
+
+pub fn as_limbs<const N: usize, const M: usize>(
+    register: ByteArrayRegister<N>,
+) -> ArrayRegister<ByteArrayRegister<M>> {
+    assert!(N % M == 0);
+    let array = ArrayRegister::from_register_unsafe(register.0);
+    array
+}
+
+pub fn from_limbs<const N: usize, const M: usize>(
+    register: ArrayRegister<ByteArrayRegister<M>>,
+) -> ByteArrayRegister<N> {
+    assert!(N % M == 0);
+
+    ByteArrayRegister::<N>::from_register_unsafe(*register.register())
+}
+
+#[cfg(test)]
+mod tests {
+    use plonky2::field::goldilocks_field::GoldilocksField;
+
+    use super::*;
+    use crate::chip::builder::AirBuilder;
+    use crate::chip::uint::operations::instruction::U32Instruction;
+    use crate::chip::AirParameters;
+    use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
+    use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct RegisterConversionTest;
+
+    impl AirParameters for RegisterConversionTest {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
+
+        type Instruction = U32Instruction;
+
+        const NUM_FREE_COLUMNS: usize = 2;
+        const EXTENDED_COLUMNS: usize = 2;
+        const NUM_ARITHMETIC_COLUMNS: usize = 0;
+
+        fn num_rows_bits() -> usize {
+            16
+        }
+    }
+
+    #[test]
+    fn test_byte_array_register() {
+        // Defin an arbitrary memory slice
+        type F = GoldilocksField;
+        type L = RegisterConversionTest;
+        type SC = PoseidonGoldilocksStarkConfig;
+
+        let mut builder = AirBuilder::<L>::new();
+
+        const N: usize = 64;
+        const M: usize = 32;
+
+        let a = builder.alloc::<ByteArrayRegister<N>>();
+
+        let a_as_limbs = as_limbs::<N, M>(a);
+
+        let b = from_limbs::<N, M>(a_as_limbs);
+
+        builder.assert_equal(&a, &b);
+    }
+}
