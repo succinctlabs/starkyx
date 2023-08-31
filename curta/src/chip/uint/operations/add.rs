@@ -2,6 +2,7 @@ use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
+use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
@@ -9,7 +10,7 @@ use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
 use crate::chip::uint::bytes::operations::instruction::ByteOperationInstruction;
 use crate::chip::uint::bytes::operations::value::ByteOperation;
-use crate::chip::uint::register::{ByteArrayRegister, U32Register};
+use crate::chip::uint::register::{as_limbs, ByteArrayRegister, U32Register, U64Register, from_limbs};
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
@@ -20,7 +21,7 @@ use crate::math::prelude::*;
 pub struct ByteArrayAdd<const N: usize> {
     pub a: ByteArrayRegister<N>,
     pub b: ByteArrayRegister<N>,
-    in_carry : Option<BitRegister>,
+    in_carry: Option<BitRegister>,
     pub result: ByteArrayRegister<N>,
     result_carry: BitRegister,
 }
@@ -29,7 +30,7 @@ impl<const N: usize> ByteArrayAdd<N> {
     pub fn new(
         a: ByteArrayRegister<N>,
         b: ByteArrayRegister<N>,
-        in_carry : Option<BitRegister>,
+        in_carry: Option<BitRegister>,
         result: ByteArrayRegister<N>,
         result_carry: BitRegister,
     ) -> Self {
@@ -48,13 +49,14 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         a: &U32Register,
         b: &U32Register,
+        in_carry: &Option<BitRegister>,
         operations: &mut ByteLookupOperations,
     ) -> (U32Register, BitRegister)
     where
         L::Instruction: From<ByteArrayAdd<4>> + From<ByteOperationInstruction>,
     {
         let result = self.alloc::<U32Register>();
-        let carry = self.set_add_u32(a, b, &None, &result, operations);
+        let carry = self.set_add_u32(a, b, in_carry, &result, operations);
 
         (result, carry)
     }
@@ -68,7 +70,7 @@ impl<L: AirParameters> AirBuilder<L> {
     where
         L::Instruction: From<ByteArrayAdd<4>> + From<ByteOperationInstruction>,
     {
-        let (result, _) = self.carrying_add_u32(a, b, operations);
+        let (result, _) = self.carrying_add_u32(a, b, &None, operations);
         result
     }
 
@@ -76,7 +78,7 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         a: &U32Register,
         b: &U32Register,
-        in_carry : &Option<BitRegister>,
+        in_carry: &Option<BitRegister>,
         result: &U32Register,
         operations: &mut ByteLookupOperations,
     ) -> BitRegister
@@ -94,6 +96,65 @@ impl<L: AirParameters> AirBuilder<L> {
 
         result_carry
     }
+
+    pub fn add_u64(
+        &mut self,
+        a: &U64Register,
+        b: &U64Register,
+        operations: &mut ByteLookupOperations,
+    ) -> U64Register
+    where
+        L::Instruction: From<ByteArrayAdd<4>> + From<ByteOperationInstruction>,
+    {
+        let result = self.alloc::<U64Register>();
+
+        let a_as_register = as_limbs::<8, 4>(*a);
+        let b_as_register = as_limbs::<8, 4>(*b);
+
+        let (lower_result, lower_carry) = self.carrying_add_u32(
+            &a_as_register.get(0),
+            &b_as_register.get(0),
+            &None,
+            operations,
+        );
+
+        let (upper_result, _) = self.carrying_add_u32(
+            &a_as_register.get(1),
+            &b_as_register.get(1),
+            &Some(lower_carry),
+            operations,
+        );
+
+        // Init new ArrayRegister with lower_result and upper_result
+        let result_as_register = ArrayRegister::from_register_unsafe(result.0);
+
+        from_limbs()
+
+        result
+    }
+
+    // pub fn set_add_u64(
+    //     &mut self,
+    //     a: &U64Register,
+    //     b: &U64Register,
+    //     in_carry: &Option<BitRegister>,
+    //     result: &U64Register,
+    //     operations: &mut ByteLookupOperations,
+    // ) -> BitRegister
+    // where
+    //     L::Instruction: From<ByteArrayAdd<8>> + From<ByteOperationInstruction>,
+    // {
+    //     let result_carry = self.alloc::<BitRegister>();
+    //     let add = ByteArrayAdd::<8>::new(*a, *b, *in_carry, *result, result_carry);
+    //     self.register_instruction(add);
+
+    //     for byte in result.to_le_bytes() {
+    //         let result_range = ByteOperation::Range(byte);
+    //         self.set_byte_operation(&result_range, operations);
+    //     }
+
+    //     result_carry
+    // }
 }
 
 impl<AP: AirParser, const N: usize> AirConstraint<AP> for ByteArrayAdd<N> {
@@ -124,7 +185,7 @@ impl<AP: AirParser, const N: usize> AirConstraint<AP> for ByteArrayAdd<N> {
         let a_plus_b_plus_carry = match in_carry {
             Some(carry) => parser.add(a_plus_b, carry),
             None => a_plus_b,
-        };   
+        };
         let two_power = AP::Field::from_canonical_u64(1 << (8 * N));
         let carry_times_mod = parser.mul_const(result_carry, two_power);
         let result_plus_carry = parser.add(result_val, carry_times_mod);
@@ -153,12 +214,18 @@ impl<F: PrimeField64> Instruction<F> for ByteArrayAdd<4> {
 
         let a_val = u32::from_le_bytes(a.map(|x| x.as_canonical_u64() as u8));
         let b_val = u32::from_le_bytes(b.map(|x| x.as_canonical_u64() as u8));
-        let in_carry_val = in_carry.map(|x| x.as_canonical_u64() as u8 ==1 ).unwrap_or(false);
+        let in_carry_val = in_carry
+            .map(|x| x.as_canonical_u64() as u8 == 1)
+            .unwrap_or(false);
 
         let (result, result_carry) = a_val.carrying_add(b_val, in_carry_val);
         let result_bytes = result.to_le_bytes().map(|x| F::from_canonical_u8(x));
 
         writer.write(&self.result, &result_bytes, row_index);
-        writer.write(&self.result_carry, &F::from_canonical_u8(result_carry as u8), row_index);
+        writer.write(
+            &self.result_carry,
+            &F::from_canonical_u8(result_carry as u8),
+            row_index,
+        );
     }
 }

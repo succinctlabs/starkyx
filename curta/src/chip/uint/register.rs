@@ -10,6 +10,7 @@ pub struct ByteArrayRegister<const N: usize>(MemorySlice);
 pub type U8Register = ByteArrayRegister<1>;
 pub type U16Register = ByteArrayRegister<2>;
 pub type U32Register = ByteArrayRegister<4>;
+pub type U64Register = ByteArrayRegister<8>;
 
 impl<const N: usize> ByteArrayRegister<N> {
     pub fn to_le_bytes(&self) -> ArrayRegister<ByteRegister> {

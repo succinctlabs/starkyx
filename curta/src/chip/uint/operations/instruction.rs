@@ -140,7 +140,7 @@ mod tests {
         let not_expected = builder.alloc::<ByteArrayRegister<N>>();
         builder.assert_equal(&a_not, &not_expected);
 
-        let (a_plus_b, carry) = builder.carrying_add_u32(&a, &b, &mut operations);
+        let (a_plus_b, carry) = builder.carrying_add_u32(&a, &b, &None, &mut operations);
         let add_expected = builder.alloc::<ByteArrayRegister<N>>();
         builder.assert_equal(&a_plus_b, &add_expected);
         let carry_expected = builder.alloc::<BitRegister>();
