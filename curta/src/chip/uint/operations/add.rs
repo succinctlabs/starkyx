@@ -101,7 +101,6 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         a: &U64Register,
         b: &U64Register,
-        // Note: when shuold in_carry be non-zero?
         in_carry: &Option<BitRegister>,
         result: &U64Register,
         out_carry: &BitRegister,

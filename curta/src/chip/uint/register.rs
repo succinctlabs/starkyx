@@ -49,6 +49,8 @@ impl<const N: usize> Register for ByteArrayRegister<N> {
     }
 }
 
+/// N is the number of bytes in the input register.
+/// M is the number of bytes that the input register is split into.
 pub fn to_le_limbs<const N: usize, const M: usize>(
     register: &ByteArrayRegister<N>,
 ) -> ArrayRegister<ByteArrayRegister<M>> {
@@ -96,15 +98,14 @@ mod tests {
 
     #[test]
     fn test_byte_array_register() {
-        // Defin an arbitrary memory slice
         type F = GoldilocksField;
         type L = RegisterConversionTest;
         type SC = PoseidonGoldilocksStarkConfig;
 
         let mut builder = AirBuilder::<L>::new();
 
-        const N: usize = 64;
-        const M: usize = 32;
+        const N: usize = 8;
+        const M: usize = 4;
 
         let a = builder.alloc::<ByteArrayRegister<N>>();
 
