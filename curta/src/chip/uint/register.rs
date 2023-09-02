@@ -76,7 +76,6 @@ mod tests {
     use crate::chip::uint::operations::instruction::U32Instruction;
     use crate::chip::AirParameters;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
-    use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
 
     #[derive(Debug, Clone, Copy)]
     pub struct RegisterConversionTest;
@@ -98,9 +97,7 @@ mod tests {
 
     #[test]
     fn test_byte_array_register() {
-        type F = GoldilocksField;
         type L = RegisterConversionTest;
-        type SC = PoseidonGoldilocksStarkConfig;
 
         let mut builder = AirBuilder::<L>::new();
 

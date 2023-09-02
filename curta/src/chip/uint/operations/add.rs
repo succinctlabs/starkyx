@@ -2,7 +2,6 @@ use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
-use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
@@ -10,9 +9,7 @@ use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
 use crate::chip::uint::bytes::operations::instruction::ByteOperationInstruction;
 use crate::chip::uint::bytes::operations::value::ByteOperation;
-use crate::chip::uint::register::{
-    from_limbs, to_le_limbs, ByteArrayRegister, U32Register, U64Register,
-};
+use crate::chip::uint::register::{to_le_limbs, ByteArrayRegister, U32Register, U64Register};
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
