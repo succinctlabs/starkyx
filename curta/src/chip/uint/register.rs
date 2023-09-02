@@ -49,8 +49,8 @@ impl<const N: usize> Register for ByteArrayRegister<N> {
     }
 }
 
-pub fn as_limbs<const N: usize, const M: usize>(
-    register: ByteArrayRegister<N>,
+pub fn to_le_limbs<const N: usize, const M: usize>(
+    register: &ByteArrayRegister<N>,
 ) -> ArrayRegister<ByteArrayRegister<M>> {
     assert!(N % M == 0);
     let array = ArrayRegister::from_register_unsafe(register.0);
@@ -58,7 +58,7 @@ pub fn as_limbs<const N: usize, const M: usize>(
 }
 
 pub fn from_limbs<const N: usize, const M: usize>(
-    register: ArrayRegister<ByteArrayRegister<M>>,
+    register: &ArrayRegister<ByteArrayRegister<M>>,
 ) -> ByteArrayRegister<N> {
     assert!(N % M == 0);
 
@@ -108,9 +108,9 @@ mod tests {
 
         let a = builder.alloc::<ByteArrayRegister<N>>();
 
-        let a_as_limbs = as_limbs::<N, M>(a);
+        let a_as_limbs = to_le_limbs::<N, M>(&a);
 
-        let b = from_limbs::<N, M>(a_as_limbs);
+        let b = from_limbs::<N, M>(&a_as_limbs);
 
         builder.assert_equal(&a, &b);
     }

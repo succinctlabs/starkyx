@@ -10,7 +10,9 @@ use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
 use crate::chip::uint::bytes::operations::instruction::ByteOperationInstruction;
 use crate::chip::uint::bytes::operations::value::ByteOperation;
-use crate::chip::uint::register::{as_limbs, ByteArrayRegister, U32Register, U64Register, from_limbs};
+use crate::chip::uint::register::{
+    from_limbs, to_le_limbs, ByteArrayRegister, U32Register, U64Register,
+};
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
@@ -56,9 +58,10 @@ impl<L: AirParameters> AirBuilder<L> {
         L::Instruction: From<ByteArrayAdd<4>> + From<ByteOperationInstruction>,
     {
         let result = self.alloc::<U32Register>();
-        let carry = self.set_add_u32(a, b, in_carry, &result, operations);
+        let out_carry = self.alloc::<BitRegister>();
+        self.set_add_u32(a, b, in_carry, &result, &out_carry, operations);
 
-        (result, carry)
+        (result, out_carry)
     }
 
     pub fn add_u32(
@@ -80,21 +83,73 @@ impl<L: AirParameters> AirBuilder<L> {
         b: &U32Register,
         in_carry: &Option<BitRegister>,
         result: &U32Register,
+        out_carry: &BitRegister,
         operations: &mut ByteLookupOperations,
-    ) -> BitRegister
-    where
+    ) where
         L::Instruction: From<ByteArrayAdd<4>> + From<ByteOperationInstruction>,
     {
-        let result_carry = self.alloc::<BitRegister>();
-        let add = ByteArrayAdd::<4>::new(*a, *b, *in_carry, *result, result_carry);
+        let add = ByteArrayAdd::<4>::new(*a, *b, *in_carry, *result, *out_carry);
         self.register_instruction(add);
 
         for byte in result.to_le_bytes() {
             let result_range = ByteOperation::Range(byte);
             self.set_byte_operation(&result_range, operations);
         }
+    }
 
-        result_carry
+    pub fn set_add_u64(
+        &mut self,
+        a: &U64Register,
+        b: &U64Register,
+        // Note: when shuold in_carry be non-zero?
+        in_carry: &Option<BitRegister>,
+        result: &U64Register,
+        out_carry: &BitRegister,
+        operations: &mut ByteLookupOperations,
+    ) where
+        L::Instruction: From<ByteArrayAdd<4>> + From<ByteOperationInstruction>,
+    {
+        let result_as_register = to_le_limbs::<8, 4>(result);
+
+        let a_as_register = to_le_limbs::<8, 4>(a);
+        let b_as_register = to_le_limbs::<8, 4>(b);
+
+        let lower_carry = self.alloc::<BitRegister>();
+
+        self.set_add_u32(
+            &a_as_register.get(0),
+            &b_as_register.get(0),
+            &in_carry,
+            &result_as_register.get(0),
+            &lower_carry,
+            operations,
+        );
+
+        self.set_add_u32(
+            &a_as_register.get(1),
+            &b_as_register.get(1),
+            &Some(lower_carry),
+            &result_as_register.get(1),
+            &out_carry,
+            operations,
+        );
+    }
+
+    pub fn carrying_add_u64(
+        &mut self,
+        a: &U64Register,
+        b: &U64Register,
+        in_carry: &Option<BitRegister>,
+        operations: &mut ByteLookupOperations,
+    ) -> (U64Register, BitRegister)
+    where
+        L::Instruction: From<ByteArrayAdd<4>> + From<ByteOperationInstruction>,
+    {
+        let result = self.alloc::<U64Register>();
+        let out_carry = self.alloc::<BitRegister>();
+        self.set_add_u64(a, b, in_carry, &result, &out_carry, operations);
+
+        (result, out_carry)
     }
 
     pub fn add_u64(
@@ -106,55 +161,9 @@ impl<L: AirParameters> AirBuilder<L> {
     where
         L::Instruction: From<ByteArrayAdd<4>> + From<ByteOperationInstruction>,
     {
-        let result = self.alloc::<U64Register>();
-
-        let a_as_register = as_limbs::<8, 4>(*a);
-        let b_as_register = as_limbs::<8, 4>(*b);
-
-        let (lower_result, lower_carry) = self.carrying_add_u32(
-            &a_as_register.get(0),
-            &b_as_register.get(0),
-            &None,
-            operations,
-        );
-
-        let (upper_result, _) = self.carrying_add_u32(
-            &a_as_register.get(1),
-            &b_as_register.get(1),
-            &Some(lower_carry),
-            operations,
-        );
-
-        // Init new ArrayRegister with lower_result and upper_result
-        let result_as_register = ArrayRegister::from_register_unsafe(result.0);
-
-        from_limbs()
-
+        let (result, _) = self.carrying_add_u64(a, b, &None, operations);
         result
     }
-
-    // pub fn set_add_u64(
-    //     &mut self,
-    //     a: &U64Register,
-    //     b: &U64Register,
-    //     in_carry: &Option<BitRegister>,
-    //     result: &U64Register,
-    //     operations: &mut ByteLookupOperations,
-    // ) -> BitRegister
-    // where
-    //     L::Instruction: From<ByteArrayAdd<8>> + From<ByteOperationInstruction>,
-    // {
-    //     let result_carry = self.alloc::<BitRegister>();
-    //     let add = ByteArrayAdd::<8>::new(*a, *b, *in_carry, *result, result_carry);
-    //     self.register_instruction(add);
-
-    //     for byte in result.to_le_bytes() {
-    //         let result_range = ByteOperation::Range(byte);
-    //         self.set_byte_operation(&result_range, operations);
-    //     }
-
-    //     result_carry
-    // }
 }
 
 impl<AP: AirParser, const N: usize> AirConstraint<AP> for ByteArrayAdd<N> {
