@@ -115,7 +115,7 @@ impl<L: AirParameters> AirBuilder<L> {
         self.set_add_u32(
             &a_as_register.get(0),
             &b_as_register.get(0),
-            &in_carry,
+            in_carry,
             &result_as_register.get(0),
             &lower_carry,
             operations,
@@ -126,7 +126,7 @@ impl<L: AirParameters> AirBuilder<L> {
             &b_as_register.get(1),
             &Some(lower_carry),
             &result_as_register.get(1),
-            &out_carry,
+            out_carry,
             operations,
         );
     }

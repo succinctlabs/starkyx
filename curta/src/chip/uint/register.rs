@@ -55,8 +55,7 @@ pub fn to_le_limbs<const N: usize, const M: usize>(
     register: &ByteArrayRegister<N>,
 ) -> ArrayRegister<ByteArrayRegister<M>> {
     assert!(N % M == 0);
-    let array = ArrayRegister::from_register_unsafe(register.0);
-    array
+    return ArrayRegister::from_register_unsafe(register.0);
 }
 
 pub fn from_limbs<const N: usize, const M: usize>(
