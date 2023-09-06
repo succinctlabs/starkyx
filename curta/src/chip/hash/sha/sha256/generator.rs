@@ -66,6 +66,12 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for SHA256AirParamete
     }
 }
 
+impl<F: RichField, E: CubicParameters<F>> SHA256Generator<F, E> {
+    pub fn id() -> String {
+        "SHA256Generator".to_string()
+    }
+}
+
 impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SimpleGenerator<F, D>
     for SHA256Generator<F, E>
 {
