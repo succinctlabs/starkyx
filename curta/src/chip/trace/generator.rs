@@ -1,6 +1,7 @@
 use alloc::sync::Arc;
 
 use anyhow::{Error, Result};
+use serde::{Deserialize, Serialize};
 
 use super::writer::TraceWriter;
 use crate::chip::builder::AirTraceData;
@@ -11,9 +12,9 @@ use crate::maybe_rayon::*;
 use crate::trace::generator::TraceGenerator;
 use crate::trace::AirTrace;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArithmeticGenerator<L: AirParameters> {
-    writer: TraceWriter<L::Field>,
+    pub writer: TraceWriter<L::Field>,
     pub air_data: AirTraceData<L>,
 }
 
@@ -75,18 +76,19 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                 }
 
                 // Write multiplicities for lookup table with search functions
-                for data in self.air_data.lookup_data.iter() {
-                    if let Lookup::Element(log_data) = data {
-                        if let Some(table_index) = log_data.table_index {
-                            self.writer.write_multiplicities_from_fn(
-                                num_rows,
-                                &log_data.table_data,
-                                table_index,
-                                &log_data.values_data.values,
-                            );
-                        }
-                    }
-                }
+                // TODO: FIX serialization
+                // for data in self.air_data.lookup_data.iter() {
+                //     if let Lookup::Element(log_data) = data {
+                //         if let Some(table_index) = log_data.table_index {
+                //             self.writer.write_multiplicities_from_fn(
+                //                 num_rows,
+                //                 &log_data.table_data,
+                //                 table_index,
+                //                 &log_data.values_data.values,
+                //             );
+                //         }
+                //     }
+                // }
 
                 let trace = self.trace_clone();
                 let execution_trace_values = trace

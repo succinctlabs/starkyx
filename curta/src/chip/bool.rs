@@ -1,5 +1,7 @@
 use core::fmt::Debug;
 
+use serde::{Deserialize, Serialize};
+
 use super::builder::AirBuilder;
 use super::instruction::Instruction;
 use super::register::bit::BitRegister;
@@ -11,7 +13,7 @@ use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::math::prelude::*;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SelectInstruction<T> {
     bit: BitRegister,
     true_value: T,

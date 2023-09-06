@@ -4,6 +4,8 @@ pub mod trace;
 
 use core::marker::PhantomData;
 
+use serde::{Deserialize, Serialize};
+
 use self::entry::Entry;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
@@ -11,7 +13,7 @@ use crate::chip::register::cubic::CubicRegister;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BusChannel<F, E> {
     pub out_channel: CubicRegister,
     table_accumulator: CubicRegister,

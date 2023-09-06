@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use super::add::FpAddInstruction;
 use super::den::FpDenInstruction;
 use super::inner_product::FpInnerProductInstruction;
@@ -13,7 +15,8 @@ use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 use crate::polynomial::parser::PolynomialParser;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum FpInstruction<P: FieldParameters> {
     Add(FpAddInstruction<P>),
     Mul(FpMulInstruction<P>),

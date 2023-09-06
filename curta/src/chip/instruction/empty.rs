@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use super::Instruction;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
@@ -6,7 +8,7 @@ use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 
 /// A defult instruction set that contains no custom instructions
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EmptyInstruction<F> {
     _marker: core::marker::PhantomData<F>,
 }

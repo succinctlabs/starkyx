@@ -3,6 +3,8 @@ pub mod generator;
 
 use core::borrow::Borrow;
 
+use serde::{Deserialize, Serialize};
+
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::cycle::Cycle;
@@ -25,7 +27,7 @@ use crate::math::prelude::*;
 
 pub type U32Value<T> = <U32Register as Register>::Value<T>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SHA256Gadget {
     /// The input chunks processed into 16-words of U32 values
     pub public_word: ArrayRegister<U32Register>,
@@ -42,7 +44,7 @@ pub struct SHA256Gadget {
     pub round_constants_public: ArrayRegister<U32Register>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SHA256PublicData<T> {
     pub public_w: Vec<U32Value<T>>,
     pub hash_state: Vec<U32Value<T>>,

@@ -1,12 +1,14 @@
 use core::hash::Hash;
 
+use serde::{Deserialize, Serialize};
+
 use crate::air::parser::AirParser;
 use crate::trace::view::{TraceView, TraceViewMut};
 
 /// A contiguous chunk of memory in the trace and Stark data.
 /// Corresponds to a slice in vars.local_values, vars.next_values, vars.public_inputs,
 /// or vars.challenges.
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Serialize, Deserialize)]
 pub enum MemorySlice {
     /// A slice of the current row.
     Local(usize, usize),

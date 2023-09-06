@@ -6,6 +6,7 @@ pub mod shared_memory;
 use core::cmp::Ordering;
 
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 
 use self::shared_memory::SharedMemory;
 use super::arithmetic::expression::ArithmeticExpression;
@@ -39,7 +40,7 @@ pub struct AirBuilder<L: AirParameters> {
     range_table: Option<ElementRegister>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AirTraceData<L: AirParameters> {
     pub num_challenges: usize,
     pub num_public_inputs: usize,

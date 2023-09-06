@@ -9,6 +9,7 @@ use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::util::serialization::{Buffer, Read, Write};
+use serde::{Deserialize, Serialize};
 
 use super::{SHA256Gadget, SHA256PublicData, INITIAL_HASH, ROUND_CONSTANTS};
 use crate::chip::register::Register;
@@ -20,7 +21,7 @@ use crate::chip::uint::util::u32_to_le_field_bytes;
 use crate::chip::AirParameters;
 use crate::math::prelude::{CubicParameters, *};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SHA256AirParameters<F, E>(pub PhantomData<(F, E)>);
 
 pub type U32Target = <U32Register as Register>::Value<Target>;
@@ -39,12 +40,13 @@ pub struct SHA256HintGenerator {
     digest_bytes: [Target; 32],
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SHA256Generator<F: PrimeField64, E: CubicParameters<F>> {
     pub gadget: SHA256Gadget,
     pub table: ByteLookupTable,
     pub padded_messages: Vec<Target>,
     pub chunk_sizes: Vec<usize>,
+    #[serde(bound = "")]
     pub trace_generator: ArithmeticGenerator<SHA256AirParameters<F, E>>,
     pub pub_values_target: SHA256PublicData<Target>,
 }
@@ -68,25 +70,26 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
     for SHA256Generator<F, E>
 {
     fn id(&self) -> String {
-        "SHA256 generator".to_string()
+        "SHA256Generator".to_string()
     }
 
     fn serialize(
         &self,
-        _dst: &mut Vec<u8>,
-        _common_data: &CommonCircuitData<F, D>,
+        dst: &mut Vec<u8>,
+        _: &CommonCircuitData<F, D>,
     ) -> plonky2::util::serialization::IoResult<()> {
-        unimplemented!("SHA256Generator::serialize")
+        dst.write_all(&bincode::serialize(self).unwrap())?;
+        Ok(())
     }
 
     fn deserialize(
-        _src: &mut Buffer,
-        _common_data: &CommonCircuitData<F, D>,
+        src: &mut Buffer,
+        _: &CommonCircuitData<F, D>,
     ) -> plonky2::util::serialization::IoResult<Self>
     where
         Self: Sized,
     {
-        unimplemented!("SHA256Generator::deserialize")
+        Ok(bincode::deserialize(src.bytes()).unwrap())
     }
 
     fn dependencies(&self) -> Vec<Target> {

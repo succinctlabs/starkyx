@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::builder::AirBuilder;
@@ -16,7 +18,7 @@ use crate::math::prelude::*;
 ///
 ///
 /// Assumes 2^N < FIELD_SIZE
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ByteArrayAdd<const N: usize> {
     pub a: ByteArrayRegister<N>,
     pub b: ByteArrayRegister<N>,

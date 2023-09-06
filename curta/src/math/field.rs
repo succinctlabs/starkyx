@@ -5,6 +5,7 @@ use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAss
 
 use num::BigUint;
 use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
 
 /// A trait for an Abstract ring containing addition, multiplication, and a zero element
 pub trait Ring:
@@ -49,7 +50,17 @@ impl<R: Ring + Copy> Iterator for Powers<R> {
 
 /// The basic trait for a finite field
 pub trait Field:
-    Ring + Div<Output = Self> + DivAssign + 'static + Copy + Eq + Hash + Send + Sync
+    Ring
+    + Div<Output = Self>
+    + DivAssign
+    + 'static
+    + Copy
+    + Eq
+    + Hash
+    + Send
+    + Sync
+    + Serialize
+    + for<'de> Deserialize<'de>
 {
     /// Inverts `self`, returning `None` if `self` is zero.
     fn try_inverse(&self) -> Option<Self>;
@@ -122,7 +133,7 @@ pub trait Field:
 pub trait PrimeField: Field {}
 
 /// A prime field of order less than `2^64`.
-pub trait PrimeField64: PrimeField {
+pub trait PrimeField64: PrimeField + Serialize + for<'de> Deserialize<'de> {
     // const ORDER_U64: u64;
 
     fn as_canonical_u64(&self) -> u64;

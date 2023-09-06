@@ -31,6 +31,7 @@ impl<L: AirParameters> AirBuilder<L> {
         .into_iter()
         .collect::<Vec<_>>();
 
-        self.lookup_log_derivative(&table, &values, Self::range_fn)
+        // TODO: fix
+        // self.lookup_log_derivative(&table, &values, Self::range_fn)
     }
 }

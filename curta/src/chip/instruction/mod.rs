@@ -1,6 +1,8 @@
 use core::fmt::Debug;
 use core::hash::Hash;
 
+use serde::{Deserialize, Serialize};
+
 use super::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
@@ -19,7 +21,9 @@ pub enum InstructionId {
     Write(MemorySlice),
 }
 
-pub trait Instruction<F: Field>: 'static + Send + Sync + Clone + Debug {
+pub trait Instruction<F: Field>:
+    'static + Send + Sync + Clone + Debug + Serialize + for<'de> Deserialize<'de>
+{
     // Returns a vector of memory slices or contiguous memory regions of the row in the trace that
     // instruction relies on. These registers must be filled in by the `TraceWriter`.
     fn trace_layout(&self) -> Vec<MemorySlice>;
@@ -41,7 +45,10 @@ pub trait Instruction<F: Field>: 'static + Send + Sync + Clone + Debug {
 }
 
 /// An instruction that only consists of constraints
-pub trait ConstraintInstruction: 'static + Clone + Debug + Send + Sync {}
+pub trait ConstraintInstruction:
+    'static + Clone + Debug + Send + Sync + Serialize + for<'de> Deserialize<'de>
+{
+}
 
 impl<F: Field, C: ConstraintInstruction> Instruction<F> for C {
     fn trace_layout(&self) -> Vec<MemorySlice> {

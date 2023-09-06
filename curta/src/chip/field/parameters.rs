@@ -1,11 +1,14 @@
 use core::fmt::Debug;
 
 use num::{BigUint, Zero};
+use serde::{Deserialize, Serialize};
 
 pub const MAX_NB_LIMBS: usize = 32;
 pub const LIMB: u32 = 2u32.pow(16);
 
-pub trait FieldParameters: Send + Sync + Copy + 'static + Debug {
+pub trait FieldParameters:
+    Send + Sync + Copy + 'static + Debug + Serialize + for<'de> Deserialize<'de>
+{
     const NB_BITS_PER_LIMB: usize;
     const NB_LIMBS: usize;
     const NB_WITNESS_LIMBS: usize;
@@ -24,10 +27,11 @@ pub trait FieldParameters: Send + Sync + Copy + 'static + Debug {
 #[cfg(test)]
 pub mod tests {
     use num::One;
+    use serde::Deserialize;
 
     use super::*;
 
-    #[derive(Debug, Clone, Copy, PartialEq)]
+    #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
     pub struct Fp25519;
 
     impl FieldParameters for Fp25519 {

@@ -4,6 +4,8 @@
 
 use core::marker::PhantomData;
 
+use serde::{Deserialize, Serialize};
+
 use crate::chip::builder::AirBuilder;
 use crate::chip::constraint::Constraint;
 use crate::chip::register::array::ArrayRegister;
@@ -19,7 +21,8 @@ use crate::math::prelude::*;
 pub mod constraint;
 pub mod trace;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct LookupTable<T: Register, F: Field, E: CubicParameters<F>> {
     pub(crate) challenge: CubicRegister,
     pub(crate) table: Vec<T>,
@@ -31,7 +34,8 @@ pub struct LookupTable<T: Register, F: Field, E: CubicParameters<F>> {
 }
 
 /// Currently, only supports an even number of values
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct LogLookupValues<T: EvalCubic, F: Field, E: CubicParameters<F>> {
     pub(crate) challenge: CubicRegister,
     pub(crate) values: Vec<T>,
@@ -46,11 +50,11 @@ pub struct LogLookupValues<T: EvalCubic, F: Field, E: CubicParameters<F>> {
 }
 
 /// Currently, only supports an even number of values
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct LogLookup<T: EvalCubic, F: Field, E: CubicParameters<F>> {
     pub(crate) table_data: LookupTable<T, F, E>,
     pub(crate) values_data: LogLookupValues<T, F, E>,
-    pub(crate) table_index: Option<fn(T::Value<F>) -> usize>,
     _marker: core::marker::PhantomData<(F, E)>,
 }
 
@@ -162,7 +166,6 @@ impl<L: AirParameters> AirBuilder<L> {
         let lookup_data = Lookup::Element(LogLookup {
             table_data: table_data.clone(),
             values_data: values_data.clone(),
-            table_index: None,
             _marker: core::marker::PhantomData,
         });
 
@@ -212,7 +215,6 @@ impl<L: AirParameters> AirBuilder<L> {
         let lookup_data = Lookup::CubicElement(LogLookup {
             table_data: table_data.clone(),
             values_data: values_data.clone(),
-            table_index: None,
             _marker: core::marker::PhantomData,
         });
 
@@ -247,12 +249,7 @@ impl<L: AirParameters> AirBuilder<L> {
         self.lookup_data.push(lookup_data);
     }
 
-    pub fn lookup_log_derivative(
-        &mut self,
-        table: &ElementRegister,
-        values: &[ElementRegister],
-        table_index: fn(L::Field) -> usize,
-    ) {
+    pub fn lookup_log_derivative(&mut self, table: &ElementRegister, values: &[ElementRegister]) {
         // Allocate memory for the lookup
         let challenge = self.alloc_challenge::<CubicRegister>();
 
@@ -262,7 +259,6 @@ impl<L: AirParameters> AirBuilder<L> {
         let lookup_data = Lookup::Element(LogLookup {
             table_data: table_data.clone(),
             values_data: values_data.clone(),
-            table_index: Some(table_index),
             _marker: core::marker::PhantomData,
         });
 

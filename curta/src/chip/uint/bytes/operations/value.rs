@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use super::{
     NUM_CHALLENGES, OPCODE_AND, OPCODE_NOT, OPCODE_RANGE, OPCODE_ROT, OPCODE_SHR, OPCODE_XOR,
 };
@@ -11,7 +13,7 @@ use crate::chip::uint::bytes::register::ByteRegister;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum ByteOperation<T> {
     And(T, T, T),
     Xor(T, T, T),

@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::instruction::Instruction;
@@ -8,7 +10,7 @@ use crate::chip::register::RegisterSerializable;
 use crate::chip::trace::writer::TraceWriter;
 pub use crate::math::prelude::*;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Xor<const NUM_BITS: usize> {
     pub a: ArrayRegister<BitRegister>,
     pub b: ArrayRegister<BitRegister>,

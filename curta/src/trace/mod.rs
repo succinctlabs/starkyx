@@ -8,12 +8,14 @@ use core::slice::{ChunksExact, ChunksExactMut};
 use plonky2_maybe_rayon::rayon::slice::{
     ChunksExact as ParChunksExact, ChunksExactMut as ParChunksExactMut,
 };
+use serde::{Deserialize, Serialize};
 
 use self::view::{TraceView, TraceViewMut};
 use self::window::TraceWindow;
 use crate::maybe_rayon::*;
+
 /// A stark trace which is stored as a matrix in row major order
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AirTrace<T> {
     pub(crate) values: Vec<T>,
     pub(crate) width: usize,

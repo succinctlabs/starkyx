@@ -8,6 +8,8 @@ pub mod trace;
 
 use core::marker::PhantomData;
 
+use serde::{Deserialize, Serialize};
+
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
@@ -15,7 +17,7 @@ use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::Register;
 use crate::chip::AirParameters;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Accumulator<F, E> {
     pub(crate) challenges: ArrayRegister<CubicRegister>,
     values: Vec<ArithmeticExpression<F>>,

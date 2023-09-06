@@ -3,6 +3,8 @@ use core::borrow::Borrow;
 use core::ops::Deref;
 use std::sync::{LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
+use serde::{Deserialize, Serialize};
+
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirTraceData;
 use crate::chip::instruction::Instruction;
@@ -15,7 +17,7 @@ use crate::trace::window::TraceWindow;
 use crate::trace::window_parser::TraceWindowParser;
 use crate::trace::AirTrace;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WriterData<T> {
     trace: RwLock<AirTrace<T>>,
     pub(crate) global: RwLock<Vec<T>>,
@@ -24,7 +26,7 @@ pub struct WriterData<T> {
     height: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TraceWriter<T>(pub Arc<WriterData<T>>);
 
 impl<T> TraceWriter<T> {

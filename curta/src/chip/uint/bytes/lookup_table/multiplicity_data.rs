@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 use itertools::Itertools;
 use plonky2_maybe_rayon::ParallelIterator;
+use serde::{Deserialize, Serialize};
 
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::element::ElementRegister;
@@ -15,10 +16,10 @@ use crate::chip::uint::bytes::operations::{
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MultiplicityValues(Vec<[AtomicUsize; NUM_BIT_OPPS + 1]>);
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MultiplicityData {
     multiplicities: ArrayRegister<ElementRegister>,
     multiplicities_values: MultiplicityValues,

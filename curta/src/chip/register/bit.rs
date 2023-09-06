@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use super::cell::CellType;
 use super::memory::MemorySlice;
 use super::{Register, RegisterSerializable, RegisterSized};
@@ -6,7 +8,7 @@ use crate::math::prelude::*;
 
 /// A register for a single element/column in the trace that is supposed to represent a bit. The
 /// value is automatically constrained to be 0 or 1 via the quadratic constraint x * (x - 1) == 0.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct BitRegister(MemorySlice);
 
 impl BitRegister {
