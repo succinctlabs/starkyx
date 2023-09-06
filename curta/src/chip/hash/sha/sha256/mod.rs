@@ -386,7 +386,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let hash_next = self.alloc_array::<U32Register>(8);
         for ((h, m_next), h_next) in hash.iter().zip(msg_next.iter()).zip(hash_next.iter()) {
             let carry = self.alloc::<BitRegister>();
-            let add = ByteArrayAdd::<4>::new(h, *m_next, h_next, carry);
+            let add = ByteArrayAdd::<4>::new(h, *m_next, None, h_next, carry);
             self.register_instruction(add);
 
             for byte in h_next.to_le_bytes() {

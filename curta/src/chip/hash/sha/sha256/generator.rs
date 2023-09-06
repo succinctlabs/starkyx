@@ -8,7 +8,7 @@ use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CommonCircuitData;
-use plonky2::util::serialization::Buffer;
+use plonky2::util::serialization::{Buffer, Read, Write};
 
 use super::{SHA256Gadget, SHA256PublicData, INITIAL_HASH, ROUND_CONSTANTS};
 use crate::chip::register::Register;
@@ -207,9 +207,15 @@ impl SHA256HintGenerator {
     }
 }
 
+impl SHA256HintGenerator {
+    pub fn id() -> String {
+        "SHA256HintGenerator".to_string()
+    }
+}
+
 impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for SHA256HintGenerator {
     fn id(&self) -> String {
-        "SHA256 hint generator".to_string()
+        Self::id()
     }
 
     fn dependencies(&self) -> Vec<Target> {
@@ -218,20 +224,27 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for SHA
 
     fn serialize(
         &self,
-        _dst: &mut Vec<u8>,
-        _common_data: &CommonCircuitData<F, D>,
+        dst: &mut Vec<u8>,
+        _: &CommonCircuitData<F, D>,
     ) -> plonky2::util::serialization::IoResult<()> {
-        unimplemented!("SHA256HintGenerator::serialize")
+        dst.write_target_vec(&self.padded_message)?;
+        dst.write_target_vec(&self.digest_bytes)?;
+        Ok(())
     }
 
     fn deserialize(
-        _src: &mut Buffer,
-        _common_data: &CommonCircuitData<F, D>,
+        src: &mut Buffer,
+        _: &CommonCircuitData<F, D>,
     ) -> plonky2::util::serialization::IoResult<Self>
     where
         Self: Sized,
     {
-        unimplemented!("SHA256HintGenerator::deserialize")
+        let padded_message = src.read_target_vec()?;
+        let digest_bytes = src.read_target_vec()?;
+        Ok(Self {
+            padded_message,
+            digest_bytes: digest_bytes.try_into().unwrap(),
+        })
     }
 
     fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
