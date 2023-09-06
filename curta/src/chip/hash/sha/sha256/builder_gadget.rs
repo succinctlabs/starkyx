@@ -24,7 +24,7 @@ pub struct CurtaBytes<const N: usize>(pub [Target; N]);
 pub struct SHA256BuilderGadget<F, E, const D: usize> {
     pub padded_messages: Vec<Target>,
     pub digests: Vec<Target>,
-    chunk_sizes: Vec<usize>,
+    pub chunk_sizes: Vec<usize>,
     _marker: PhantomData<(F, E)>,
 }
 
