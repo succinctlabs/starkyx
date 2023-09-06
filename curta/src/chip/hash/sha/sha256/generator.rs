@@ -41,12 +41,12 @@ pub struct SHA256HintGenerator {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct SHA256Generator<F: PrimeField64, E: CubicParameters<F>> {
     pub gadget: SHA256Gadget,
     pub table: ByteLookupTable,
     pub padded_messages: Vec<Target>,
     pub chunk_sizes: Vec<usize>,
-    #[serde(bound = "")]
     pub trace_generator: ArithmeticGenerator<SHA256AirParameters<F, E>>,
     pub pub_values_target: SHA256PublicData<Target>,
 }
