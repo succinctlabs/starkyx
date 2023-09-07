@@ -3,8 +3,7 @@ use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
-use crate::chip::register::Register;
-use crate::chip::uint::bytes::gadget::operation;
+use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
 use crate::chip::uint::operations::instruction::U32Instructions;
 use crate::chip::uint::register::{ByteArrayRegister, U64Register};
@@ -71,6 +70,7 @@ const SIGMA: [[usize; 16]; SIGMA_LEN] = [
     [10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0],
 ];
 
+#[allow(clippy::too_many_arguments)]
 impl<L: AirParameters> AirBuilder<L> {
     fn blake2b_compress(
         &mut self,
@@ -79,124 +79,119 @@ impl<L: AirParameters> AirBuilder<L> {
         h: &ArrayRegister<U64Register>,
         iv: &ArrayRegister<U64Register>,
         inversion_const: &U64Register,
-        input_chunk: ArrayRegister<U64Register>,
         t: U64Register, // assumes t is not more than u64
         last_block_bit: &BitRegister,
         operations: &mut ByteLookupOperations,
+        end_bit: &BitRegister,
     ) -> ArrayRegister<U64Register>
     where
         L::Instruction: U32Instructions,
         L::Instruction: From<SelectInstruction<ByteArrayRegister<8>>>,
     {
-        // Initialize local work vector V
-        let V0 = h.get(0);
-        let V1 = h.get(1);
-        let V2 = h.get(2);
-        let V3 = h.get(3);
-        let V4 = h.get(4);
-        let V5 = h.get(5);
-        let V6 = h.get(6);
-        let V7 = h.get(7);
-
-        let V8 = iv.get(8);
-        let V9 = iv.get(9);
-        let V10 = iv.get(10);
-        let V11 = iv.get(11);
-        let V12 = iv.get(12);
-        let V13 = iv.get(13);
-        let V14 = iv.get(14);
-        let V15 = iv.get(15);
-
         for i in 0..32 {
             self.set_to_expression_first_row(&h.get(i), iv.get(i).expr());
         }
 
-        V12 = self.bitwise_xor(&V12, &t, operations);
+        let mut V0 = h.get(0);
+        let mut V1 = h.get(1);
+        let mut V2 = h.get(2);
+        let mut V3 = h.get(3);
+        let mut V4 = h.get(4);
+        let mut V5 = h.get(5);
+        let mut V6 = h.get(6);
+        let mut V7 = h.get(7);
 
+        let mut V8 = iv.get(8);
+        let mut V9 = iv.get(9);
+        let mut V10 = iv.get(10);
+        let mut V11 = iv.get(11);
+        let mut V12 = iv.get(12);
+        let mut V13 = iv.get(13);
+        let mut V14 = iv.get(14);
+        let mut V15 = iv.get(15);
+
+        V12 = self.bitwise_xor(&V12, &t, operations);
         // We assume that t is no more than u64, so we don't modify V13
 
-        self.select::<ByteArrayRegister<8>>(
-            last_block_bit,
-            &self.bitwise_xor(&V14, inversion_const, operations),
-            &V14,
-        );
+        let tmp = self.bitwise_xor(&V14, inversion_const, operations);
+        self.select::<ByteArrayRegister<8>>(last_block_bit, &tmp, &V14);
 
         for i in 0..12 {
             self.blake2b_mix(
-                &V0,
-                &V4,
-                &V8,
-                &V12,
+                &mut V0,
+                &mut V4,
+                &mut V8,
+                &mut V12,
                 &m.get(SIGMA[i % 10][0]),
                 &m.get(SIGMA[i % 10][1]),
                 operations,
             );
 
             self.blake2b_mix(
-                &V1,
-                &V5,
-                &V9,
-                &V13,
+                &mut V1,
+                &mut V5,
+                &mut V9,
+                &mut V13,
                 &m.get(SIGMA[i % 10][2]),
                 &m.get(SIGMA[i % 10][3]),
                 operations,
             );
 
             self.blake2b_mix(
-                &V2,
-                &V6,
-                &V10,
-                &V14,
+                &mut V2,
+                &mut V6,
+                &mut V10,
+                &mut V14,
                 &m.get(SIGMA[i % 10][4]),
                 &m.get(SIGMA[i % 10][5]),
                 operations,
             );
 
             self.blake2b_mix(
-                &V3,
-                &V7,
-                &V11,
-                &V15,
+                &mut V3,
+                &mut V7,
+                &mut V11,
+                &mut V15,
                 &m.get(SIGMA[i % 10][6]),
                 &m.get(SIGMA[i % 10][7]),
                 operations,
             );
 
             self.blake2b_mix(
-                &V0,
-                &V5,
-                &V10,
-                &V15,
+                &mut V0,
+                &mut V5,
+                &mut V10,
+                &mut V15,
                 &m.get(SIGMA[i % 10][8]),
                 &m.get(SIGMA[i % 10][9]),
                 operations,
             );
 
             self.blake2b_mix(
-                &V1,
-                &V6,
-                &V11,
-                &V12,
+                &mut V1,
+                &mut V6,
+                &mut V11,
+                &mut V12,
                 &m.get(SIGMA[i % 10][10]),
                 &m.get(SIGMA[i % 10][11]),
                 operations,
             );
 
             self.blake2b_mix(
-                &V2,
-                &V7,
-                &V8,
-                &V13,
+                &mut V2,
+                &mut V7,
+                &mut V8,
+                &mut V13,
                 &m.get(SIGMA[i % 10][12]),
                 &m.get(SIGMA[i % 10][13]),
                 operations,
             );
 
             self.blake2b_mix(
-                &V3,
-                &V4,
-                &V9,
-                &V14,
+                &mut V3,
+                &mut V4,
+                &mut V9,
+                &mut V14,
                 &m.get(SIGMA[i % 10][14]),
                 &m.get(SIGMA[i % 10][15]),
                 operations,
@@ -204,59 +199,73 @@ impl<L: AirParameters> AirBuilder<L> {
         }
 
         let next_h = self.alloc_array::<U64Register>(8);
-        next_h.set(0, self.bitwise_xor(&h.get(0), &V0, operations));
+        let mut next_h_0 = next_h.get(0);
+        let mut next_h_1 = next_h.get(1);
+        let mut next_h_2 = next_h.get(2);
+        let mut next_h_3 = next_h.get(3);
+        let mut next_h_4 = next_h.get(4);
+        let mut next_h_5 = next_h.get(5);
+        let mut next_h_6 = next_h.get(6);
+        let mut next_h_7 = next_h.get(7);
+
+        next_h_0 = self.bitwise_xor(&h.get(0), &V0, operations);
+        next_h_1 = self.bitwise_xor(&h.get(1), &V1, operations);
+        next_h_2 = self.bitwise_xor(&h.get(2), &V2, operations);
+        next_h_3 = self.bitwise_xor(&h.get(3), &V3, operations);
+        next_h_4 = self.bitwise_xor(&h.get(4), &V4, operations);
+        next_h_5 = self.bitwise_xor(&h.get(5), &V5, operations);
+        next_h_6 = self.bitwise_xor(&h.get(6), &V6, operations);
+        next_h_7 = self.bitwise_xor(&h.get(7), &V7, operations);
+
+        next_h_0 = self.bitwise_xor(&next_h_0, &V8, operations);
+        next_h_1 = self.bitwise_xor(&next_h_1, &V9, operations);
+        next_h_2 = self.bitwise_xor(&next_h_2, &V10, operations);
+        next_h_3 = self.bitwise_xor(&next_h_3, &V11, operations);
+        next_h_4 = self.bitwise_xor(&next_h_4, &V12, operations);
+        next_h_5 = self.bitwise_xor(&next_h_5, &V13, operations);
+        next_h_6 = self.bitwise_xor(&next_h_6, &V14, operations);
+        next_h_7 = self.bitwise_xor(&next_h_7, &V15, operations);
+
+        self.set_to_expression_transition(
+            &h.get(0).next(),
+            next_h_0.expr() * end_bit.not_expr() + iv.get(0).expr() * end_bit.expr(),
+        );
+
+        next_h
     }
 
     fn blake2b_mix(
-        &self,
-        mut Va: &U64Register,
-        mut Vb: &U64Register,
-        mut Vc: &U64Register,
-        mut Vd: &U64Register,
+        &mut self,
+        Va: &mut U64Register,
+        Vb: &mut U64Register,
+        Vc: &mut U64Register,
+        Vd: &mut U64Register,
         x: &U64Register,
         y: &U64Register,
         operations: &mut ByteLookupOperations,
     ) where
         L::Instruction: U32Instructions,
     {
-        Va = &self.add_u64(
-            &self.add_u64(&Va, &Vb, &mut &operations),
-            &x,
-            &mut &operations,
-        );
+        *Va = self.add_u64(Va, Vb, operations);
+        *Va = self.add_u64(Va, x, operations);
 
-        Vd = &self.bit_rotate_right(
-            &self.bitwise_xor(&Vd, &Va, &mut &operations),
-            32,
-            &mut &operations,
-        );
+        *Vd = self.bitwise_xor(Vd, Va, operations);
+        *Vd = self.bit_rotate_right(Vd, 32, operations);
 
-        Vc = &self.add_u64(&Vc, &Vd, &mut &operations);
+        *Vc = self.add_u64(Vc, Vd, operations);
 
-        Vb = &self.bit_rotate_right(
-            &self.bitwise_xor(&Vb, &Vc, &mut &operations),
-            24,
-            &mut &operations,
-        );
+        *Vb = self.bitwise_xor(Vb, Vc, operations);
+        *Vb = self.bit_rotate_right(Vb, 24, operations);
 
-        Va = &self.add_u64(
-            &self.add_u64(&Va, &Vb, &mut &operations),
-            &y,
-            &mut &operations,
-        );
+        *Va = self.add_u64(Va, Vb, operations);
+        *Va = self.add_u64(Va, y, operations);
 
-        Vd = &self.bit_rotate_right(
-            &self.bitwise_xor(&Vd, &Va, &mut &operations),
-            16,
-            &mut &operations,
-        );
+        *Vd = self.bitwise_xor(Vd, Va, operations);
+        *Vd = self.bit_rotate_right(Vd, 16, operations);
 
-        Vc = &self.add_u64(&Vc, &Vd, &mut &operations);
+        *Vc = self.add_u64(Vc, Vd, operations);
 
-        Vb = &self.bit_rotate_right(
-            &self.bitwise_xor(&Vb, &Vc, &mut &operations),
-            63,
-            &mut &operations,
-        );
+        *Vb = self.bitwise_xor(Vb, Vc, operations);
+        *Vb = self.bit_rotate_right(Vb, 63, operations);
     }
 }
