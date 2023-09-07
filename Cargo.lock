@@ -796,7 +796,7 @@ dependencies = [
 [[package]]
 name = "plonky2"
 version = "0.1.4"
-source = "git+https://github.com/jtguibas/plonky2.git?branch=jtguibas/serde-target#3256dc5c50ad88025b700e6781a93d09b5834cfa"
+source = "git+https://github.com/mir-protocol/plonky2.git#e6ca46062384ee7f113f52e06c1c828cdc4b9106"
 dependencies = [
  "ahash",
  "anyhow",

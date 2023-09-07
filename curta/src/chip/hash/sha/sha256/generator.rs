@@ -76,7 +76,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
     for SHA256Generator<F, E>
 {
     fn id(&self) -> String {
-        "SHA256Generator".to_string()
+        Self::id()
     }
 
     fn serialize(
