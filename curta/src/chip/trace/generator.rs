@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 
 use super::writer::TraceWriter;
 use crate::chip::builder::AirTraceData;
-use crate::chip::table::lookup::Lookup;
 use crate::chip::{AirParameters, Chip};
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;

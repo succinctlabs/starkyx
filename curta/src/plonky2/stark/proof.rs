@@ -11,6 +11,7 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::GenericConfig;
+use serde::{Deserialize, Serialize};
 
 use super::config::StarkyConfig;
 use super::Starky;
