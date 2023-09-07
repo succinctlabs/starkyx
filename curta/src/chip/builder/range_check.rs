@@ -1,6 +1,7 @@
 use super::AirBuilder;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::register::array::ArrayRegister;
+use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
@@ -9,8 +10,6 @@ use crate::chip::AirParameters;
 impl<L: AirParameters> AirBuilder<L> {
     pub(crate) fn arithmetic_range_checks(&mut self) {
         let table = self.alloc::<ElementRegister>();
-
-        self.range_table = Some(table);
 
         let one = || -> ArithmeticExpression<L::Field> { ArithmeticExpression::one() };
         let zero = || -> ArithmeticExpression<L::Field> { ArithmeticExpression::zero() };
@@ -29,8 +28,15 @@ impl<L: AirParameters> AirBuilder<L> {
             L::NUM_ARITHMETIC_COLUMNS,
         ))
         .into_iter()
+        .chain(self.global_arithmetic.iter().copied())
         .collect::<Vec<_>>();
 
-        self.lookup_log_derivative(&table, &values)
+        let challenge = self.alloc_challenge::<CubicRegister>();
+        let table_data = self.lookup_table(&challenge, &[table]);
+        let values_data = self.lookup_values(&challenge, &values);
+
+        self.element_lookup_from_table_and_values(table_data, values_data);
+
+        self.range_data = Some(self.lookup_data.last().unwrap().clone());
     }
 }

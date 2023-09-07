@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use super::writer::TraceWriter;
 use crate::chip::builder::AirTraceData;
+use crate::chip::register::element::ElementRegister;
+use crate::chip::table::lookup::Lookup;
 use crate::chip::{AirParameters, Chip};
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
@@ -72,21 +74,24 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                 let num_rows = L::num_rows();
 
                 // Write the range check table and multiplicitiies
-                if let Some(table) = &self.air_data.range_table {
+                if let Some(Lookup::Element(lookup_data)) = &self.air_data.range_data {
+                    let (table_data, values_data) =
+                        (&lookup_data.table_data, &lookup_data.values_data);
+                    assert_eq!(table_data.table.len(), 1);
+                    let table = table_data.table[0];
                     for i in 0..num_rows {
                         self.writer
-                            .write(table, &L::Field::from_canonical_usize(i), i);
+                            .write(&table, &L::Field::from_canonical_usize(i), i);
                     }
-                }
 
-                // Write multiplicities for the range check lookup
-                if let Some(table) = &self.air_data.range_table {
-                    self.writer.write_multiplicities_from_fn(
-                        num_rows,
-                        table_data,
-                        Self::range_fn,
-                        values,
-                    )
+                    self.writer
+                        .write_multiplicities_from_fn::<L::CubicParams, ElementRegister>(
+                            num_rows,
+                            &table_data,
+                            Self::range_fn,
+                            &values_data.trace_values,
+                            &values_data.public_values,
+                        )
                 }
 
                 let trace = self.trace_clone();
