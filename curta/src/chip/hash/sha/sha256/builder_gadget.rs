@@ -9,6 +9,7 @@ use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use super::generator::{SHA256AirParameters, SHA256Generator, SHA256HintGenerator};
 use super::SHA256PublicData;
 use crate::chip::builder::AirBuilder;
+use crate::chip::hash::CurtaBytes;
 use crate::chip::trace::generator::ArithmeticGenerator;
 use crate::chip::AirParameters;
 use crate::math::prelude::CubicParameters;
@@ -16,9 +17,6 @@ use crate::plonky2::stark::config::StarkyConfig;
 use crate::plonky2::stark::gadget::StarkGadget;
 use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
 use crate::plonky2::stark::Starky;
-
-#[derive(Debug, Clone, Copy)]
-pub struct CurtaBytes<const N: usize>(pub [Target; N]);
 
 #[derive(Debug, Clone)]
 pub struct SHA256BuilderGadget<F, E, const D: usize> {

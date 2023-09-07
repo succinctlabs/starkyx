@@ -1,3 +1,6 @@
+pub mod builder_gadget;
+pub mod generator;
+
 use crate::chip::bool::SelectInstruction;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
@@ -199,37 +202,31 @@ impl<L: AirParameters> AirBuilder<L> {
         }
 
         let next_h = self.alloc_array::<U64Register>(8);
-        let mut next_h_0 = next_h.get(0);
-        let mut next_h_1 = next_h.get(1);
-        let mut next_h_2 = next_h.get(2);
-        let mut next_h_3 = next_h.get(3);
-        let mut next_h_4 = next_h.get(4);
-        let mut next_h_5 = next_h.get(5);
-        let mut next_h_6 = next_h.get(6);
-        let mut next_h_7 = next_h.get(7);
 
-        next_h_0 = self.bitwise_xor(&h.get(0), &V0, operations);
-        next_h_1 = self.bitwise_xor(&h.get(1), &V1, operations);
-        next_h_2 = self.bitwise_xor(&h.get(2), &V2, operations);
-        next_h_3 = self.bitwise_xor(&h.get(3), &V3, operations);
-        next_h_4 = self.bitwise_xor(&h.get(4), &V4, operations);
-        next_h_5 = self.bitwise_xor(&h.get(5), &V5, operations);
-        next_h_6 = self.bitwise_xor(&h.get(6), &V6, operations);
-        next_h_7 = self.bitwise_xor(&h.get(7), &V7, operations);
+        let next_h_0_tmp = self.bitwise_xor(&h.get(0), &V0, operations);
+        let next_h_1_tmp = self.bitwise_xor(&h.get(1), &V1, operations);
+        let next_h_2_tmp = self.bitwise_xor(&h.get(2), &V2, operations);
+        let next_h_3_tmp = self.bitwise_xor(&h.get(3), &V3, operations);
+        let next_h_4_tmp = self.bitwise_xor(&h.get(4), &V4, operations);
+        let next_h_5_tmp = self.bitwise_xor(&h.get(5), &V5, operations);
+        let next_h_6_tmp = self.bitwise_xor(&h.get(6), &V6, operations);
+        let next_h_7_tmp = self.bitwise_xor(&h.get(7), &V7, operations);
 
-        next_h_0 = self.bitwise_xor(&next_h_0, &V8, operations);
-        next_h_1 = self.bitwise_xor(&next_h_1, &V9, operations);
-        next_h_2 = self.bitwise_xor(&next_h_2, &V10, operations);
-        next_h_3 = self.bitwise_xor(&next_h_3, &V11, operations);
-        next_h_4 = self.bitwise_xor(&next_h_4, &V12, operations);
-        next_h_5 = self.bitwise_xor(&next_h_5, &V13, operations);
-        next_h_6 = self.bitwise_xor(&next_h_6, &V14, operations);
-        next_h_7 = self.bitwise_xor(&next_h_7, &V15, operations);
+        self.set_bitwise_xor(&next_h_0_tmp, &V8, &next_h.get(0), operations);
+        self.set_bitwise_xor(&next_h_1_tmp, &V9, &next_h.get(1), operations);
+        self.set_bitwise_xor(&next_h_2_tmp, &V10, &next_h.get(2), operations);
+        self.set_bitwise_xor(&next_h_3_tmp, &V11, &next_h.get(3), operations);
+        self.set_bitwise_xor(&next_h_4_tmp, &V12, &next_h.get(4), operations);
+        self.set_bitwise_xor(&next_h_5_tmp, &V13, &next_h.get(5), operations);
+        self.set_bitwise_xor(&next_h_6_tmp, &V14, &next_h.get(6), operations);
+        self.set_bitwise_xor(&next_h_7_tmp, &V15, &next_h.get(7), operations);
 
-        self.set_to_expression_transition(
-            &h.get(0).next(),
-            next_h_0.expr() * end_bit.not_expr() + iv.get(0).expr() * end_bit.expr(),
-        );
+        for i in 0..8 {
+            self.set_to_expression_transition(
+                &h.get(i).next(),
+                next_h.get(i).expr() * end_bit.not_expr() + iv.get(i).expr() * end_bit.expr(),
+            );
+        }
 
         next_h
     }
