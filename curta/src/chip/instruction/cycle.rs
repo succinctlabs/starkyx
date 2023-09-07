@@ -163,7 +163,7 @@ mod tests {
     use crate::chip::builder::tests::*;
     use crate::trace::window_parser::TraceWindowParser;
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct CycleTest;
 
     impl AirParameters for CycleTest {

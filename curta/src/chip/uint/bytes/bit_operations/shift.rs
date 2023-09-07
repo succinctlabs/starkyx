@@ -131,6 +131,7 @@ impl<L: AirParameters> AirBuilder<L> {
 pub mod tests {
 
     use rand::{thread_rng, Rng};
+    use serde::{Deserialize, Serialize};
 
     use super::*;
     use crate::chip::bool::SelectInstruction;
@@ -139,7 +140,7 @@ pub mod tests {
     use crate::chip::uint::bytes::bit_operations::util::{bits_u8_to_val, u8_to_bits_le};
     use crate::chip::AirParameters;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct ShfitTest<const N: usize, const M: usize>;
 
     impl<const N: usize, const M: usize> AirParameters for ShfitTest<N, M> {

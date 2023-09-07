@@ -98,7 +98,7 @@ mod tests {
     use crate::chip::AirParameters;
     use crate::math::field::Field;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     struct U32OpTest;
 
     impl AirParameters for U32OpTest {
@@ -116,7 +116,7 @@ mod tests {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     struct U64OpTest;
 
     impl AirParameters for U64OpTest {

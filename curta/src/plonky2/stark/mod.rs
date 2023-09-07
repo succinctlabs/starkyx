@@ -12,6 +12,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::GenericConfig;
+use serde::{Deserialize, Serialize};
 
 use self::config::StarkyConfig;
 use super::parser::{RecursiveStarkParser, StarkParser};
@@ -25,7 +26,7 @@ pub mod proof;
 pub mod prover;
 pub mod verifier;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Starky<A> {
     pub air: A,
 }

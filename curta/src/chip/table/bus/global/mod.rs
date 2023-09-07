@@ -92,6 +92,7 @@ impl<E: Clone> Bus<E> {
 #[cfg(test)]
 mod tests {
     use plonky2::field::types::Sample;
+    use serde::{Deserialize, Serialize};
 
     use super::*;
     use crate::chip::builder::tests::*;
@@ -101,7 +102,7 @@ mod tests {
     use crate::math::extension::cubic::element::CubicElement;
     use crate::math::prelude::*;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     struct BusTest;
 
     impl AirParameters for BusTest {

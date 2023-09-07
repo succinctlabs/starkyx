@@ -595,7 +595,7 @@ mod tests {
     use crate::chip::uint::util::u32_to_le_field_bytes;
     use crate::chip::AirParameters;
 
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
     pub struct SHA256Test;
 
     impl AirParameters for SHA256Test {

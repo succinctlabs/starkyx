@@ -113,7 +113,7 @@ pub mod tests {
     use crate::math::extension::cubic::element::CubicElement;
     use crate::math::prelude::*;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     struct AccumulatorTest;
 
     impl AirParameters for AccumulatorTest {

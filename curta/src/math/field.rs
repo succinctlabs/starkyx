@@ -5,6 +5,7 @@ use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAss
 
 use num::BigUint;
 use rand::rngs::OsRng;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 /// A trait for an Abstract ring containing addition, multiplication, and a zero element
@@ -60,7 +61,7 @@ pub trait Field:
     + Send
     + Sync
     + Serialize
-    + for<'de> Deserialize<'de>
+    + DeserializeOwned
 {
     /// Inverts `self`, returning `None` if `self` is zero.
     fn try_inverse(&self) -> Option<Self>;

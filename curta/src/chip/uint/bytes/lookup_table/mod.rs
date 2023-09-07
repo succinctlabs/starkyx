@@ -177,7 +177,7 @@ mod tests {
     use crate::chip::AirParameters;
     use crate::math::field::Field;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     struct ByteOpTest<const N: usize>;
 
     impl<const N: usize> AirParameters for ByteOpTest<N> {

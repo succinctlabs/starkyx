@@ -14,6 +14,7 @@ use crate::trace::generator::TraceGenerator;
 use crate::trace::AirTrace;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct ArithmeticGenerator<L: AirParameters> {
     pub writer: TraceWriter<L::Field>,
     pub air_data: AirTraceData<L>,

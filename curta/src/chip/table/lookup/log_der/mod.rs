@@ -288,7 +288,7 @@ mod tests {
     use crate::chip::AirParameters;
     use crate::math::extension::cubic::element::CubicElement;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     struct LookupTest<const N: usize, const M: usize>;
 
     impl<const N: usize, const M: usize> AirParameters for LookupTest<N, M> {
@@ -363,7 +363,7 @@ mod tests {
         test_recursive_starky(stark, config, generator, &[]);
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     struct CubicLookupTest<const N: usize, const M: usize>;
 
     impl<const N: usize, const M: usize> AirParameters for CubicLookupTest<N, M> {

@@ -78,7 +78,7 @@ mod tests {
     use crate::chip::AirParameters;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
 
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
     pub struct RegisterConversionTest;
 
     impl AirParameters for RegisterConversionTest {

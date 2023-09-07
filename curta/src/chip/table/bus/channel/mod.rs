@@ -136,7 +136,7 @@ mod tests {
     use crate::chip::AirParameters;
     use crate::math::extension::cubic::element::CubicElement;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     struct BusChannelTest;
 
     impl AirParameters for BusChannelTest {

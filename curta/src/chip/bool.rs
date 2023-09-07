@@ -110,7 +110,7 @@ mod tests {
     use super::*;
     use crate::chip::builder::tests::*;
 
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
     pub struct SelectorTest;
 
     impl AirParameters for SelectorTest {

@@ -62,7 +62,7 @@ pub mod tests {
     use crate::chip::builder::AirBuilder;
     use crate::chip::AirParameters;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct NotTest<const N: usize>;
 
     impl<const N: usize> AirParameters for NotTest<N> {

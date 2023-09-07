@@ -59,7 +59,7 @@ mod tests {
     use crate::chip::builder::AirBuilder;
     use crate::chip::AirParameters;
 
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
     struct DecodeTest;
 
     impl AirParameters for DecodeTest {

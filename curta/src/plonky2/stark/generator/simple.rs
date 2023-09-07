@@ -21,7 +21,7 @@ use crate::plonky2::stark::Starky;
 use crate::trace::generator::TraceGenerator;
 
 #[derive(Debug, Clone)]
-pub struct SimpleStarkWitnessGenerator<A, T: Clone, F, C, P, const D: usize> {
+pub struct SimpleStarkWitnessGenerator<A, T, F, C, P, const D: usize> {
     config: StarkyConfig<F, C, D>,
     pub stark: Starky<A>,
     pub proof_target: StarkProofTarget<D>,
@@ -84,17 +84,13 @@ where
         set_stark_proof_target(out_buffer, &self.proof_target, &proof);
     }
 
-    fn serialize(
-        &self,
-        _dst: &mut Vec<u8>,
-        _common_data: &CommonCircuitData<F, D>,
-    ) -> IoResult<()> {
+    fn serialize(&self, dst: &mut Vec<u8>, common_data: &CommonCircuitData<F, D>) -> IoResult<()> {
         unimplemented!("SimpleStarkWitnessGenerator::serialize")
     }
 
     fn deserialize(
-        _src: &mut plonky2::util::serialization::Buffer,
-        _common_data: &CommonCircuitData<F, D>,
+        src: &mut plonky2::util::serialization::Buffer,
+        common_data: &CommonCircuitData<F, D>,
     ) -> IoResult<Self>
     where
         Self: Sized,

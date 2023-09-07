@@ -170,7 +170,7 @@ mod tests {
     use crate::chip::builder::tests::*;
     use crate::chip::field::parameters::tests::Fp25519;
 
-    #[derive(Clone, Debug, Copy)]
+    #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
     struct FpMulConstTest;
 
     impl AirParameters for FpMulConstTest {

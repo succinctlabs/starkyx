@@ -66,7 +66,7 @@ pub mod tests {
     use crate::chip::register::Register;
     use crate::chip::AirParameters;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct AndTest<const N: usize>;
 
     impl<const N: usize> AirParameters for AndTest<N> {

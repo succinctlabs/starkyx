@@ -171,7 +171,7 @@ mod tests {
     use crate::chip::register::bit::BitRegister;
     use crate::chip::register::Register;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct EvalTest;
 
     impl AirParameters for EvalTest {

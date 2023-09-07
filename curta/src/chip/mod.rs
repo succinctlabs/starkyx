@@ -1,3 +1,6 @@
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+
 use self::constraint::Constraint;
 use self::instruction::Instruction;
 use crate::math::extension::cubic::parameters::CubicParameters;
@@ -19,7 +22,10 @@ pub mod trace;
 pub mod uint;
 pub mod utils;
 
-pub trait AirParameters {
+use core::fmt::Debug;
+pub trait AirParameters:
+    'static + Clone + Send + Sync + Sized + Debug + Serialize + DeserializeOwned
+{
     type Field: PrimeField64;
 
     type CubicParams: CubicParameters<Self::Field>;

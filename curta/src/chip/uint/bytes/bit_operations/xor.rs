@@ -70,7 +70,7 @@ pub mod tests {
     use crate::chip::builder::AirBuilder;
     use crate::chip::AirParameters;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct XorTest<const N: usize>;
 
     impl<const N: usize> AirParameters for XorTest<N> {

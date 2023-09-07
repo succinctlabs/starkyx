@@ -273,7 +273,7 @@ pub(crate) mod tests {
     pub use crate::plonky2::stark::Starky;
     pub use crate::trace::window_parser::TraceWindowParser;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct FibonacciParameters;
 
     impl AirParameters for FibonacciParameters {
@@ -379,7 +379,7 @@ pub(crate) mod tests {
         test_recursive_starky(stark, config, generator, &public_inputs);
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct SimpleTestParameters;
 
     impl AirParameters for SimpleTestParameters {
