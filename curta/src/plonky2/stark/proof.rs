@@ -21,7 +21,8 @@ use crate::plonky2::challenger::{Plonky2Challenger, Plonky2RecursiveChallenger};
 use crate::plonky2::parser::RecursiveStarkParser;
 
 /// A proof of a STARK computation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct StarkProof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> {
     /// Merkle cap of LDEs of trace values for each round.
     pub trace_caps: Vec<MerkleCap<F, C::Hasher>>,
@@ -212,7 +213,8 @@ pub struct StarkProofChallengesTarget<const D: usize> {
 }
 
 /// Purported values of each polynomial at the challenge point.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct StarkOpeningSet<F: RichField + Extendable<D>, const D: usize> {
     pub local_values: Vec<F::Extension>,
     pub next_values: Vec<F::Extension>,
