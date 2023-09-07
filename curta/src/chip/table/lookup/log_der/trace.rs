@@ -9,7 +9,7 @@ use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 
 impl<F: PrimeField> TraceWriter<F> {
-    pub(crate) fn write_multiplicities_from_fn<E: CubicParameters<F>, T: Register>(
+    pub fn write_multiplicities_from_fn<E: CubicParameters<F>, T: Register>(
         &self,
         num_rows: usize,
         table_data: &LookupTable<T, F, E>,

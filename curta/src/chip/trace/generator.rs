@@ -33,6 +33,11 @@ impl<L: AirParameters> ArithmeticGenerator<L> {
         }
     }
 
+    #[inline]
+    pub fn range_fn(element: L::Field) -> usize {
+        element.as_canonical_u64() as usize
+    }
+
     pub fn new_writer(&self) -> TraceWriter<L::Field> {
         self.writer.clone()
     }
@@ -74,20 +79,15 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                     }
                 }
 
-                // Write multiplicities for lookup table with search functions
-                // TODO: FIX serialization
-                // for data in self.air_data.lookup_data.iter() {
-                //     if let Lookup::Element(log_data) = data {
-                //         if let Some(table_index) = log_data.table_index {
-                //             self.writer.write_multiplicities_from_fn(
-                //                 num_rows,
-                //                 &log_data.table_data,
-                //                 table_index,
-                //                 &log_data.values_data.values,
-                //             );
-                //         }
-                //     }
-                // }
+                // Write multiplicities for the range check lookup
+                if let Some(table) = &self.air_data.range_table {
+                    self.writer.write_multiplicities_from_fn(
+                        num_rows,
+                        table_data,
+                        Self::range_fn,
+                        values,
+                    )
+                }
 
                 let trace = self.trace_clone();
                 let execution_trace_values = trace

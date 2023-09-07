@@ -150,10 +150,7 @@ impl<L: AirParameters> AirBuilder<L> {
         Ok(())
     }
 
-    #[inline]
-    pub fn range_fn(element: L::Field) -> usize {
-        element.as_canonical_u64() as usize
-    }
+
 
     pub fn clock(&mut self) -> ElementRegister {
         let clk = self.alloc::<ElementRegister>();
