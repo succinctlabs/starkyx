@@ -19,10 +19,9 @@
 //! ```
 //!
 
-use curta::chip::hash::sha::sha256::builder_gadget::{
-    CurtaBytes, SHA256Builder, SHA256BuilderGadget,
-};
+use curta::chip::hash::sha::sha256::builder_gadget::{SHA256Builder, SHA256BuilderGadget};
 use curta::chip::hash::sha::sha256::SHA256Gadget;
+use curta::chip::hash::CurtaBytes;
 use curta::math::goldilocks::cubic::GoldilocksCubicParameters;
 use curta::math::prelude::*;
 use plonky2::field::goldilocks_field::GoldilocksField;
