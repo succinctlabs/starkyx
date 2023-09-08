@@ -59,7 +59,7 @@ where
     C::Hasher: AlgebraicHasher<F>,
     P: PackedField<Scalar = F>,
     A: for<'a> RAir<StarkParser<'a, F, F, P, D, 1>>,
-    T: Debug + Send + Sync + 'static + TraceGenerator<F, A>,
+    T: TraceGenerator<F, A>,
     T::Error: Into<anyhow::Error>,
 {
     fn id(&self) -> String {
