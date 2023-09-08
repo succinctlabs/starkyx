@@ -1,6 +1,8 @@
 pub mod builder_gadget;
 pub mod generator;
 
+use itertools::Itertools;
+
 use crate::chip::bool::SelectInstruction;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
@@ -15,7 +17,7 @@ use crate::chip::AirParameters;
 pub type U64Value<T> = <U64Register as Register>::Value<T>;
 
 #[derive(Debug, Clone)]
-pub struct Blake2bGadget {
+pub struct BLAKE2BGadget {
     /// The input chunks processed into 16-words of U64 values
     pub public_word: ArrayRegister<U64Register>,
     /// The hash states at all 1024 rounds
@@ -264,5 +266,138 @@ impl<L: AirParameters> AirBuilder<L> {
 
         *Vb = self.bitwise_xor(Vb, Vc, operations);
         *Vb = self.bit_rotate_right(Vb, 63, operations);
+    }
+}
+
+impl BLAKE2BGadget {
+    pub fn compress(
+        msg_chunk: &[u8; 256],
+        state: &mut [u64; 16],
+        bytes_compressed: usize,
+        last_chunk: bool,
+    ) -> [u64; 16] {
+        // Set up the work vector V
+        let mut V: [u64; 16] = [0; 16];
+
+        V[..8].copy_from_slice(&state[..8]);
+        V[8..16].copy_from_slice(&INITIAL_HASH[..8]);
+
+        V[12] ^= bytes_compressed as u64;
+        if last_chunk {
+            V[14] ^= INVERSION_CONST;
+        }
+
+        let msg_u64_chunks = msg_chunk
+            .chunks_exact(8)
+            .map(|x| u64::from_le_bytes(x.try_into().unwrap()))
+            .collect_vec();
+
+        for i in 0..12 {
+            let S = SIGMA[i % 10];
+
+            BLAKE2BGadget::mix(
+                &mut V,
+                0,
+                4,
+                8,
+                12,
+                msg_u64_chunks[S[0]],
+                msg_u64_chunks[S[1]],
+            );
+            BLAKE2BGadget::mix(
+                &mut V,
+                1,
+                5,
+                9,
+                13,
+                msg_u64_chunks[S[2]],
+                msg_u64_chunks[S[3]],
+            );
+            BLAKE2BGadget::mix(
+                &mut V,
+                2,
+                6,
+                10,
+                14,
+                msg_u64_chunks[S[4]],
+                msg_u64_chunks[S[5]],
+            );
+            BLAKE2BGadget::mix(
+                &mut V,
+                3,
+                7,
+                11,
+                15,
+                msg_u64_chunks[S[6]],
+                msg_u64_chunks[S[7]],
+            );
+
+            BLAKE2BGadget::mix(
+                &mut V,
+                0,
+                5,
+                10,
+                15,
+                msg_u64_chunks[S[8]],
+                msg_u64_chunks[S[9]],
+            );
+            BLAKE2BGadget::mix(
+                &mut V,
+                1,
+                6,
+                11,
+                12,
+                msg_u64_chunks[S[10]],
+                msg_u64_chunks[S[11]],
+            );
+            BLAKE2BGadget::mix(
+                &mut V,
+                2,
+                7,
+                8,
+                13,
+                msg_u64_chunks[S[12]],
+                msg_u64_chunks[S[13]],
+            );
+            BLAKE2BGadget::mix(
+                &mut V,
+                3,
+                4,
+                9,
+                14,
+                msg_u64_chunks[S[14]],
+                msg_u64_chunks[S[15]],
+            );
+        }
+
+        for i in 0..8 {
+            state[i] ^= V[i];
+        }
+
+        for i in 0..8 {
+            state[i] ^= V[i + 8];
+        }
+
+        *state
+    }
+
+    fn mix(V: &mut [u64; 16], a: usize, b: usize, c: usize, d: usize, x: u64, y: u64) {
+        V[a] = V[a].wrapping_add(V[b]).wrapping_add(x);
+        V[d] = (V[d] ^ V[a]).rotate_right(32);
+        V[c] = V[c].wrapping_add(V[d]);
+        V[b] = (V[b] ^ V[c]).rotate_right(24);
+        V[a] = V[a].wrapping_add(V[b]).wrapping_add(y);
+        V[d] = (V[d] ^ V[a]).rotate_right(16);
+        V[c] = V[c].wrapping_add(V[d]);
+        V[b] = (V[b] ^ V[c]).rotate_right(63);
+    }
+
+    pub fn pad(msg: &[u8]) -> Vec<u8> {
+        let padlen = 128 - (msg.len() % 128);
+
+        let mut padded_msg = Vec::new();
+        padded_msg.extend_from_slice(msg);
+        padded_msg.extend_from_slice(&vec![0u8; padlen]);
+        padded_msg
     }
 }

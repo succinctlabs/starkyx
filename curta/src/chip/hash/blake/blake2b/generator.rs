@@ -8,6 +8,7 @@ use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::util::serialization::{Buffer, Read, Write};
 
 use super::INITIAL_HASH;
+use crate::chip::hash::blake::blake2b::BLAKE2BGadget;
 use crate::chip::uint::util::u64_to_le_field_bytes;
 use crate::math::field::PrimeField64;
 
@@ -80,7 +81,9 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for BLA
 
         let message_len = witness.get_target(self.message_len).as_canonical_u64() as usize;
 
-        let mut state = &INITIAL_HASH[0..8];
+        let mut state: [u64; 16] = [0; 16];
+        state[..8].copy_from_slice(&INITIAL_HASH[..8]);
+
         let num_chunks = padded_message.len() / 128;
         let mut bytes_compressed = 0;
         assert!(padded_message.len() % 128 == 0);
@@ -93,21 +96,25 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for BLA
                 bytes_compressed += 128;
             }
 
-            state = BLAKE2BGadget::compress_round(chunk, state, bytes_compressed, last_chunk);
+            state = BLAKE2BGadget::compress(
+                chunk.try_into().unwrap(),
+                &mut state,
+                bytes_compressed,
+                last_chunk,
+            );
         }
 
         // We only support a digest of 32 bytes.  Retrieve the first four elements of the state
-        let digest_bytes = state[0..4]
+        let binding = state[0..4]
             .iter()
-            .map(|x| {
+            .flat_map(|x| {
                 let mut arr = u64_to_le_field_bytes::<F>(*x);
                 arr.reverse();
                 arr
             })
-            .flatten()
-            .collect_vec()
-            .as_slice();
+            .collect_vec();
+        let digest_bytes = binding.as_slice();
 
-        out_buffer.set_target_arr(&self.digest_bytes, &digest_bytes);
+        out_buffer.set_target_arr(&self.digest_bytes, digest_bytes);
     }
 }
