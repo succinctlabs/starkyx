@@ -81,7 +81,7 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for BLA
 
         let message_len = witness.get_target(self.message_len).as_canonical_u64() as usize;
 
-        let mut state: [u64; 16] = [0; 16];
+        let mut state: [u64; 8] = [0; 8];
         state[..8].copy_from_slice(&INITIAL_HASH[..8]);
 
         let num_chunks = padded_message.len() / 128;
@@ -107,11 +107,7 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for BLA
         // We only support a digest of 32 bytes.  Retrieve the first four elements of the state
         let binding = state[0..4]
             .iter()
-            .flat_map(|x| {
-                let mut arr = u64_to_le_field_bytes::<F>(*x);
-                arr.reverse();
-                arr
-            })
+            .flat_map(|x| u64_to_le_field_bytes::<F>(*x))
             .collect_vec();
         let digest_bytes = binding.as_slice();
 

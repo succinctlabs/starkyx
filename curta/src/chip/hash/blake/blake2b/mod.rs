@@ -271,16 +271,16 @@ impl<L: AirParameters> AirBuilder<L> {
 
 impl BLAKE2BGadget {
     pub fn compress(
-        msg_chunk: &[u8; 256],
-        state: &mut [u64; 16],
+        msg_chunk: &[u8; 128],
+        state: &mut [u64; 8],
         bytes_compressed: usize,
         last_chunk: bool,
-    ) -> [u64; 16] {
+    ) -> [u64; 8] {
         // Set up the work vector V
         let mut V: [u64; 16] = [0; 16];
 
         V[..8].copy_from_slice(&state[..8]);
-        V[8..16].copy_from_slice(&INITIAL_HASH[..8]);
+        V[8..16].copy_from_slice(&INITIAL_HASH[8..]);
 
         V[12] ^= bytes_compressed as u64;
         if last_chunk {
@@ -393,11 +393,15 @@ impl BLAKE2BGadget {
     }
 
     pub fn pad(msg: &[u8]) -> Vec<u8> {
-        let padlen = 128 - (msg.len() % 128);
+        if (msg.len() % 128 == 0) && (!msg.is_empty()) {
+            msg.to_vec()
+        } else {
+            let padlen = 128 - (msg.len() % 128);
 
-        let mut padded_msg = Vec::new();
-        padded_msg.extend_from_slice(msg);
-        padded_msg.extend_from_slice(&vec![0u8; padlen]);
-        padded_msg
+            let mut padded_msg = Vec::new();
+            padded_msg.extend_from_slice(msg);
+            padded_msg.extend_from_slice(&vec![0u8; padlen]);
+            padded_msg
+        }
     }
 }
