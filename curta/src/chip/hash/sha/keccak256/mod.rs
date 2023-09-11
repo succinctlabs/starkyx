@@ -8,7 +8,7 @@ use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
 use super::sha256::U32Value;
 
 pub struct Keccak256Gadget {
-   
+   pub(crate) round_constant: U64Register
 }
 
 #[derive(Debug, Clone)]
@@ -28,27 +28,33 @@ pub const KECCAKF_ROTC: [[u32; 5]; 5] = [
 ];
 
 #[rustfmt::skip]
-pub const KECCAKF_RNDC: [[u32; 2]; 24] = [
-    [0x00000001, 0x00000000], [0x00008082, 0x00000000],
-    [0x0000808A, 0x80000000], [0x80008000, 0x80000000],
-    [0x0000808B, 0x00000000], [0x80000001, 0x00000000],
-    [0x80008081, 0x80000000], [0x00008009, 0x80000000],
-    [0x0000008A, 0x00000000], [0x00000088, 0x00000000],
-    [0x80008009, 0x00000000], [0x8000000A, 0x00000000],
-    [0x8000808B, 0x00000000], [0x0000008B, 0x80000000],
-    [0x00008089, 0x80000000], [0x00008003, 0x80000000],
-    [0x00008002, 0x80000000], [0x00000080, 0x80000000],
-    [0x0000800A, 0x00000000], [0x8000000A, 0x80000000],
-    [0x80008081, 0x80000000], [0x00008080, 0x80000000],
-    [0x80000001, 0x00000000], [0x80008008, 0x80000000],
+pub const KECCAKF_RNDC: [u64; 24] = [
+    0x0000000000000001, 0x0000000000008082,
+    0x800000000000808A, 0x8000000080008000,
+    0x000000000000808B, 0x0000000080000001,
+    0x8000000080008081, 0x8000000000008009,
+    0x000000000000008A, 0x0000000000000088,
+    0x0000000080008009, 0x000000008000000A,
+    0x000000008000808B, 0x800000000000008B,
+    0x8000000000008089, 0x8000000000008003,
+    0x8000000000008002, 0x8000000000000080,
+    0x000000000000800A, 0x800000008000000A,
+    0x8000000080008081, 0x8000000000008080,
+    0x0000000080000001, 0x8000000080008008,
 ];
+
 
 // impl constraint for keccack256 
 // state register 
+// todo: figure out round_constant and rotation offset
 impl<L: AirParameters> AirBuilder<L> {
+    // trace table layout for keccak_f
+    //      state  |  state_after_theta | state_after_rhopi | state_after_chi | round_constant 
+    // i    input        x                       x                x            RC[i]
+    // i+1  new_state
     pub fn keccak_f(&mut self,
         operations: &mut ByteLookupOperations,
-    )where
+    ) -> Keccak256Gadget where
     // SHOULD it be u64instructions?
     L::Instruction: U32Instructions {
         // alloate 5*5 u64 register for storing 25 8byte lanes
@@ -61,13 +67,13 @@ impl<L: AirParameters> AirBuilder<L> {
         // xxxxx  j  3*5 + 3 = 18th lane
         // xxxxx
         // i == x axis, refer to column, j == y axis, refer to row, this diff from most competitve programmer's convention, but follow the keccak spec, so pls tolerate. so bit weird but a[i,j] actually refer to j * 5 + i NOT i * 5 + j.
-
-        let round_const = self.alloc_array::<U64Register>(24);
+        // alloc round_const, write it later outside circuit, constrain later
+        let round_const = self.alloc::<U64Register>();
         // unsure this is correct..
         // how to constrain it to come constant, i.e. the fixed column for the circuit?
-        for i in 0..24 {
-            // self.assert_equal(&round_const.get(i)., &ByteArrayRegister::from(KECCAKF_RNDC[i]));
-        }
+        // for i in 0..24 {
+        //     // self.assert_equal(&round_const.get(i)., &ByteArrayRegister::from(KECCAKF_RNDC[i]));
+        // }
 
         // maybe need to boundary the initial state?
         // define boundary constraint for theta
@@ -93,22 +99,25 @@ impl<L: AirParameters> AirBuilder<L> {
             let d_i = self.bitwise_xor(&c_arr.get((x+4)%5), &temp, operations);
             self.assert_equal_transition(&d_arr.get(x), &d_i);
             for y in 0..5 {
-                // make sure next row of state_after_theta follows the theta transition of state
+                // make sure state_after_theta follows the theta transition of state
                 let tmp = self.bitwise_xor(&state.get(y * 5 + x), &d_i, operations);
-                self.set_to_expression_transition(&(state_after_theta.get(y * 5 + x)).next(), tmp.expr());
+                self.set_to_expression_transition(&(state_after_theta.get(y * 5 + x)), tmp.expr());
             }
         }
 
         let state_after_rhopi = self.alloc_array::<U64Register>(25);
-
+        // 0,0 has no change, direct copy constraint 
+        self.set_to_expression(&state_after_rhopi.get(0), state_after_theta.get(0).expr());
         // rho and pi
         for x in 0..5 {
             for y in 0..5 {
                 // x is column, y is row
                 // y, 2x+3y, is pi_idx in the flatten version
-                let pi_idx = ((2 * x + 3 * y) % 5) * 5 + y;
-                let tmp = self.bit_rotate_right(&state_after_theta.get(y * 5 + x), KECCAKF_ROTC[y][x].try_into().unwrap(), operations);
-                self.set_to_expression_transition(&state_after_rhopi.get(pi_idx).next(), tmp.expr());
+                if x+y != 0 {
+                    let pi_idx = ((2 * x + 3 * y) % 5) * 5 + y;
+                    let tmp = self.bit_rotate_right(&state_after_theta.get(y * 5 + x), KECCAKF_ROTC[y][x].try_into().unwrap(), operations);
+                    self.set_to_expression_transition(&state_after_rhopi.get(pi_idx), tmp.expr());
+                }
             }
         }
 
@@ -116,7 +125,6 @@ impl<L: AirParameters> AirBuilder<L> {
         // chi
         for x in 0..5 {
             for y in 0..5 {
-              
                 let tmp1 = self.bitwise_not(&state_after_rhopi.get(  (x + 1) % 5 + y * 5), operations);
                 let tmp2 = self.bitwise_and(&tmp1, &state_after_rhopi.get((x+2) % 5 + y * 5), operations);
                 let tmp3 = self.bitwise_xor(&state_after_rhopi.get(x + y * 5), &tmp2, operations);
@@ -125,11 +133,9 @@ impl<L: AirParameters> AirBuilder<L> {
         }
 
         // iota
-        for i in 0..24 {
-            let tmp = self.bitwise_xor(&state_after_chi.get(0), &round_const.get(i), operations);
-            self.set_to_expression_transition(&state.get(0).next(),
+        let tmp = self.bitwise_xor(&state_after_chi.get(0), &round_const, operations);
+        self.set_to_expression_transition(&state.get(0).next(),
             tmp.expr());
-        }
 
         // constrain the other val of next state is the same as chi's result
         for x in 0..5 {
@@ -141,8 +147,11 @@ impl<L: AirParameters> AirBuilder<L> {
                              state_after_chi.get(x + y * 5).expr()
                         );
                 }
-               
             }
+        }
+
+        Keccak256Gadget {
+            round_constant: round_const
         }
     }
 }
@@ -164,3 +173,71 @@ impl Keccak256Gadget {
         todo!()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    pub use crate::chip::builder::tests::*;
+    use crate::chip::builder::AirBuilder;
+    use crate::chip::uint::operations::instruction::U32Instruction;
+    use crate::chip::uint::util::{u64_to_le_field_bytes};
+    use crate::chip::AirParameters;
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct Keccak256Test;
+
+    impl AirParameters for Keccak256Test {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
+
+        type Instruction = U32Instruction;
+
+        const NUM_FREE_COLUMNS: usize = 2693;
+        const EXTENDED_COLUMNS: usize = 5622;
+        const NUM_ARITHMETIC_COLUMNS: usize = 0;
+
+        fn num_rows_bits() -> usize {
+            16
+        }
+    }
+
+    #[test]
+    fn test_keccak_256_stark() {
+        type F = GoldilocksField;
+        type L = Keccak256Test;
+        type SC = PoseidonGoldilocksStarkConfig;
+
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let mut builder = AirBuilder::<L>::new();
+       
+        let (mut operations, table) = builder.byte_operations();
+
+        let keccak_f_gadget = builder.keccak_f(&mut operations);
+
+        builder.register_byte_lookup(operations, &table);
+
+        let (air, trace_data) = builder.build();
+
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let writer = generator.new_writer();
+       
+        for i in 0..L::num_rows() {
+            let round_constant_value = u64_to_le_field_bytes::<F>(KECCAKF_RNDC[i % 24]);
+            writer.write(&keccak_f_gadget.round_constant, &round_constant_value, i);
+            
+            writer.write_row_instructions(&generator.air_data, i);
+        }
+
+        // for i in 0..L::num_rows() {
+        //     println!("{:?}", writer.read(&keccak_f_gadget.round_constant, i));
+        // }
+
+        let stark = Starky::new(air);
+        let config = SC::standard_fast_config(L::num_rows());
+
+        test_starky(&stark, &config, &generator, &[]);
+
+    }
+}
+

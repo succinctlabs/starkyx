@@ -623,7 +623,7 @@ mod tests {
 
         let mut timing = TimingTree::new("Sha256 test", log::Level::Debug);
 
-        let mut builder = AirBuilder::<L>::new();
+        let mut builder: AirBuilder<SHA256Test> = AirBuilder::<L>::new();
         let clk = builder.clock();
 
         let (mut operations, table) = builder.byte_operations();

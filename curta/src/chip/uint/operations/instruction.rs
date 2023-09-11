@@ -207,7 +207,7 @@ mod tests {
 
         let to_field = |a: u32| a.to_le_bytes().map(F::from_canonical_u8);
 
-        let mut rng = thread_rng();
+        let mut rng: rand::rngs::ThreadRng = thread_rng();
         for i in 0..L::num_rows() {
             let a_val = rng.gen::<u32>();
             let b_val = rng.gen::<u32>();
