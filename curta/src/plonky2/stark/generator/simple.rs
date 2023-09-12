@@ -100,5 +100,3 @@ where
         unimplemented!("SimpleStarkWitnessGenerator::deserialize")
     }
 }
-
-

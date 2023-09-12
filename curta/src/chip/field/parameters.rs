@@ -1,13 +1,14 @@
 use core::fmt::Debug;
 
 use num::{BigUint, Zero};
-use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 pub const MAX_NB_LIMBS: usize = 32;
 pub const LIMB: u32 = 2u32.pow(16);
 
 pub trait FieldParameters:
-    Send + Sync + Copy + 'static + Debug + Serialize + for<'de> Deserialize<'de>
+    Send + Sync + Copy + 'static + Debug + Serialize + DeserializeOwned
 {
     const NB_BITS_PER_LIMB: usize;
     const NB_LIMBS: usize;
