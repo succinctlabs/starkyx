@@ -16,14 +16,14 @@ use crate::polynomial::to_u16_le_limbs_polynomial;
 
 /// Fp subtraction.
 ///
-/// We prove a - b = c by asserting b + c = a.
+/// prove a - b = c by asserting b + c = a.
 #[derive(Debug, Clone, Copy)]
 pub struct FpSubInstruction<P: FieldParameters> {
     inner: FpAddInstruction<P>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
-    /// Given two field elements `a` and `b`, computes the difference `a - b = c`.
+    /// given two field elements `a` and `b`, computes the difference `a - b = c`.
     pub fn fp_sub<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,

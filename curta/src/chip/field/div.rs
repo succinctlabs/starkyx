@@ -17,19 +17,19 @@ use crate::math::prelude::*;
 use crate::polynomial::parser::PolynomialParser;
 use crate::polynomial::to_u16_le_limbs_polynomial;
 
-/// Fp Division. Computes `a / b = result`
+/// Fp Division. Computes `a / b = result`.
 ///
-/// This is done by computing `b_inv = b^(-1)` and then `a * b_inv = result`.
+/// This is done by computing `b_inv = b^(-1)` followed by `a * b_inv = result`.
 #[derive(Debug, Clone, Copy)]
 pub struct FpDivInstruction<P: FieldParameters> {
-    /// FpMulInstruction to compute `b_inv = b^(-1)`
+    /// a `FpMulInstruction` to compute `b_inv = b^(-1)`.
     denominator: FpMulInstruction<P>,
-    /// FpMulInstruction to compute `a * b_inv = result`
+    /// a `FpMulInstruction` to compute `a * b_inv = result`.
     multiplication: FpMulInstruction<P>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
-    /// Given two field elements `a` and `b`, computes the quotient `a/b = c`.
+    /// given two field elements `a` and `b`, computes the quotient `a / b = c`.
     pub fn fp_div<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,
@@ -58,13 +58,13 @@ impl<L: AirParameters> AirBuilder<L> {
         let mut one_value = vec![L::Field::ONE];
         one_value.resize(P::NB_LIMBS, L::Field::ZERO);
 
-        // Set a register to the constant one
+        // set a register to the constant one.
         let one = self.alloc::<FieldRegister<P>>();
         self.set_to_expression(&one, ArithmeticExpression::from_constant_vec(one_value));
 
         let b_inv = self.alloc::<FieldRegister<P>>();
 
-        // Checking b * b_inv = one
+        // check that b * b_inv = one.
         let denominator = FpMulInstruction {
             a: *b,
             b: b_inv,
@@ -78,7 +78,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let mult_witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
         let mult_witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
 
-        // Instruction a * b_inv = result
+        // set the instruction a * b_inv = result.
         let multiplication = FpMulInstruction {
             a: *a,
             b: b_inv,
@@ -104,7 +104,7 @@ impl<AP: PolynomialParser, P: FieldParameters> AirConstraint<AP> for FpDivInstru
     }
 }
 
-// Instruction trait
+
 impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpDivInstruction<P> {
     fn trace_layout(&self) -> Vec<MemorySlice> {
         let mut layout = vec![
