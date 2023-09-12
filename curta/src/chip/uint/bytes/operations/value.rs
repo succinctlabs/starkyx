@@ -43,7 +43,7 @@ impl ByteOperation<ByteRegister> {
                 opcode,
                 a.expr(),
                 ArithmeticExpression::from_constant(F::from_canonical_u8(*shift)),
-                result.expr() + (carry.expr() * F::from_canonical_u8(1 << (8 - shift))),
+                result.expr() + (carry.expr() * F::from_canonical_u16(1u16 << (8 - shift))),
             ],
             ByteOperation::Rot(a, b, result) => [opcode, a.expr(), b.expr(), result.expr()],
             ByteOperation::RotConst(a, b, c) => [
