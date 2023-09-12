@@ -22,12 +22,14 @@ use crate::polynomial::to_u16_le_limbs_polynomial;
 /// This is done by computing `b_inv = b^(-1)` and then `a * b_inv = result`.
 #[derive(Debug, Clone, Copy)]
 pub struct FpDivInstruction<P: FieldParameters> {
+    /// FpMulInstruction to compute `b_inv = b^(-1)`
     denominator: FpMulInstruction<P>,
+    /// FpMulInstruction to compute `a * b_inv = result`
     multiplication: FpMulInstruction<P>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
-    /// Given two field elements `a` and `b`, computes the sum `a + b = c`.
+    /// Given two field elements `a` and `b`, computes the quotient `a/b = c`.
     pub fn fp_div<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,
@@ -49,9 +51,9 @@ impl<L: AirParameters> AirBuilder<L> {
     ) where
         L::Instruction: From<FpDivInstruction<P>>,
     {
-        let den_carry = self.alloc::<FieldRegister<P>>();
-        let den_witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
-        let den_witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        let denom_carry = self.alloc::<FieldRegister<P>>();
+        let denom_witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        let denom_witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
 
         let mut one_value = vec![L::Field::ONE];
         one_value.resize(P::NB_LIMBS, L::Field::ZERO);
@@ -67,15 +69,16 @@ impl<L: AirParameters> AirBuilder<L> {
             a: *b,
             b: b_inv,
             result: one,
-            carry: den_carry,
-            witness_low: den_witness_low,
-            witness_high: den_witness_high,
+            carry: denom_carry,
+            witness_low: denom_witness_low,
+            witness_high: denom_witness_high,
         };
 
         let mult_carry = self.alloc::<FieldRegister<P>>();
         let mult_witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
         let mult_witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
 
+        // Instruction a * b_inv = result
         let multiplication = FpMulInstruction {
             a: *a,
             b: b_inv,

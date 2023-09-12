@@ -23,7 +23,7 @@ pub struct FpSubInstruction<P: FieldParameters> {
 }
 
 impl<L: AirParameters> AirBuilder<L> {
-    /// Given two field elements `a` and `b`, computes the sum `a + b = c`.
+    /// Given two field elements `a` and `b`, computes the difference `a - b = c`.
     pub fn fp_sub<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,
