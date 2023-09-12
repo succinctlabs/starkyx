@@ -44,7 +44,7 @@ impl<L: AirParameters> AirBuilder<L> {
     {
         let result = self.alloc::<FieldRegister<P>>();
         self.set_fp_add(a, b, &result);
-        result 
+        result
     }
 
     pub fn set_fp_add<P: FieldParameters>(

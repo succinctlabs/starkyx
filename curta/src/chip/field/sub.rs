@@ -14,9 +14,8 @@ use crate::math::prelude::*;
 use crate::polynomial::parser::PolynomialParser;
 use crate::polynomial::to_u16_le_limbs_polynomial;
 
-
-/// Fp subtraction. 
-/// 
+/// Fp subtraction.
+///
 /// We prove a - b = c by asserting b + c = a.
 #[derive(Debug, Clone, Copy)]
 pub struct FpSubInstruction<P: FieldParameters> {
@@ -35,7 +34,7 @@ impl<L: AirParameters> AirBuilder<L> {
     {
         let result = self.alloc::<FieldRegister<P>>();
         self.set_fp_sub(a, b, &result);
-        result 
+        result
     }
 
     pub fn set_fp_sub<P: FieldParameters>(
@@ -58,20 +57,16 @@ impl<L: AirParameters> AirBuilder<L> {
             witness_high,
         };
 
-        let instr = FpSubInstruction {
-            inner: inner_instr,
-        };
+        let instr = FpSubInstruction { inner: inner_instr };
         self.register_instruction(instr);
     }
 }
-
 
 impl<AP: PolynomialParser, P: FieldParameters> AirConstraint<AP> for FpSubInstruction<P> {
     fn eval(&self, parser: &mut AP) {
         self.inner.eval(parser);
     }
 }
-
 
 // Instruction trait
 impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpSubInstruction<P> {
@@ -97,20 +92,19 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpSubInstruction<P>
         let p_a = writer.read(&self.inner.result, row_index);
 
         let b_digits = p_b
-        .coefficients
-        .iter()
-        .map(|x| x.as_canonical_u64() as u16)
-        .collect::<Vec<_>>();
+            .coefficients
+            .iter()
+            .map(|x| x.as_canonical_u64() as u16)
+            .collect::<Vec<_>>();
 
         let a_digits = p_a
-        .coefficients
-        .iter()
-        .map(|x| x.as_canonical_u64() as u16)
-        .collect::<Vec<_>>();
+            .coefficients
+            .iter()
+            .map(|x| x.as_canonical_u64() as u16)
+            .collect::<Vec<_>>();
 
         let b = digits_to_biguint(&b_digits);
         let a = digits_to_biguint(&a_digits);
-
 
         let modulus = P::modulus();
         let c = (&modulus + &a - &b) % &modulus;
@@ -121,7 +115,6 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpSubInstruction<P>
         self.inner.write(writer, row_index);
     }
 }
-
 
 #[cfg(test)]
 mod tests {
