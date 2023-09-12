@@ -1,6 +1,8 @@
 pub mod builder_gadget;
 pub mod generator;
 
+use core::borrow::Borrow;
+
 use itertools::Itertools;
 
 use crate::chip::bool::SelectInstruction;
@@ -9,38 +11,38 @@ use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
+use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
 use crate::chip::uint::operations::instruction::U32Instructions;
 use crate::chip::uint::register::{ByteArrayRegister, U64Register};
+use crate::chip::uint::util::{u32_to_le_field_bytes, u64_to_le_field_bytes};
 use crate::chip::AirParameters;
+use crate::math::prelude::*;
 
 pub type U64Value<T> = <U64Register as Register>::Value<T>;
 
 #[derive(Debug, Clone)]
 pub struct BLAKE2BGadget {
-    /// The input chunks processed into 16-words of U64 values
-    pub public_word: ArrayRegister<U64Register>,
-    /// The hash states at all 1024 rounds
-    pub state: ArrayRegister<U64Register>,
-    /// Signifies when to reset the state to the initial hash
+    pub t: U64Register,
+    pub m: ArrayRegister<U64Register>,
+    pub h: ArrayRegister<U64Register>,
+    pub last_chunk_bit: BitRegister,
     pub end_bit: BitRegister,
 
-    pub(crate) end_bits_public: ArrayRegister<BitRegister>,
+    // Public values
+    pub(crate) msg_chunks: ArrayRegister<U64Register>,
     pub(crate) initial_state: ArrayRegister<U64Register>,
+    pub(crate) hash_state: ArrayRegister<U64Register>,
+    pub(crate) inversion_const: U64Register,
 }
 
 #[derive(Debug, Clone)]
-pub struct Blake2bPublicData<T> {
-    pub public_w: Vec<U64Value<T>>,
+pub struct BLAKE2BPublicData<T> {
     pub hash_state: Vec<U64Value<T>>,
     pub end_bits: Vec<T>,
 }
 
-// Note that for this blake2b implementation, we don't support a key input and
-// we assume that the output is 32 bytes
-// So that means the initial hash entry to be
-// 0x6a09e667f3bcc908 xor 0x01010020
-const INITIAL_HASH: [u64; 16] = [
+const INITIAL_HASH: [u64; 8] = [
     0x6a09e667f2bdc928,
     0xbb67ae8584caa73b,
     0x3c6ef372fe94f82b,
@@ -49,6 +51,13 @@ const INITIAL_HASH: [u64; 16] = [
     0x9b05688c2b3e6c1f,
     0x1f83d9abfb41bd6b,
     0x5be0cd19137e2179,
+];
+
+// Note that for this blake2b implementation, we don't support a key input and
+// we assume that the output is 32 bytes
+// So that means the initial hash entry to be
+// 0x6a09e667f3bcc908 xor 0x01010020
+const INITIAL_HASH_COMPRESS: [u64; 8] = [
     0x6a09e667f3bcc908,
     0xbb67ae8584caa73b,
     0x3c6ef372fe94f82b,
@@ -75,8 +84,59 @@ const SIGMA: [[usize; 16]; SIGMA_LEN] = [
     [10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0],
 ];
 
-#[allow(clippy::too_many_arguments)]
 impl<L: AirParameters> AirBuilder<L> {
+    pub fn process_blake2b(
+        &mut self,
+        clk: &ElementRegister,
+        operations: &mut ByteLookupOperations,
+    ) -> BLAKE2BGadget
+    where
+        L::Instruction: U32Instructions,
+        L::Instruction: From<SelectInstruction<ByteArrayRegister<8>>>,
+    {
+        // Registers to be written to
+        let t = self.alloc::<U64Register>();
+        let m = self.alloc_array::<U64Register>(16);
+        let h = self.alloc_array::<U64Register>(8);
+        let last_chunk_bit = self.alloc::<BitRegister>();
+        let end_bit = self.alloc::<BitRegister>();
+
+        // Public values
+        let msg_chunks = self.alloc_array_public::<U64Register>(16 * 512);
+        let initial_state = self.alloc_array_public::<U64Register>(16);
+        let hash_state = self.alloc_array_public::<U64Register>(8 * 512);
+        let inversion_const = self.alloc_public::<U64Register>();
+
+        for (h, init) in h.iter().zip(initial_state.iter()) {
+            self.set_to_expression_first_row(&h, init.expr());
+        }
+
+        self.blake2b_compress(
+            clk,
+            &m,
+            &h,
+            &initial_state,
+            &inversion_const,
+            &t,
+            &last_chunk_bit,
+            operations,
+            &end_bit,
+        );
+
+        BLAKE2BGadget {
+            t,
+            m,
+            h,
+            last_chunk_bit,
+            end_bit,
+            msg_chunks,
+            initial_state,
+            hash_state,
+            inversion_const,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn blake2b_compress(
         &mut self,
         clk: &ElementRegister,
@@ -84,12 +144,11 @@ impl<L: AirParameters> AirBuilder<L> {
         h: &ArrayRegister<U64Register>,
         iv: &ArrayRegister<U64Register>,
         inversion_const: &U64Register,
-        t: U64Register, // assumes t is not more than u64
+        t: &U64Register, // assumes t is not more than u64
         last_block_bit: &BitRegister,
         operations: &mut ByteLookupOperations,
         end_bit: &BitRegister,
-    ) -> ArrayRegister<U64Register>
-    where
+    ) where
         L::Instruction: U32Instructions,
         L::Instruction: From<SelectInstruction<ByteArrayRegister<8>>>,
     {
@@ -229,8 +288,6 @@ impl<L: AirParameters> AirBuilder<L> {
                 next_h.get(i).expr() * end_bit.not_expr() + iv.get(i).expr() * end_bit.expr(),
             );
         }
-
-        next_h
     }
 
     fn blake2b_mix(
@@ -270,8 +327,80 @@ impl<L: AirParameters> AirBuilder<L> {
 }
 
 impl BLAKE2BGadget {
+    pub fn write<F: Field, I: IntoIterator>(
+        &self,
+        padded_message: &[u8],
+        writer: &TraceWriter<F>,
+    ) -> BLAKE2BPublicData<F>
+    where
+        I::Item: Borrow<[u8]>,
+    {
+        let mut end_bits_values = Vec::new();
+        let mut hash_values = Vec::new();
+
+        let num_chunks = padded_message.len() / 128;
+        end_bits_values = vec![F::ZERO; num_chunks - 1];
+        end_bits_values.push(F::ONE);
+
+        let mut state = INITIAL_HASH;
+        let mut bytes_compressed = 0;
+        for (chunk_num, chunk) in padded_message.chunks_exact(128).enumerate() {
+            state = BLAKE2BGadget::compress(
+                chunk,
+                &mut state,
+                bytes_compressed,
+                chunk_num == num_chunks - 1,
+            );
+            hash_values.extend_from_slice(&state.map(u64_to_le_field_bytes::<F>));
+        }
+
+        /*
+        pub t: U64Register,
+        pub m: ArrayRegister<U64Register>,
+        pub h: ArrayRegister<U64Register>,
+        pub last_chunk_bit: BitRegister,
+        pub end_bit: BitRegister,
+
+        // Public values
+        pub(crate) msg_chunks: ArrayRegister<U64Register>,
+        pub(crate) initial_state: ArrayRegister<U64Register>,
+        pub(crate) hash_state: ArrayRegister<U64Register>,
+        pub(crate) inversion_const: U64Register,
+        */
+
+        writer.write_array(
+            &self.initial_state,
+            INITIAL_HASH.map(u64_to_le_field_bytes),
+            0,
+        );
+        writer.write_array(&self.state, &hash_values, 0);
+        writer.write_array(&self.end_bits_public, &end_bits_values, 0);
+        writer.write_array(&self.public_word, &public_w_values, 0);
+        (0..1024).for_each(|i| {
+            writer.write(&self.end_bit, &end_bits_values[i], i * 64 + 63);
+            for j in 0..64 {
+                let row = i * 64 + j;
+                writer.write(
+                    &self.round_constant,
+                    &u32_to_le_field_bytes(ROUND_CONSTANTS[j]),
+                    row,
+                );
+                writer.write(&self.w_window.get(0), &w_values[i * 64 + j], row);
+                if j < 16 {
+                    writer.write(&self.w_bit, &F::ONE, row);
+                }
+            }
+        });
+
+        SHA256PublicData {
+            public_w: public_w_values,
+            hash_state: hash_values,
+            end_bits: end_bits_values,
+        }
+    }
+
     pub fn compress(
-        msg_chunk: &[u8; 128],
+        msg_chunk: &[u8],
         state: &mut [u64; 8],
         bytes_compressed: usize,
         last_chunk: bool,
@@ -280,7 +409,7 @@ impl BLAKE2BGadget {
         let mut V: [u64; 16] = [0; 16];
 
         V[..8].copy_from_slice(&state[..8]);
-        V[8..16].copy_from_slice(&INITIAL_HASH[8..]);
+        V[8..16].copy_from_slice(&INITIAL_HASH_COMPRESS);
 
         V[12] ^= bytes_compressed as u64;
         if last_chunk {
