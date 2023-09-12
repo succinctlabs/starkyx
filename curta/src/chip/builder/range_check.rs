@@ -29,8 +29,9 @@ impl<L: AirParameters> AirBuilder<L> {
             L::NUM_ARITHMETIC_COLUMNS,
         ))
         .into_iter()
+        .chain(self.global_arithmetic.iter().copied())
         .collect::<Vec<_>>();
 
-        self.lookup_log_derivative(&table, &values, Self::range_fn)
+        self.element_lookup_with_table_index(&table, &values, Self::range_fn)
     }
 }

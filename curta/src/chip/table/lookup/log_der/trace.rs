@@ -14,15 +14,16 @@ impl<F: PrimeField> TraceWriter<F> {
         num_rows: usize,
         table_data: &LookupTable<T, F, E>,
         table_index: impl Fn(T::Value<F>) -> usize,
-        values: &[T],
+        trace_values: &[T],
+        global_values: &[T],
     ) {
         // Calculate multiplicities
         let mut multiplicities = vec![F::ZERO; num_rows];
 
+        // Count the multiplicities in the trace
         let trace = self.read_trace().unwrap();
-
         for row in trace.rows() {
-            for value in values.iter() {
+            for value in trace_values.iter() {
                 let val = value.read_from_slice(row);
                 let index = table_index(val);
                 assert!(index < num_rows);
@@ -30,6 +31,15 @@ impl<F: PrimeField> TraceWriter<F> {
             }
         }
         drop(trace);
+
+        // Count the multiplicities in the public values
+        let public_slice = self.public.read().unwrap();
+        for value in global_values.iter() {
+            let val = value.read_from_slice(&public_slice);
+            let index = table_index(val);
+            assert!(index < num_rows);
+            multiplicities[index] += F::ONE;
+        }
 
         // Write multiplicities into the trace
         let multiplicity = table_data.multiplicities.get(0);
@@ -103,7 +113,7 @@ impl<F: PrimeField> TraceWriter<F> {
             .map(|row| {
                 let mut accumumulator = CubicExtension::ZERO;
                 let accumulators = values_data.row_accumulators;
-                for (k, pair) in values_data.values.chunks_exact(2).enumerate() {
+                for (k, pair) in values_data.trace_values.chunks_exact(2).enumerate() {
                     let a = T::trace_value_as_cubic(pair[0].read_from_slice(row));
                     let b = T::trace_value_as_cubic(pair[1].read_from_slice(row));
                     let beta_minus_a = beta - CubicExtension::from(a);
