@@ -20,7 +20,6 @@ use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
 pub struct BLAKE2BBuilderGadget<F, E, const D: usize> {
     pub padded_message: Vec<Target>,
     pub digest: Vec<Target>,
-    pub chunk_size: usize,
     _marker: PhantomData<(F, E)>,
 }
 
@@ -36,11 +35,13 @@ pub trait BLAKE2BBuilder<F: RichField + Extendable<D>, E: CubicParameters<F>, co
         gadget: &mut Self::Gadget,
     ) -> CurtaBytes<32>;
 
+    /*
     fn constrain_blake2b_gadget<C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone>(
         &mut self,
         gadget: Self::Gadget,
     ) where
         C::Hasher: AlgebraicHasher<F>;
+        */
 }
 
 impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> BLAKE2BBuilder<F, E, D>
@@ -52,7 +53,6 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> BLAKE2
         BLAKE2BBuilderGadget {
             padded_message: Vec::new(),
             digest: Vec::new(),
-            chunk_size: 0,
             _marker: PhantomData,
         }
     }
@@ -68,10 +68,10 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> BLAKE2
         let hint = BLAKE2BHintGenerator::new(&padded_message.0, message_len, digest_bytes);
         self.add_simple_generator(hint);
         gadget.digest.extend_from_slice(&digest_bytes);
-        gadget.chunk_size = N / 64;
         CurtaBytes(digest_bytes)
     }
 
+    /*
     fn constrain_blake2b_gadget<C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone>(
         &mut self,
         gadget: Self::Gadget,
@@ -126,6 +126,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> BLAKE2
 
         self.add_simple_generator(stark_generator);
     }
+    */
 }
 
 #[cfg(test)]
@@ -206,13 +207,13 @@ mod tests {
         pw.set_target(msg_length_target, F::from_canonical_usize(msg.len()));
         pw.set_target_arr(&expected_digest_target.0, &expected_digest);
 
-        let recursive_proof = timed!(
+        let proof = timed!(
             timing,
             "Generate proof",
             plonky2::plonk::prover::prove(&data.prover_only, &data.common, pw, &mut timing)
         )
         .unwrap();
         timing.print();
-        data.verify(recursive_proof).unwrap();
+        data.verify(proof).unwrap();
     }
 }

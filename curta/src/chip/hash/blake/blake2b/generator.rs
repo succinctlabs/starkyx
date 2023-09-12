@@ -6,7 +6,6 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::generator::{GeneratedValues, SimpleGenerator};
 use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
-use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::util::serialization::{Buffer, Read, Write};
 
@@ -35,67 +34,6 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for BLAKE2BAirParamet
 
     fn num_rows_bits() -> usize {
         16
-    }
-}
-
-impl BLAKE2BPublicData<Target> {
-    pub fn add_virtual<F: RichField + Extendable<D>, const D: usize>(
-        builder: &mut CircuitBuilder<F, D>,
-        digest: Target,
-        chunk_size: usize,
-    ) -> Self {
-        let public_msg_chunk_targets = (0..16 * 1024)
-            .map(|_| builder.add_virtual_target_arr::<4>())
-            .collect::<Vec<_>>();
-
-        let mut end_bits_targets = Vec::new();
-        let mut hash_state_targets = Vec::new();
-
-        for (digest, chunk_size) in digests.chunks_exact(32).zip_eq(chunk_sizes.iter()) {
-            end_bits_targets.extend((0..(chunk_size - 1)).map(|_| builder.zero()));
-            end_bits_targets.push(builder.one());
-
-            hash_state_targets
-                .extend((0..8 * (chunk_size - 1)).map(|_| builder.add_virtual_target_arr::<4>()));
-
-            // Convert digest to little endian u32 chunks
-            let u32_digest = digest.chunks_exact(4).map(|arr| {
-                let mut array: [Target; 4] = arr.try_into().unwrap();
-                array.reverse();
-                array
-            });
-            hash_state_targets.extend(u32_digest);
-        }
-
-        BLAKE2BPublicData {
-            hash_state: hash_state_targets,
-            end_bits: end_bits_targets,
-        }
-    }
-
-    pub fn public_input_targets<F: RichField + Extendable<D>, const D: usize>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-    ) -> Vec<Target> {
-        self.public_w
-            .iter()
-            .flatten()
-            .copied()
-            .chain(
-                INITIAL_HASH
-                    .map(|value| u32_to_le_field_bytes(value).map(|x| builder.constant(x)))
-                    .into_iter()
-                    .flatten(),
-            )
-            .chain(
-                ROUND_CONSTANTS
-                    .map(|value| u32_to_le_field_bytes(value).map(|x| builder.constant(x)))
-                    .into_iter()
-                    .flatten(),
-            )
-            .chain(self.hash_state.iter().flatten().copied())
-            .chain(self.end_bits.iter().copied())
-            .collect()
     }
 }
 
@@ -182,13 +120,13 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for BLA
         state[..8].copy_from_slice(&INITIAL_HASH[..8]);
 
         let num_chunks = padded_message.len() / 128;
-        let mut bytes_compressed = 0;
+        let mut bytes_compressed = 0u64;
         assert!(padded_message.len() % 128 == 0);
         for (chunk_num, chunk) in padded_message.chunks_exact(128).enumerate() {
             let last_chunk = chunk_num == num_chunks - 1;
 
             if last_chunk {
-                bytes_compressed = message_len;
+                bytes_compressed = message_len as u64;
             } else {
                 bytes_compressed += 128;
             }

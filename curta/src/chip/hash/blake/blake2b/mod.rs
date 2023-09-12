@@ -1,6 +1,7 @@
 pub mod builder_gadget;
 pub mod generator;
 
+use alloc::sync::Arc;
 use core::borrow::Borrow;
 
 use itertools::Itertools;
@@ -15,7 +16,7 @@ use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
 use crate::chip::uint::operations::instruction::U32Instructions;
 use crate::chip::uint::register::{ByteArrayRegister, U64Register};
-use crate::chip::uint::util::{u32_to_le_field_bytes, u64_to_le_field_bytes};
+use crate::chip::uint::util::u64_to_le_field_bytes;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
@@ -92,7 +93,6 @@ impl<L: AirParameters> AirBuilder<L> {
     ) -> BLAKE2BGadget
     where
         L::Instruction: U32Instructions,
-        L::Instruction: From<SelectInstruction<ByteArrayRegister<8>>>,
     {
         // Registers to be written to
         let t = self.alloc::<U64Register>();
@@ -150,9 +150,8 @@ impl<L: AirParameters> AirBuilder<L> {
         end_bit: &BitRegister,
     ) where
         L::Instruction: U32Instructions,
-        L::Instruction: From<SelectInstruction<ByteArrayRegister<8>>>,
     {
-        for i in 0..32 {
+        for i in 0..8 {
             self.set_to_expression_first_row(&h.get(i), iv.get(i).expr());
         }
 
@@ -178,7 +177,11 @@ impl<L: AirParameters> AirBuilder<L> {
         // We assume that t is no more than u64, so we don't modify V13
 
         let tmp = self.bitwise_xor(&V14, inversion_const, operations);
-        self.select::<ByteArrayRegister<8>>(last_block_bit, &tmp, &V14);
+        let mut V14New = self.alloc::<ByteArrayRegister<8>>();
+        self.set_to_expression(
+            &V14New,
+            tmp.expr() * last_block_bit.expr() + V14.expr() * last_block_bit.not_expr(),
+        );
 
         for i in 0..12 {
             self.blake2b_mix(
@@ -205,7 +208,7 @@ impl<L: AirParameters> AirBuilder<L> {
                 &mut V2,
                 &mut V6,
                 &mut V10,
-                &mut V14,
+                &mut V14New,
                 &m.get(SIGMA[i % 10][4]),
                 &m.get(SIGMA[i % 10][5]),
                 operations,
@@ -327,16 +330,15 @@ impl<L: AirParameters> AirBuilder<L> {
 }
 
 impl BLAKE2BGadget {
-    pub fn write<F: Field, I: IntoIterator>(
+    pub fn write<F: Field>(
         &self,
         padded_message: &[u8],
+        message_len: u64,
         writer: &TraceWriter<F>,
-    ) -> BLAKE2BPublicData<F>
-    where
-        I::Item: Borrow<[u8]>,
-    {
+    ) {
         let mut end_bits_values = Vec::new();
         let mut hash_values = Vec::new();
+        let mut msg_chunks = Vec::<[F; 8]>::new();
 
         let num_chunks = padded_message.len() / 128;
         end_bits_values = vec![F::ZERO; num_chunks - 1];
@@ -344,7 +346,17 @@ impl BLAKE2BGadget {
 
         let mut state = INITIAL_HASH;
         let mut bytes_compressed = 0;
+        let row_num = 0;
+        let t = 0;
         for (chunk_num, chunk) in padded_message.chunks_exact(128).enumerate() {
+            let last_chunk = chunk_num == num_chunks - 1;
+
+            if last_chunk {
+                bytes_compressed = message_len;
+            } else {
+                bytes_compressed += 128;
+            }
+
             state = BLAKE2BGadget::compress(
                 chunk,
                 &mut state,
@@ -352,57 +364,51 @@ impl BLAKE2BGadget {
                 chunk_num == num_chunks - 1,
             );
             hash_values.extend_from_slice(&state.map(u64_to_le_field_bytes::<F>));
+
+            for i in 0..128 / 8 {
+                msg_chunks.push(
+                    chunk[i * 8..(i + 1) * 8]
+                        .iter()
+                        .map(|x| F::from_canonical_u8(*x))
+                        .collect_vec()
+                        .try_into()
+                        .unwrap(),
+                );
+            }
+
+            writer.write_array(
+                &self.m,
+                &msg_chunks[msg_chunks.len() - 16..msg_chunks.len()],
+                chunk_num,
+            );
+            writer.write(
+                &self.t,
+                &u64_to_le_field_bytes::<F>(bytes_compressed),
+                chunk_num,
+            );
+            if last_chunk {
+                writer.write(&self.last_chunk_bit, &F::ONE, chunk_num);
+            }
         }
-
-        /*
-        pub t: U64Register,
-        pub m: ArrayRegister<U64Register>,
-        pub h: ArrayRegister<U64Register>,
-        pub last_chunk_bit: BitRegister,
-        pub end_bit: BitRegister,
-
-        // Public values
-        pub(crate) msg_chunks: ArrayRegister<U64Register>,
-        pub(crate) initial_state: ArrayRegister<U64Register>,
-        pub(crate) hash_state: ArrayRegister<U64Register>,
-        pub(crate) inversion_const: U64Register,
-        */
 
         writer.write_array(
             &self.initial_state,
             INITIAL_HASH.map(u64_to_le_field_bytes),
             0,
         );
-        writer.write_array(&self.state, &hash_values, 0);
-        writer.write_array(&self.end_bits_public, &end_bits_values, 0);
-        writer.write_array(&self.public_word, &public_w_values, 0);
-        (0..1024).for_each(|i| {
-            writer.write(&self.end_bit, &end_bits_values[i], i * 64 + 63);
-            for j in 0..64 {
-                let row = i * 64 + j;
-                writer.write(
-                    &self.round_constant,
-                    &u32_to_le_field_bytes(ROUND_CONSTANTS[j]),
-                    row,
-                );
-                writer.write(&self.w_window.get(0), &w_values[i * 64 + j], row);
-                if j < 16 {
-                    writer.write(&self.w_bit, &F::ONE, row);
-                }
-            }
-        });
-
-        SHA256PublicData {
-            public_w: public_w_values,
-            hash_state: hash_values,
-            end_bits: end_bits_values,
-        }
+        writer.write_array(&self.hash_state, &hash_values, 0);
+        writer.write_array(&self.msg_chunks, &msg_chunks, 0);
+        writer.write(
+            &self.inversion_const,
+            &u64_to_le_field_bytes(INVERSION_CONST),
+            0,
+        );
     }
 
     pub fn compress(
         msg_chunk: &[u8],
         state: &mut [u64; 8],
-        bytes_compressed: usize,
+        bytes_compressed: u64,
         last_chunk: bool,
     ) -> [u64; 8] {
         // Set up the work vector V
@@ -532,5 +538,111 @@ impl BLAKE2BGadget {
             padded_msg.extend_from_slice(&vec![0u8; padlen]);
             padded_msg
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use plonky2::field::goldilocks_field::GoldilocksField;
+    use plonky2::field::types::PrimeField64;
+    use plonky2::timed;
+    use plonky2::util::timing::TimingTree;
+    use subtle_encoding::hex::decode;
+
+    use super::*;
+    pub use crate::chip::builder::tests::*;
+    use crate::chip::builder::AirBuilder;
+    use crate::chip::uint::operations::instruction::U32Instruction;
+    use crate::chip::AirParameters;
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct BLAKE2BTest;
+
+    impl AirParameters for BLAKE2BTest {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
+
+        type Instruction = U32Instruction;
+
+        const NUM_FREE_COLUMNS: usize = 18504;
+        const EXTENDED_COLUMNS: usize = 49074;
+        const NUM_ARITHMETIC_COLUMNS: usize = 0;
+
+        fn num_rows_bits() -> usize {
+            16
+        }
+    }
+
+    #[test]
+    fn test_blake2b_stark() {
+        type F = GoldilocksField;
+        type L = BLAKE2BTest;
+        type SC = PoseidonGoldilocksStarkConfig;
+
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let mut timing = TimingTree::new("Blake2b test", log::Level::Debug);
+
+        let mut builder = AirBuilder::<L>::new();
+        let clk = builder.clock();
+
+        let (mut operations, table) = builder.byte_operations();
+
+        let blake_gadget = builder.process_blake2b(&clk, &mut operations);
+
+        builder.register_byte_lookup(operations, &table);
+
+        let (air, trace_data) = builder.build();
+
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let writer = generator.new_writer();
+
+        let msg = b"243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89452821e638d01377be5466cf34e90c6cc0ac29b7c97c50dd3f84d5b5b5470917243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89452821e638d01377be5466cf34e90c6cc0ac29b7c97c50dd3f84d5b5b5470917".to_vec();
+        let digest = "369ffcc61c51d8ed04bf30a9e8cf79f8994784d1e3f90f32c3182e67873a3238";
+
+        let padded_msg = BLAKE2BGadget::pad(&msg).into_iter().collect::<Vec<_>>();
+
+        let expected_digest = hex::decode(digest).unwrap().into_iter().collect::<Vec<_>>();
+
+        timed!(timing, "Write the execusion trace", {
+            table.write_table_entries(&writer);
+            blake_gadget.write(&padded_msg, msg.len() as u64, &writer);
+            for i in 0..L::num_rows() {
+                writer.write_row_instructions(&generator.air_data, i);
+                let end_bit = writer.read(&blake_gadget.end_bit, i);
+                if end_bit == F::ONE {
+                    let hash: [[GoldilocksField; 8]; 4] =
+                        writer.read_array(&blake_gadget.h.get_subarray(0..4), i);
+                    let calculated_hash_bytes = hash
+                        .iter()
+                        .flatten()
+                        .map(|x| x.to_canonical_u64() as u8)
+                        .collect_vec();
+                    assert_eq!(calculated_hash_bytes, expected_digest);
+                }
+            }
+            table.write_multiplicities(&writer);
+        });
+
+        let public_inputs = writer.0.public.read().unwrap().clone();
+        let stark = Starky::new(air);
+        let config = SC::standard_fast_config(L::num_rows());
+
+        // Generate proof and verify as a stark
+        timed!(
+            timing,
+            "Stark proof and verify",
+            test_starky(&stark, &config, &generator, &public_inputs)
+        );
+
+        // Generate recursive proof
+        timed!(
+            timing,
+            "Recursive proof generation and verification",
+            test_recursive_starky(stark, config, generator, &public_inputs)
+        );
+
+        timing.print();
     }
 }
