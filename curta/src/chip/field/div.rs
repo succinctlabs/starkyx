@@ -209,7 +209,6 @@ mod tests {
             .map(|_| {
                 let mut rng = thread_rng();
                 let writer = generator.new_writer();
-                // let handle = tx.clone();
                 let a_int: BigUint = rng.gen_biguint(256) % &p;
                 let b_int = rng.gen_biguint(256) % &p;
                 let b_inv_int = b_int.modpow(&(&p - BigUint::from(2u32)), &p);
