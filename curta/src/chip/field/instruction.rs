@@ -2,11 +2,13 @@ use serde::{Deserialize, Serialize};
 
 use super::add::FpAddInstruction;
 use super::den::FpDenInstruction;
+use super::div::FpDivInstruction;
 use super::inner_product::FpInnerProductInstruction;
 use super::mul::FpMulInstruction;
 use super::mul_const::FpMulConstInstruction;
 use super::parameters::FieldParameters;
 use super::register::FieldRegister;
+use super::sub::FpSubInstruction;
 use crate::air::AirConstraint;
 use crate::chip::bool::SelectInstruction;
 use crate::chip::instruction::Instruction;
@@ -24,6 +26,8 @@ pub enum FpInstruction<P: FieldParameters> {
     Inner(FpInnerProductInstruction<P>),
     Den(FpDenInstruction<P>),
     Select(SelectInstruction<FieldRegister<P>>),
+    Sub(FpSubInstruction<P>),
+    Div(FpDivInstruction<P>),
 }
 
 pub trait FromFieldInstruction<P: FieldParameters>:
@@ -47,6 +51,8 @@ impl<AP: PolynomialParser, P: FieldParameters> AirConstraint<AP> for FpInstructi
             FpInstruction::Inner(instruction) => AirConstraint::<AP>::eval(instruction, parser),
             FpInstruction::Den(instruction) => AirConstraint::<AP>::eval(instruction, parser),
             FpInstruction::Select(instruction) => AirConstraint::<AP>::eval(instruction, parser),
+            FpInstruction::Sub(instruction) => AirConstraint::<AP>::eval(instruction, parser),
+            FpInstruction::Div(instruction) => AirConstraint::<AP>::eval(instruction, parser),
         }
     }
 }
@@ -60,6 +66,8 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpInstruction<P> {
             FpInstruction::Inner(instruction) => Instruction::<F>::trace_layout(instruction),
             FpInstruction::Den(instruction) => Instruction::<F>::trace_layout(instruction),
             FpInstruction::Select(instruction) => Instruction::<F>::trace_layout(instruction),
+            FpInstruction::Sub(instruction) => Instruction::<F>::trace_layout(instruction),
+            FpInstruction::Div(instruction) => Instruction::<F>::trace_layout(instruction),
         }
     }
 
@@ -71,6 +79,8 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpInstruction<P> {
             FpInstruction::Inner(instruction) => Instruction::<F>::inputs(instruction),
             FpInstruction::Den(instruction) => Instruction::<F>::inputs(instruction),
             FpInstruction::Select(instruction) => Instruction::<F>::inputs(instruction),
+            FpInstruction::Sub(instruction) => Instruction::<F>::inputs(instruction),
+            FpInstruction::Div(instruction) => Instruction::<F>::inputs(instruction),
         }
     }
 
@@ -92,6 +102,12 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpInstruction<P> {
                 Instruction::<F>::write(instruction, writer, row_index)
             }
             FpInstruction::Select(instruction) => {
+                Instruction::<F>::write(instruction, writer, row_index)
+            }
+            FpInstruction::Sub(instruction) => {
+                Instruction::<F>::write(instruction, writer, row_index)
+            }
+            FpInstruction::Div(instruction) => {
                 Instruction::<F>::write(instruction, writer, row_index)
             }
         }
@@ -131,5 +147,17 @@ impl<P: FieldParameters> From<FpDenInstruction<P>> for FpInstruction<P> {
 impl<P: FieldParameters> From<SelectInstruction<FieldRegister<P>>> for FpInstruction<P> {
     fn from(instr: SelectInstruction<FieldRegister<P>>) -> Self {
         FpInstruction::Select(instr)
+    }
+}
+
+impl<P: FieldParameters> From<FpSubInstruction<P>> for FpInstruction<P> {
+    fn from(instr: FpSubInstruction<P>) -> Self {
+        FpInstruction::Sub(instr)
+    }
+}
+
+impl<P: FieldParameters> From<FpDivInstruction<P>> for FpInstruction<P> {
+    fn from(instr: FpDivInstruction<P>) -> Self {
+        FpInstruction::Div(instr)
     }
 }

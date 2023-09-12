@@ -21,12 +21,12 @@ use crate::polynomial::{to_u16_le_limbs_polynomial, Polynomial};
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub struct FpMulConstInstruction<P: FieldParameters> {
-    a: FieldRegister<P>,
-    c: [u16; MAX_NB_LIMBS],
+    pub a: FieldRegister<P>,
+    pub c: [u16; MAX_NB_LIMBS],
     pub result: FieldRegister<P>,
-    carry: FieldRegister<P>,
-    witness_low: ArrayRegister<U16Register>,
-    witness_high: ArrayRegister<U16Register>,
+    pub(crate) carry: FieldRegister<P>,
+    pub(crate) witness_low: ArrayRegister<U16Register>,
+    pub(crate) witness_high: ArrayRegister<U16Register>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
