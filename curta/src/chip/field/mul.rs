@@ -119,7 +119,7 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpMulInstruction<P>
         let carry = (&a * &b - &result) / &modulus;
         debug_assert!(result < modulus);
         debug_assert!(carry < modulus);
-        debug_assert_eq!(&carry * &modulus, a + b - &result);
+        debug_assert_eq!(&carry * &modulus, a * b - &result);
 
         // Make little endian polynomial limbs.
         let p_modulus = to_u16_le_limbs_polynomial::<F, P>(&modulus);
