@@ -17,12 +17,12 @@ use crate::polynomial::{to_u16_le_limbs_polynomial, Polynomial};
 
 #[derive(Debug, Clone, Copy)]
 pub struct FpMulInstruction<P: FieldParameters> {
-    a: FieldRegister<P>,
-    b: FieldRegister<P>,
+    pub a: FieldRegister<P>,
+    pub b: FieldRegister<P>,
     pub result: FieldRegister<P>,
-    carry: FieldRegister<P>,
-    witness_low: ArrayRegister<U16Register>,
-    witness_high: ArrayRegister<U16Register>,
+    pub(crate) carry: FieldRegister<P>,
+    pub(crate) witness_low: ArrayRegister<U16Register>,
+    pub(crate) witness_high: ArrayRegister<U16Register>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {

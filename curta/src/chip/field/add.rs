@@ -17,12 +17,12 @@ use crate::polynomial::{to_u16_le_limbs_polynomial, Polynomial};
 
 #[derive(Debug, Clone, Copy)]
 pub struct FpAddInstruction<P: FieldParameters> {
-    a: FieldRegister<P>,
-    b: FieldRegister<P>,
-    result: FieldRegister<P>,
-    carry: FieldRegister<P>,
-    witness_low: ArrayRegister<U16Register>,
-    witness_high: ArrayRegister<U16Register>,
+    pub a: FieldRegister<P>,
+    pub b: FieldRegister<P>,
+    pub result: FieldRegister<P>,
+    pub(crate) carry: FieldRegister<P>,
+    pub(crate) witness_low: ArrayRegister<U16Register>,
+    pub(crate) witness_high: ArrayRegister<U16Register>,
 }
 
 impl<P: FieldParameters> FpAddInstruction<P> {
@@ -38,24 +38,35 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         a: &FieldRegister<P>,
         b: &FieldRegister<P>,
-    ) -> FpAddInstruction<P>
+    ) -> FieldRegister<P>
     where
         L::Instruction: From<FpAddInstruction<P>>,
     {
         let result = self.alloc::<FieldRegister<P>>();
+        self.set_fp_add(a, b, &result);
+        result
+    }
+
+    pub fn set_fp_add<P: FieldParameters>(
+        &mut self,
+        a: &FieldRegister<P>,
+        b: &FieldRegister<P>,
+        result: &FieldRegister<P>,
+    ) where
+        L::Instruction: From<FpAddInstruction<P>>,
+    {
         let carry = self.alloc::<FieldRegister<P>>();
         let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
         let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
         let instr = FpAddInstruction {
             a: *a,
             b: *b,
-            result,
+            result: *result,
             carry,
             witness_low,
             witness_high,
         };
         self.register_instruction(instr);
-        instr
     }
 
     pub fn alloc_fp_add_instruction<P: FieldParameters>(
