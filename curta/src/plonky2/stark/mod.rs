@@ -188,6 +188,7 @@ pub(crate) mod tests {
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::AlgebraicHasher;
     use plonky2::util::timing::TimingTree;
+    use serde::de::DeserializeOwned;
 
     use super::*;
     use crate::air::fibonacci::FibonacciAir;
@@ -233,7 +234,7 @@ pub(crate) mod tests {
 
     /// Generate a Stark proof and a recursive proof using the witness generator
     pub(crate) fn test_recursive_starky<
-        A: 'static + Debug + Send + Sync,
+        A: 'static + Debug + Send + Sync + Serialize + DeserializeOwned,
         T,
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F, FE = F::Extension> + 'static,

@@ -60,8 +60,8 @@ where
     C: GenericConfig<D, F = F> + 'static,
     C::Hasher: AlgebraicHasher<F>,
     P: PackedField<Scalar = F>,
-    A: for<'a> RAir<StarkParser<'a, F, F, P, D, 1>>,
-    T: TraceGenerator<F, A>,
+    A: Serialize + DeserializeOwned + for<'a> RAir<StarkParser<'a, F, F, P, D, 1>>,
+    T: TraceGenerator<F, A> + Serialize + DeserializeOwned,
     T::Error: Into<anyhow::Error>,
 {
     fn id(&self) -> String {

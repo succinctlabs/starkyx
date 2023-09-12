@@ -62,8 +62,8 @@ pub struct Chip<L: AirParameters> {
     global_constraints: Vec<Constraint<L>>,
     execution_trace_length: usize,
     num_challenges: usize,
-    num_public_inputs: usize,
-    num_global_values: usize,
+    pub num_public_values: usize,
+    pub num_global_values: usize,
 }
 
 impl<L: AirParameters> Starky<Chip<L>> {

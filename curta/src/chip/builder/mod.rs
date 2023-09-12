@@ -232,7 +232,7 @@ impl<L: AirParameters> AirBuilder<L> {
                 global_constraints: self.global_constraints,
                 num_challenges: self.shared_memory.challenge_index(),
                 execution_trace_length,
-                num_public_inputs: self.shared_memory.public_index(),
+                num_public_values: self.shared_memory.public_index(),
                 num_global_values: self.shared_memory.global_index(),
             },
             AirTraceData {
@@ -303,7 +303,7 @@ pub(crate) mod tests {
         let constr_2 = builder.set_to_expression_transition(&x_1.next(), x_0.expr() + x_1.expr());
 
         let (mut air, mut air_data) = builder.build();
-        air.num_public_inputs = 3;
+        air.num_public_values = 3;
         air_data.num_public_inputs = 3;
 
         let public_inputs = [
@@ -355,7 +355,7 @@ pub(crate) mod tests {
         ];
 
         let (mut air, mut air_data) = builder.build();
-        air.num_public_inputs = 3;
+        air.num_public_values = 3;
         air_data.num_public_inputs = 3;
 
         let generator = ArithmeticGenerator::<L>::new(air_data);

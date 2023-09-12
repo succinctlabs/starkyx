@@ -512,7 +512,7 @@ mod tests {
         }
 
         // Set the public values
-        let mut public_inputs: Vec<F> = vec![F::ZERO; air.num_public_inputs];
+        let mut public_inputs: Vec<F> = vec![F::ZERO; air.num_public_values];
         for public_value in public_values.iter() {
             let j = rng.gen_range(0..L::num_rows());
             let k = rng.gen_range(0..N);
