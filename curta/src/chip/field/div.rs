@@ -104,7 +104,6 @@ impl<AP: PolynomialParser, P: FieldParameters> AirConstraint<AP> for FpDivInstru
     }
 }
 
-
 impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpDivInstruction<P> {
     fn trace_layout(&self) -> Vec<MemorySlice> {
         let mut layout = vec![
