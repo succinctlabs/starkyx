@@ -29,6 +29,7 @@ impl<L: AirParameters> AirBuilder<L> {
         ))
         .into_iter()
         .chain(self.global_arithmetic.iter().copied())
+        .chain(self.global_arithmetic.iter().copied())
         .collect::<Vec<_>>();
 
         let challenge = self.alloc_challenge::<CubicRegister>();

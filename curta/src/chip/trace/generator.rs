@@ -92,7 +92,7 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                             Self::range_fn,
                             &values_data.trace_values,
                             &values_data.public_values,
-                        )
+                        );
                 }
 
                 let trace = self.trace_clone();
