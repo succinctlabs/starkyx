@@ -22,7 +22,8 @@ pub enum Lookup<F: Field, E: CubicParameters<F>> {
     CubicElement(LogLookup<CubicRegister, F, E>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum LookupChipConstraint<F: Field, E: CubicParameters<F>> {
     Element(LookupConstraint<ElementRegister, F, E>),
     CubicElement(LookupConstraint<CubicRegister, F, E>),

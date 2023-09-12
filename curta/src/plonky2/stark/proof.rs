@@ -19,6 +19,11 @@ use crate::air::{RAir, RAirData};
 use crate::maybe_rayon::*;
 use crate::plonky2::challenger::{Plonky2Challenger, Plonky2RecursiveChallenger};
 use crate::plonky2::parser::RecursiveStarkParser;
+use crate::utils::serde::{
+    deserialize_extension_targets, deserialize_fri_proof_target, deserialize_merkle_cap_target,
+    deserialize_merkle_cap_targets, serialize_extension_targets, serialize_fri_proof_target,
+    serialize_merkle_cap_target, serialize_merkle_cap_targets,
+};
 
 /// A proof of a STARK computation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -106,12 +111,18 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> S
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StarkProofTarget<const D: usize> {
+    #[serde(serialize_with = "serialize_merkle_cap_targets")]
+    #[serde(deserialize_with = "deserialize_merkle_cap_targets")]
     pub trace_caps: Vec<MerkleCapTarget>,
+    #[serde(serialize_with = "serialize_merkle_cap_target")]
+    #[serde(deserialize_with = "deserialize_merkle_cap_target")]
     pub quotient_polys_cap: MerkleCapTarget,
     pub global_values: Vec<Target>,
     pub openings: StarkOpeningSetTarget<D>,
+    #[serde(serialize_with = "serialize_fri_proof_target")]
+    #[serde(deserialize_with = "deserialize_fri_proof_target")]
     pub opening_proof: FriProofTarget<D>,
 }
 
@@ -270,10 +281,16 @@ impl<F: RichField + Extendable<D>, const D: usize> StarkOpeningSet<F, D> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StarkOpeningSetTarget<const D: usize> {
+    #[serde(serialize_with = "serialize_extension_targets")]
+    #[serde(deserialize_with = "deserialize_extension_targets")]
     pub local_values: Vec<ExtensionTarget<D>>,
+    #[serde(serialize_with = "serialize_extension_targets")]
+    #[serde(deserialize_with = "deserialize_extension_targets")]
     pub next_values: Vec<ExtensionTarget<D>>,
+    #[serde(serialize_with = "serialize_extension_targets")]
+    #[serde(deserialize_with = "deserialize_extension_targets")]
     pub quotient_polys: Vec<ExtensionTarget<D>>,
 }
 

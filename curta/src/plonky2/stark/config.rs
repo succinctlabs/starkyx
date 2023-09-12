@@ -6,12 +6,14 @@ use plonky2::fri::{FriConfig, FriParams};
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
 use plonky2::util::log2_strict;
+use serde::{Deserialize, Serialize};
 
 use crate::plonky2::challenger::{Plonky2Challenger, Plonky2RecursiveChallenger};
 use crate::plonky2::parser::{RecursiveStarkParser, StarkParser};
 use crate::stark::config::StarkConfig;
+use crate::utils::serde::{deserialize_fri_config, serialize_fri_config};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StarkyConfig<F, C, const D: usize> {
     pub security_bits: usize,
 
@@ -24,6 +26,8 @@ pub struct StarkyConfig<F, C, const D: usize> {
     /// Number Rows = 2^{degree_bits}
     pub degree_bits: usize,
 
+    #[serde(serialize_with = "serialize_fri_config")]
+    #[serde(deserialize_with = "deserialize_fri_config")]
     pub fri_config: FriConfig,
 
     _marker: core::marker::PhantomData<(F, C)>,

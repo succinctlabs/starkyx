@@ -1,5 +1,5 @@
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use self::constraint::Constraint;
 use self::instruction::Instruction;
@@ -55,7 +55,8 @@ pub trait AirParameters:
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct Chip<L: AirParameters> {
     constraints: Vec<Constraint<L>>,
     global_constraints: Vec<Constraint<L>>,

@@ -10,6 +10,8 @@ use plonky2::iop::witness::{PartitionWitness, Witness};
 use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2::util::serialization::IoResult;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 
 use super::super::config::StarkyConfig;
 use super::super::proof::StarkProofTarget;
@@ -20,7 +22,7 @@ use crate::plonky2::parser::StarkParser;
 use crate::plonky2::stark::Starky;
 use crate::trace::generator::TraceGenerator;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimpleStarkWitnessGenerator<A, T, F, C, P, const D: usize> {
     config: StarkyConfig<F, C, D>,
     pub stark: Starky<A>,
@@ -30,7 +32,7 @@ pub struct SimpleStarkWitnessGenerator<A, T, F, C, P, const D: usize> {
     _marker: core::marker::PhantomData<P>,
 }
 
-impl<A, T: Clone, F: RichField, C, const D: usize>
+impl<A, T: Clone + Serialize + DeserializeOwned, F: RichField, C, const D: usize>
     SimpleStarkWitnessGenerator<A, T, F, C, <F as Packable>::Packing, D>
 {
     pub fn new(
@@ -98,3 +100,5 @@ where
         unimplemented!("SimpleStarkWitnessGenerator::deserialize")
     }
 }
+
+
