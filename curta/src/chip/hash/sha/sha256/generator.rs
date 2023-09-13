@@ -8,7 +8,7 @@ use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CommonCircuitData;
-use plonky2::util::serialization::{Buffer, Read, Write, IoError};
+use plonky2::util::serialization::{Buffer, Read, Write};
 use serde::{Deserialize, Serialize};
 
 use super::{SHA256Gadget, SHA256PublicData, INITIAL_HASH, ROUND_CONSTANTS};
@@ -20,7 +20,6 @@ use crate::chip::uint::register::U32Register;
 use crate::chip::uint::util::u32_to_le_field_bytes;
 use crate::chip::AirParameters;
 use crate::math::prelude::{CubicParameters, *};
-use crate::utils::serde::BufferWrite;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SHA256AirParameters<F, E>(pub PhantomData<(F, E)>);
@@ -86,8 +85,6 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
         _: &CommonCircuitData<F, D>,
     ) -> plonky2::util::serialization::IoResult<()> {
         let data = bincode::serialize(self).unwrap();
-        let back = bincode::deserialize::<Self>(&data).unwrap();
-        assert_eq!(self.padded_messages[0], back.padded_messages[0]);
         dst.write_all(&data)
     }
 
