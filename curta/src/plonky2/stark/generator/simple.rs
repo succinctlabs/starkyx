@@ -21,6 +21,7 @@ use crate::air::RAir;
 use crate::plonky2::parser::StarkParser;
 use crate::plonky2::stark::Starky;
 use crate::trace::generator::TraceGenerator;
+use crate::utils::serde::{BufferRead, BufferWrite};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimpleStarkWitnessGenerator<A, T, F, C, P, const D: usize> {
@@ -88,14 +89,15 @@ where
 
     fn serialize(&self, dst: &mut Vec<u8>, _common_data: &CommonCircuitData<F, D>) -> IoResult<()> {
         let data = bincode::serialize(&self).unwrap();
-        dst.write_all(&data)
+        dst.write_bytes(&data)
     }
 
     fn deserialize(src: &mut Buffer, _common_data: &CommonCircuitData<F, D>) -> IoResult<Self>
     where
         Self: Sized,
     {
-        let data = bincode::deserialize(src.bytes()).unwrap();
+        let bytes = src.read_bytes()?;
+        let data = bincode::deserialize(&bytes).unwrap();
         Ok(data)
     }
 }

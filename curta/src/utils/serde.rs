@@ -43,11 +43,8 @@ pub fn deserialize_hash_out_target<'de, D>(deserializer: D) -> Result<HashOutTar
 where
     D: serde::Deserializer<'de>,
 {
-    
     let elements = <[Target; 4]>::deserialize(deserializer)?;
-    Ok(HashOutTarget {
-        elements,
-    })
+    Ok(HashOutTarget { elements })
 }
 
 #[derive(Debug, Clone)]
@@ -67,7 +64,6 @@ impl<'de> Deserialize<'de> for SerdeHashOut {
     where
         D: serde::Deserializer<'de>,
     {
-        
         deserialize_hash_out_target(deserializer).map(Self)
     }
 }
@@ -104,7 +100,6 @@ impl<'de> Deserialize<'de> for SerdeMerkleCapTarget {
     where
         D: serde::Deserializer<'de>,
     {
-        
         deserialize_merkle_cap_target(deserializer).map(Self)
     }
 }

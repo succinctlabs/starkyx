@@ -20,6 +20,7 @@ use crate::chip::uint::register::U32Register;
 use crate::chip::uint::util::u32_to_le_field_bytes;
 use crate::chip::AirParameters;
 use crate::math::prelude::{CubicParameters, *};
+use crate::utils::serde::{BufferRead, BufferWrite};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SHA256AirParameters<F, E>(pub PhantomData<(F, E)>);
@@ -85,7 +86,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
         _: &CommonCircuitData<F, D>,
     ) -> plonky2::util::serialization::IoResult<()> {
         let data = bincode::serialize(self).unwrap();
-        dst.write_all(&data)
+        dst.write_bytes(&data)
     }
 
     fn deserialize(
@@ -95,7 +96,8 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
     where
         Self: Sized,
     {
-        let data = bincode::deserialize(src.bytes()).unwrap();
+        let bytes = src.read_bytes()?;
+        let data = bincode::deserialize(&bytes).unwrap();
         Ok(data)
     }
 
@@ -249,7 +251,6 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for SHA
     where
         Self: Sized,
     {
-        
         let padded_message = src.read_target_vec()?;
         let digest_bytes = src.read_target_vec()?;
         Ok(Self {

@@ -122,8 +122,11 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
 
         let mut bytes = bincode::serialize(&sha_generator).unwrap();
         bytes.extend_from_slice(&vec![0u8; 32]);
-        let back_sha_generator : SHA256Generator<F, E> = bincode::deserialize(&bytes).unwrap();
-        assert_eq!(sha_generator.padded_messages[0], back_sha_generator.padded_messages[0]);
+        let back_sha_generator: SHA256Generator<F, E> = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(
+            sha_generator.padded_messages[0],
+            back_sha_generator.padded_messages[0]
+        );
 
         self.add_simple_generator(sha_generator);
 
@@ -142,8 +145,18 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
         );
 
         let bytes = bincode::serialize(&stark_generator).unwrap();
-        let back_stark_generator : SimpleStarkWitnessGenerator<Chip<SHA256AirParameters<F, E>>, ArithmeticGenerator<SHA256AirParameters<F, E>>, F, C, F, D>  = bincode::deserialize(&bytes).unwrap();
-        assert_eq!(stark_generator.config.degree_bits, back_stark_generator.config.degree_bits);
+        let back_stark_generator: SimpleStarkWitnessGenerator<
+            Chip<SHA256AirParameters<F, E>>,
+            ArithmeticGenerator<SHA256AirParameters<F, E>>,
+            F,
+            C,
+            F,
+            D,
+        > = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(
+            stark_generator.config.degree_bits,
+            back_stark_generator.config.degree_bits
+        );
 
         self.add_simple_generator(stark_generator);
     }
