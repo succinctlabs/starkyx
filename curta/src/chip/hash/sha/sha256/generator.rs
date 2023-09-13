@@ -248,6 +248,7 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for SHA
     where
         Self: Sized,
     {
+        assert!(false);
         let padded_message = src.read_target_vec()?;
         let digest_bytes = src.read_target_vec()?;
         Ok(Self {
