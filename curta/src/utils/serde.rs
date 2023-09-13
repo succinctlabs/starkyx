@@ -33,6 +33,9 @@ pub fn serialize_hash_out_target<S>(
 where
     S: serde::Serializer,
 {
+    let elements = hash_out.elements;
+    let bytes = bincode::serialize(&elements).unwrap();
+    let back = bincode::deserialize::<[Target; 4]>(&bytes).unwrap();
     hash_out.elements.serialize(serializer)
 }
 
@@ -41,9 +44,9 @@ where
     D: serde::Deserializer<'de>,
 {
     
-    let elements = Vec::<Target>::deserialize(deserializer)?;
+    let elements = <[Target; 4]>::deserialize(deserializer)?;
     Ok(HashOutTarget {
-        elements: elements.try_into().unwrap(),
+        elements,
     })
 }
 
@@ -147,7 +150,8 @@ pub fn serialize_extension_target<S, const D: usize>(
 where
     S: serde::Serializer,
 {
-    extension_target.0.serialize(serializer)
+    let elements = extension_target.0.to_vec();
+    elements.serialize(serializer)
 }
 
 fn deserialize_extension_target<'de, D, const DEG: usize>(
@@ -156,7 +160,8 @@ fn deserialize_extension_target<'de, D, const DEG: usize>(
 where
     D: serde::Deserializer<'de>,
 {
-    let elements = Vec::<Target>::deserialize(deserializer)?;
+    let elements = <Vec<Target>>::deserialize(deserializer)?;
+    assert_eq!(elements.len(), DEG);
     Ok(ExtensionTarget(elements.try_into().unwrap()))
 }
 

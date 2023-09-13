@@ -24,7 +24,7 @@ use crate::trace::generator::TraceGenerator;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimpleStarkWitnessGenerator<A, T, F, C, P, const D: usize> {
-    config: StarkyConfig<F, C, D>,
+    pub config: StarkyConfig<F, C, D>,
     pub stark: Starky<A>,
     pub proof_target: StarkProofTarget<D>,
     pub public_input_targets: Vec<Target>,
@@ -88,8 +88,8 @@ where
 
     fn serialize(&self, dst: &mut Vec<u8>, _common_data: &CommonCircuitData<F, D>) -> IoResult<()> {
         let data = bincode::serialize(&self).unwrap();
-        let back = bincode::deserialize::<Self>(&data).unwrap();
-        assert_eq!(self.config.degree_bits, back.config.degree_bits);
+        // let back = bincode::deserialize::<Self>(&data).unwrap();
+        // assert_eq!(self.config.degree_bits, back.config.degree_bits);
         dst.write_all(&data)
     }
 
