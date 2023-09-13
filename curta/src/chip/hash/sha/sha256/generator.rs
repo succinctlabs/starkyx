@@ -94,7 +94,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
     where
         Self: Sized,
     {
-        bincode::deserialize(src.bytes()).map_err(|_| IoError)
+        Ok(bincode::deserialize(src.bytes()).unwrap())
     }
 
     fn dependencies(&self) -> Vec<Target> {
