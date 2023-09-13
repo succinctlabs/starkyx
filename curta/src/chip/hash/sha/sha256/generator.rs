@@ -8,7 +8,7 @@ use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CommonCircuitData;
-use plonky2::util::serialization::{Buffer, Read, Write};
+use plonky2::util::serialization::{Buffer, Read, Write, IoError};
 use serde::{Deserialize, Serialize};
 
 use super::{SHA256Gadget, SHA256PublicData, INITIAL_HASH, ROUND_CONSTANTS};
@@ -84,8 +84,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
         dst: &mut Vec<u8>,
         _: &CommonCircuitData<F, D>,
     ) -> plonky2::util::serialization::IoResult<()> {
-        dst.write_all(&bincode::serialize(self).unwrap())?;
-        Ok(())
+        dst.write_all(&bincode::serialize(self).map_err(|_| IoError)?)
     }
 
     fn deserialize(
@@ -95,7 +94,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
     where
         Self: Sized,
     {
-        Ok(bincode::deserialize(src.bytes()).unwrap())
+        bincode::deserialize(src.bytes()).map_err(|_| IoError)
     }
 
     fn dependencies(&self) -> Vec<Target> {

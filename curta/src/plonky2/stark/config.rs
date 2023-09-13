@@ -82,4 +82,16 @@ where
     type Proof = ();
 }
 
-pub type PoseidonGoldilocksStarkConfig = StarkyConfig<GoldilocksField, PoseidonGoldilocksConfig, 2>;
+pub type PoseidonGoldilocksStarkConfig =
+    StarkyConfig<GoldilocksField, SerdePoseidonGoldilocksConfig, 2>;
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SerdePoseidonGoldilocksConfig;
+
+impl GenericConfig<2> for SerdePoseidonGoldilocksConfig {
+    type F = <PoseidonGoldilocksConfig as GenericConfig<2>>::F;
+    type FE = <PoseidonGoldilocksConfig as GenericConfig<2>>::FE;
+
+    type Hasher = <PoseidonGoldilocksConfig as GenericConfig<2>>::Hasher;
+    type InnerHasher = <PoseidonGoldilocksConfig as GenericConfig<2>>::InnerHasher;
+}

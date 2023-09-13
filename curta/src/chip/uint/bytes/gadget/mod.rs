@@ -7,6 +7,8 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use self::air::ByteGadgetParameters;
 use self::generator::BytesLookupGenerator;
@@ -52,7 +54,9 @@ pub trait CircuitBuilderBytes<F: RichField + Extendable<D>, E: CubicParameters<F
         gadget: &mut BytesGadget<F, E, D>,
     ) -> ByteTarget;
 
-    fn register_byte_operations<C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone>(
+    fn register_byte_operations<
+        C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone + Serialize + DeserializeOwned,
+    >(
         &mut self,
         gadget: BytesGadget<F, E, D>,
     ) where
@@ -162,7 +166,11 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
 
     fn register_byte_operations<C>(&mut self, gadget: BytesGadget<F, E, D>)
     where
-        C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone,
+        C: GenericConfig<D, F = F, FE = F::Extension>
+            + 'static
+            + Clone
+            + Serialize
+            + DeserializeOwned,
         C::Hasher: AlgebraicHasher<F>,
     {
         // Register the operations into the table
@@ -230,12 +238,13 @@ mod tests {
 
     use super::*;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
+    use crate::plonky2::stark::config::SerdePoseidonGoldilocksConfig;
 
     #[test]
     fn test_byte_generator_gadget() {
         type F = GoldilocksField;
         type E = GoldilocksCubicParameters;
-        type C = PoseidonGoldilocksConfig;
+        type C = SerdePoseidonGoldilocksConfig;
         const D: usize = 2;
 
         let num_ops = 10000;

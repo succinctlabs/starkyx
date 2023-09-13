@@ -237,7 +237,7 @@ pub(crate) mod tests {
         A: 'static + Debug + Send + Sync + Serialize + DeserializeOwned,
         T,
         F: RichField + Extendable<D>,
-        C: GenericConfig<D, F = F, FE = F::Extension> + 'static,
+        C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Serialize + DeserializeOwned,
         const D: usize,
     >(
         stark: Starky<A>,

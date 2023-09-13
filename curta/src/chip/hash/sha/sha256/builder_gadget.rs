@@ -5,6 +5,8 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use super::generator::{SHA256AirParameters, SHA256Generator, SHA256HintGenerator};
 use super::SHA256PublicData;
@@ -39,7 +41,9 @@ pub trait SHA256Builder<F: RichField + Extendable<D>, E: CubicParameters<F>, con
         gadget: &mut Self::Gadget,
     ) -> CurtaBytes<32>;
 
-    fn constrain_sha256_gadget<C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone>(
+    fn constrain_sha256_gadget<
+        C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone + Serialize + DeserializeOwned,
+    >(
         &mut self,
         gadget: Self::Gadget,
     ) where
@@ -74,7 +78,9 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
         CurtaBytes(digest_bytes)
     }
 
-    fn constrain_sha256_gadget<C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone>(
+    fn constrain_sha256_gadget<
+        C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone + Serialize + DeserializeOwned,
+    >(
         &mut self,
         gadget: Self::Gadget,
     ) where
@@ -140,7 +146,6 @@ mod tests {
     use plonky2::field::types::Field;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_data::CircuitConfig;
-    use plonky2::plonk::config::PoseidonGoldilocksConfig;
     use plonky2::timed;
     use plonky2::util::timing::TimingTree;
     use subtle_encoding::hex::decode;
@@ -148,12 +153,13 @@ mod tests {
     use super::*;
     pub use crate::chip::builder::tests::*;
     use crate::chip::hash::sha::sha256::SHA256Gadget;
+    use crate::plonky2::stark::config::SerdePoseidonGoldilocksConfig;
 
     #[test]
     fn test_sha_256_plonky_gadget() {
         type F = GoldilocksField;
         type E = GoldilocksCubicParameters;
-        type C = PoseidonGoldilocksConfig;
+        type C = SerdePoseidonGoldilocksConfig;
         const D: usize = 2;
 
         let _ = env_logger::builder().is_test(true).try_init();

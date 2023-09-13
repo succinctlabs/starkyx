@@ -11,6 +11,8 @@ use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use super::air::ScalarMulEd25519;
 use super::gadget::EdScalarMulGadget;
@@ -46,7 +48,7 @@ pub struct AffinePointTarget {
 pub trait ScalarMulEd25519Gadget<F: RichField + Extendable<D>, const D: usize> {
     fn ed_scalar_mul_batch<
         E: CubicParameters<F>,
-        C: GenericConfig<D, F = F, FE = F::Extension> + 'static,
+        C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Serialize + DeserializeOwned,
     >(
         &mut self,
         points: &[AffinePointTarget],
@@ -74,7 +76,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
 {
     fn ed_scalar_mul_batch<
         E: CubicParameters<F>,
-        C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone,
+        C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone + Serialize + DeserializeOwned,
     >(
         &mut self,
         points: &[AffinePointTarget],
@@ -501,12 +503,13 @@ mod tests {
     };
     use crate::chip::ec::edwards::EdwardsParameters;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
+    use crate::plonky2::stark::config::SerdePoseidonGoldilocksConfig;
 
     #[test]
     fn test_scalar_generator() {
         type F = GoldilocksField;
         type E = GoldilocksCubicParameters;
-        type C = PoseidonGoldilocksConfig;
+        type C = SerdePoseidonGoldilocksConfig;
         const D: usize = 2;
 
         let _ = env_logger::builder().is_test(true).try_init();

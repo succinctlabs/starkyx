@@ -9,7 +9,7 @@ use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness};
 use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
-use plonky2::util::serialization::IoResult;
+use plonky2::util::serialization::{Buffer, IoError, IoResult, Write};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -57,7 +57,7 @@ impl<A: 'static + Debug + Send + Sync, T: Clone, F, C, P, const D: usize> Simple
     for SimpleStarkWitnessGenerator<A, T, F, C, P, D>
 where
     F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F> + 'static,
+    C: GenericConfig<D, F = F> + 'static + Serialize + DeserializeOwned,
     C::Hasher: AlgebraicHasher<F>,
     P: PackedField<Scalar = F>,
     A: Serialize + DeserializeOwned + for<'a> RAir<StarkParser<'a, F, F, P, D, 1>>,
@@ -65,7 +65,7 @@ where
     T::Error: Into<anyhow::Error>,
 {
     fn id(&self) -> String {
-        "SimpleStarkWitnessGenerator".to_string()
+        format!("SimpleStarkWitnessGenerator").to_string()
     }
 
     fn dependencies(&self) -> Vec<Target> {
@@ -86,17 +86,15 @@ where
         set_stark_proof_target(out_buffer, &self.proof_target, &proof);
     }
 
-    fn serialize(&self, dst: &mut Vec<u8>, common_data: &CommonCircuitData<F, D>) -> IoResult<()> {
-        unimplemented!("SimpleStarkWitnessGenerator::serialize")
+    fn serialize(&self, dst: &mut Vec<u8>, _common_data: &CommonCircuitData<F, D>) -> IoResult<()> {
+        let data = bincode::serialize(&self).map_err(|_| IoError)?;
+        dst.write_all(&data)
     }
 
-    fn deserialize(
-        src: &mut plonky2::util::serialization::Buffer,
-        common_data: &CommonCircuitData<F, D>,
-    ) -> IoResult<Self>
+    fn deserialize(src: &mut Buffer, _common_data: &CommonCircuitData<F, D>) -> IoResult<Self>
     where
         Self: Sized,
     {
-        unimplemented!("SimpleStarkWitnessGenerator::deserialize")
+        bincode::deserialize(src.bytes()).map_err(|_| IoError)
     }
 }

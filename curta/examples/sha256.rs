@@ -25,11 +25,11 @@ use curta::chip::hash::sha::sha256::builder_gadget::{
 use curta::chip::hash::sha::sha256::SHA256Gadget;
 use curta::math::goldilocks::cubic::GoldilocksCubicParameters;
 use curta::math::prelude::*;
+use curta::plonky2::stark::config::SerdePoseidonGoldilocksConfig;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CircuitConfig;
-use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::plonk::prover::prove;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
@@ -39,7 +39,7 @@ fn main() {
     // Define some type aliases for convenience
     type F = GoldilocksField;
     type E = GoldilocksCubicParameters;
-    type C = PoseidonGoldilocksConfig;
+    type C = SerdePoseidonGoldilocksConfig;
     const D: usize = 2;
 
     // env-logger for timing information
