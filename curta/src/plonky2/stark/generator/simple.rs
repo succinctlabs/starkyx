@@ -95,6 +95,7 @@ where
     where
         Self: Sized,
     {
-        bincode::deserialize(src.bytes()).map_err(|_| IoError)
+        let data = bincode::deserialize(src.bytes()).unwrap();
+        Ok(data)
     }
 }
