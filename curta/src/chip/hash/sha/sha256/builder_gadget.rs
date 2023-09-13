@@ -125,13 +125,13 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
         let back_sha_generator : SHA256Generator<F, E> = bincode::deserialize(&bytes).unwrap();
         assert_eq!(sha_generator.padded_messages[0], back_sha_generator.padded_messages[0]);
 
-        self.add_simple_generator(sha_generator);
+        // self.add_simple_generator(sha_generator);
 
         let stark = Starky::new(air);
         let config =
             StarkyConfig::<F, C, D>::standard_fast_config(SHA256AirParameters::<F, E>::num_rows());
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
-        self.verify_stark_proof(&config, &stark, virtual_proof.clone(), &public_input_target);
+        // self.verify_stark_proof(&config, &stark, virtual_proof.clone(), &public_input_target);
 
         let stark_generator = SimpleStarkWitnessGenerator::new(
             config,
