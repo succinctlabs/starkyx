@@ -94,6 +94,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
     where
         Self: Sized,
     {
+        assert!(false);
         Ok(bincode::deserialize(src.bytes()).unwrap())
     }
 
