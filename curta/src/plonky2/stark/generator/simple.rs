@@ -88,6 +88,8 @@ where
 
     fn serialize(&self, dst: &mut Vec<u8>, _common_data: &CommonCircuitData<F, D>) -> IoResult<()> {
         let data = bincode::serialize(&self).unwrap();
+        let back = bincode::deserialize::<Self>(&data).unwrap();
+        assert_eq!(self.config.degree_bits, back.config.degree_bits);
         dst.write_all(&data)
     }
 
