@@ -20,6 +20,7 @@ use crate::chip::uint::register::U32Register;
 use crate::chip::uint::util::u32_to_le_field_bytes;
 use crate::chip::AirParameters;
 use crate::math::prelude::{CubicParameters, *};
+use crate::utils::serde::BufferWrite;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SHA256AirParameters<F, E>(pub PhantomData<(F, E)>);
@@ -84,7 +85,8 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
         dst: &mut Vec<u8>,
         _: &CommonCircuitData<F, D>,
     ) -> plonky2::util::serialization::IoResult<()> {
-        dst.write_all(&bincode::serialize(self).unwrap())
+        let data = bincode::serialize(self).unwrap();
+        dst.write_bytes(&data)
     }
 
     fn deserialize(
