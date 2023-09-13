@@ -87,7 +87,7 @@ where
     }
 
     fn serialize(&self, dst: &mut Vec<u8>, _common_data: &CommonCircuitData<F, D>) -> IoResult<()> {
-        let data = bincode::serialize(&self).map_err(|_| IoError)?;
+        let data = bincode::serialize(&self).unwrap();
         dst.write_all(&data)
     }
 

@@ -84,7 +84,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
         dst: &mut Vec<u8>,
         _: &CommonCircuitData<F, D>,
     ) -> plonky2::util::serialization::IoResult<()> {
-        dst.write_all(&bincode::serialize(self).map_err(|_| IoError)?)
+        dst.write_all(&bincode::serialize(self).unwrap())
     }
 
     fn deserialize(
