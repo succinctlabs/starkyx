@@ -40,7 +40,7 @@ pub fn deserialize_hash_out_target<'de, D>(deserializer: D) -> Result<HashOutTar
 where
     D: serde::Deserializer<'de>,
 {
-    assert!(false);
+    
     let elements = Vec::<Target>::deserialize(deserializer)?;
     Ok(HashOutTarget {
         elements: elements.try_into().unwrap(),
@@ -64,7 +64,7 @@ impl<'de> Deserialize<'de> for SerdeHashOut {
     where
         D: serde::Deserializer<'de>,
     {
-        assert!(false);
+        
         deserialize_hash_out_target(deserializer).map(Self)
     }
 }
@@ -101,7 +101,7 @@ impl<'de> Deserialize<'de> for SerdeMerkleCapTarget {
     where
         D: serde::Deserializer<'de>,
     {
-        assert!(false);
+        
         deserialize_merkle_cap_target(deserializer).map(Self)
     }
 }

@@ -96,7 +96,7 @@ where
         Self: Sized,
     {
 
-        assert!(false);
+        
         let data = bincode::deserialize(src.bytes()).unwrap();
         Ok(data)
     }
