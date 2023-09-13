@@ -255,6 +255,7 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for SHA
         
         let padded_message = src.read_target_vec()?;
         let digest_bytes = src.read_target_vec()?;
+        unimplemented!("TODO: deserialize");
         Ok(Self {
             padded_message,
             digest_bytes: digest_bytes.try_into().unwrap(),

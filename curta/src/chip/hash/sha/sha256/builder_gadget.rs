@@ -120,6 +120,11 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
             pub_values_target: public_sha_targets,
         };
 
+        let mut bytes = bincode::serialize(&sha_generator).unwrap();
+        bytes.extend_from_slice(&vec![0u8; 32]);
+        let back_sha_generator : SHA256Generator<F, E> = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(sha_generator.padded_messages[0], back_sha_generator.padded_messages[0]);
+
         self.add_simple_generator(sha_generator);
 
         let stark = Starky::new(air);
