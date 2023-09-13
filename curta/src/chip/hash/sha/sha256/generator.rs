@@ -86,6 +86,8 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
         _: &CommonCircuitData<F, D>,
     ) -> plonky2::util::serialization::IoResult<()> {
         let data = bincode::serialize(self).unwrap();
+        let back = bincode::deserialize::<Self>(&data).unwrap();
+        assert_eq!(self.padded_messages[0], back.padded_messages[0]);
         dst.write_all(&data)
     }
 
