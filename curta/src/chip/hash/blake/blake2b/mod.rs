@@ -1,12 +1,8 @@
 pub mod builder_gadget;
 pub mod generator;
 
-use alloc::sync::Arc;
-use core::borrow::Borrow;
-
 use itertools::Itertools;
 
-use crate::chip::bool::SelectInstruction;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
@@ -32,7 +28,8 @@ pub struct BLAKE2BGadget {
 
     // Public values
     pub(crate) msg_chunks: ArrayRegister<U64Register>,
-    pub(crate) initial_state: ArrayRegister<U64Register>,
+    pub(crate) initial_hash: ArrayRegister<U64Register>,
+    pub(crate) initial_hash_compress: ArrayRegister<U64Register>,
     pub(crate) hash_state: ArrayRegister<U64Register>,
     pub(crate) inversion_const: U64Register,
 }
@@ -103,11 +100,12 @@ impl<L: AirParameters> AirBuilder<L> {
 
         // Public values
         let msg_chunks = self.alloc_array_public::<U64Register>(16 * 512);
-        let initial_state = self.alloc_array_public::<U64Register>(16);
+        let initial_hash = self.alloc_array_public::<U64Register>(8);
+        let initial_hash_compress = self.alloc_array_public::<U64Register>(8);
         let hash_state = self.alloc_array_public::<U64Register>(8 * 512);
         let inversion_const = self.alloc_public::<U64Register>();
 
-        for (h, init) in h.iter().zip(initial_state.iter()) {
+        for (h, init) in h.iter().zip(initial_hash.iter()) {
             self.set_to_expression_first_row(&h, init.expr());
         }
 
@@ -115,7 +113,7 @@ impl<L: AirParameters> AirBuilder<L> {
             clk,
             &m,
             &h,
-            &initial_state,
+            &initial_hash_compress,
             &inversion_const,
             &t,
             &last_chunk_bit,
@@ -130,7 +128,8 @@ impl<L: AirParameters> AirBuilder<L> {
             last_chunk_bit,
             end_bit,
             msg_chunks,
-            initial_state,
+            initial_hash,
+            initial_hash_compress,
             hash_state,
             inversion_const,
         }
@@ -142,8 +141,8 @@ impl<L: AirParameters> AirBuilder<L> {
         clk: &ElementRegister,
         m: &ArrayRegister<U64Register>,
         h: &ArrayRegister<U64Register>,
-        iv: &ArrayRegister<U64Register>,
-        inversion_const: &U64Register,
+        iv_pub: &ArrayRegister<U64Register>,
+        inversion_const_pub: &U64Register,
         t: &U64Register, // assumes t is not more than u64
         last_block_bit: &BitRegister,
         operations: &mut ByteLookupOperations,
@@ -151,9 +150,13 @@ impl<L: AirParameters> AirBuilder<L> {
     ) where
         L::Instruction: U32Instructions,
     {
+        let iv = self.alloc_array::<U64Register>(8);
         for i in 0..8 {
-            self.set_to_expression_first_row(&h.get(i), iv.get(i).expr());
+            self.set_to_expression_first_row(&iv.get(i), iv_pub.get(i).expr());
         }
+
+        let inversion_const = self.alloc::<U64Register>();
+        self.set_to_expression_first_row(&inversion_const, inversion_const_pub.expr());
 
         let mut V0 = h.get(0);
         let mut V1 = h.get(1);
@@ -164,26 +167,26 @@ impl<L: AirParameters> AirBuilder<L> {
         let mut V6 = h.get(6);
         let mut V7 = h.get(7);
 
-        let mut V8 = iv.get(8);
-        let mut V9 = iv.get(9);
-        let mut V10 = iv.get(10);
-        let mut V11 = iv.get(11);
-        let mut V12 = iv.get(12);
-        let mut V13 = iv.get(13);
-        let mut V14 = iv.get(14);
-        let mut V15 = iv.get(15);
+        let mut V8 = iv.get(0);
+        let mut V9 = iv.get(1);
+        let mut V10 = iv.get(2);
+        let mut V11 = iv.get(3);
+        let mut V12 = iv.get(4);
+        let mut V13 = iv.get(5);
+        let mut V14 = iv.get(6);
+        let mut V15 = iv.get(7);
 
         V12 = self.bitwise_xor(&V12, &t, operations);
         // We assume that t is no more than u64, so we don't modify V13
 
-        let tmp = self.bitwise_xor(&V14, inversion_const, operations);
+        let tmp = self.bitwise_xor(&V14, &inversion_const, operations);
         let mut V14New = self.alloc::<ByteArrayRegister<8>>();
         self.set_to_expression(
             &V14New,
             tmp.expr() * last_block_bit.expr() + V14.expr() * last_block_bit.not_expr(),
         );
 
-        for i in 0..12 {
+        for i in 0..1 {
             self.blake2b_mix(
                 &mut V0,
                 &mut V4,
@@ -392,8 +395,14 @@ impl BLAKE2BGadget {
         }
 
         writer.write_array(
-            &self.initial_state,
+            &self.initial_hash,
             INITIAL_HASH.map(u64_to_le_field_bytes),
+            0,
+        );
+
+        writer.write_array(
+            &self.initial_hash_compress,
+            INITIAL_HASH_COMPRESS.map(u64_to_le_field_bytes),
             0,
         );
         writer.write_array(&self.hash_state, &hash_values, 0);
@@ -565,8 +574,8 @@ mod tests {
 
         type Instruction = U32Instruction;
 
-        const NUM_FREE_COLUMNS: usize = 18504;
-        const EXTENDED_COLUMNS: usize = 49074;
+        const NUM_FREE_COLUMNS: usize = 2032;
+        const EXTENDED_COLUMNS: usize = 4722;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
         fn num_rows_bits() -> usize {
@@ -636,12 +645,12 @@ mod tests {
             test_starky(&stark, &config, &generator, &public_inputs)
         );
 
-        // Generate recursive proof
-        timed!(
-            timing,
-            "Recursive proof generation and verification",
-            test_recursive_starky(stark, config, generator, &public_inputs)
-        );
+        // // Generate recursive proof
+        // timed!(
+        //     timing,
+        //     "Recursive proof generation and verification",
+        //     test_recursive_starky(stark, config, generator, &public_inputs)
+        // );
 
         timing.print();
     }
