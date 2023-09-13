@@ -88,7 +88,6 @@ where
 
     fn serialize(&self, dst: &mut Vec<u8>, _common_data: &CommonCircuitData<F, D>) -> IoResult<()> {
         let data = bincode::serialize(&self).unwrap();
-        assert!(false, "check this");
         dst.write_all(&data)
     }
 
@@ -97,6 +96,7 @@ where
         Self: Sized,
     {
         let data = bincode::deserialize(src.bytes()).unwrap();
+        assert!(false, "check this");
         Ok(data)
     }
 }
