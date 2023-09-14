@@ -131,12 +131,7 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for BLA
                 bytes_compressed += 128;
             }
 
-            state = BLAKE2BGadget::compress(
-                chunk.try_into().unwrap(),
-                &mut state,
-                bytes_compressed,
-                last_chunk,
-            );
+            state = BLAKE2BGadget::compress(chunk, &mut state, bytes_compressed, last_chunk);
         }
 
         // We only support a digest of 32 bytes.  Retrieve the first four elements of the state

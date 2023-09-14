@@ -193,7 +193,6 @@ impl<L: AirParameters> AirBuilder<L> {
             ],
         );
         self.output_from_bus(bus_channel_idx, round_constant_output);
-
         let round_constant_input = self.accumulate_expressions(
             &round_constant_challenges,
             &[clk.expr(), round_constant.expr()],
