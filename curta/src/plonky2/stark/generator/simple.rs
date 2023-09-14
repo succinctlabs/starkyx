@@ -2,14 +2,13 @@ use core::fmt::Debug;
 
 use plonky2::field::extension::Extendable;
 use plonky2::field::packable::Packable;
-use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::generator::{GeneratedValues, SimpleGenerator};
 use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness};
 use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
-use plonky2::util::serialization::{Buffer, IoError, IoResult, Write};
+use plonky2::util::serialization::{Buffer, IoResult};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -17,31 +16,29 @@ use super::super::config::StarkyConfig;
 use super::super::proof::StarkProofTarget;
 use super::super::prover::StarkyProver;
 use super::super::verifier::set_stark_proof_target;
-use crate::air::RAir;
-use crate::plonky2::parser::StarkParser;
+use crate::chip::trace::generator::ArithmeticGenerator;
+use crate::chip::{AirParameters, Chip};
 use crate::plonky2::stark::Starky;
-use crate::trace::generator::TraceGenerator;
+use crate::plonky2::Plonky2Air;
 use crate::utils::serde::{BufferRead, BufferWrite};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SimpleStarkWitnessGenerator<A, T, F, C, P, const D: usize> {
-    pub config: StarkyConfig<F, C, D>,
-    pub stark: Starky<A>,
+#[serde(bound = "")]
+pub struct SimpleStarkWitnessGenerator<L: AirParameters, C, const D: usize> {
+    pub config: StarkyConfig<L::Field, C, D>,
+    pub stark: Starky<Chip<L>>,
     pub proof_target: StarkProofTarget<D>,
     pub public_input_targets: Vec<Target>,
-    pub trace_generator: T,
-    _marker: core::marker::PhantomData<P>,
+    pub trace_generator: ArithmeticGenerator<L>,
 }
 
-impl<A, T: Clone + Serialize + DeserializeOwned, F: RichField, C, const D: usize>
-    SimpleStarkWitnessGenerator<A, T, F, C, <F as Packable>::Packing, D>
-{
+impl<L: AirParameters, C, const D: usize> SimpleStarkWitnessGenerator<L, C, D> {
     pub fn new(
-        config: StarkyConfig<F, C, D>,
-        stark: Starky<A>,
+        config: StarkyConfig<L::Field, C, D>,
+        stark: Starky<Chip<L>>,
         proof_target: StarkProofTarget<D>,
         public_input_targets: Vec<Target>,
-        trace_generator: T,
+        trace_generator: ArithmeticGenerator<L>,
     ) -> Self {
         Self {
             config,
@@ -49,21 +46,26 @@ impl<A, T: Clone + Serialize + DeserializeOwned, F: RichField, C, const D: usize
             proof_target,
             public_input_targets,
             trace_generator,
-            _marker: core::marker::PhantomData,
         }
+    }
+
+    pub fn id() -> String {
+        format!(
+            "SimpleStarkWitnessGenerator, air parameters: {}, D = {}",
+            L::id(),
+            D
+        )
+        .to_string()
     }
 }
 
-impl<A: 'static + Debug + Send + Sync, T: Clone, F, C, P, const D: usize> SimpleGenerator<F, D>
-    for SimpleStarkWitnessGenerator<A, T, F, C, P, D>
+impl<L: AirParameters, C, const D: usize> SimpleGenerator<L::Field, D>
+    for SimpleStarkWitnessGenerator<L, C, D>
 where
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F> + 'static + Serialize + DeserializeOwned,
-    C::Hasher: AlgebraicHasher<F>,
-    P: PackedField<Scalar = F>,
-    A: Serialize + DeserializeOwned + for<'a> RAir<StarkParser<'a, F, F, P, D, 1>>,
-    T: TraceGenerator<F, A> + Serialize + DeserializeOwned,
-    T::Error: Into<anyhow::Error>,
+    L::Field: RichField + Extendable<D>,
+    Chip<L>: Plonky2Air<L::Field, D>,
+    C: GenericConfig<D, F = L::Field> + 'static + Serialize + DeserializeOwned,
+    C::Hasher: AlgebraicHasher<L::Field>,
 {
     fn id(&self) -> String {
         format!("SimpleStarkWitnessGenerator").to_string()
@@ -73,26 +75,38 @@ where
         self.public_input_targets.clone()
     }
 
-    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
+    fn run_once(
+        &self,
+        witness: &PartitionWitness<L::Field>,
+        out_buffer: &mut GeneratedValues<L::Field>,
+    ) {
         let public_inputs = witness.get_targets(&self.public_input_targets);
 
-        let proof = StarkyProver::<F, C, F, P, D, 1>::prove(
-            &self.config,
-            &self.stark,
-            &self.trace_generator,
-            &public_inputs,
-        )
-        .unwrap();
+        let proof =
+            StarkyProver::<L::Field, C, L::Field, <L::Field as Packable>::Packing, D, 1>::prove(
+                &self.config,
+                &self.stark,
+                &self.trace_generator,
+                &public_inputs,
+            )
+            .unwrap();
 
         set_stark_proof_target(out_buffer, &self.proof_target, &proof);
     }
 
-    fn serialize(&self, dst: &mut Vec<u8>, _common_data: &CommonCircuitData<F, D>) -> IoResult<()> {
+    fn serialize(
+        &self,
+        dst: &mut Vec<u8>,
+        _common_data: &CommonCircuitData<L::Field, D>,
+    ) -> IoResult<()> {
         let data = bincode::serialize(&self).unwrap();
         dst.write_bytes(&data)
     }
 
-    fn deserialize(src: &mut Buffer, _common_data: &CommonCircuitData<F, D>) -> IoResult<Self>
+    fn deserialize(
+        src: &mut Buffer,
+        _common_data: &CommonCircuitData<L::Field, D>,
+    ) -> IoResult<Self>
     where
         Self: Sized,
     {

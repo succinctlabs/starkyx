@@ -19,8 +19,7 @@ impl<'a> BufferRead for Buffer<'a> {}
 pub trait BufferWrite: Write {
     fn write_bytes(&mut self, bytes: &[u8]) -> IoResult<()> {
         self.write_usize(bytes.len())?;
-        self.write_all(bytes)?;
-        Ok(())
+        self.write_all(bytes)
     }
 }
 
@@ -33,9 +32,6 @@ pub fn serialize_hash_out_target<S>(
 where
     S: serde::Serializer,
 {
-    let elements = hash_out.elements;
-    let bytes = bincode::serialize(&elements).unwrap();
-    let back = bincode::deserialize::<[Target; 4]>(&bytes).unwrap();
     hash_out.elements.serialize(serializer)
 }
 

@@ -192,13 +192,16 @@ pub(crate) mod tests {
 
     use super::*;
     use crate::air::fibonacci::FibonacciAir;
+    use crate::chip::builder::tests::ArithmeticGenerator;
+    use crate::chip::{AirParameters, Chip};
     use crate::math::prelude::*;
-    use crate::plonky2::parser::global::{GlobalRecursiveStarkParser, GlobalStarkParser};
+    use crate::plonky2::parser::global::GlobalStarkParser;
     use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
     use crate::plonky2::stark::gadget::StarkGadget;
     use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
     use crate::plonky2::stark::prover::StarkyProver;
     use crate::plonky2::stark::verifier::StarkyVerifier;
+    use crate::plonky2::Plonky2Air;
     use crate::trace::generator::{ConstantGenerator, TraceGenerator};
 
     /// Generate the proof and verify as a stark
@@ -234,23 +237,18 @@ pub(crate) mod tests {
 
     /// Generate a Stark proof and a recursive proof using the witness generator
     pub(crate) fn test_recursive_starky<
-        A: 'static + Debug + Send + Sync + Serialize + DeserializeOwned,
-        T,
+        L: AirParameters<Field = F>,
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Serialize + DeserializeOwned,
         const D: usize,
     >(
-        stark: Starky<A>,
+        stark: Starky<Chip<L>>,
         config: StarkyConfig<F, C, D>,
-        trace_generator: T,
+        trace_generator: ArithmeticGenerator<L>,
         public_inputs: &[F],
     ) where
         C::Hasher: AlgebraicHasher<F>,
-        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
-            + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>
-            + for<'a> RAir<GlobalRecursiveStarkParser<'a, F, D>>,
-        T: Clone + Debug + Send + Sync + 'static + TraceGenerator<F, A>,
-        T::Error: Into<anyhow::Error>,
+        Chip<L>: Plonky2Air<F, D>,
     {
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut builder = CircuitBuilder::<F, D>::new(config_rec);
@@ -310,8 +308,5 @@ pub(crate) mod tests {
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &trace_generator, &public_inputs);
-
-        // Test the recursive proof.
-        test_recursive_starky(stark, config, trace_generator, &public_inputs);
     }
 }

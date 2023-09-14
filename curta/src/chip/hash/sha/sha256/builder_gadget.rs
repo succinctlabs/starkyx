@@ -12,7 +12,7 @@ use super::generator::{SHA256AirParameters, SHA256Generator, SHA256HintGenerator
 use super::SHA256PublicData;
 use crate::chip::builder::AirBuilder;
 use crate::chip::trace::generator::ArithmeticGenerator;
-use crate::chip::{AirParameters, Chip};
+use crate::chip::AirParameters;
 use crate::math::prelude::CubicParameters;
 use crate::plonky2::stark::config::StarkyConfig;
 use crate::plonky2::stark::gadget::StarkGadget;
@@ -120,14 +120,6 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
             pub_values_target: public_sha_targets,
         };
 
-        let mut bytes = bincode::serialize(&sha_generator).unwrap();
-        bytes.extend_from_slice(&vec![0u8; 32]);
-        let back_sha_generator: SHA256Generator<F, E> = bincode::deserialize(&bytes).unwrap();
-        assert_eq!(
-            sha_generator.padded_messages[0],
-            back_sha_generator.padded_messages[0]
-        );
-
         self.add_simple_generator(sha_generator);
 
         let stark = Starky::new(air);
@@ -143,21 +135,6 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
             public_input_target,
             generator,
         );
-
-        let bytes = bincode::serialize(&stark_generator).unwrap();
-        let back_stark_generator: SimpleStarkWitnessGenerator<
-            Chip<SHA256AirParameters<F, E>>,
-            ArithmeticGenerator<SHA256AirParameters<F, E>>,
-            F,
-            C,
-            F,
-            D,
-        > = bincode::deserialize(&bytes).unwrap();
-        assert_eq!(
-            stark_generator.config.degree_bits,
-            back_stark_generator.config.degree_bits
-        );
-
         self.add_simple_generator(stark_generator);
     }
 }
