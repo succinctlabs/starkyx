@@ -10,6 +10,7 @@ use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CommonCircuitData;
+use serde::{Serialize, Deserialize};
 
 use super::air::ScalarMulEd25519;
 use super::gadget::EdScalarMulGadget;
@@ -31,12 +32,13 @@ use crate::plonky2::stark::config::{CurtaConfig, StarkyConfig};
 use crate::plonky2::stark::gadget::StarkGadget;
 use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
 use crate::plonky2::stark::Starky;
+use crate::utils::serde::{BufferWrite, BufferRead};
 
 pub type EdDSAStark<F, E> = Starky<Chip<ScalarMulEd25519<F, E>>>;
 
 const AFFINE_POINT_TARGET_NUM_LIMBS: usize = 16;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct AffinePointTarget {
     pub x: [Target; AFFINE_POINT_TARGET_NUM_LIMBS],
     pub y: [Target; AFFINE_POINT_TARGET_NUM_LIMBS],
@@ -135,7 +137,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
 
         let trace_generator = ArithmeticGenerator::<ScalarMulEd25519<F, E>>::new(trace_data);
 
-        self.verify_stark_proof(&config, &stark, virtual_proof.clone(), &public_input_target);
+        self.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_target);
 
         let stark_generator = SimpleStarkWitnessGenerator::new(
             config,
@@ -218,7 +220,8 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct SimpleScalarMulEd25519Generator<
     F: RichField + Extendable<D>,
     E: CubicParameters<F>,
@@ -263,6 +266,10 @@ impl<
             _marker: core::marker::PhantomData,
         }
     }
+
+    pub fn id() -> String {
+        "SimpleScalarMulEd25519Generator".to_string()
+    }
 }
 
 impl<
@@ -273,7 +280,7 @@ impl<
     > SimpleGenerator<F, D> for SimpleScalarMulEd25519Generator<F, E, C, D>
 {
     fn id(&self) -> String {
-        unimplemented!("TODO")
+        Self::id() 
     }
 
     fn dependencies(&self) -> Vec<Target> {
@@ -351,21 +358,24 @@ impl<
 
     fn serialize(
         &self,
-        _dst: &mut Vec<u8>,
+        dst: &mut Vec<u8>,
         _common_data: &CommonCircuitData<F, D>,
     ) -> plonky2::util::serialization::IoResult<()> {
-        unimplemented!("SimpleScalarMulEd25519Generator::serialize")
+        let data = bincode::serialize(&self).unwrap();
+        dst.write_bytes(&data)
     }
 
     fn deserialize(
-        _src: &mut plonky2::util::serialization::Buffer,
+        src: &mut plonky2::util::serialization::Buffer,
         _common_data: &CommonCircuitData<F, D>,
     ) -> plonky2::util::serialization::IoResult<Self> {
-        unimplemented!("SimpleScalarMulEd25519Generator::deserialize")
+        let bytes = src.read_bytes()?;
+        let data = bincode::deserialize(&bytes).unwrap();
+        Ok(data)
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimpleScalarMulEd25519HintGenerator<F: RichField + Extendable<D>, const D: usize> {
     points: Vec<AffinePointTarget>,
     scalars: Vec<Vec<Target>>, // 32-byte limbs
@@ -386,13 +396,17 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleScalarMulEd25519HintGen
             _marker: core::marker::PhantomData,
         }
     }
+
+    fn id() -> String {
+        "SimpleScalarMulEd25519HintGenerator".to_string()
+    }
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
     for SimpleScalarMulEd25519HintGenerator<F, D>
 {
     fn id(&self) -> String {
-        unimplemented!("TODO")
+        Self::id()
     }
 
     fn dependencies(&self) -> Vec<Target> {
@@ -453,17 +467,20 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
 
     fn serialize(
         &self,
-        _dst: &mut Vec<u8>,
+        dst: &mut Vec<u8>,
         _common_data: &CommonCircuitData<F, D>,
     ) -> plonky2::util::serialization::IoResult<()> {
-        unimplemented!("SimpleScalarMulEd25519HintGenerator::serialize")
+        let data = bincode::serialize(&self).unwrap();
+        dst.write_bytes(&data)
     }
 
     fn deserialize(
-        _src: &mut plonky2::util::serialization::Buffer,
+        src: &mut plonky2::util::serialization::Buffer,
         _common_data: &CommonCircuitData<F, D>,
     ) -> plonky2::util::serialization::IoResult<Self> {
-        unimplemented!("SimpleScalarMulEd25519HintGenerator::deserialize")
+        let bytes = src.read_bytes()?;
+        let data = bincode::deserialize(&bytes).unwrap();
+        Ok(data)
     }
 }
 

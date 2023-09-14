@@ -192,7 +192,7 @@ where
         builder: &mut CircuitBuilder<F, D>,
         config: &StarkyConfig<C, D>,
         stark: &Starky<A>,
-        proof: StarkProofTarget<D>,
+        proof: &StarkProofTarget<D>,
         public_inputs: &[Target],
     ) where
         A: Plonky2Air<F, D>,
@@ -278,8 +278,9 @@ where
 
         let merkle_caps = proof
             .trace_caps
-            .into_iter()
-            .chain(once(proof.quotient_polys_cap))
+            .iter()
+            .cloned()
+            .chain(once(proof.quotient_polys_cap.clone()))
             .collect::<Vec<_>>();
 
         let fri_instance = stark.fri_instance_target(

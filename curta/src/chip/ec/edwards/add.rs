@@ -1,3 +1,5 @@
+use serde::{Serialize, Deserialize};
+
 use super::EdwardsParameters;
 use crate::chip::builder::AirBuilder;
 use crate::chip::ec::point::AffinePointRegister;
@@ -11,7 +13,7 @@ use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EdAddGadget<E: EdwardsParameters> {
     p: AffinePointRegister<E>,
     q: AffinePointRegister<E>,

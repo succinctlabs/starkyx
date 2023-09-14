@@ -116,7 +116,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
         let config =
             StarkyConfig::<C, D>::standard_fast_config(SHA256AirParameters::<F, E>::num_rows());
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
-        self.verify_stark_proof(&config, &stark, virtual_proof.clone(), &public_input_target);
+        self.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_target);
 
         let stark_generator = SimpleStarkWitnessGenerator::new(
             config,

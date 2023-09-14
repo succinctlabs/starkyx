@@ -1,3 +1,5 @@
+use serde::{Serialize, Deserialize};
+
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::ec::edwards::add::EdAddGadget;
@@ -9,7 +11,7 @@ use crate::chip::register::bit::BitRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::AirParameters;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(dead_code)]
 pub struct EdDoubleAndAddGadget<E: EdwardsParameters> {
     pub bit: BitRegister,
@@ -21,7 +23,7 @@ pub struct EdDoubleAndAddGadget<E: EdwardsParameters> {
     double_gadget: EdAddGadget<E>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(dead_code)]
 pub struct EdScalarMulGadget<F, E: EdwardsParameters> {
     pub cycle: Cycle<F>,

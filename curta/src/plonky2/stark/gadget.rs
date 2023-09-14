@@ -29,7 +29,7 @@ pub trait StarkGadget<
         &mut self,
         config: &StarkyConfig<C, D>,
         stark: &Starky<A>,
-        proof: StarkProofTarget<D>,
+        proof: &StarkProofTarget<D>,
         public_inputs: &[Target],
     ) where
         A: Plonky2Air<F, D>;
@@ -53,7 +53,7 @@ impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F, FE = F::Extension>, 
         &mut self,
         config: &StarkyConfig<C, D>,
         stark: &Starky<A>,
-        proof: StarkProofTarget<D>,
+        proof: &StarkProofTarget<D>,
         public_inputs: &[Target],
     ) where
         A: Plonky2Air<F, D>,
