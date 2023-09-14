@@ -1,12 +1,10 @@
 pub mod builder_gadget;
 pub mod generator;
-mod instruction;
 
 use core::borrow::Borrow;
 
 use itertools::Itertools;
 
-use self::instruction::Blake2bInstructions;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
@@ -17,6 +15,7 @@ use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
 use crate::chip::table::bus::global::Bus;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
+use crate::chip::uint::operations::instruction::U32Instructions;
 use crate::chip::uint::register::U64Register;
 use crate::chip::uint::util::u64_to_le_field_bytes;
 use crate::chip::AirParameters;
@@ -98,7 +97,7 @@ impl<L: AirParameters> AirBuilder<L> {
         operations: &mut ByteLookupOperations,
     ) -> BLAKE2BGadget
     where
-        L::Instruction: Blake2bInstructions,
+        L::Instruction: U32Instructions,
     {
         // Registers to be written to
         let t = self.alloc::<U64Register>(); // need to constrain
@@ -233,7 +232,7 @@ impl<L: AirParameters> AirBuilder<L> {
         cycle_12_end_bit: &BitRegister,
         operations: &mut ByteLookupOperations,
     ) where
-        L::Instruction: Blake2bInstructions,
+        L::Instruction: U32Instructions,
     {
         // Need to create non public registers for IV and inversion_const.  Operating on public and private registers causes issues.
         let iv = self.alloc_array::<U64Register>(8);
@@ -540,7 +539,7 @@ impl<L: AirParameters> AirBuilder<L> {
         y: &U64Register,
         operations: &mut ByteLookupOperations,
     ) where
-        L::Instruction: Blake2bInstructions,
+        L::Instruction: U32Instructions,
     {
         *v_a = self.add_u64(v_a, v_b, operations);
         *v_a = self.add_u64(v_a, x, operations);
@@ -841,10 +840,10 @@ mod tests {
     use plonky2::timed;
     use plonky2::util::timing::TimingTree;
 
-    use super::instruction::Blake2bInstruction;
     use super::*;
     pub use crate::chip::builder::tests::*;
     use crate::chip::builder::AirBuilder;
+    use crate::chip::uint::operations::instruction::U32Instruction;
     use crate::chip::AirParameters;
 
     #[derive(Debug, Clone, Copy)]
@@ -854,7 +853,7 @@ mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        type Instruction = Blake2bInstruction;
+        type Instruction = U32Instruction;
 
         const NUM_FREE_COLUMNS: usize = 2032;
         const EXTENDED_COLUMNS: usize = 4722;
