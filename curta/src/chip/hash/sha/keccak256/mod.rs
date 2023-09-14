@@ -2,12 +2,13 @@ use core::borrow::Borrow;
 
 use plonky2::field::types::Field;
 
-use crate::chip::{builder::{AirBuilder}, AirParameters, trace::writer::TraceWriter, uint::{register::{U64Register, ByteArrayRegister}, bytes::lookup_table::builder_operations::ByteLookupOperations, operations::instruction::U32Instructions}, arithmetic::expression, register::bit::BitRegister};
+use crate::chip::{builder::{AirBuilder}, AirParameters, trace::writer::TraceWriter, uint::{register::{U64Register, ByteArrayRegister}, bytes::lookup_table::builder_operations::ByteLookupOperations, operations::instruction::U32Instructions}, arithmetic::expression, register::{bit::BitRegister, array::ArrayRegister}};
 use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
 
 use super::sha256::U32Value;
 
 pub struct Keccak256Gadget {
+    pub state: ArrayRegister<ByteArrayRegister<8>>,
    pub(crate) round_constant: U64Register
 }
 
@@ -78,79 +79,86 @@ impl<L: AirParameters> AirBuilder<L> {
         // maybe need to boundary the initial state?
         // define boundary constraint for theta
         let state = self.alloc_array::<U64Register>(25);
-        
+        let a = self.alloc::<U64Register>();
+        for x in 0..5 {
+            for y in 0..5 {
+                let res = self.add_u64(&state.get(x + y*5), &a, operations);
+                self.set_to_expression(&state.get(x + y*5).next(), res.expr());
+            }
+        }
         // theta
         // how to constrain an array value follows a transition constraint in for loop? 
-        let c_arr = self.alloc_array::<U64Register>(5);
-        let d_arr = self.alloc_array::<U64Register>(5);
-        for x in 0..5 {
-            let mut c_i = state.get(x); 
-            for y in 1..5 {
-                c_i = self.bitwise_xor(&c_i, &state.get(y * 5 + x), operations);
-            }
-            // Does it suffice to constrain for every row of c_i, it need to satisfy its relationship with state at the same row?
-            self.assert_equal_transition(&c_arr.get(x), &c_i);
-        }
+        // let c_arr = self.alloc_array::<U64Register>(5);
+        // let d_arr = self.alloc_array::<U64Register>(5);
+        // for x in 0..5 {
+        //     let mut c_i = state.get(x); 
+        //     for y in 1..5 {
+        //         c_i = self.bitwise_xor(&c_i, &state.get(y * 5 + x), operations);
+        //     }
+        //     // Does it suffice to constrain for every row of c_i, it need to satisfy its relationship with state at the same row?
+        //     self.assert_equal_transition(&c_arr.get(x), &c_i);
+        // }
         // initial state doesn't exist? or don't want to constrain? first row of it is empty?
-        let state_after_theta = self.alloc_array::<U64Register>(25);
+        // let state_after_theta = self.alloc_array::<U64Register>(25);
         
-        for x in 0..5 {
-            let temp = self.bit_rotate_right(&c_arr.get((x + 1) % 5), 1, operations);
-            let d_i = self.bitwise_xor(&c_arr.get((x+4)%5), &temp, operations);
-            self.assert_equal_transition(&d_arr.get(x), &d_i);
-            for y in 0..5 {
-                // make sure state_after_theta follows the theta transition of state
-                let tmp = self.bitwise_xor(&state.get(y * 5 + x), &d_i, operations);
-                self.set_to_expression_transition(&(state_after_theta.get(y * 5 + x)), tmp.expr());
-            }
-        }
+        // for x in 0..5 {
+        //     let temp = self.bit_rotate_right(&c_arr.get((x + 1) % 5), 1, operations);
+        //     let d_i = self.bitwise_xor(&c_arr.get((x+4)%5), &temp, operations);
+        //     self.assert_equal_transition(&d_arr.get(x), &d_i);
+        //     for y in 0..5 {
+        //         // make sure state_after_theta follows the theta transition of state
+        //         let tmp = self.bitwise_xor(&state.get(y * 5 + x), &d_i, operations);
+        //         self.set_to_expression_transition(&(state_after_theta.get(y * 5 + x)), tmp.expr());
+        //     }
+        // }
 
-        let state_after_rhopi = self.alloc_array::<U64Register>(25);
-        // 0,0 has no change, direct copy constraint 
-        self.set_to_expression(&state_after_rhopi.get(0), state_after_theta.get(0).expr());
-        // rho and pi
-        for x in 0..5 {
-            for y in 0..5 {
-                // x is column, y is row
-                // y, 2x+3y, is pi_idx in the flatten version
-                if x+y != 0 {
-                    let pi_idx = ((2 * x + 3 * y) % 5) * 5 + y;
-                    let tmp = self.bit_rotate_right(&state_after_theta.get(y * 5 + x), KECCAKF_ROTC[y][x].try_into().unwrap(), operations);
-                    self.set_to_expression_transition(&state_after_rhopi.get(pi_idx), tmp.expr());
-                }
-            }
-        }
+        // let state_after_rhopi = self.alloc_array::<U64Register>(25);
+        // // 0,0 has no change, direct copy constraint 
+        // self.set_to_expression(&state_after_rhopi.get(0), state_after_theta.get(0).expr());
+        // // rho and pi
+        // for x in 0..5 {
+        //     for y in 0..5 {
+        //         // x is column, y is row
+        //         // y, 2x+3y, is pi_idx in the flatten version
+        //         if x+y != 0 {
+        //             let pi_idx = ((2 * x + 3 * y) % 5) * 5 + y;
+        //             let tmp = self.bit_rotate_right(&state_after_theta.get(y * 5 + x), KECCAKF_ROTC[y][x].try_into().unwrap(), operations);
+        //             self.set_to_expression_transition(&state_after_rhopi.get(pi_idx), tmp.expr());
+        //         }
+        //     }
+        // }
 
-        let state_after_chi = self.alloc_array::<U64Register>(25);
-        // chi
-        for x in 0..5 {
-            for y in 0..5 {
-                let tmp1 = self.bitwise_not(&state_after_rhopi.get(  (x + 1) % 5 + y * 5), operations);
-                let tmp2 = self.bitwise_and(&tmp1, &state_after_rhopi.get((x+2) % 5 + y * 5), operations);
-                let tmp3 = self.bitwise_xor(&state_after_rhopi.get(x + y * 5), &tmp2, operations);
-                self.set_to_expression_transition(&state_after_chi.get(x + y*5), tmp3.expr());
-            }
-        }
+        // let state_after_chi = self.alloc_array::<U64Register>(25);
+        // // chi
+        // for x in 0..5 {
+        //     for y in 0..5 {
+        //         let tmp1 = self.bitwise_not(&state_after_rhopi.get(  (x + 1) % 5 + y * 5), operations);
+        //         let tmp2 = self.bitwise_and(&tmp1, &state_after_rhopi.get((x+2) % 5 + y * 5), operations);
+        //         let tmp3 = self.bitwise_xor(&state_after_rhopi.get(x + y * 5), &tmp2, operations);
+        //         self.set_to_expression_transition(&state_after_chi.get(x + y*5), tmp3.expr());
+        //     }
+        // }
 
-        // iota
-        let tmp = self.bitwise_xor(&state_after_chi.get(0), &round_const, operations);
-        self.set_to_expression_transition(&state.get(0).next(),
-            tmp.expr());
+        // // iota
+        // let tmp = self.bitwise_xor(&state_after_chi.get(0), &round_const, operations);
+        // self.set_to_expression_transition(&state.get(0).next(),
+        //     tmp.expr());
 
-        // constrain the other val of next state is the same as chi's result
-        for x in 0..5 {
-            for y in 0..5 {
-                // can if used here? if not, guess need to pass some indicator bit to help identity 0,0 
-                if x + y > 0 {
-                    self.set_to_expression_transition(
-                        &state.get(x + y * 5).next(), 
-                             state_after_chi.get(x + y * 5).expr()
-                        );
-                }
-            }
-        }
+        // // constrain the other val of next state is the same as chi's result
+        // for x in 0..5 {
+        //     for y in 0..5 {
+        //         // can if used here? if not, guess need to pass some indicator bit to help identity 0,0 
+        //         if x + y > 0 {
+        //             self.set_to_expression_transition(
+        //                 &state.get(x + y * 5).next(), 
+        //                      state_after_chi.get(x + y * 5).expr()
+        //                 );
+        //         }
+        //     }
+        // }
 
         Keccak256Gadget {
+            state: state,
             round_constant: round_const
         }
     }
@@ -192,12 +200,12 @@ mod tests {
 
         type Instruction = U32Instruction;
 
-        const NUM_FREE_COLUMNS: usize = 2693;
-        const EXTENDED_COLUMNS: usize = 5622;
+        const NUM_FREE_COLUMNS: usize = 567;
+        const EXTENDED_COLUMNS: usize = 942;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
         fn num_rows_bits() -> usize {
-            16
+            9
         }
     }
 
@@ -221,13 +229,21 @@ mod tests {
 
         let generator = ArithmeticGenerator::<L>::new(trace_data);
         let writer = generator.new_writer();
-       
-        for i in 0..L::num_rows() {
+        for i in 0..24 {
+            writer.write(&keccak_f_gadget.state.get(i), &[F::ZERO; 8], 0);
+        }
+        println!("{}", L::num_rows());
+        println!("{}", generator.air_data.instructions.len());
+
+        for i in 0..L::num_rows() -1 {
             let round_constant_value = u64_to_le_field_bytes::<F>(KECCAKF_RNDC[i % 24]);
             writer.write(&keccak_f_gadget.round_constant, &round_constant_value, i);
             
             writer.write_row_instructions(&generator.air_data, i);
         }
+
+        // after one round result should be at row_index = 1
+        
 
         // for i in 0..L::num_rows() {
         //     println!("{:?}", writer.read(&keccak_f_gadget.round_constant, i));
