@@ -126,7 +126,7 @@ impl ByteOperation<ByteRegister> {
             ByteOperation::ShrCarry(a, b, result, carry) => {
                 let a_val = from_field(writer.read(a, row_index));
                 let b_mod = b & 0x7;
-                let (res_val, carry_val) = if b_mod != 0 {
+                let (res_val, mut carry_val) = if b_mod != 0 {
                     let res_val = a_val >> b_mod;
                     let carry_val = (a_val << (8 - b_mod)) >> (8 - b_mod);
                     debug_assert_eq!(
