@@ -12,11 +12,10 @@ use plonky2::field::types::Field;
 use plonky2::field::zero_poly_coset::ZeroPolyOnCoset;
 use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::hash::hash_types::RichField;
-use plonky2::plonk::config::GenericConfig;
 use plonky2::util::timing::TimingTree;
 use plonky2::util::{log2_ceil, transpose};
 
-use super::config::StarkyConfig;
+use super::config::{CurtaConfig, StarkyConfig};
 use super::Starky;
 use crate::maybe_rayon::*;
 use crate::plonky2::challenger::Plonky2Challenger;
@@ -34,14 +33,14 @@ type P<F> = <F as Packable>::Packing;
 impl<F, C, const D: usize> StarkyProver<F, C, D>
 where
     F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
+    C: CurtaConfig<D, F = F>,
 {
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
     }
 
     pub fn prove<A, T>(
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
         stark: &Starky<A>,
         trace_generator: &T,
         public_inputs: &[F],
@@ -87,7 +86,7 @@ where
                 num_rows = trace_cols[0].len();
             }
 
-            let commitment = PolynomialBatch::<F, C, D>::from_values(
+            let commitment = PolynomialBatch::<F, C::GenericConfig, D>::from_values(
                 trace_cols,
                 rate_bits,
                 false,
@@ -146,7 +145,7 @@ where
             })
             .collect();
 
-        let quotient_commitment = PolynomialBatch::<F, C, D>::from_coeffs(
+        let quotient_commitment = PolynomialBatch::<F, C::GenericConfig, D>::from_coeffs(
             all_quotient_chunks,
             rate_bits,
             false,
@@ -203,9 +202,9 @@ where
     #[allow(clippy::too_many_arguments)]
     fn quotient_polys<A>(
         degree_bits: usize,
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
         stark: &Starky<A>,
-        trace_data: &[PolynomialBatch<F, C, D>],
+        trace_data: &[PolynomialBatch<F, C::GenericConfig, D>],
         challenges_vars: &[P<F>],
         global_vars: &[P<F>],
         public_vars: &[P<F>],

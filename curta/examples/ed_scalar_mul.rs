@@ -22,13 +22,14 @@ use curta::chip::ec::edwards::scalar_mul::generator::{AffinePointTarget, ScalarM
 use curta::chip::ec::edwards::EdwardsParameters;
 use curta::chip::utils::biguint_to_16_digits_field;
 use curta::math::goldilocks::cubic::GoldilocksCubicParameters;
-use curta::plonky2::stark::config::SerdePoseidonGoldilocksConfig;
+use curta::plonky2::stark::config::CurtaPoseidonGoldilocksConfig;
 use num::bigint::RandBigInt;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::Field;
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CircuitConfig;
+use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::plonk::prover::prove;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
@@ -38,7 +39,8 @@ fn main() {
     // Define some type aliases for convenience
     type F = GoldilocksField;
     type E = GoldilocksCubicParameters;
-    type C = SerdePoseidonGoldilocksConfig;
+    type SC = CurtaPoseidonGoldilocksConfig;
+    type C = PoseidonGoldilocksConfig;
     const D: usize = 2;
 
     // env-logger for timing information
@@ -82,7 +84,7 @@ fn main() {
     }
 
     // Get the results of the scalar multiplication
-    let results = builder.ed_scalar_mul_batch::<E, C>(&points, &scalars_limbs);
+    let results = builder.ed_scalar_mul_batch::<E, SC>(&points, &scalars_limbs);
 
     // These results will be allocated automatically into the trace once `points` and
     // `scalars` are written into the trace.

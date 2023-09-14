@@ -11,18 +11,18 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::iop::target::Target;
 use plonky2::iop::witness::WitnessWrite;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
+use plonky2::plonk::config::AlgebraicHasher;
 use plonky2::plonk::plonk_common::reduce_with_powers;
 use plonky2::util::reducing::ReducingFactorTarget;
 
-use super::config::StarkyConfig;
+use super::config::{CurtaConfig, StarkyConfig};
 use super::proof::{StarkOpeningSet, StarkOpeningSetTarget, StarkProof, StarkProofTarget};
 use super::Starky;
 use crate::air::{RAir, RAirData};
 use crate::plonky2::parser::consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
 use crate::plonky2::parser::global::{GlobalRecursiveStarkParser, GlobalStarkParser};
 use crate::plonky2::parser::{RecursiveStarkParser, StarkParser};
-use crate::plonky2::StarkyAir;
+use crate::plonky2::{Plonky2Air, StarkyAir};
 
 #[derive(Debug, Clone)]
 pub struct StarkyVerifier<F, C, const D: usize>(core::marker::PhantomData<(F, C)>);
@@ -30,10 +30,10 @@ pub struct StarkyVerifier<F, C, const D: usize>(core::marker::PhantomData<(F, C)
 impl<F, C, const D: usize> StarkyVerifier<F, C, D>
 where
     F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F, FE = F::Extension>,
+    C: CurtaConfig<D, F = F, FE = F::Extension>,
 {
     pub fn verify<A>(
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
         stark: &Starky<A>,
         proof: StarkProof<F, C, D>,
         public_inputs: &[F],
@@ -125,7 +125,7 @@ where
             .chain(once(proof.quotient_polys_cap))
             .collect::<Vec<_>>();
 
-        verify_fri_proof::<F, C, D>(
+        verify_fri_proof::<F, C::GenericConfig, D>(
             &stark.fri_instance(
                 challenges.stark_zeta,
                 F::primitive_root_of_unity(degree_bits),
@@ -141,7 +141,7 @@ where
     }
 
     pub fn validate_proof_shape<A: RAirData>(
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
         stark: &Starky<A>,
         proof: &StarkProof<F, C, D>,
     ) -> Result<()> {
@@ -190,14 +190,12 @@ where
 
     pub fn verify_circuit<A>(
         builder: &mut CircuitBuilder<F, D>,
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
         stark: &Starky<A>,
         proof: StarkProofTarget<D>,
         public_inputs: &[Target],
     ) where
-        C::Hasher: AlgebraicHasher<F>,
-        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
-            + for<'a> RAir<GlobalRecursiveStarkParser<'a, F, D>>,
+        A: Plonky2Air<F, D>,
     {
         let StarkOpeningSetTarget {
             local_values,
@@ -290,7 +288,7 @@ where
             F::primitive_root_of_unity(degree_bits),
             config,
         );
-        builder.verify_fri_proof::<C>(
+        builder.verify_fri_proof::<C::GenericConfig>(
             &fri_instance,
             &proof.openings.to_fri_openings(),
             &challenges.fri_challenges,
@@ -323,16 +321,13 @@ where
 pub fn add_virtual_stark_proof<
     F: RichField + Extendable<D>,
     A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
-    C: GenericConfig<D, F = F>,
+    C: CurtaConfig<D, F = F>,
     const D: usize,
 >(
     builder: &mut CircuitBuilder<F, D>,
     stark: &Starky<A>,
-    config: &StarkyConfig<F, C, D>,
-) -> StarkProofTarget<D>
-where
-    C::Hasher: AlgebraicHasher<F>,
-{
+    config: &StarkyConfig<C, D>,
+) -> StarkProofTarget<D> {
     let fri_params = config.fri_params();
     let cap_height = fri_params.config.cap_height;
 
@@ -364,16 +359,13 @@ where
 pub(crate) fn add_stark_opening_set_target<
     F: RichField + Extendable<D>,
     A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
-    C: GenericConfig<D, F = F>,
+    C: CurtaConfig<D, F = F>,
     const D: usize,
 >(
     builder: &mut CircuitBuilder<F, D>,
     stark: &Starky<A>,
-    config: &StarkyConfig<F, C, D>,
-) -> StarkOpeningSetTarget<D>
-where
-    C::Hasher: AlgebraicHasher<F>,
-{
+    config: &StarkyConfig<C, D>,
+) -> StarkOpeningSetTarget<D> {
     let num_challenges = config.num_challenges;
     StarkOpeningSetTarget {
         local_values: builder.add_virtual_extension_targets(stark.air().num_columns()),
@@ -383,7 +375,7 @@ where
     }
 }
 
-pub fn set_stark_proof_target<F, C: GenericConfig<D, F = F>, W, const D: usize>(
+pub fn set_stark_proof_target<F, C: CurtaConfig<D, F = F>, W, const D: usize>(
     witness: &mut W,
     proof_target: &StarkProofTarget<D>,
     proof: &StarkProof<F, C, D>,

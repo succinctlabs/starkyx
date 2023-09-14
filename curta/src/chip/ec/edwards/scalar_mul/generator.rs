@@ -10,9 +10,6 @@ use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CommonCircuitData;
-use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 
 use super::air::ScalarMulEd25519;
 use super::gadget::EdScalarMulGadget;
@@ -30,7 +27,7 @@ use crate::chip::{AirParameters, Chip};
 use crate::math::extension::CubicParameters;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
-use crate::plonky2::stark::config::StarkyConfig;
+use crate::plonky2::stark::config::{CurtaConfig, StarkyConfig};
 use crate::plonky2::stark::gadget::StarkGadget;
 use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
 use crate::plonky2::stark::Starky;
@@ -46,16 +43,11 @@ pub struct AffinePointTarget {
 }
 
 pub trait ScalarMulEd25519Gadget<F: RichField + Extendable<D>, const D: usize> {
-    fn ed_scalar_mul_batch<
-        E: CubicParameters<F>,
-        C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Serialize + DeserializeOwned,
-    >(
+    fn ed_scalar_mul_batch<E: CubicParameters<F>, C: CurtaConfig<D, F = F, FE = F::Extension>>(
         &mut self,
         points: &[AffinePointTarget],
         scalars: &[Vec<Target>],
-    ) -> Vec<AffinePointTarget>
-    where
-        C::Hasher: AlgebraicHasher<F>;
+    ) -> Vec<AffinePointTarget>;
 
     fn ed_scalar_mul_batch_hint(
         &mut self,
@@ -74,17 +66,11 @@ pub trait ScalarMulEd25519Gadget<F: RichField + Extendable<D>, const D: usize> {
 impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
     for CircuitBuilder<F, D>
 {
-    fn ed_scalar_mul_batch<
-        E: CubicParameters<F>,
-        C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone + Serialize + DeserializeOwned,
-    >(
+    fn ed_scalar_mul_batch<E: CubicParameters<F>, C: CurtaConfig<D, F = F, FE = F::Extension>>(
         &mut self,
         points: &[AffinePointTarget],
         scalars: &[Vec<Target>],
-    ) -> Vec<AffinePointTarget>
-    where
-        C::Hasher: AlgebraicHasher<F>,
-    {
+    ) -> Vec<AffinePointTarget> {
         let (
             air,
             trace_data,
@@ -144,7 +130,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
 
         let stark = Starky::new(air);
         let config =
-            StarkyConfig::<F, C, D>::standard_fast_config(ScalarMulEd25519::<F, E>::num_rows());
+            StarkyConfig::<C, D>::standard_fast_config(ScalarMulEd25519::<F, E>::num_rows());
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
 
         let trace_generator = ArithmeticGenerator::<ScalarMulEd25519<F, E>>::new(trace_data);
@@ -236,8 +222,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
 pub struct SimpleScalarMulEd25519Generator<
     F: RichField + Extendable<D>,
     E: CubicParameters<F>,
-    C: GenericConfig<D, F = F>,
-    // S,
+    C: CurtaConfig<D, F = F>,
     const D: usize,
 > {
     gadget: EdScalarMulGadget<F, Ed25519>,
@@ -253,8 +238,7 @@ pub struct SimpleScalarMulEd25519Generator<
 impl<
         F: RichField + Extendable<D>,
         E: CubicParameters<F>,
-        C: GenericConfig<D, F = F>,
-        // S,
+        C: CurtaConfig<D, F = F>,
         const D: usize,
     > SimpleScalarMulEd25519Generator<F, E, C, D>
 {
@@ -284,11 +268,9 @@ impl<
 impl<
         F: RichField + Extendable<D>,
         E: CubicParameters<F>,
-        C: GenericConfig<D, F = F, FE = F::Extension> + 'static,
+        C: CurtaConfig<D, F = F, FE = F::Extension>,
         const D: usize,
     > SimpleGenerator<F, D> for SimpleScalarMulEd25519Generator<F, E, C, D>
-where
-    C::Hasher: AlgebraicHasher<F>,
 {
     fn id(&self) -> String {
         unimplemented!("TODO")
@@ -503,13 +485,14 @@ mod tests {
     };
     use crate::chip::ec::edwards::EdwardsParameters;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
-    use crate::plonky2::stark::config::SerdePoseidonGoldilocksConfig;
+    use crate::plonky2::stark::config::CurtaPoseidonGoldilocksConfig;
 
     #[test]
-    fn test_scalar_generator() {
+    fn test_ed_generator_scalar_mul() {
         type F = GoldilocksField;
         type E = GoldilocksCubicParameters;
-        type C = SerdePoseidonGoldilocksConfig;
+        type SC = CurtaPoseidonGoldilocksConfig;
+        type C = PoseidonGoldilocksConfig;
         const D: usize = 2;
 
         let _ = env_logger::builder().is_test(true).try_init();
@@ -543,7 +526,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // The scalar multiplications
-        let results = builder.ed_scalar_mul_batch::<E, C>(&points, &scalars_limbs);
+        let results = builder.ed_scalar_mul_batch::<E, SC>(&points, &scalars_limbs);
 
         // compare the results to the expected results
         for (result, expected) in results.iter().zip(expected_results.iter()) {

@@ -6,9 +6,7 @@ use plonky2::iop::generator::{GeneratedValues, SimpleGenerator};
 use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness};
 use plonky2::plonk::circuit_data::CommonCircuitData;
-use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2::util::serialization::{Buffer, IoResult};
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use super::super::config::StarkyConfig;
@@ -17,6 +15,7 @@ use super::super::prover::StarkyProver;
 use super::super::verifier::set_stark_proof_target;
 use crate::chip::trace::generator::ArithmeticGenerator;
 use crate::chip::{AirParameters, Chip};
+use crate::plonky2::stark::config::CurtaConfig;
 use crate::plonky2::stark::Starky;
 use crate::plonky2::Plonky2Air;
 use crate::utils::serde::{BufferRead, BufferWrite};
@@ -24,7 +23,7 @@ use crate::utils::serde::{BufferRead, BufferWrite};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub struct SimpleStarkWitnessGenerator<L: AirParameters, C, const D: usize> {
-    pub config: StarkyConfig<L::Field, C, D>,
+    pub config: StarkyConfig<C, D>,
     pub stark: Starky<Chip<L>>,
     pub proof_target: StarkProofTarget<D>,
     pub public_input_targets: Vec<Target>,
@@ -33,7 +32,7 @@ pub struct SimpleStarkWitnessGenerator<L: AirParameters, C, const D: usize> {
 
 impl<L: AirParameters, C, const D: usize> SimpleStarkWitnessGenerator<L, C, D> {
     pub fn new(
-        config: StarkyConfig<L::Field, C, D>,
+        config: StarkyConfig<C, D>,
         stark: Starky<Chip<L>>,
         proof_target: StarkProofTarget<D>,
         public_input_targets: Vec<Target>,
@@ -63,8 +62,7 @@ impl<L: AirParameters, C, const D: usize> SimpleGenerator<L::Field, D>
 where
     L::Field: RichField + Extendable<D>,
     Chip<L>: Plonky2Air<L::Field, D>,
-    C: GenericConfig<D, F = L::Field> + 'static + Serialize + DeserializeOwned,
-    C::Hasher: AlgebraicHasher<L::Field>,
+    C: CurtaConfig<D, F = L::Field>,
 {
     fn id(&self) -> String {
         Self::id()

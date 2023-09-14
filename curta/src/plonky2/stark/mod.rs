@@ -10,10 +10,9 @@ use plonky2::fri::structure::{
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2::plonk::config::GenericConfig;
 use serde::{Deserialize, Serialize};
 
-use self::config::StarkyConfig;
+use self::config::{CurtaConfig, StarkyConfig};
 use crate::air::RAirData;
 
 pub mod config;
@@ -39,13 +38,9 @@ impl<A> Starky<A> {
         &self.air
     }
 
-    fn num_quotient_polys<
-        F: RichField + Extendable<D>,
-        C: GenericConfig<D, F = F>,
-        const D: usize,
-    >(
+    fn num_quotient_polys<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize>(
         &self,
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
     ) -> usize
     where
         A: RAirData,
@@ -54,11 +49,11 @@ impl<A> Starky<A> {
     }
 
     /// Computes the FRI instance used to prove this Stark.
-    fn fri_instance<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
+    fn fri_instance<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize>(
         &self,
         zeta: F::Extension,
         g: F,
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
     ) -> FriInstanceInfo<F, D>
     where
         A: RAirData,
@@ -97,16 +92,12 @@ impl<A> Starky<A> {
     }
 
     /// Computes the FRI instance used to prove this Stark.
-    fn fri_instance_target<
-        C: GenericConfig<D, F = F>,
-        F: RichField + Extendable<D>,
-        const D: usize,
-    >(
+    fn fri_instance_target<C: CurtaConfig<D, F = F>, F: RichField + Extendable<D>, const D: usize>(
         &self,
         builder: &mut CircuitBuilder<F, D>,
         zeta: ExtensionTarget<D>,
         g: F,
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
     ) -> FriInstanceInfoTarget<D>
     where
         A: RAirData,
@@ -176,11 +167,11 @@ pub(crate) mod tests {
         A: 'static + Debug + Send + Sync,
         T,
         F: RichField + Extendable<D>,
-        C: GenericConfig<D, F = F, FE = F::Extension>,
+        C: CurtaConfig<D, F = F, FE = F::Extension>,
         const D: usize,
     >(
         stark: &Starky<A>,
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
         trace_generator: &T,
         public_inputs: &[F],
     ) where
@@ -199,11 +190,11 @@ pub(crate) mod tests {
     pub(crate) fn test_recursive_starky<
         L: AirParameters<Field = F>,
         F: RichField + Extendable<D>,
-        C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Serialize + DeserializeOwned,
+        C: CurtaConfig<D, F = F, FE = F::Extension> + 'static + Serialize + DeserializeOwned,
         const D: usize,
     >(
         stark: Starky<Chip<L>>,
-        config: StarkyConfig<F, C, D>,
+        config: StarkyConfig<C, D>,
         trace_generator: ArithmeticGenerator<L>,
         public_inputs: &[F],
     ) where
@@ -237,7 +228,7 @@ pub(crate) mod tests {
         );
         builder.add_simple_generator(generator);
 
-        let data = builder.build::<C>();
+        let data = builder.build::<C::GenericConfig>();
         let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
         let recursive_proof =
             plonky2::plonk::prover::prove(&data.prover_only, &data.common, pw, &mut timing)

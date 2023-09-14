@@ -13,7 +13,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::GenericConfig;
 use serde::{Deserialize, Serialize};
 
-use super::config::StarkyConfig;
+use super::config::{CurtaConfig, StarkyConfig};
 use super::Starky;
 use crate::air::{RAir, RAirData};
 use crate::maybe_rayon::*;
@@ -28,7 +28,7 @@ use crate::utils::serde::{
 /// A proof of a STARK computation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
-pub struct StarkProof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> {
+pub struct StarkProof<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> {
     /// Merkle cap of LDEs of trace values for each round.
     pub trace_caps: Vec<MerkleCap<F, C::Hasher>>,
     /// Merkle cap of LDEs of trace values.
@@ -41,9 +41,9 @@ pub struct StarkProof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, 
     pub opening_proof: FriProof<F, C::Hasher, D>,
 }
 
-impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> StarkProof<F, C, D> {
+impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> StarkProof<F, C, D> {
     /// Recover the length of the trace from a STARK proof and a STARK config.
-    pub fn recover_degree_bits(&self, config: &StarkyConfig<F, C, D>) -> usize {
+    pub fn recover_degree_bits(&self, config: &StarkyConfig<C, D>) -> usize {
         let initial_merkle_proof = &self.opening_proof.query_round_proofs[0]
             .initial_trees_proof
             .evals_proofs[0]
@@ -54,7 +54,7 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> S
 
     pub(crate) fn get_challenges<A: RAirData>(
         &self,
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
         stark: &Starky<A>,
         public_inputs: &[F],
         degree_bits: usize,
@@ -100,7 +100,7 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> S
             stark_alphas,
             stark_betas: challenges,
             stark_zeta,
-            fri_challenges: challenger.0.fri_challenges::<C, D>(
+            fri_challenges: challenger.0.fri_challenges::<C::GenericConfig, D>(
                 commit_phase_merkle_caps,
                 final_poly,
                 *pow_witness,
@@ -128,9 +128,9 @@ pub struct StarkProofTarget<const D: usize> {
 
 impl<const D: usize> StarkProofTarget<D> {
     /// Recover the length of the trace from a STARK proof and a STARK config.
-    pub fn recover_degree_bits<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>>(
+    pub fn recover_degree_bits<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>>(
         &self,
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
     ) -> usize {
         let initial_merkle_proof = &self.opening_proof.query_round_proofs[0]
             .initial_trees_proof
@@ -143,11 +143,11 @@ impl<const D: usize> StarkProofTarget<D> {
     pub fn get_challenges_target<
         F: RichField + Extendable<D>,
         A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
-        C: GenericConfig<D, F = F>,
+        C: CurtaConfig<D, F = F>,
     >(
         &self,
         builder: &mut CircuitBuilder<F, D>,
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
         public_inputs: &[Target],
         stark: &Starky<A>,
     ) -> StarkProofChallengesTarget<D> {
@@ -167,7 +167,11 @@ impl<const D: usize> StarkProofTarget<D> {
 
         let num_challenges = config.num_challenges;
 
-        let mut challenger = Plonky2RecursiveChallenger::<F, C::InnerHasher, D>::new(builder);
+        let mut challenger = Plonky2RecursiveChallenger::<
+            F,
+            <C::GenericConfig as GenericConfig<D>>::InnerHasher,
+            D,
+        >::new(builder);
 
         // Observe public inputs
         challenger.0.observe_elements(public_inputs);

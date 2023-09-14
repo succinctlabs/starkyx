@@ -284,7 +284,7 @@ pub(crate) mod tests {
         const NUM_FREE_COLUMNS: usize = 2;
 
         fn num_rows_bits() -> usize {
-            5
+            10
         }
     }
 

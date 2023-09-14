@@ -6,9 +6,6 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 
 use self::air::ByteGadgetParameters;
 use self::generator::BytesLookupGenerator;
@@ -54,17 +51,14 @@ pub trait CircuitBuilderBytes<F: RichField + Extendable<D>, E: CubicParameters<F
         gadget: &mut BytesGadget<F, E, D>,
     ) -> ByteTarget;
 
-    fn register_byte_operations<
-        C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone + Serialize + DeserializeOwned,
-    >(
+    fn register_byte_operations<C: CurtaConfig<D, F = F, FE = F::Extension>>(
         &mut self,
         gadget: BytesGadget<F, E, D>,
-    ) where
-        C::Hasher: AlgebraicHasher<F>;
+    );
 }
 
 use crate::math::prelude::*;
-use crate::plonky2::stark::config::StarkyConfig;
+use crate::plonky2::stark::config::{CurtaConfig, StarkyConfig};
 use crate::plonky2::stark::gadget::StarkGadget;
 use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
 use crate::plonky2::stark::Starky;
@@ -166,12 +160,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
 
     fn register_byte_operations<C>(&mut self, gadget: BytesGadget<F, E, D>)
     where
-        C: GenericConfig<D, F = F, FE = F::Extension>
-            + 'static
-            + Clone
-            + Serialize
-            + DeserializeOwned,
-        C::Hasher: AlgebraicHasher<F>,
+        C: CurtaConfig<D, F = F, FE = F::Extension>,
     {
         // Register the operations into the table
         let BytesGadget {
@@ -207,9 +196,8 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
         self.add_simple_generator(byte_generator);
 
         let stark = Starky::new(air);
-        let config = StarkyConfig::<F, C, D>::standard_fast_config(
-            ByteGadgetParameters::<F, E, D>::num_rows(),
-        );
+        let config =
+            StarkyConfig::<C, D>::standard_fast_config(ByteGadgetParameters::<F, E, D>::num_rows());
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
         self.verify_stark_proof(&config, &stark, virtual_proof.clone(), &public_input_target);
 
@@ -238,13 +226,14 @@ mod tests {
 
     use super::*;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
-    use crate::plonky2::stark::config::SerdePoseidonGoldilocksConfig;
+    use crate::plonky2::stark::config::CurtaPoseidonGoldilocksConfig;
 
     #[test]
     fn test_byte_generator_gadget() {
         type F = GoldilocksField;
         type E = GoldilocksCubicParameters;
-        type C = SerdePoseidonGoldilocksConfig;
+        type SC = CurtaPoseidonGoldilocksConfig;
+        type C = PoseidonGoldilocksConfig;
         const D: usize = 2;
 
         let num_ops = 10000;
@@ -286,7 +275,7 @@ mod tests {
             a_not_expected_targets.push(a_not_expected);
         }
 
-        builder.register_byte_operations::<C>(gadget);
+        builder.register_byte_operations::<SC>(gadget);
 
         let data = builder.build::<C>();
         let mut pw = PartialWitness::new();

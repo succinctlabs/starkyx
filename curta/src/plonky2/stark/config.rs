@@ -1,26 +1,27 @@
 use core::fmt::Debug;
 
-use plonky2::field::extension::Extendable;
-use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::fri::reduction_strategies::FriReductionStrategy;
 use plonky2::fri::{FriConfig, FriParams};
 use plonky2::hash::hash_types::RichField;
-use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, PoseidonGoldilocksConfig};
 use plonky2::util::log2_strict;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use crate::chip::AirParameters;
 use crate::utils::serde::{deserialize_fri_config, serialize_fri_config};
 
-pub trait StarkyConfigg<L: AirParameters, const D: usize>:
+pub trait CurtaConfig<const D: usize>:
     Debug + Clone + 'static + Send + Sync + Serialize + DeserializeOwned
 {
-    // type GnericConfig :
+    type F: RichField + Extendable<D>;
+    type FE: FieldExtension<D, BaseField = Self::F>;
+    type Hasher: AlgebraicHasher<Self::F>;
+    type GenericConfig: GenericConfig<D, F = Self::F, FE = Self::FE, Hasher = Self::Hasher>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StarkyConfig<F, C, const D: usize> {
+pub struct StarkyConfig<C, const D: usize> {
     pub security_bits: usize,
 
     /// The number of challenge points to generate, for IOPs that have soundness errors of (roughly)
@@ -36,12 +37,10 @@ pub struct StarkyConfig<F, C, const D: usize> {
     #[serde(deserialize_with = "deserialize_fri_config")]
     pub fri_config: FriConfig,
 
-    _marker: core::marker::PhantomData<(F, C)>,
+    _marker: core::marker::PhantomData<C>,
 }
 
-impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>
-    StarkyConfig<F, C, D>
-{
+impl<C: CurtaConfig<D>, const D: usize> StarkyConfig<C, D> {
     /// A typical configuration with a rate of 2, resulting in fast but large proofs.
     /// Targets ~100 bit conjectured security.
     pub fn standard_fast_config(num_rows: usize) -> Self {
@@ -66,38 +65,14 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>
     }
 }
 
-// impl<'a, F, C: GenericConfig<D, F = F>, FE, P, const D: usize, const D2: usize>
-//     StarkConfig<StarkParser<'a, F, FE, P, D, D2>> for StarkyConfig<F, C, D>
-// where
-//     F: RichField + Extendable<D>,
-//     FE: FieldExtension<D2, BaseField = F>,
-//     P: PackedField<Scalar = FE>,
-// {
-//     type Challenger = Plonky2Challenger<F, C::Hasher>;
-
-//     type Proof = ();
-// }
-
-// impl<'a, F, C: GenericConfig<D, F = F>, const D: usize> StarkConfig<RecursiveStarkParser<'a, F, D>>
-//     for StarkyConfig<F, C, D>
-// where
-//     F: RichField + Extendable<D>,
-// {
-//     type Challenger = Plonky2RecursiveChallenger<F, C::InnerHasher, D>;
-
-//     type Proof = ();
-// }
-
-pub type PoseidonGoldilocksStarkConfig =
-    StarkyConfig<GoldilocksField, SerdePoseidonGoldilocksConfig, 2>;
-
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct SerdePoseidonGoldilocksConfig;
+pub struct CurtaPoseidonGoldilocksConfig;
 
-impl GenericConfig<2> for SerdePoseidonGoldilocksConfig {
+impl CurtaConfig<2> for CurtaPoseidonGoldilocksConfig {
     type F = <PoseidonGoldilocksConfig as GenericConfig<2>>::F;
     type FE = <PoseidonGoldilocksConfig as GenericConfig<2>>::FE;
-
     type Hasher = <PoseidonGoldilocksConfig as GenericConfig<2>>::Hasher;
-    type InnerHasher = <PoseidonGoldilocksConfig as GenericConfig<2>>::InnerHasher;
+    type GenericConfig = PoseidonGoldilocksConfig;
 }
+
+pub type PoseidonGoldilocksStarkConfig = StarkyConfig<CurtaPoseidonGoldilocksConfig, 2>;
