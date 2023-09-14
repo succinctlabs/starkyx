@@ -3,7 +3,6 @@
 //!
 
 use plonky2::field::extension::{Extendable, FieldExtension};
-use plonky2::field::packed::PackedField;
 use plonky2::fri::structure::{
     FriBatchInfo, FriBatchInfoTarget, FriInstanceInfo, FriInstanceInfoTarget, FriOracleInfo,
     FriPolynomialInfo,
@@ -15,9 +14,7 @@ use plonky2::plonk::config::GenericConfig;
 use serde::{Deserialize, Serialize};
 
 use self::config::StarkyConfig;
-use super::parser::{RecursiveStarkParser, StarkParser};
-use crate::air::{RAir, RAirData};
-use crate::stark::Stark;
+use crate::air::RAirData;
 
 pub mod config;
 pub mod gadget;
@@ -150,40 +147,11 @@ impl<A> Starky<A> {
     }
 }
 
-impl<'a, A, F, C: GenericConfig<D, F = F>, FE, P, const D: usize, const D2: usize>
-    Stark<StarkParser<'a, F, FE, P, D, D2>, StarkyConfig<F, C, D>> for Starky<A>
-where
-    F: RichField + Extendable<D>,
-    FE: FieldExtension<D2, BaseField = F>,
-    P: PackedField<Scalar = FE>,
-    A: RAir<StarkParser<'a, F, FE, P, D, D2>>,
-{
-    type Air = A;
-
-    fn air(&self) -> &Self::Air {
-        self.air()
-    }
-}
-
-impl<'a, A, F, C: GenericConfig<D, F = F>, const D: usize>
-    Stark<RecursiveStarkParser<'a, F, D>, StarkyConfig<F, C, D>> for Starky<A>
-where
-    F: RichField + Extendable<D>,
-    A: RAir<RecursiveStarkParser<'a, F, D>>,
-{
-    type Air = A;
-
-    fn air(&self) -> &Self::Air {
-        self.air()
-    }
-}
-
 #[cfg(test)]
 pub(crate) mod tests {
     use core::fmt::Debug;
 
     use plonky2::field::goldilocks_field::GoldilocksField;
-    use plonky2::field::packable::Packable;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::AlgebraicHasher;
@@ -195,13 +163,12 @@ pub(crate) mod tests {
     use crate::chip::builder::tests::ArithmeticGenerator;
     use crate::chip::{AirParameters, Chip};
     use crate::math::prelude::*;
-    use crate::plonky2::parser::global::GlobalStarkParser;
     use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
     use crate::plonky2::stark::gadget::StarkGadget;
     use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
     use crate::plonky2::stark::prover::StarkyProver;
     use crate::plonky2::stark::verifier::StarkyVerifier;
-    use crate::plonky2::Plonky2Air;
+    use crate::plonky2::{Plonky2Air, StarkyAir};
     use crate::trace::generator::{ConstantGenerator, TraceGenerator};
 
     /// Generate the proof and verify as a stark
@@ -217,19 +184,12 @@ pub(crate) mod tests {
         trace_generator: &T,
         public_inputs: &[F],
     ) where
-        A: for<'a> RAir<StarkParser<'a, F, C::FE, C::FE, D, D>>
-            + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>
-            + for<'a> RAir<GlobalStarkParser<'a, F, F, F, D, 1>>,
+        A: StarkyAir<F, D>,
         T: TraceGenerator<F, A>,
         T::Error: Into<anyhow::Error>,
     {
-        let proof = StarkyProver::<F, C, F, <F as Packable>::Packing, D, 1>::prove(
-            config,
-            stark,
-            trace_generator,
-            public_inputs,
-        )
-        .unwrap();
+        let proof =
+            StarkyProver::<F, C, D>::prove(config, stark, trace_generator, public_inputs).unwrap();
 
         // Verify the proof as a stark
         StarkyVerifier::verify(config, stark, proof, public_inputs).unwrap();

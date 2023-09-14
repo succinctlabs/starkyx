@@ -1,17 +1,23 @@
-use plonky2::field::extension::{Extendable, FieldExtension};
+use core::fmt::Debug;
+
+use plonky2::field::extension::Extendable;
 use plonky2::field::goldilocks_field::GoldilocksField;
-use plonky2::field::packed::PackedField;
 use plonky2::fri::reduction_strategies::FriReductionStrategy;
 use plonky2::fri::{FriConfig, FriParams};
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
 use plonky2::util::log2_strict;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use crate::plonky2::challenger::{Plonky2Challenger, Plonky2RecursiveChallenger};
-use crate::plonky2::parser::{RecursiveStarkParser, StarkParser};
-use crate::stark::config::StarkConfig;
+use crate::chip::AirParameters;
 use crate::utils::serde::{deserialize_fri_config, serialize_fri_config};
+
+pub trait StarkyConfigg<L: AirParameters, const D: usize>:
+    Debug + Clone + 'static + Send + Sync + Serialize + DeserializeOwned
+{
+    // type GnericConfig :
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StarkyConfig<F, C, const D: usize> {
@@ -60,27 +66,27 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>
     }
 }
 
-impl<'a, F, C: GenericConfig<D, F = F>, FE, P, const D: usize, const D2: usize>
-    StarkConfig<StarkParser<'a, F, FE, P, D, D2>> for StarkyConfig<F, C, D>
-where
-    F: RichField + Extendable<D>,
-    FE: FieldExtension<D2, BaseField = F>,
-    P: PackedField<Scalar = FE>,
-{
-    type Challenger = Plonky2Challenger<F, C::Hasher>;
+// impl<'a, F, C: GenericConfig<D, F = F>, FE, P, const D: usize, const D2: usize>
+//     StarkConfig<StarkParser<'a, F, FE, P, D, D2>> for StarkyConfig<F, C, D>
+// where
+//     F: RichField + Extendable<D>,
+//     FE: FieldExtension<D2, BaseField = F>,
+//     P: PackedField<Scalar = FE>,
+// {
+//     type Challenger = Plonky2Challenger<F, C::Hasher>;
 
-    type Proof = ();
-}
+//     type Proof = ();
+// }
 
-impl<'a, F, C: GenericConfig<D, F = F>, const D: usize> StarkConfig<RecursiveStarkParser<'a, F, D>>
-    for StarkyConfig<F, C, D>
-where
-    F: RichField + Extendable<D>,
-{
-    type Challenger = Plonky2RecursiveChallenger<F, C::InnerHasher, D>;
+// impl<'a, F, C: GenericConfig<D, F = F>, const D: usize> StarkConfig<RecursiveStarkParser<'a, F, D>>
+//     for StarkyConfig<F, C, D>
+// where
+//     F: RichField + Extendable<D>,
+// {
+//     type Challenger = Plonky2RecursiveChallenger<F, C::InnerHasher, D>;
 
-    type Proof = ();
-}
+//     type Proof = ();
+// }
 
 pub type PoseidonGoldilocksStarkConfig =
     StarkyConfig<GoldilocksField, SerdePoseidonGoldilocksConfig, 2>;

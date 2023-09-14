@@ -5,6 +5,7 @@ use core::iter::once;
 
 use anyhow::{self, ensure, Result};
 use plonky2::field::extension::Extendable;
+use plonky2::field::packable::Packable;
 use plonky2::field::packed::PackedField;
 use plonky2::field::polynomial::{PolynomialCoeffs, PolynomialValues};
 use plonky2::field::types::Field;
@@ -17,24 +18,23 @@ use plonky2::util::{log2_ceil, transpose};
 
 use super::config::StarkyConfig;
 use super::Starky;
-use crate::air::RAir;
 use crate::maybe_rayon::*;
 use crate::plonky2::challenger::Plonky2Challenger;
 use crate::plonky2::parser::consumer::ConstraintConsumer;
 use crate::plonky2::parser::StarkParser;
 use crate::plonky2::stark::proof::{StarkOpeningSet, StarkProof};
+use crate::plonky2::StarkyAir;
 use crate::trace::generator::TraceGenerator;
 
 #[derive(Debug, Clone)]
-pub struct StarkyProver<F, C, FE, P, const D: usize, const D2: usize>(
-    core::marker::PhantomData<(F, C, FE, P)>,
-);
+pub struct StarkyProver<F, C, const D: usize>(core::marker::PhantomData<(F, C)>);
 
-impl<F, C, P, const D: usize> StarkyProver<F, C, F, P, D, 1>
+type P<F> = <F as Packable>::Packing;
+
+impl<F, C, const D: usize> StarkyProver<F, C, D>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
-    P: PackedField<Scalar = F>,
 {
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
@@ -47,7 +47,7 @@ where
         public_inputs: &[F],
     ) -> Result<StarkProof<F, C, D>>
     where
-        A: 'static + Debug + Send + Sync + for<'a> RAir<StarkParser<'a, F, F, P, D, 1>>,
+        A: StarkyAir<F, D>,
         T: TraceGenerator<F, A>,
         T::Error: Into<anyhow::Error>,
     {
@@ -113,14 +113,14 @@ where
             "FRI total reduction arity is too large.",
         );
 
-        let challenge_vars = challenges.into_iter().map(P::from).collect::<Vec<_>>();
+        let challenge_vars = challenges.into_iter().map(P::<F>::from).collect::<Vec<_>>();
         let global_vars = global_values
             .iter()
-            .map(|x| P::from(*x))
+            .map(|x| P::<F>::from(*x))
             .collect::<Vec<_>>();
         let public_vars = public_inputs
             .iter()
-            .map(|x| P::from(*x))
+            .map(|x| P::<F>::from(*x))
             .collect::<Vec<_>>();
         let quotient_polys = Self::quotient_polys(
             degree_bits,
@@ -206,13 +206,13 @@ where
         config: &StarkyConfig<F, C, D>,
         stark: &Starky<A>,
         trace_data: &[PolynomialBatch<F, C, D>],
-        challenges_vars: &[P],
-        global_vars: &[P],
-        public_vars: &[P],
+        challenges_vars: &[P<F>],
+        global_vars: &[P<F>],
+        public_vars: &[P<F>],
         challenger: &mut Plonky2Challenger<F, C::Hasher>,
     ) -> Vec<PolynomialCoeffs<F>>
     where
-        A: 'static + Debug + Send + Sync + for<'a> RAir<StarkParser<'a, F, F, P, D, 1>>,
+        A: StarkyAir<F, D>,
     {
         let alphas = challenger.0.get_n_challenges(config.num_challenges);
         let degree = 1 << degree_bits;
@@ -237,7 +237,7 @@ where
         let z_h_on_coset = ZeroPolyOnCoset::<F>::new(degree_bits, quotient_degree_bits);
 
         // Retrieve the LDE values at index `i`.
-        let get_trace_values_packed = |i_start| -> Vec<P> {
+        let get_trace_values_packed = |i_start| -> Vec<P<F>> {
             trace_data
                 .iter()
                 .flat_map(|commitment| commitment.get_lde_values_packed(i_start, step))
@@ -256,15 +256,16 @@ where
         // a batch of `P::WIDTH` points.
         let quotient_values = (0..size)
             .into_par_iter()
-            .step_by(P::WIDTH)
+            .step_by(P::<F>::WIDTH)
             .flat_map_iter(|i_start| {
                 let i_next_start = (i_start + next_step) % size;
-                let i_range = i_start..i_start + P::WIDTH;
+                let i_range = i_start..i_start + P::<F>::WIDTH;
 
-                let x = *P::from_slice(&coset[i_range.clone()]);
+                let x = *P::<F>::from_slice(&coset[i_range.clone()]);
                 let z_last = x - last;
-                let lagrange_basis_first = *P::from_slice(&lagrange_first.values[i_range.clone()]);
-                let lagrange_basis_last = *P::from_slice(&lagrange_last.values[i_range]);
+                let lagrange_basis_first =
+                    *P::<F>::from_slice(&lagrange_first.values[i_range.clone()]);
+                let lagrange_basis_last = *P::<F>::from_slice(&lagrange_last.values[i_range]);
 
                 let mut consumer = ConstraintConsumer::new(
                     alphas.clone(),
@@ -285,7 +286,7 @@ where
 
                 let mut constraints_evals = consumer.accumulators();
                 // We divide the constraints evaluations by `Z_H(x)`.
-                let denominator_inv: P = z_h_on_coset.eval_inverse_packed(i_start);
+                let denominator_inv: P<F> = z_h_on_coset.eval_inverse_packed(i_start);
 
                 for eval in &mut constraints_evals {
                     *eval *= denominator_inv;
@@ -293,7 +294,7 @@ where
 
                 let num_challenges = alphas.len();
 
-                (0..P::WIDTH).map(move |i| {
+                (0..P::<F>::WIDTH).map(move |i| {
                     (0..num_challenges)
                         .map(|j| constraints_evals[j].as_slice()[i])
                         .collect()

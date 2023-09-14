@@ -1,7 +1,6 @@
 use core::fmt::Debug;
 
 use plonky2::field::extension::Extendable;
-use plonky2::field::packable::Packable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::generator::{GeneratedValues, SimpleGenerator};
 use plonky2::iop::target::Target;
@@ -82,14 +81,13 @@ where
     ) {
         let public_inputs = witness.get_targets(&self.public_input_targets);
 
-        let proof =
-            StarkyProver::<L::Field, C, L::Field, <L::Field as Packable>::Packing, D, 1>::prove(
-                &self.config,
-                &self.stark,
-                &self.trace_generator,
-                &public_inputs,
-            )
-            .unwrap();
+        let proof = StarkyProver::<L::Field, C, D>::prove(
+            &self.config,
+            &self.stark,
+            &self.trace_generator,
+            &public_inputs,
+        )
+        .unwrap();
 
         set_stark_proof_target(out_buffer, &self.proof_target, &proof);
     }

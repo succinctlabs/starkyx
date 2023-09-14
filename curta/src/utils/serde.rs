@@ -110,6 +110,7 @@ where
     ))
 }
 
+#[allow(clippy::ptr_arg)]
 pub fn serialize_merkle_cap_targets<S>(
     merkle_cap_targets: &Vec<MerkleCapTarget>,
     serializer: S,
@@ -176,6 +177,7 @@ impl<'de, const DEG: usize> Deserialize<'de> for SerdeExtensionTarget<DEG> {
     }
 }
 
+#[allow(clippy::ptr_arg)]
 pub fn serialize_extension_targets<S, const D: usize>(
     extension_targets: &Vec<ExtensionTarget<D>>,
     serializer: S,

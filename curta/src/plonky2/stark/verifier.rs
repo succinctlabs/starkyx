@@ -22,6 +22,7 @@ use crate::air::{RAir, RAirData};
 use crate::plonky2::parser::consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
 use crate::plonky2::parser::global::{GlobalRecursiveStarkParser, GlobalStarkParser};
 use crate::plonky2::parser::{RecursiveStarkParser, StarkParser};
+use crate::plonky2::StarkyAir;
 
 #[derive(Debug, Clone)]
 pub struct StarkyVerifier<F, C, const D: usize>(core::marker::PhantomData<(F, C)>);
@@ -38,8 +39,7 @@ where
         public_inputs: &[F],
     ) -> Result<()>
     where
-        A: for<'a> RAir<StarkParser<'a, F, C::FE, C::FE, D, D>>
-            + for<'a> RAir<GlobalStarkParser<'a, F, F, F, D, 1>>,
+        A: StarkyAir<F, D>,
     {
         let degree_bits = proof.recover_degree_bits(config);
         let challenges = proof.get_challenges(config, stark, public_inputs, degree_bits);

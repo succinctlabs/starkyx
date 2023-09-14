@@ -88,7 +88,7 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                     self.writer
                         .write_multiplicities_from_fn::<L::CubicParams, ElementRegister>(
                             num_rows,
-                            &table_data,
+                            table_data,
                             Self::range_fn,
                             &values_data.trace_values,
                             &values_data.public_values,
