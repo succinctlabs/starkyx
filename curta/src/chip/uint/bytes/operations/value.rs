@@ -139,7 +139,11 @@ impl ByteOperation<ByteRegister> {
                 };
                 writer.write(result, &as_field(res_val), row_index);
                 writer.write(carry, &as_field(carry_val), row_index);
-                ByteOperation::Rot(a_val, *b, res_val + (carry_val << (8 - b_mod)))
+
+                if carry_val != 0 {
+                    carry_val <<= 8 - b_mod;
+                }
+                ByteOperation::Rot(a_val, *b, res_val + carry_val)
             }
             ByteOperation::Rot(a, b, c) => {
                 let a_val = from_field(writer.read(a, row_index));
