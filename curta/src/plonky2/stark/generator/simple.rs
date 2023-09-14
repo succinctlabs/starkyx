@@ -68,7 +68,7 @@ where
     C::Hasher: AlgebraicHasher<L::Field>,
 {
     fn id(&self) -> String {
-        format!("SimpleStarkWitnessGenerator").to_string()
+        Self::id()
     }
 
     fn dependencies(&self) -> Vec<Target> {
