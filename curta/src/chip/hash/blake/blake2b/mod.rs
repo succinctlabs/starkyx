@@ -1,17 +1,22 @@
 pub mod builder_gadget;
 pub mod generator;
 
+use core::slice::SlicePattern;
+
 use itertools::Itertools;
 
+use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
+use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::element::ElementRegister;
-use crate::chip::register::{Register, RegisterSerializable};
+use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
+use crate::chip::table::bus::global::Bus;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
 use crate::chip::uint::operations::instruction::U32Instructions;
-use crate::chip::uint::register::{ByteArrayRegister, U64Register};
+use crate::chip::uint::register::{ByteArrayRegister, U64Register, U8Register};
 use crate::chip::uint::util::u64_to_le_field_bytes;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
@@ -23,15 +28,14 @@ pub struct BLAKE2BGadget {
     pub t: U64Register,
     pub m: ArrayRegister<U64Register>,
     pub h: ArrayRegister<U64Register>,
-    pub last_chunk_bit: BitRegister,
     pub end_bit: BitRegister,
 
     // Public values
-    pub(crate) msg_chunks: ArrayRegister<U64Register>,
-    pub(crate) initial_hash: ArrayRegister<U64Register>,
-    pub(crate) initial_hash_compress: ArrayRegister<U64Register>,
-    pub(crate) hash_state: ArrayRegister<U64Register>,
-    pub(crate) inversion_const: U64Register,
+    pub msg_chunks: ArrayRegister<U64Register>,
+    pub initial_hash: ArrayRegister<U64Register>,
+    pub initial_hash_compress: ArrayRegister<U64Register>,
+    pub hash_state: ArrayRegister<U64Register>,
+    pub inversion_const: U64Register,
 }
 
 #[derive(Debug, Clone)]
@@ -86,6 +90,8 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn process_blake2b(
         &mut self,
         clk: &ElementRegister,
+        bus: &mut Bus<L::CubicParams>,
+        bus_channel_idx: usize,
         operations: &mut ByteLookupOperations,
     ) -> BLAKE2BGadget
     where
@@ -95,8 +101,9 @@ impl<L: AirParameters> AirBuilder<L> {
         let t = self.alloc::<U64Register>();
         let m = self.alloc_array::<U64Register>(16);
         let h = self.alloc_array::<U64Register>(8);
-        let last_chunk_bit = self.alloc::<BitRegister>();
         let end_bit = self.alloc::<BitRegister>();
+        let cycle_12_clk = self.alloc::<U8Register>();
+        let cycle_12_end_bit = self.alloc::<BitRegister>();
 
         // Public values
         let msg_chunks = self.alloc_array_public::<U64Register>(16 * 512);
@@ -104,28 +111,103 @@ impl<L: AirParameters> AirBuilder<L> {
         let initial_hash_compress = self.alloc_array_public::<U64Register>(8);
         let hash_state = self.alloc_array_public::<U64Register>(8 * 512);
         let inversion_const = self.alloc_public::<U64Register>();
+        let end_bits_public = self.alloc_array_public::<BitRegister>(512);
+
+        // Get message chunk challenges
+        let message_chunk_challenges =
+            self.alloc_challenge_array::<CubicRegister>(U64Register::size_of() * 16 + 1);
+
+        // Get hash state challenges
+        let state_challenges =
+            self.alloc_challenge_array::<CubicRegister>(U64Register::size_of() * 8 + 1);
+
+        // Get a challenge for the end bit
+        let end_bit_challenge = self.alloc_challenge_array::<CubicRegister>(2);
+
+        // Put end bit values into the bus
+        let clk_end_bit =
+            self.accumulate_expressions(&end_bit_challenge, &[clk.expr(), end_bit.expr()]);
+
+        // Put the end_bit in the bus at the end of each round
+        self.input_to_bus_filtered(bus_channel_idx, clk_end_bit, cycle_12_end_bit.expr());
+
+        // Constrain all other values of end_bit to zero
+        self.assert_expression_zero(end_bit.expr() * cycle_12_end_bit.not_expr());
+
+        // Put public hash state, end_bits, and all the msg chunk permutations into the bus
+        for i in 0..512 {
+            let state_digest = self.accumulate_public_expressions(
+                &state_challenges,
+                &[
+                    ArithmeticExpression::from_constant(L::Field::from_canonical_usize(
+                        i * 12 + 11,
+                    )),
+                    hash_state.get_subarray(i * 8..i * 8 + 8).expr(),
+                ],
+            );
+
+            bus.output_global_value(&state_digest);
+
+            let bit_digest = self.accumulate_public_expressions(
+                &end_bit_challenge,
+                &[
+                    ArithmeticExpression::from_constant(L::Field::from_canonical_usize(
+                        i * 12 + 11,
+                    )),
+                    end_bits_public.get(i).expr(),
+                ],
+            );
+            bus.output_global_value(&bit_digest);
+
+            for k in 0..12 {
+                let row = i * 12 + k;
+                let sigma = SIGMA[k % SIGMA_LEN];
+                let mut values = Vec::new();
+
+                values.push(ArithmeticExpression::from_constant(
+                    L::Field::from_canonical_usize(row),
+                ));
+
+                for index in sigma.iter() {
+                    values.push(msg_chunks.get(i * 16 + index).expr());
+                }
+
+                let msg_digest = self
+                    .accumulate_public_expressions(&message_chunk_challenges, values.as_slice());
+
+                bus.output_global_value(&msg_digest);
+            }
+        }
+
+        let clk_msg_digest = self.accumulate_public_expressions(&message_chunk_challenges, &[
+            clk,
+            m.get_subarray(0..16).expr(),
+        ]);
+        bus.input_value(&clk_msg_digest);
 
         for (h, init) in h.iter().zip(initial_hash.iter()) {
             self.set_to_expression_first_row(&h, init.expr());
         }
 
-        self.blake2b_compress(
+        let next_h = self.blake2b_compress(
             clk,
             &m,
             &h,
             &initial_hash_compress,
             &inversion_const,
             &t,
-            &last_chunk_bit,
             operations,
             &end_bit,
         );
+
+        let clk_hash_next =
+            self.accumulate_expressions(&state_challenges, &[clk.expr(), next_h.expr()]);
+        self.input_to_bus_filtered(bus_channel_idx, clk_hash_next, cycle_12_end_bit.expr());
 
         BLAKE2BGadget {
             t,
             m,
             h,
-            last_chunk_bit,
             end_bit,
             msg_chunks,
             initial_hash,
@@ -144,10 +226,10 @@ impl<L: AirParameters> AirBuilder<L> {
         iv_pub: &ArrayRegister<U64Register>,
         inversion_const_pub: &U64Register,
         t: &U64Register, // assumes t is not more than u64
-        last_block_bit: &BitRegister,
         operations: &mut ByteLookupOperations,
         end_bit: &BitRegister,
-    ) where
+    ) -> ArrayRegister<U64Register>
+    where
         L::Instruction: U32Instructions,
     {
         let iv = self.alloc_array::<U64Register>(8);
@@ -186,87 +268,85 @@ impl<L: AirParameters> AirBuilder<L> {
             tmp.expr() * last_block_bit.expr() + V14.expr() * last_block_bit.not_expr(),
         );
 
-        for i in 0..1 {
-            self.blake2b_mix(
-                &mut V0,
-                &mut V4,
-                &mut V8,
-                &mut V12,
-                &m.get(SIGMA[i % 10][0]),
-                &m.get(SIGMA[i % 10][1]),
-                operations,
-            );
+        self.blake2b_mix(
+            &mut V0,
+            &mut V4,
+            &mut V8,
+            &mut V12,
+            &m.get(0),
+            &m.get(1),
+            operations,
+        );
 
-            self.blake2b_mix(
-                &mut V1,
-                &mut V5,
-                &mut V9,
-                &mut V13,
-                &m.get(SIGMA[i % 10][2]),
-                &m.get(SIGMA[i % 10][3]),
-                operations,
-            );
+        self.blake2b_mix(
+            &mut V1,
+            &mut V5,
+            &mut V9,
+            &mut V13,
+            &m.get(2),
+            &m.get(3),
+            operations,
+        );
 
-            self.blake2b_mix(
-                &mut V2,
-                &mut V6,
-                &mut V10,
-                &mut V14New,
-                &m.get(SIGMA[i % 10][4]),
-                &m.get(SIGMA[i % 10][5]),
-                operations,
-            );
+        self.blake2b_mix(
+            &mut V2,
+            &mut V6,
+            &mut V10,
+            &mut V14New,
+            &m.get(4),
+            &m.get(5),
+            operations,
+        );
 
-            self.blake2b_mix(
-                &mut V3,
-                &mut V7,
-                &mut V11,
-                &mut V15,
-                &m.get(SIGMA[i % 10][6]),
-                &m.get(SIGMA[i % 10][7]),
-                operations,
-            );
+        self.blake2b_mix(
+            &mut V3,
+            &mut V7,
+            &mut V11,
+            &mut V15,
+            &m.get(6),
+            &m.get(7),
+            operations,
+        );
 
-            self.blake2b_mix(
-                &mut V0,
-                &mut V5,
-                &mut V10,
-                &mut V15,
-                &m.get(SIGMA[i % 10][8]),
-                &m.get(SIGMA[i % 10][9]),
-                operations,
-            );
+        self.blake2b_mix(
+            &mut V0,
+            &mut V5,
+            &mut V10,
+            &mut V15,
+            &m.get(8),
+            &m.get(9),
+            operations,
+        );
 
-            self.blake2b_mix(
-                &mut V1,
-                &mut V6,
-                &mut V11,
-                &mut V12,
-                &m.get(SIGMA[i % 10][10]),
-                &m.get(SIGMA[i % 10][11]),
-                operations,
-            );
+        self.blake2b_mix(
+            &mut V1,
+            &mut V6,
+            &mut V11,
+            &mut V12,
+            &m.get(10),
+            &m.get(11),
+            operations,
+        );
 
-            self.blake2b_mix(
-                &mut V2,
-                &mut V7,
-                &mut V8,
-                &mut V13,
-                &m.get(SIGMA[i % 10][12]),
-                &m.get(SIGMA[i % 10][13]),
-                operations,
-            );
+        self.blake2b_mix(
+            &mut V2,
+            &mut V7,
+            &mut V8,
+            &mut V13,
+            &m.get(12),
+            &m.get(13),
+            operations,
+        );
 
-            self.blake2b_mix(
-                &mut V3,
-                &mut V4,
-                &mut V9,
-                &mut V14,
-                &m.get(SIGMA[i % 10][14]),
-                &m.get(SIGMA[i % 10][15]),
-                operations,
-            );
-        }
+        self.blake2b_mix(
+            &mut V3,
+            &mut V4,
+            &mut V9,
+            &mut V14,
+            &m.get(14),
+            &m.get(15),
+            operations,
+        );
 
         let next_h = self.alloc_array::<U64Register>(8);
 
@@ -294,6 +374,8 @@ impl<L: AirParameters> AirBuilder<L> {
                 next_h.get(i).expr() * end_bit.not_expr() + iv.get(i).expr() * end_bit.expr(),
             );
         }
+
+        next_h
     }
 
     fn blake2b_mix(
@@ -329,6 +411,19 @@ impl<L: AirParameters> AirBuilder<L> {
 
         *Vb = self.bitwise_xor(Vb, Vc, operations);
         *Vb = self.bit_rotate_right(Vb, 63, operations);
+    }
+
+    fn permute_msgs<T: Clone>(&mut self, arr: &[T], mix_round_num: usize) -> Vec<T> {
+        assert!(mix_round_num <= 12);
+
+        let permutation = SIGMA[mix_round_num % 10];
+        let mut result = vec![arr[0].clone(); arr.len()];
+
+        for (from_index, &to_index) in permutation.iter().enumerate() {
+            result[to_index] = arr[from_index].clone();
+        }
+
+        result
     }
 }
 
@@ -412,6 +507,16 @@ impl BLAKE2BGadget {
             &u64_to_le_field_bytes(INVERSION_CONST),
             0,
         );
+
+        (0..512).for_each(|i| {
+            writer.write(&self.end_bit, &end_bits_values[i], i * 12 + 11);
+            for j in 0..12 {
+                let row = i * 12 + j;
+
+                writer.write_array(&self.m, )
+            }
+        }
+
     }
 
     pub fn compress(
@@ -557,7 +662,6 @@ mod tests {
     use plonky2::field::types::PrimeField64;
     use plonky2::timed;
     use plonky2::util::timing::TimingTree;
-    use subtle_encoding::hex::decode;
 
     use super::*;
     pub use crate::chip::builder::tests::*;
@@ -598,7 +702,10 @@ mod tests {
 
         let (mut operations, table) = builder.byte_operations();
 
-        let blake_gadget = builder.process_blake2b(&clk, &mut operations);
+        let mut bus = builder.new_bus();
+        let channel_idx = bus.new_channel(&mut builder);
+
+        let blake_gadget = builder.process_blake2b(&clk, &mut bus, channel_idx, &mut operations);
 
         builder.register_byte_lookup(operations, &table);
 
