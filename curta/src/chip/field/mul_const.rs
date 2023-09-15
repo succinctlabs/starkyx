@@ -1,4 +1,5 @@
 use num::{BigUint, Zero};
+use serde::{Deserialize, Serialize};
 
 use super::parameters::{FieldParameters, MAX_NB_LIMBS};
 use super::register::FieldRegister;
@@ -17,7 +18,8 @@ use crate::math::prelude::*;
 use crate::polynomial::parser::PolynomialParser;
 use crate::polynomial::{to_u16_le_limbs_polynomial, Polynomial};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct FpMulConstInstruction<P: FieldParameters> {
     pub a: FieldRegister<P>,
     pub c: [u16; MAX_NB_LIMBS],
@@ -168,7 +170,7 @@ mod tests {
     use crate::chip::builder::tests::*;
     use crate::chip::field::parameters::tests::Fp25519;
 
-    #[derive(Clone, Debug, Copy)]
+    #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
     struct FpMulConstTest;
 
     impl AirParameters for FpMulConstTest {

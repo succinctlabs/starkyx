@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use self::builder_operations::ByteLookupOperations;
 use self::table::ByteLookupTable;
 use super::bit_operations::and::And;
@@ -23,7 +25,7 @@ pub mod table;
 
 use crate::math::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ByteInstructionSet {
     Op(ByteOperationInstruction),
     BitAnd(And<8>),
@@ -175,7 +177,7 @@ mod tests {
     use crate::chip::AirParameters;
     use crate::math::field::Field;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     struct ByteOpTest<const N: usize>;
 
     impl<const N: usize> AirParameters for ByteOpTest<N> {

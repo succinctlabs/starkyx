@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use self::expression::ArithmeticExpression;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
@@ -7,7 +9,7 @@ pub mod expression_slice;
 
 use crate::math::prelude::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ArithmeticConstraint<F> {
     First(ArithmeticExpression<F>),
     Last(ArithmeticExpression<F>),

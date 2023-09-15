@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use super::arithmetic::ArithmeticConstraint;
 use super::instruction::set::AirInstruction;
 use super::table::accumulator::Accumulator;
@@ -10,7 +12,7 @@ use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::{AirParser, MulParser};
 use crate::air::AirConstraint;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Constraint<L: AirParameters> {
     Instruction(AirInstruction<L::Field, L::Instruction>),
     Arithmetic(ArithmeticConstraint<L::Field>),

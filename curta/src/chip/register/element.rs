@@ -1,9 +1,11 @@
+use serde::{Deserialize, Serialize};
+
 use super::cell::CellType;
 use super::memory::MemorySlice;
 use super::{Register, RegisterSerializable, RegisterSized};
 
 /// A register for a single element/column in the trace. The value is not constrainted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ElementRegister(MemorySlice);
 
 impl RegisterSerializable for ElementRegister {

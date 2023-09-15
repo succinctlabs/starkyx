@@ -29,7 +29,7 @@ impl<L: AirParameters> RAirData for Chip<L> {
     }
 
     fn num_public_inputs(&self) -> usize {
-        self.num_public_inputs
+        self.num_public_values
     }
 
     fn width(&self) -> usize {

@@ -2,6 +2,7 @@ use alloc::sync::Arc;
 use core::array::from_fn;
 
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 
 use super::super::operations::NUM_BIT_OPPS;
 use super::multiplicity_data::MultiplicityData;
@@ -28,7 +29,7 @@ use crate::chip::AirParameters;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ByteLookupTable {
     pub a: ByteRegister,
     pub b: ByteRegister,

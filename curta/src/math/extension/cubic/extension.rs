@@ -4,12 +4,14 @@ use core::marker::PhantomData;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
 use super::element::CubicElement;
 use super::parameters::CubicParameters;
 use crate::math::prelude::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct CubicExtension<F: Field, P: CubicParameters<F>>(pub CubicElement<F>, PhantomData<P>);
 
 impl<F: Field, P: CubicParameters<F>> CubicExtension<F, P> {

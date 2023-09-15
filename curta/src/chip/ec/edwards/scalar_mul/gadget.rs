@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::ec::edwards::add::EdAddGadget;
@@ -9,7 +11,7 @@ use crate::chip::register::bit::BitRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::AirParameters;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(dead_code)]
 pub struct EdDoubleAndAddGadget<E: EdwardsParameters> {
     pub bit: BitRegister,
@@ -21,7 +23,7 @@ pub struct EdDoubleAndAddGadget<E: EdwardsParameters> {
     double_gadget: EdAddGadget<E>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(dead_code)]
 pub struct EdScalarMulGadget<F, E: EdwardsParameters> {
     pub cycle: Cycle<F>,
@@ -135,6 +137,7 @@ mod tests {
     use plonky2::timed;
     use plonky2::util::timing::TimingTree;
     use rand::thread_rng;
+    use serde::{Deserialize, Serialize};
 
     use super::*;
     use crate::chip::builder::tests::*;
@@ -144,7 +147,7 @@ mod tests {
     use crate::chip::utils::biguint_to_bits_le;
     use crate::math::prelude::*;
 
-    #[derive(Clone, Debug, Copy)]
+    #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
     pub struct Ed25519ScalarMulTest;
 
     impl AirParameters for Ed25519ScalarMulTest {

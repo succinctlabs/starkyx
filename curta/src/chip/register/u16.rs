@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use super::cell::CellType;
 use super::memory::MemorySlice;
 use super::{Register, RegisterSerializable, RegisterSized};
@@ -5,7 +7,7 @@ use super::{Register, RegisterSerializable, RegisterSized};
 /// A register for a single element/column in the trace that is supposed to represent a u16. The
 /// value is automatically range checked via the lookup table if the register is allocated through
 /// the builder.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct U16Register(MemorySlice);
 
 impl RegisterSerializable for U16Register {

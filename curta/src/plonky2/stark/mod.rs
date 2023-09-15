@@ -3,7 +3,6 @@
 //!
 
 use plonky2::field::extension::{Extendable, FieldExtension};
-use plonky2::field::packed::PackedField;
 use plonky2::fri::structure::{
     FriBatchInfo, FriBatchInfoTarget, FriInstanceInfo, FriInstanceInfoTarget, FriOracleInfo,
     FriPolynomialInfo,
@@ -11,12 +10,10 @@ use plonky2::fri::structure::{
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2::plonk::config::GenericConfig;
+use serde::{Deserialize, Serialize};
 
-use self::config::StarkyConfig;
-use super::parser::{RecursiveStarkParser, StarkParser};
-use crate::air::{RAir, RAirData};
-use crate::stark::Stark;
+use self::config::{CurtaConfig, StarkyConfig};
+use crate::air::RAirData;
 
 pub mod config;
 pub mod gadget;
@@ -25,7 +22,7 @@ pub mod proof;
 pub mod prover;
 pub mod verifier;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Starky<A> {
     pub air: A,
 }
@@ -41,13 +38,9 @@ impl<A> Starky<A> {
         &self.air
     }
 
-    fn num_quotient_polys<
-        F: RichField + Extendable<D>,
-        C: GenericConfig<D, F = F>,
-        const D: usize,
-    >(
+    fn num_quotient_polys<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize>(
         &self,
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
     ) -> usize
     where
         A: RAirData,
@@ -56,11 +49,11 @@ impl<A> Starky<A> {
     }
 
     /// Computes the FRI instance used to prove this Stark.
-    fn fri_instance<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
+    fn fri_instance<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize>(
         &self,
         zeta: F::Extension,
         g: F,
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
     ) -> FriInstanceInfo<F, D>
     where
         A: RAirData,
@@ -99,16 +92,12 @@ impl<A> Starky<A> {
     }
 
     /// Computes the FRI instance used to prove this Stark.
-    fn fri_instance_target<
-        C: GenericConfig<D, F = F>,
-        F: RichField + Extendable<D>,
-        const D: usize,
-    >(
+    fn fri_instance_target<C: CurtaConfig<D, F = F>, F: RichField + Extendable<D>, const D: usize>(
         &self,
         builder: &mut CircuitBuilder<F, D>,
         zeta: ExtensionTarget<D>,
         g: F,
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
     ) -> FriInstanceInfoTarget<D>
     where
         A: RAirData,
@@ -149,54 +138,28 @@ impl<A> Starky<A> {
     }
 }
 
-impl<'a, A, F, C: GenericConfig<D, F = F>, FE, P, const D: usize, const D2: usize>
-    Stark<StarkParser<'a, F, FE, P, D, D2>, StarkyConfig<F, C, D>> for Starky<A>
-where
-    F: RichField + Extendable<D>,
-    FE: FieldExtension<D2, BaseField = F>,
-    P: PackedField<Scalar = FE>,
-    A: RAir<StarkParser<'a, F, FE, P, D, D2>>,
-{
-    type Air = A;
-
-    fn air(&self) -> &Self::Air {
-        self.air()
-    }
-}
-
-impl<'a, A, F, C: GenericConfig<D, F = F>, const D: usize>
-    Stark<RecursiveStarkParser<'a, F, D>, StarkyConfig<F, C, D>> for Starky<A>
-where
-    F: RichField + Extendable<D>,
-    A: RAir<RecursiveStarkParser<'a, F, D>>,
-{
-    type Air = A;
-
-    fn air(&self) -> &Self::Air {
-        self.air()
-    }
-}
-
 #[cfg(test)]
 pub(crate) mod tests {
     use core::fmt::Debug;
 
     use plonky2::field::goldilocks_field::GoldilocksField;
-    use plonky2::field::packable::Packable;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::AlgebraicHasher;
     use plonky2::util::timing::TimingTree;
+    use serde::de::DeserializeOwned;
 
     use super::*;
     use crate::air::fibonacci::FibonacciAir;
+    use crate::chip::builder::tests::ArithmeticGenerator;
+    use crate::chip::{AirParameters, Chip};
     use crate::math::prelude::*;
-    use crate::plonky2::parser::global::{GlobalRecursiveStarkParser, GlobalStarkParser};
     use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
     use crate::plonky2::stark::gadget::StarkGadget;
     use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
     use crate::plonky2::stark::prover::StarkyProver;
     use crate::plonky2::stark::verifier::StarkyVerifier;
+    use crate::plonky2::{Plonky2Air, StarkyAir};
     use crate::trace::generator::{ConstantGenerator, TraceGenerator};
 
     /// Generate the proof and verify as a stark
@@ -204,27 +167,20 @@ pub(crate) mod tests {
         A: 'static + Debug + Send + Sync,
         T,
         F: RichField + Extendable<D>,
-        C: GenericConfig<D, F = F, FE = F::Extension>,
+        C: CurtaConfig<D, F = F, FE = F::Extension>,
         const D: usize,
     >(
         stark: &Starky<A>,
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
         trace_generator: &T,
         public_inputs: &[F],
     ) where
-        A: for<'a> RAir<StarkParser<'a, F, C::FE, C::FE, D, D>>
-            + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>
-            + for<'a> RAir<GlobalStarkParser<'a, F, F, F, D, 1>>,
+        A: StarkyAir<F, D>,
         T: TraceGenerator<F, A>,
         T::Error: Into<anyhow::Error>,
     {
-        let proof = StarkyProver::<F, C, F, <F as Packable>::Packing, D, 1>::prove(
-            config,
-            stark,
-            trace_generator,
-            public_inputs,
-        )
-        .unwrap();
+        let proof =
+            StarkyProver::<F, C, D>::prove(config, stark, trace_generator, public_inputs).unwrap();
 
         // Verify the proof as a stark
         StarkyVerifier::verify(config, stark, proof, public_inputs).unwrap();
@@ -232,23 +188,18 @@ pub(crate) mod tests {
 
     /// Generate a Stark proof and a recursive proof using the witness generator
     pub(crate) fn test_recursive_starky<
-        A: 'static + Debug + Send + Sync,
-        T,
+        L: AirParameters<Field = F>,
         F: RichField + Extendable<D>,
-        C: GenericConfig<D, F = F, FE = F::Extension> + 'static,
+        C: CurtaConfig<D, F = F, FE = F::Extension> + 'static + Serialize + DeserializeOwned,
         const D: usize,
     >(
-        stark: Starky<A>,
-        config: StarkyConfig<F, C, D>,
-        trace_generator: T,
+        stark: Starky<Chip<L>>,
+        config: StarkyConfig<C, D>,
+        trace_generator: ArithmeticGenerator<L>,
         public_inputs: &[F],
     ) where
         C::Hasher: AlgebraicHasher<F>,
-        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>
-            + for<'a> RAir<StarkParser<'a, F, F, <F as Packable>::Packing, D, 1>>
-            + for<'a> RAir<GlobalRecursiveStarkParser<'a, F, D>>,
-        T: Clone + Debug + Send + Sync + 'static + TraceGenerator<F, A>,
-        T::Error: Into<anyhow::Error>,
+        Chip<L>: Plonky2Air<F, D>,
     {
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut builder = CircuitBuilder::<F, D>::new(config_rec);
@@ -261,12 +212,7 @@ pub(crate) mod tests {
         for (&pi_t, &pi) in public_input_targets.iter().zip(public_inputs.iter()) {
             pw.set_target(pi_t, pi);
         }
-        builder.verify_stark_proof(
-            &config,
-            &stark,
-            virtual_proof.clone(),
-            &public_input_targets,
-        );
+        builder.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_targets);
 
         let generator = SimpleStarkWitnessGenerator::new(
             config,
@@ -277,7 +223,7 @@ pub(crate) mod tests {
         );
         builder.add_simple_generator(generator);
 
-        let data = builder.build::<C>();
+        let data = builder.build::<C::GenericConfig>();
         let mut timing = TimingTree::new("recursive_proof", log::Level::Debug);
         let recursive_proof =
             plonky2::plonk::prover::prove(&data.prover_only, &data.common, pw, &mut timing)
@@ -308,8 +254,5 @@ pub(crate) mod tests {
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &trace_generator, &public_inputs);
-
-        // Test the recursive proof.
-        test_recursive_starky(stark, config, trace_generator, &public_inputs);
     }
 }

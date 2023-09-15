@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 
 use super::Instruction;
 use crate::air::parser::AirParser;
@@ -8,7 +9,7 @@ use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum AssignType {
     First,
     Last,
@@ -16,7 +17,7 @@ pub enum AssignType {
     All,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AssignInstruction<F> {
     pub source: ArithmeticExpression<F>,
     pub target: MemorySlice,

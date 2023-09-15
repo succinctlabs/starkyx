@@ -11,17 +11,24 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::GenericConfig;
+use serde::{Deserialize, Serialize};
 
-use super::config::StarkyConfig;
+use super::config::{CurtaConfig, StarkyConfig};
 use super::Starky;
 use crate::air::{RAir, RAirData};
 use crate::maybe_rayon::*;
 use crate::plonky2::challenger::{Plonky2Challenger, Plonky2RecursiveChallenger};
 use crate::plonky2::parser::RecursiveStarkParser;
+use crate::utils::serde::{
+    deserialize_extension_targets, deserialize_fri_proof_target, deserialize_merkle_cap_target,
+    deserialize_merkle_cap_targets, serialize_extension_targets, serialize_fri_proof_target,
+    serialize_merkle_cap_target, serialize_merkle_cap_targets,
+};
 
 /// A proof of a STARK computation.
-#[derive(Debug, Clone)]
-pub struct StarkProof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
+pub struct StarkProof<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> {
     /// Merkle cap of LDEs of trace values for each round.
     pub trace_caps: Vec<MerkleCap<F, C::Hasher>>,
     /// Merkle cap of LDEs of trace values.
@@ -34,9 +41,9 @@ pub struct StarkProof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, 
     pub opening_proof: FriProof<F, C::Hasher, D>,
 }
 
-impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> StarkProof<F, C, D> {
+impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> StarkProof<F, C, D> {
     /// Recover the length of the trace from a STARK proof and a STARK config.
-    pub fn recover_degree_bits(&self, config: &StarkyConfig<F, C, D>) -> usize {
+    pub fn recover_degree_bits(&self, config: &StarkyConfig<C, D>) -> usize {
         let initial_merkle_proof = &self.opening_proof.query_round_proofs[0]
             .initial_trees_proof
             .evals_proofs[0]
@@ -47,7 +54,7 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> S
 
     pub(crate) fn get_challenges<A: RAirData>(
         &self,
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
         stark: &Starky<A>,
         public_inputs: &[F],
         degree_bits: usize,
@@ -93,7 +100,7 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> S
             stark_alphas,
             stark_betas: challenges,
             stark_zeta,
-            fri_challenges: challenger.0.fri_challenges::<C, D>(
+            fri_challenges: challenger.0.fri_challenges::<C::GenericConfig, D>(
                 commit_phase_merkle_caps,
                 final_poly,
                 *pow_witness,
@@ -104,20 +111,26 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> S
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StarkProofTarget<const D: usize> {
+    #[serde(serialize_with = "serialize_merkle_cap_targets")]
+    #[serde(deserialize_with = "deserialize_merkle_cap_targets")]
     pub trace_caps: Vec<MerkleCapTarget>,
+    #[serde(serialize_with = "serialize_merkle_cap_target")]
+    #[serde(deserialize_with = "deserialize_merkle_cap_target")]
     pub quotient_polys_cap: MerkleCapTarget,
     pub global_values: Vec<Target>,
     pub openings: StarkOpeningSetTarget<D>,
+    #[serde(serialize_with = "serialize_fri_proof_target")]
+    #[serde(deserialize_with = "deserialize_fri_proof_target")]
     pub opening_proof: FriProofTarget<D>,
 }
 
 impl<const D: usize> StarkProofTarget<D> {
     /// Recover the length of the trace from a STARK proof and a STARK config.
-    pub fn recover_degree_bits<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>>(
+    pub fn recover_degree_bits<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>>(
         &self,
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
     ) -> usize {
         let initial_merkle_proof = &self.opening_proof.query_round_proofs[0]
             .initial_trees_proof
@@ -130,11 +143,11 @@ impl<const D: usize> StarkProofTarget<D> {
     pub fn get_challenges_target<
         F: RichField + Extendable<D>,
         A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
-        C: GenericConfig<D, F = F>,
+        C: CurtaConfig<D, F = F>,
     >(
         &self,
         builder: &mut CircuitBuilder<F, D>,
-        config: &StarkyConfig<F, C, D>,
+        config: &StarkyConfig<C, D>,
         public_inputs: &[Target],
         stark: &Starky<A>,
     ) -> StarkProofChallengesTarget<D> {
@@ -154,7 +167,11 @@ impl<const D: usize> StarkProofTarget<D> {
 
         let num_challenges = config.num_challenges;
 
-        let mut challenger = Plonky2RecursiveChallenger::<F, C::InnerHasher, D>::new(builder);
+        let mut challenger = Plonky2RecursiveChallenger::<
+            F,
+            <C::GenericConfig as GenericConfig<D>>::InnerHasher,
+            D,
+        >::new(builder);
 
         // Observe public inputs
         challenger.0.observe_elements(public_inputs);
@@ -211,7 +228,8 @@ pub struct StarkProofChallengesTarget<const D: usize> {
 }
 
 /// Purported values of each polynomial at the challenge point.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct StarkOpeningSet<F: RichField + Extendable<D>, const D: usize> {
     pub local_values: Vec<F::Extension>,
     pub next_values: Vec<F::Extension>,
@@ -267,10 +285,16 @@ impl<F: RichField + Extendable<D>, const D: usize> StarkOpeningSet<F, D> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StarkOpeningSetTarget<const D: usize> {
+    #[serde(serialize_with = "serialize_extension_targets")]
+    #[serde(deserialize_with = "deserialize_extension_targets")]
     pub local_values: Vec<ExtensionTarget<D>>,
+    #[serde(serialize_with = "serialize_extension_targets")]
+    #[serde(deserialize_with = "deserialize_extension_targets")]
     pub next_values: Vec<ExtensionTarget<D>>,
+    #[serde(serialize_with = "serialize_extension_targets")]
+    #[serde(deserialize_with = "deserialize_extension_targets")]
     pub quotient_polys: Vec<ExtensionTarget<D>>,
 }
 

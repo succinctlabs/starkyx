@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use super::set::AirInstruction;
 use super::Instruction;
 use crate::air::parser::AirParser;
@@ -11,7 +13,7 @@ use crate::chip::trace::writer::TraceWriter;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Cycle<F> {
     pub start_bit: BitRegister,
     pub end_bit: BitRegister,
@@ -161,7 +163,7 @@ mod tests {
     use crate::chip::builder::tests::*;
     use crate::trace::window_parser::TraceWindowParser;
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct CycleTest;
 
     impl AirParameters for CycleTest {

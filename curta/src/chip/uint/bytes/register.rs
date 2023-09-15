@@ -1,9 +1,11 @@
+use serde::{Deserialize, Serialize};
+
 use crate::chip::register::cell::CellType;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ByteRegister(MemorySlice);
 
 impl ByteRegister {

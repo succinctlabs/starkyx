@@ -3,6 +3,7 @@
 //! To understand the implementation, it may be useful to refer to `mod.rs`.
 
 use num::{BigUint, Zero};
+use serde::{Deserialize, Serialize};
 
 use super::parameters::FieldParameters;
 use super::register::FieldRegister;
@@ -21,7 +22,8 @@ use crate::math::prelude::*;
 use crate::polynomial::parser::PolynomialParser;
 use crate::polynomial::{to_u16_le_limbs_polynomial, Polynomial};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct FpInnerProductInstruction<P: FieldParameters> {
     a: Vec<FieldRegister<P>>,
     b: Vec<FieldRegister<P>>,
@@ -186,7 +188,7 @@ mod tests {
     use crate::chip::builder::tests::*;
     use crate::chip::field::parameters::tests::Fp25519;
 
-    #[derive(Clone, Debug, Copy)]
+    #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
     struct FpInnerProductTest;
 
     impl AirParameters for FpInnerProductTest {

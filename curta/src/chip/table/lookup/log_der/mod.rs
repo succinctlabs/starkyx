@@ -4,6 +4,8 @@
 
 use core::marker::PhantomData;
 
+use serde::{Deserialize, Serialize};
+
 use crate::chip::builder::AirBuilder;
 use crate::chip::constraint::Constraint;
 use crate::chip::register::array::ArrayRegister;
@@ -19,7 +21,8 @@ use crate::math::prelude::*;
 pub mod constraint;
 pub mod trace;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct LookupTable<T: Register, F: Field, E: CubicParameters<F>> {
     pub(crate) challenge: CubicRegister,
     pub(crate) table: Vec<T>,
@@ -31,7 +34,8 @@ pub struct LookupTable<T: Register, F: Field, E: CubicParameters<F>> {
 }
 
 /// Currently, only supports an even number of values
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct LogLookupValues<T: EvalCubic, F: Field, E: CubicParameters<F>> {
     pub(crate) challenge: CubicRegister,
     pub(crate) trace_values: Vec<T>,
@@ -46,11 +50,11 @@ pub struct LogLookupValues<T: EvalCubic, F: Field, E: CubicParameters<F>> {
 }
 
 /// Currently, only supports an even number of values
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct LogLookup<T: EvalCubic, F: Field, E: CubicParameters<F>> {
     pub(crate) table_data: LookupTable<T, F, E>,
     pub(crate) values_data: LogLookupValues<T, F, E>,
-    pub(crate) table_index: Option<fn(T::Value<F>) -> usize>,
     _marker: core::marker::PhantomData<(F, E)>,
 }
 
@@ -162,7 +166,6 @@ impl<L: AirParameters> AirBuilder<L> {
         let lookup_data = Lookup::Element(LogLookup {
             table_data: table_data.clone(),
             values_data: values_data.clone(),
-            table_index: None,
             _marker: core::marker::PhantomData,
         });
 
@@ -209,7 +212,6 @@ impl<L: AirParameters> AirBuilder<L> {
         let lookup_data = Lookup::CubicElement(LogLookup {
             table_data: table_data.clone(),
             values_data: values_data.clone(),
-            table_index: None,
             _marker: core::marker::PhantomData,
         });
 
@@ -241,58 +243,7 @@ impl<L: AirParameters> AirBuilder<L> {
         self.lookup_data.push(lookup_data);
     }
 
-    pub fn element_lookup_with_table_index(
-        &mut self,
-        table: &ElementRegister,
-        values: &[ElementRegister],
-        table_index: fn(L::Field) -> usize,
-    ) {
-        // Allocate memory for the lookup
-        let challenge = self.alloc_challenge::<CubicRegister>();
-
-        let table_data = self.lookup_table(&challenge, &[*table]);
-        let values_data = self.lookup_values(&challenge, values);
-
-        let lookup_data = Lookup::Element(LogLookup {
-            table_data: table_data.clone(),
-            values_data: values_data.clone(),
-            table_index: Some(table_index),
-            _marker: core::marker::PhantomData,
-        });
-
-        // self.element_lookup_from_table_and_values(table_data, value_data);
-        // Add the lookup constraints
-        // Digest constraints
-        self.constraints.push(Constraint::lookup(
-            LookupConstraint::<ElementRegister, _, _>::Digest(
-                table_data.digest,
-                values_data.digest,
-            )
-            .into(),
-        ));
-
-        // table constraints
-        self.constraints.push(Constraint::lookup(
-            LookupConstraint::Table(table_data).into(),
-        ));
-
-        // Values constraints
-        self.constraints
-            .push(Constraint::lookup(values_data.digest_constraint().into()));
-        self.constraints.push(Constraint::lookup(
-            LookupConstraint::<ElementRegister, _, _>::ValuesLocal(values_data.clone()).into(),
-        ));
-        if values_data.global_digest.is_some() {
-            self.global_constraints.push(Constraint::lookup(
-                LookupConstraint::<ElementRegister, _, _>::ValuesGlobal(values_data.clone()).into(),
-            ));
-        }
-
-        // Add the lookup to the list of lookups
-        self.lookup_data.push(lookup_data);
-    }
-
-    pub fn lookup_log_derivative_no_index(
+    pub fn element_lookup(
         &mut self,
         table: &[ElementRegister],
         values: &[ElementRegister],
@@ -309,7 +260,7 @@ impl<L: AirParameters> AirBuilder<L> {
         multiplicities
     }
 
-    pub fn lookup_cubic_log_derivative(
+    pub fn cubic_lookup(
         &mut self,
         table: &[CubicRegister],
         values: &[CubicRegister],
@@ -319,7 +270,6 @@ impl<L: AirParameters> AirBuilder<L> {
 
         let table_data = self.lookup_table(&challenge, table);
         let values_data = self.lookup_values(&challenge, values);
-
         let multiplicities = table_data.multiplicities;
 
         self.cubic_lookup_from_table_and_values(table_data, values_data);
@@ -338,7 +288,7 @@ mod tests {
     use crate::chip::AirParameters;
     use crate::math::extension::cubic::element::CubicElement;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     struct LookupTest<const N: usize, const M: usize>;
 
     impl<const N: usize, const M: usize> AirParameters for LookupTest<N, M> {
@@ -374,7 +324,7 @@ mod tests {
             .into_iter()
             .collect::<Vec<_>>();
 
-        let multiplicities = builder.lookup_log_derivative_no_index(&table_values, &values);
+        let multiplicities = builder.element_lookup(&table_values, &values);
 
         let (air, trace_data) = builder.build();
 
@@ -413,7 +363,7 @@ mod tests {
         test_recursive_starky(stark, config, generator, &[]);
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     struct CubicLookupTest<const N: usize, const M: usize>;
 
     impl<const N: usize, const M: usize> AirParameters for CubicLookupTest<N, M> {
@@ -449,7 +399,7 @@ mod tests {
             .into_iter()
             .collect::<Vec<_>>();
 
-        let multiplicities = builder.lookup_cubic_log_derivative(&table_values, &values);
+        let multiplicities = builder.cubic_lookup(&table_values, &values);
 
         let (air, trace_data) = builder.build();
 
@@ -562,7 +512,7 @@ mod tests {
         }
 
         // Set the public values
-        let mut public_inputs: Vec<F> = vec![F::ZERO; air.num_public_inputs];
+        let mut public_inputs: Vec<F> = vec![F::ZERO; air.num_public_values];
         for public_value in public_values.iter() {
             let j = rng.gen_range(0..L::num_rows());
             let k = rng.gen_range(0..N);
