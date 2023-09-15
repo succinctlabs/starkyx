@@ -1,5 +1,5 @@
 //! Parameters for bn254 base field.
-use num::BigUint;
+use num::{BigUint, Zero};
 use serde::{Deserialize, Serialize};
 
 use super::projective::SWProjectivePoint;
