@@ -15,6 +15,8 @@ use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
 use crate::chip::table::bus::global::Bus;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
+use crate::chip::uint::bytes::operations::value::ByteOperation;
+use crate::chip::uint::bytes::register::ByteRegister;
 use crate::chip::uint::operations::instruction::U32Instructions;
 use crate::chip::uint::register::U64Register;
 use crate::chip::uint::util::u64_to_le_field_bytes;
@@ -169,13 +171,10 @@ impl<L: AirParameters> AirBuilder<L> {
         );
         self.input_to_bus(bus_channel_idx, clk_msg_digest);
 
-        // Set h_input to the initial hash if we are at the first block.
+        // Set h_input to the initial hash if we are at the first block and at the first loop of the cycle_12
         // Otherwise set it to h_output
-        for ((h_in, init), h_out) in h_input.iter().zip(initial_hash.iter()).zip(h_output.iter()) {
-            self.set_to_expression(
-                &h_in,
-                first_block_bit.expr() * init.expr() + first_block_bit.not_expr() * h_out.expr(),
-            );
+        for (h_in, init) in h_input.iter().zip(initial_hash.iter()) {
+            self.set_to_expression_first_row(&h_in, init.expr());
         }
 
         let (v_input, v_output) = self.blake2b_compress(
@@ -197,6 +196,16 @@ impl<L: AirParameters> AirBuilder<L> {
             &[clk.expr(), h_output.get_subarray(0..8).expr()],
         );
         self.input_to_bus_filtered(bus_channel_idx, clk_hash_next, cycle_12_end_bit.expr());
+
+        for ((h_in, init), h_out) in h_input.iter().zip(initial_hash.iter()).zip(h_output.iter()) {
+            self.set_to_expression(
+                &h_in.next(),
+                first_block_bit.expr()
+                    * (cycle_12_start_bit.expr() * init.expr()
+                        + cycle_12_start_bit.not_expr() * h_out.expr())
+                    + (first_block_bit.not_expr() * h_out.expr()),
+            );
+        }
 
         BLAKE2BGadget {
             t,
@@ -517,15 +526,6 @@ impl<L: AirParameters> AirBuilder<L> {
             cycle_12_end_bit.expr() * h_7_tmp.expr()
                 + cycle_12_end_bit.not_expr() * h_input.get(7).expr(),
         );
-
-        self.set_to_expression_transition(&h_input.get(0).next(), h_output.get(0).expr());
-        self.set_to_expression_transition(&h_input.get(1).next(), h_output.get(1).expr());
-        self.set_to_expression_transition(&h_input.get(2).next(), h_output.get(2).expr());
-        self.set_to_expression_transition(&h_input.get(3).next(), h_output.get(3).expr());
-        self.set_to_expression_transition(&h_input.get(4).next(), h_output.get(4).expr());
-        self.set_to_expression_transition(&h_input.get(5).next(), h_output.get(5).expr());
-        self.set_to_expression_transition(&h_input.get(6).next(), h_output.get(6).expr());
-        self.set_to_expression_transition(&h_input.get(7).next(), h_output.get(7).expr());
 
         (v_input, v_output)
     }
@@ -889,7 +889,7 @@ mod tests {
         let blake_gadget = builder.process_blake2b(&clk, &mut bus, channel_idx, &mut operations);
 
         builder.register_byte_lookup(operations, &table);
-        //builder.constrain_bus(bus);
+        builder.constrain_bus(bus);
 
         let (air, trace_data) = builder.build();
 
