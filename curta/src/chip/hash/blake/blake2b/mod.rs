@@ -37,6 +37,7 @@ pub struct BLAKE2BGadget {
     pub last_block_bit: BitRegister,     // need to constrain
     pub cycle_12_start_bit: BitRegister, // need to constrain
     pub cycle_12_end_bit: BitRegister,   // need to constrain
+    pub pad_bit: BitRegister,
 
     // Public values
     pub msg_chunks: ArrayRegister<U64Register>,
@@ -112,6 +113,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let h_output = self.alloc_array::<U64Register>(8);
         let first_block_bit = self.alloc::<BitRegister>(); // need to constrain
         let last_block_bit = self.alloc::<BitRegister>();
+        let pad_bit = self.alloc::<BitRegister>();
 
         let cycle_12_start_bit = self.alloc::<BitRegister>(); // need to constrain
         let cycle_12_end_bit = self.alloc::<BitRegister>(); // need to constrain
@@ -169,7 +171,7 @@ impl<L: AirParameters> AirBuilder<L> {
             &message_chunk_challenges,
             &[clk.expr(), m.get_subarray(0..16).expr()],
         );
-        self.input_to_bus(bus_channel_idx, clk_msg_digest);
+        self.input_to_bus_filtered(bus_channel_idx, clk_msg_digest, pad_bit.not_expr());
 
         // Set h_input to the initial hash if we are at the first block and at the first loop of the cycle_12
         // Otherwise set it to h_output
@@ -198,12 +200,12 @@ impl<L: AirParameters> AirBuilder<L> {
         self.input_to_bus_filtered(bus_channel_idx, clk_hash_next, cycle_12_end_bit.expr());
 
         for ((h_in, init), h_out) in h_input.iter().zip(initial_hash.iter()).zip(h_output.iter()) {
-            self.set_to_expression(
+            self.set_to_expression_transition(
                 &h_in.next(),
-                first_block_bit.expr()
-                    * (cycle_12_start_bit.expr() * init.expr()
-                        + cycle_12_start_bit.not_expr() * h_out.expr())
-                    + (first_block_bit.not_expr() * h_out.expr()),
+                last_block_bit.expr()
+                    * (cycle_12_end_bit.expr() * init.expr()
+                        + cycle_12_end_bit.not_expr() * h_out.expr())
+                    + (last_block_bit.not_expr() * h_out.expr()),
             );
         }
 
@@ -216,6 +218,7 @@ impl<L: AirParameters> AirBuilder<L> {
             v_output,
             first_block_bit,
             last_block_bit,
+            pad_bit,
             cycle_12_start_bit,
             cycle_12_end_bit,
             msg_chunks,
@@ -683,6 +686,11 @@ impl BLAKE2BGadget {
             writer.write(&self.cycle_12_start_bit, &cycle_12_start_bit_values[i], i);
             writer.write(&self.cycle_12_end_bit, &cycle_12_end_bit_values[i], i);
             writer.write_array(&self.m, &m_chunks[i], i);
+            writer.write(&self.pad_bit, &F::ZERO, i);
+        }
+
+        for i in 5461 * 12..2usize.pow(16) {
+            writer.write(&self.pad_bit, &F::ONE, i);
         }
     }
 
@@ -858,7 +866,7 @@ mod tests {
 
         type Instruction = U32Instruction;
 
-        const NUM_FREE_COLUMNS: usize = 2498;
+        const NUM_FREE_COLUMNS: usize = 2499;
         const EXTENDED_COLUMNS: usize = 4740;
         //const EXTENDED_COLUMNS: usize = 4731;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
@@ -912,17 +920,10 @@ mod tests {
             blake_gadget.write(padded_messages, msg_lens.as_slice(), &writer);
             for i in 0..L::num_rows() {
                 writer.write_row_instructions(&generator.air_data, i);
-                if i < 12 {
-                    //let m: [[GoldilocksField; 8]; 16] = writer.read_array(&blake_gadget.m, i);
-                    //println!("i = {:?}, m = {:?}", i, m);
-
+                if i < 24 {
                     let h_input: [[GoldilocksField; 8]; 1] =
                         writer.read_array(&blake_gadget.h_input, i);
-                    //println!("i = {:?}, h_input = {:?}", i, h_input);
-
-                    let h_output: [[GoldilocksField; 8]; 1] =
-                        writer.read_array(&blake_gadget.h_output, i);
-                    //println!("i = {:?}, h_output = {:?}", i, h_output);
+                    println!("i = {:?}, h_input = {:?}", i, h_input);
 
                     let mut v_input = Vec::new();
                     let mut v_output = Vec::new();
@@ -933,18 +934,14 @@ mod tests {
                     println!("i = {:?}, v_input = {:?}", i, v_input);
                     println!("i = {:?}, v_output = {:?}", i, v_output);
 
-                    if i == 11 {
+                    let h_output: [[GoldilocksField; 8]; 1] =
+                        writer.read_array(&blake_gadget.h_output, i);
+                    println!("i = {:?}, h_output = {:?}", i, h_output);
+
+                    if i == 11 || i == 23 {
                         let hash_state: [[GoldilocksField; 8]; 1] =
                             writer.read_array(&blake_gadget.hash_state, i);
                         println!("i = {:?}, hash_state = {:?}", i, hash_state);
-
-                        let h_input: [[GoldilocksField; 8]; 1] =
-                            writer.read_array(&blake_gadget.h_input, i);
-                        println!("i = {:?}, h_input = {:?}", i, h_input);
-
-                        let h_output: [[GoldilocksField; 8]; 1] =
-                            writer.read_array(&blake_gadget.h_output, i);
-                        println!("i = {:?}, h_output = {:?}", i, h_output);
                     }
                 }
                 /*
