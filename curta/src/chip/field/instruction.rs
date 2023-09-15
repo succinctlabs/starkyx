@@ -33,6 +33,8 @@ pub enum FpInstruction<P: FieldParameters> {
 pub trait FromFieldInstruction<P: FieldParameters>:
     From<FpAddInstruction<P>>
     + From<FpMulInstruction<P>>
+    + From<FpSubInstruction<P>>
+    + From<FpDivInstruction<P>>
     + From<FpMulConstInstruction<P>>
     + From<FpInnerProductInstruction<P>>
     + From<FpDenInstruction<P>>
