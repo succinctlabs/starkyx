@@ -38,7 +38,7 @@ impl EllipticCurveParameters for Bn254 {
 
 impl WeierstrassParameter for Bn254 {
     const A: [u16; crate::chip::field::parameters::MAX_NB_LIMBS] = [
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0,
     ];
 
@@ -51,5 +51,9 @@ impl WeierstrassParameter for Bn254 {
 
     fn prime_group_order() -> num::BigUint {
         todo!()
+    }
+
+    fn a_biguint() -> BigUint {
+        BigUint::zero()
     }
 }
