@@ -1,5 +1,5 @@
 use num::BigUint;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use super::EllipticCurveParameters;
 use crate::chip::field::register::FieldRegister;

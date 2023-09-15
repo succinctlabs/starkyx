@@ -10,7 +10,7 @@ use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CommonCircuitData;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use super::air::ScalarMulEd25519;
 use super::gadget::EdScalarMulGadget;
@@ -32,7 +32,7 @@ use crate::plonky2::stark::config::{CurtaConfig, StarkyConfig};
 use crate::plonky2::stark::gadget::StarkGadget;
 use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
 use crate::plonky2::stark::Starky;
-use crate::utils::serde::{BufferWrite, BufferRead};
+use crate::utils::serde::{BufferRead, BufferWrite};
 
 pub type EdDSAStark<F, E> = Starky<Chip<ScalarMulEd25519<F, E>>>;
 
@@ -280,7 +280,7 @@ impl<
     > SimpleGenerator<F, D> for SimpleScalarMulEd25519Generator<F, E, C, D>
 {
     fn id(&self) -> String {
-        Self::id() 
+        Self::id()
     }
 
     fn dependencies(&self) -> Vec<Target> {
