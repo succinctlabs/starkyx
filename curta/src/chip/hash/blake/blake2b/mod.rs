@@ -119,10 +119,10 @@ impl<L: AirParameters> AirBuilder<L> {
         let cycle_12_end_bit = self.alloc::<BitRegister>(); // need to constrain
 
         // Public values
-        let msg_chunks = self.alloc_array_public::<U64Register>(16 * 5461);
+        let msg_chunks = self.alloc_array_public::<U64Register>(16 * 682);
         let initial_hash = self.alloc_array_public::<U64Register>(8);
         let initial_hash_compress = self.alloc_array_public::<U64Register>(8);
-        let hash_state = self.alloc_array_public::<U64Register>(8 * 5461);
+        let hash_state = self.alloc_array_public::<U64Register>(8 * 682);
         let inversion_const = self.alloc_public::<U64Register>();
 
         // Get message chunk challenges
@@ -134,7 +134,7 @@ impl<L: AirParameters> AirBuilder<L> {
             self.alloc_challenge_array::<CubicRegister>(U64Register::size_of() * 8 + 1);
 
         // Put public hash state, end_bits, and all the msg chunk permutations into the bus
-        for i in 0..5461 {
+        for i in 0..682 {
             let state_digest = self.accumulate_public_expressions(
                 &state_challenges,
                 &[
@@ -596,7 +596,7 @@ impl BLAKE2BGadget {
 
             first_block_bit_values.extend_from_slice(&[F::ONE; 12]);
             first_block_bit_values.extend_from_slice(&vec![F::ZERO; (num_chunks - 1) * 12]);
-            last_block_bit_values.extend_from_slice(&vec![F::ZERO; num_chunks - 1]);
+            last_block_bit_values.extend_from_slice(&vec![F::ZERO; (num_chunks - 1) * 12]);
             last_block_bit_values.extend_from_slice(&[F::ONE; 12]);
 
             let mut state = INITIAL_HASH;
@@ -654,7 +654,7 @@ impl BLAKE2BGadget {
 
         println!("hash_values.len() = {}", hash_values.len());
         assert!(
-            hash_values.len() == 5461 * 8,
+            hash_values.len() == 682 * 8 * 8,
             "Padded messages lengths do not add up"
         );
 
@@ -679,7 +679,7 @@ impl BLAKE2BGadget {
         );
 
         // Write to the the local registers
-        for i in 0..5461 * 12 {
+        for i in 0..682 * 12 {
             writer.write(&self.t, &u64_to_le_field_bytes(t_values[i]), i);
             writer.write(&self.first_block_bit, &first_block_bit_values[i], i);
             writer.write(&self.last_block_bit, &last_block_bit_values[i], i);
@@ -689,7 +689,7 @@ impl BLAKE2BGadget {
             writer.write(&self.pad_bit, &F::ZERO, i);
         }
 
-        for i in 5461 * 12..2usize.pow(16) {
+        for i in 682 * 12..2usize.pow(16) {
             writer.write(&self.pad_bit, &F::ONE, i);
         }
     }
@@ -904,14 +904,22 @@ mod tests {
         let generator = ArithmeticGenerator::<L>::new(trace_data);
         let writer = generator.new_writer();
 
-        let msg = b"abc";
+        /*
+        let msg = hex::decode("").unwrap();
         let digest = "0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8";
+
+        let msg = hex::decode("092005a6f7a58a98df5f9b8d186b9877f12b603aa06c7debf0f610d5a49f9ed7262b5e095b309af2b0eae1c554e03b6cc4a5a0df207b662b329623f27fdce8d088554d82b1e63bedeb3fe9bd7754c7deccdfe277bcbfad4bbaff6302d3488bd2a8565f4f6e753fc7942fa29051e258da2e06d13b352220b9eadb31d8ead7f88b").unwrap();
+        let digest = "dad415aa819ebb585ce8ee1c1fa883804f405f6d8a6a0992628fb3bdaab5b42e";
+        */
+
+        let msg = hex::decode("092005a6f7a58a98df5f9b8d186b9877f12b603aa06c7debf0f610d5a49f9ed7262b5e095b309af2b0eae1c554e03b6cc4a5a0df207b662b329623f27fdce8d088554d82b1e63bedeb3fe9bd7754c7deccdfe277bcbfad4bbaff6302d3488bd2a8565f4f6e753fc7942fa29051e258da2e06d13b352220b9eadb31d8ead7f88b244f13c0835db4a3909cee6106b276684aba0f8d8b1b0ba02dff4d659b081adfeab6f3a26d7fd65eff7c72a539dbeee68a9497476b69082958eae7d6a7f0f1d5a1b99a0a349691e80429667831f9b818431514bb2763e26e94a65428d22f3827d491c474c7a1885fe1d2d557e27bbcd81bffa9f3a507649e623b47681d6c9893301d8f635ec49e983cc537c4b81399bb24027ac4be709ce1a4eeb448e98a9aecfe249696419a67cb9e0f29d0297d840048bddf6612a383f37d7b96348a1bc5f1f9ac6eed6eb911dc43e120c8480e0258a6b33e0b91734cc64f144827053b17ae91c62e6866d8b68c1b0e53df0d0f0f4f187278db30c7b95d2741f4d0c8c59507984482b48d356ce8e299268b100c61a9ba5f96a757cf98150683a3e8aa85484a4590b293b6ec62c77f022542a73651a42b50f05a8d10bbb546746ca82221ca3b18105a05e4a7ea9c9d5096a37c8b3ce1a9c62ebd7badd7ee6f1c6e5961a08d066d5e025e08e3ec72531c476098287b13295fa606fab8275418e0c4c54f236c9e73fbfdaa00a5205310cb0d1bd54175647482fae300cc66b36e7846e82288e9f0290d9479d0c1998373900dfb72900d1c9f55c018dd7eeed4ce0e988bb3da03a22910ddec7c51b2eab4d96831a8b9e84a42cebdadae62bdea26ca7b0c640e8a21f86c72277ed20efe15bab1abcf34656e7d2336e42133fa99331e874b5458b28fabe6cb62c4606ee7046d07bc9e5eec2246068396590b59194c10bbe82f7c8b5ddea0d85a4cf74a91c85d7f90873bfbdc40c8c939377bec9a26d66b895a1bbeaa94028d6eafa1c0d6218077d174cc59cea6f2ea17ef1c002160e549f43b03112b0a978fd659c69448273e35554e21bac35458fe2b199f8b8fb81a6488ee99c734e2eefb4dd06c686ca29cdb2173a53ec8322a6cb9128e3b7cdf4bf5a5c2e8906b840bd86fa97ef694a34fd47740c2d44ff7378d773ee090903796a719697e67d8df4bc26d8aeb83ed380c04fe8aa4f23678989ebffd29c647eb96d4999b4a6736dd66c7a479fe0352fda60876f173519b4e567f0a0f0798d25e198603c1c5569b95fefa2edb64720ba97bd4d5f82614236b3a1f5deb344df02d095fccfe1db9b000f38ebe212f804ea0fbbeb645b8375e21d27f5381de0e0c0156f2fa3a0a0a055b8afe90b542f6e0fffb744f1dba74e34bb4d3ea6c84e49796f5e549781a2f5c2dc01d7b8e814661b5e2d2a51a258b2f7032a83082e6e36a5e51ef9af960b058").unwrap();
+        let digest = "022bfe46002fe82ab0c451574898fafaeb36283825aab39ddf825dc48a1c0970";
 
         let mut padded_messages = Vec::new();
         let mut msg_lens = Vec::new();
 
-        for _i in 0..5461 {
-            padded_messages.push(BLAKE2BGadget::pad(msg).into_iter().collect::<Vec<_>>());
+        for _i in 0..682 {
+            padded_messages.push(BLAKE2BGadget::pad(&msg).into_iter().collect::<Vec<_>>());
             msg_lens.push(msg.len() as u64);
         }
 
@@ -920,11 +928,7 @@ mod tests {
             blake_gadget.write(padded_messages, msg_lens.as_slice(), &writer);
             for i in 0..L::num_rows() {
                 writer.write_row_instructions(&generator.air_data, i);
-                if i < 24 {
-                    let h_input: [[GoldilocksField; 8]; 1] =
-                        writer.read_array(&blake_gadget.h_input, i);
-                    println!("i = {:?}, h_input = {:?}", i, h_input);
-
+                if i < 96 {
                     let mut v_input = Vec::new();
                     let mut v_output = Vec::new();
                     for j in 0..1 {
@@ -934,29 +938,41 @@ mod tests {
                     println!("i = {:?}, v_input = {:?}", i, v_input);
                     println!("i = {:?}, v_output = {:?}", i, v_output);
 
-                    let h_output: [[GoldilocksField; 8]; 1] =
-                        writer.read_array(&blake_gadget.h_output, i);
-                    println!("i = {:?}, h_output = {:?}", i, h_output);
+                    if i % 12 == 11 {
+                        let h_output: [[GoldilocksField; 8]; 1] =
+                            writer.read_array(&blake_gadget.h_output, i);
+                        println!("i = {:?}, h_output = {:?}", i, h_output);
 
-                    if i == 11 || i == 23 {
-                        let hash_state: [[GoldilocksField; 8]; 1] =
-                            writer.read_array(&blake_gadget.hash_state, i);
+                        let hash_state: [[GoldilocksField; 8]; 1] = writer.read_array(
+                            &blake_gadget
+                                .hash_state
+                                .get_subarray((i / 12) * 8..(i / 12) * 8 + 8),
+                            0,
+                        );
                         println!("i = {:?}, hash_state = {:?}", i, hash_state);
                     }
                 }
-                /*
+                let last_block_bit = writer.read(&blake_gadget.last_block_bit, i);
+                let cycle_12_end_bit = writer.read(&blake_gadget.cycle_12_end_bit, i);
                 if last_block_bit == F::ONE && cycle_12_end_bit == F::ONE {
                     let hash: [[GoldilocksField; 8]; 4] =
-                        writer.read_array(&blake_gadget.hash_state.get_subarray(0..8), i);
+                        writer.read_array(&blake_gadget.h_output.get_subarray(0..8), i);
                     let calculated_hash_bytes = hash
                         .iter()
                         .flatten()
                         .map(|x| x.to_canonical_u64() as u8)
-                        .collect_vec();
-                    if i < 12 {
-                        println!("i = {:?}, hash = {:?}", i, calculated_hash_bytes);
-
-                */
+                        .collect::<Vec<_>>();
+                    assert_eq!(
+                        calculated_hash_bytes.len(),
+                        32,
+                        "Hash should be 32 bytes long"
+                    );
+                    assert_eq!(
+                        calculated_hash_bytes,
+                        hex::decode(digest).unwrap(),
+                        "Hashes do not match"
+                    );
+                }
             }
             table.write_multiplicities(&writer);
         });
