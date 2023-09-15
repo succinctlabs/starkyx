@@ -6,8 +6,9 @@ use crate::chip::{builder::{AirBuilder}, AirParameters, trace::writer::TraceWrit
 use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
 
 pub struct Keccak256Gadget {
-    pub state: ArrayRegister<ByteArrayRegister<8>>,
-   pub(crate) round_constant: U64Register
+   pub state: ArrayRegister<ByteArrayRegister<8>>,
+   pub(crate) round_constant: U64Register,
+   pub a: U64Register
 }
 
 #[derive(Debug, Clone)]
@@ -80,10 +81,11 @@ impl<L: AirParameters> AirBuilder<L> {
         let a = self.alloc::<U64Register>();
         for x in 0..5 {
             for y in 0..5 {
-                let res = self.add_u64(&state.get(x + y*5), &a, operations);
-                self.assert_equal_transition(&state.get(x + y*5).next(), &res);
+                // let res = self.add_u64(&state.get(x + y*5), &a, operations);
+                self.set_to_expression_transition(&state.get(x + y*5).next(), state.get(x + y*5).expr() + a.expr());
             }
         }
+        self.set_to_expression_transition(&a.next(), a.expr());
         // theta
         // how to constrain an array value follows a transition constraint in for loop? 
         // let c_arr = self.alloc_array::<U64Register>(5);
@@ -156,6 +158,7 @@ impl<L: AirParameters> AirBuilder<L> {
         // }
 
         Keccak256Gadget {
+            a,
             state,
             round_constant: round_const
         }
@@ -186,7 +189,7 @@ mod tests {
     pub use crate::chip::builder::tests::*;
     use crate::chip::builder::AirBuilder;
     use crate::chip::uint::operations::instruction::U32Instruction;
-    use crate::chip::uint::util::{u64_to_le_field_bytes};
+    use crate::chip::uint::util::u64_to_le_field_bytes;
     use crate::chip::AirParameters;
 
     #[derive(Debug, Clone, Copy)]
@@ -227,18 +230,24 @@ mod tests {
 
         let generator = ArithmeticGenerator::<L>::new(trace_data);
         let writer = generator.new_writer();
-        for i in 0..24 {
-            writer.write(&keccak_f_gadget.state.get(i), &[F::ZERO; 8], 0);
+        table.write_table_entries(&writer);
+
+        // write the initial value of state to 0th row
+        for i in 0..25 {
+            writer.write(&keccak_f_gadget.state.get(i), &u64_to_le_field_bytes(0), 0);
         }
-        println!("{}", L::num_rows());
+        // write the intial a
+        writer.write(&keccak_f_gadget.a, &u64_to_le_field_bytes(5), 0);
+        // println!("{}", L::num_rows());
         println!("{}", generator.air_data.instructions.len());
 
         for i in 0..L::num_rows() {
             let round_constant_value = u64_to_le_field_bytes::<F>(KECCAKF_RNDC[i % 24]);
             writer.write(&keccak_f_gadget.round_constant, &round_constant_value, i);
-            
             writer.write_row_instructions(&generator.air_data, i);
         }
+
+        table.write_multiplicities(&writer);
 
         // after one round result should be at row_index = 1
         
