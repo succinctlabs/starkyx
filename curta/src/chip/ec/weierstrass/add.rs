@@ -4,6 +4,7 @@ use super::projective::SWProjectivePointRegister;
 use super::WeierstrassParameter;
 use crate::chip::builder::AirBuilder;
 use crate::chip::field::instruction::FromFieldInstruction;
+use crate::chip::field::parameters::MAX_NB_LIMBS;
 use crate::chip::AirParameters;
 
 /// Gadgets for Weierstrass curve projective point addition
@@ -13,25 +14,11 @@ pub struct SWAddGadget<E: WeierstrassParameter> {
     pub p: SWProjectivePointRegister<E>,
     pub q: SWProjectivePointRegister<E>,
     pub result: SWProjectivePointRegister<E>,
-    // z1z1_ins: FpMulInstruction<E::BaseField>,
-    // z1z1z1_ins: FpMulInstruction<E::BaseField>,
-    // z2z2_ins: FpMulInstruction<E::BaseField>,
-    // z2z2z2_ins: FpMulInstruction<E::BaseField>,
-    // u1_ins: FpMulInstruction<E::BaseField>,
-    // u2_ins: FpMulInstruction<E::BaseField>,
-    // s1_ins: FpMulInstruction<E::BaseField>,
-    // s2_ins: FpMulInstruction<E::BaseField>,
-    // hh_ins: FpMulInstruction<E::BaseField>,
-    // hhh_ins: FpMulInstruction<E::BaseField>,
-    // v_ins: FpMulInstruction<E::BaseField>,
-    // rr_ins: FpMulInstruction<E::BaseField>,
-    // r_v_sub_x3_ins: FpMulInstruction<E::BaseField>,
-    // s1_hhh_ins: FpMulInstruction<E::BaseField>,
-    // z1z2_ins: FpMulInstruction<E::BaseField>,
-    // z3_ins: FpMulInstruction<E::BaseField>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
+    /// Weierstrass curve addition for projective points
+    /// WARNING: It DOESN'T handle the case where p == q. In that case you should call `sw_projective_doubling` below.
     pub fn sw_projective_add<E: WeierstrassParameter>(
         &mut self,
         p: &SWProjectivePointRegister<E>,
@@ -108,23 +95,92 @@ impl<L: AirParameters> AirBuilder<L> {
             p: *p,
             q: *q,
             result,
-            // z1z1_ins,
-            // z1z1z1_ins,
-            // z2z2_ins,
-            // z2z2z2_ins,
-            // u1_ins,
-            // u2_ins,
-            // s1_ins,
-            // s2_ins,
-            // hh_ins,
-            // hhh_ins,
-            // v_ins,
-            // rr_ins,
-            // r_v_sub_x3_ins,
-            // s1_hhh_ins,
-            // z1z2_ins,
-            // z3_ins,
         }
+    }
+}
+
+/// Gadgets for Weierstrass curve projective point doubling
+/// Formula: [http://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2007-bl]
+#[derive(Debug, Clone)]
+pub struct SWDoublingGadget<E: WeierstrassParameter> {
+    pub p: SWProjectivePointRegister<E>,
+    pub result: SWProjectivePointRegister<E>,
+}
+
+impl<L: AirParameters> AirBuilder<L> {
+    /// Weierstrass curve point doubling for projective points.
+    pub fn sw_projective_doubling<E: WeierstrassParameter>(
+        &mut self,
+        p: &SWProjectivePointRegister<E>,
+    ) -> SWDoublingGadget<E>
+    where
+        L::Instruction: FromFieldInstruction<E::BaseField>,
+    {
+        // Addition formula for Weierstrass curve projective points
+        //
+        // Result of doubling (x1, y1, z1) is (x3, y3, z3) where
+        //  xx = x1 * x1
+        //  yy = y1 * y1
+        //  yyyy = yy * yy
+        //  zz = z1 * z1
+        //  x1_plus_yy = x1 + yy
+        //  x1_plus_yy_square = x1_plus_yy * x1_plus_yy
+        //  s = (x1_plus_yy_square - xx - yyyy) * 2
+        //  m = 3 * xx - a * zz * zz
+        //  x3 = m * m - 2 * s
+        //  y3 = m * (s - x3) - 8 * yyyy
+        //  z3 = (y1 + z1) * (y1 + z1) - yy - zz
+        //
+        // Reference: http://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2007-bl
+
+        let x1 = p.x;
+        let y1 = p.y;
+        let z1 = p.z;
+
+        let xx_ins = self.fp_mul(&x1, &x1);
+        let yy_ins = self.fp_mul(&y1, &y1);
+        let yyyy_ins = self.fp_mul(&yy_ins.result, &yy_ins.result);
+        let zz_ins = self.fp_mul(&z1, &z1);
+
+        let x1_plus_yy = self.fp_add(&x1, &yy_ins.result);
+        let x1_plus_yy_square_ins = self.fp_mul(&x1_plus_yy, &x1_plus_yy);
+        let x1_plus_yy_square_minus_xx = self.fp_sub(&x1_plus_yy_square_ins.result, &xx_ins.result);
+        let x1_plus_yy_square_minus_xx_minus_yyyy =
+            self.fp_sub(&x1_plus_yy_square_minus_xx, &yyyy_ins.result);
+        let s = self.fp_add(
+            &x1_plus_yy_square_minus_xx_minus_yyyy,
+            &x1_plus_yy_square_minus_xx_minus_yyyy,
+        );
+
+        let zzzz_ins = self.fp_mul(&zz_ins.result, &zz_ins.result);
+        let const_3: [u16; MAX_NB_LIMBS] = [
+            3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ];
+        let const_8: [u16; MAX_NB_LIMBS] = [
+            8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ];
+        let xx_times_3_ins = self.fp_mul_const(&xx_ins.result, const_3);
+        let a_zzzz_ins = self.fp_mul_const(&zzzz_ins.result, E::A);
+        let m = self.fp_sub(&xx_times_3_ins.result, &a_zzzz_ins.result);
+
+        let mm_ins = self.fp_mul(&m, &m);
+        let s_plus_s = self.fp_add(&s, &s);
+
+        let x3 = self.fp_sub(&mm_ins.result, &s_plus_s);
+        let s_minus_x3 = self.fp_sub(&s, &x3);
+        let m_times_s_minus_x3_ins = self.fp_mul(&m, &s_minus_x3);
+        let yyyy_times_8_ins = self.fp_mul_const(&yyyy_ins.result, const_8);
+        let y3 = self.fp_sub(&m_times_s_minus_x3_ins.result, &yyyy_times_8_ins.result);
+
+        let y1_plus_z1 = self.fp_add(&y1, &z1);
+        let y1_plus_z1_square_ins = self.fp_mul(&y1_plus_z1, &y1_plus_z1);
+        let y1_plus_z1_square_minus_yy = self.fp_sub(&y1_plus_z1_square_ins.result, &yy_ins.result);
+        let z3 = self.fp_sub(&y1_plus_z1_square_minus_yy, &zz_ins.result);
+
+        let result = SWProjectivePointRegister::new(x3, y3, z3);
+        SWDoublingGadget { p: *p, result }
     }
 }
 
@@ -184,6 +240,58 @@ mod tests {
         (0..L::num_rows()).into_par_iter().for_each(|i| {
             writer.write_swec_point(&p, &p_int, i);
             writer.write_swec_point(&q, &q_int, i);
+            writer.write_row_instructions(&generator.air_data, i);
+        });
+
+        let stark = Starky::new(air);
+        let config = SC::standard_fast_config(L::num_rows());
+
+        // Generate proof and verify as a stark
+        test_starky(&stark, &config, &generator, &[]);
+
+        // Test the recursive proof.
+        test_recursive_starky(stark, config, generator, &[]);
+    }
+
+    #[derive(Clone, Debug, Copy)]
+    pub struct SWDoublingTest;
+
+    impl AirParameters for SWDoublingTest {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
+
+        const NUM_ARITHMETIC_COLUMNS: usize = 2256;
+        const NUM_FREE_COLUMNS: usize = 2;
+        const EXTENDED_COLUMNS: usize = 3393;
+        type Instruction = FpInstruction<Bn254BaseField>;
+
+        fn num_rows_bits() -> usize {
+            16
+        }
+    }
+
+    #[test]
+    fn test_bn254_doubling() {
+        type L = SWDoublingTest;
+        type SC = PoseidonGoldilocksStarkConfig;
+        type E = Bn254;
+
+        let mut builder = AirBuilder::<L>::new();
+
+        let p = builder.alloc_swec_point();
+
+        let _gadget = builder.sw_projective_doubling::<E>(&p);
+
+        let (air, trace_data) = builder.build();
+        let generator = ArithmeticGenerator::<L>::new(trace_data);
+
+        let base = E::generator();
+        let mut rng = thread_rng();
+        let a = rng.gen_biguint(256);
+        let p_int = &base * &a;
+        let writer = generator.new_writer();
+        (0..L::num_rows()).into_par_iter().for_each(|i| {
+            writer.write_swec_point(&p, &p_int, i);
             writer.write_row_instructions(&generator.air_data, i);
         });
 
