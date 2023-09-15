@@ -114,50 +114,50 @@ impl<L: AirParameters> AirBuilder<L> {
             }
         }
 
-        // let state_after_rhopi = self.alloc_array::<U64Register>(25);
-        // // 0,0 has no change, direct copy constraint 
-        // self.set_to_expression(&state_after_rhopi.get(0), state_after_theta.get(0).expr());
-        // // rho and pi
-        // for x in 0..5 {
-        //     for y in 0..5 {
-        //         // x is column, y is row
-        //         // y, 2x+3y, is pi_idx in the flatten version
-        //         if x+y != 0 {
-        //             let pi_idx = ((2 * x + 3 * y) % 5) * 5 + y;
-        //             let tmp = self.bit_rotate_right(&state_after_theta.get(y * 5 + x), KECCAKF_ROTC[y][x].try_into().unwrap(), operations);
-        //             self.set_to_expression_transition(&state_after_rhopi.get(pi_idx), tmp.expr());
-        //         }
-        //     }
-        // }
+        let state_after_rhopi = self.alloc_array::<U64Register>(25);
+        // 0,0 has no change, direct copy constraint 
+        self.set_to_expression(&state_after_rhopi.get(0), state_after_theta.get(0).expr());
+        // rho and pi
+        for x in 0..5 {
+            for y in 0..5 {
+                // x is column, y is row
+                // y, 2x+3y, is pi_idx in the flatten version
+                if x+y != 0 {
+                    let pi_idx = ((2 * x + 3 * y) % 5) * 5 + y;
+                    let tmp = self.bit_rotate_right(&state_after_theta.get(y * 5 + x), KECCAKF_ROTC[y][x].try_into().unwrap(), operations);
+                    self.set_to_expression(&state_after_rhopi.get(pi_idx), tmp.expr());
+                }
+            }
+        }
 
-        // let state_after_chi = self.alloc_array::<U64Register>(25);
-        // // chi
-        // for x in 0..5 {
-        //     for y in 0..5 {
-        //         let tmp1 = self.bitwise_not(&state_after_rhopi.get(  (x + 1) % 5 + y * 5), operations);
-        //         let tmp2 = self.bitwise_and(&tmp1, &state_after_rhopi.get((x+2) % 5 + y * 5), operations);
-        //         let tmp3 = self.bitwise_xor(&state_after_rhopi.get(x + y * 5), &tmp2, operations);
-        //         self.set_to_expression_transition(&state_after_chi.get(x + y*5), tmp3.expr());
-        //     }
-        // }
+        let state_after_chi = self.alloc_array::<U64Register>(25);
+        // chi
+        for x in 0..5 {
+            for y in 0..5 {
+                let tmp1 = self.bitwise_not(&state_after_rhopi.get(  (x + 1) % 5 + y * 5), operations);
+                let tmp2 = self.bitwise_and(&tmp1, &state_after_rhopi.get((x+2) % 5 + y * 5), operations);
+                let tmp3 = self.bitwise_xor(&state_after_rhopi.get(x + y * 5), &tmp2, operations);
+                self.set_to_expression(&state_after_chi.get(x + y*5), tmp3.expr());
+            }
+        }
 
-        // // iota
-        // let tmp = self.bitwise_xor(&state_after_chi.get(0), &round_const, operations);
-        // self.set_to_expression_transition(&state.get(0).next(),
-        //     tmp.expr());
+        // iota
+        let tmp = self.bitwise_xor(&state_after_chi.get(0), &round_const, operations);
+        self.set_to_expression_transition(&state.get(0).next(),
+            tmp.expr());
 
-        // // constrain the other val of next state is the same as chi's result
-        // for x in 0..5 {
-        //     for y in 0..5 {
-        //         // can if used here? if not, guess need to pass some indicator bit to help identity 0,0 
-        //         if x + y > 0 {
-        //             self.set_to_expression_transition(
-        //                 &state.get(x + y * 5).next(), 
-        //                      state_after_chi.get(x + y * 5).expr()
-        //                 );
-        //         }
-        //     }
-        // }
+        // constrain the other val of next state is the same as chi's result
+        for x in 0..5 {
+            for y in 0..5 {
+                // can if used here? if not, guess need to pass some indicator bit to help identity 0,0 
+                if x + y > 0 {
+                    self.set_to_expression_transition(
+                        &state.get(x + y * 5).next(), 
+                             state_after_chi.get(x + y * 5).expr()
+                        );
+                }
+            }
+        }
 
         Keccak256Gadget {
             // a,
@@ -203,8 +203,8 @@ mod tests {
 
         type Instruction = U32Instruction;
 
-        const NUM_FREE_COLUMNS: usize = 1109;
-        const EXTENDED_COLUMNS: usize = 2022;
+        const NUM_FREE_COLUMNS: usize = 2693;
+        const EXTENDED_COLUMNS: usize = 5622;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
         fn num_rows_bits() -> usize {
@@ -243,12 +243,16 @@ mod tests {
         // println!("{}", L::num_rows());
         println!("{}", generator.air_data.instructions.len());
 
+        // write the initial state to be 0
+        // new state would be written to state.next() through instructions given by set_to_expression_transition
+        for i in 0..25 {
+            writer.write(&keccak_f_gadget.state.get(i), &u64_to_le_field_bytes(0), i);
+        }
+
         for i in 0..L::num_rows() {
+            // for each row (round) write the round_constant required for that round
             let round_constant_value = u64_to_le_field_bytes::<F>(KECCAKF_RNDC[i % 24]);
             writer.write(&keccak_f_gadget.round_constant, &round_constant_value, i);
-            for i in 0..25 {
-                writer.write(&keccak_f_gadget.state.get(i), &u64_to_le_field_bytes(0), i);
-            }
             writer.write_row_instructions(&generator.air_data, i);
         }
 
