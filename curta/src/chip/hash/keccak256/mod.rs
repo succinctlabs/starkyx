@@ -5,18 +5,16 @@ use plonky2::field::types::Field;
 use crate::chip::{builder::{AirBuilder}, AirParameters, trace::writer::TraceWriter, uint::{register::{U64Register, ByteArrayRegister}, bytes::lookup_table::builder_operations::ByteLookupOperations, operations::instruction::U32Instructions}, arithmetic::expression, register::{bit::BitRegister, array::ArrayRegister}};
 use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
 
-use super::sha256::U32Value;
-
 pub struct Keccak256Gadget {
     pub state: ArrayRegister<ByteArrayRegister<8>>,
    pub(crate) round_constant: U64Register
 }
 
 #[derive(Debug, Clone)]
-pub struct Keccak256PublicData<T> {
-    pub public_w: Vec<U32Value<T>>,
-    pub hash_state: Vec<U32Value<T>>,
-    pub end_bits: Vec<T>,
+pub struct Keccak256PublicData<> {
+    // pub public_w: Vec<U32Value<T>>,
+    // pub hash_state: Vec<U32Value<T>>,
+    // pub end_bits: Vec<T>,
 }
 
 #[rustfmt::skip]
@@ -83,7 +81,7 @@ impl<L: AirParameters> AirBuilder<L> {
         for x in 0..5 {
             for y in 0..5 {
                 let res = self.add_u64(&state.get(x + y*5), &a, operations);
-                self.set_to_expression(&state.get(x + y*5).next(), res.expr());
+                self.assert_equal_transition(&state.get(x + y*5).next(), &res);
             }
         }
         // theta
@@ -98,7 +96,7 @@ impl<L: AirParameters> AirBuilder<L> {
         //     // Does it suffice to constrain for every row of c_i, it need to satisfy its relationship with state at the same row?
         //     self.assert_equal_transition(&c_arr.get(x), &c_i);
         // }
-        // initial state doesn't exist? or don't want to constrain? first row of it is empty?
+        // // initial state doesn't exist? or don't want to constrain? first row of it is empty?
         // let state_after_theta = self.alloc_array::<U64Register>(25);
         
         // for x in 0..5 {
@@ -158,7 +156,7 @@ impl<L: AirParameters> AirBuilder<L> {
         // }
 
         Keccak256Gadget {
-            state: state,
+            state,
             round_constant: round_const
         }
     }
@@ -169,7 +167,7 @@ impl Keccak256Gadget {
         &self,
         padded_messages: I,
         writer: &TraceWriter<F>,
-    ) -> Keccak256PublicData<F>
+    ) -> Keccak256PublicData<>
     where
         I::Item: Borrow<[u8]>
     {
@@ -200,12 +198,12 @@ mod tests {
 
         type Instruction = U32Instruction;
 
-        const NUM_FREE_COLUMNS: usize = 567;
-        const EXTENDED_COLUMNS: usize = 942;
+        const NUM_FREE_COLUMNS: usize = 1109;
+        const EXTENDED_COLUMNS: usize = 2022;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
         fn num_rows_bits() -> usize {
-            9
+            16
         }
     }
 
@@ -235,7 +233,7 @@ mod tests {
         println!("{}", L::num_rows());
         println!("{}", generator.air_data.instructions.len());
 
-        for i in 0..L::num_rows() -1 {
+        for i in 0..L::num_rows() {
             let round_constant_value = u64_to_le_field_bytes::<F>(KECCAKF_RNDC[i % 24]);
             writer.write(&keccak_f_gadget.round_constant, &round_constant_value, i);
             
