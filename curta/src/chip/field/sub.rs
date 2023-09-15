@@ -62,12 +62,6 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 }
 
-impl<P: FieldParameters> FpSubInstruction<P> {
-    pub fn result(&self) -> &FieldRegister<P> {
-        &self.inner.a
-    }
-}
-
 impl<AP: PolynomialParser, P: FieldParameters> AirConstraint<AP> for FpSubInstruction<P> {
     fn eval(&self, parser: &mut AP) {
         self.inner.eval(parser);
