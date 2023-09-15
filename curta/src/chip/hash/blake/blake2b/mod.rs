@@ -27,6 +27,10 @@ pub type U64Value<T> = <U64Register as Register>::Value<T>;
 pub struct BLAKE2BGadget {
     pub t: U64Register, // Need to constrain
     pub m: ArrayRegister<U64Register>,
+    pub h_input: ArrayRegister<U64Register>,
+    pub h_output: ArrayRegister<U64Register>,
+    pub v_input: [U64Register; 16],
+    pub v_output: [U64Register; 16],
     pub first_block_bit: BitRegister,    // need to constrain
     pub last_block_bit: BitRegister,     // need to constrain
     pub cycle_12_start_bit: BitRegister, // need to constrain
@@ -107,15 +111,14 @@ impl<L: AirParameters> AirBuilder<L> {
         let first_block_bit = self.alloc::<BitRegister>(); // need to constrain
         let last_block_bit = self.alloc::<BitRegister>();
 
-        // TODO:  Need to write to these registers and constraint them
         let cycle_12_start_bit = self.alloc::<BitRegister>(); // need to constrain
         let cycle_12_end_bit = self.alloc::<BitRegister>(); // need to constrain
 
         // Public values
-        let msg_chunks = self.alloc_array_public::<U64Register>(16 * 512);
+        let msg_chunks = self.alloc_array_public::<U64Register>(16 * 5461);
         let initial_hash = self.alloc_array_public::<U64Register>(8);
         let initial_hash_compress = self.alloc_array_public::<U64Register>(8);
-        let hash_state = self.alloc_array_public::<U64Register>(8 * 512);
+        let hash_state = self.alloc_array_public::<U64Register>(8 * 5461);
         let inversion_const = self.alloc_public::<U64Register>();
 
         // Get message chunk challenges
@@ -127,7 +130,7 @@ impl<L: AirParameters> AirBuilder<L> {
             self.alloc_challenge_array::<CubicRegister>(U64Register::size_of() * 8 + 1);
 
         // Put public hash state, end_bits, and all the msg chunk permutations into the bus
-        for i in 0..512 {
+        for i in 0..5461 {
             let state_digest = self.accumulate_public_expressions(
                 &state_challenges,
                 &[
@@ -160,20 +163,11 @@ impl<L: AirParameters> AirBuilder<L> {
             }
         }
 
-        let clk_msg_digest = self.accumulate_public_expressions(
+        let clk_msg_digest = self.accumulate_expressions(
             &message_chunk_challenges,
             &[clk.expr(), m.get_subarray(0..16).expr()],
         );
         self.input_to_bus(bus_channel_idx, clk_msg_digest);
-
-        /*
-        for i in 0..8 {
-            self.set_to_expression_first_row(
-                &h_output.get(i),
-                ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-            );
-        }
-        */
 
         // Set h_input to the initial hash if we are at the first block.
         // Otherwise set it to h_output
@@ -184,7 +178,7 @@ impl<L: AirParameters> AirBuilder<L> {
             );
         }
 
-        self.blake2b_compress(
+        let (v_input, v_output) = self.blake2b_compress(
             clk,
             &m,
             &h_input,
@@ -207,6 +201,10 @@ impl<L: AirParameters> AirBuilder<L> {
         BLAKE2BGadget {
             t,
             m,
+            h_input,
+            h_output,
+            v_input,
+            v_output,
             first_block_bit,
             last_block_bit,
             cycle_12_start_bit,
@@ -233,7 +231,8 @@ impl<L: AirParameters> AirBuilder<L> {
         cycle_12_start_bit: &BitRegister,
         cycle_12_end_bit: &BitRegister,
         operations: &mut ByteLookupOperations,
-    ) where
+    ) -> ([U64Register; 16], [U64Register; 16])
+    where
         L::Instruction: U32Instructions,
     {
         // Need to create non public registers for IV and inversion_const.  Operating on public and private registers causes issues.
@@ -247,22 +246,22 @@ impl<L: AirParameters> AirBuilder<L> {
 
         // Allocate the work vector
         // This is used to store the current value of the work vector during the mix loop
-        let mut v_0 = self.alloc::<U64Register>();
-        let mut v_1 = self.alloc::<U64Register>();
-        let mut v_2 = self.alloc::<U64Register>();
-        let mut v_3 = self.alloc::<U64Register>();
-        let mut v_4 = self.alloc::<U64Register>();
-        let mut v_5 = self.alloc::<U64Register>();
-        let mut v_6 = self.alloc::<U64Register>();
-        let mut v_7 = self.alloc::<U64Register>();
-        let mut v_8 = self.alloc::<U64Register>();
-        let mut v_9 = self.alloc::<U64Register>();
-        let mut v_10 = self.alloc::<U64Register>();
-        let mut v_11 = self.alloc::<U64Register>();
-        let mut v_12 = self.alloc::<U64Register>();
-        let mut v_13 = self.alloc::<U64Register>();
-        let mut v_14 = self.alloc::<U64Register>();
-        let mut v_15 = self.alloc::<U64Register>();
+        let v_0_orig = self.alloc::<U64Register>();
+        let v_1_orig = self.alloc::<U64Register>();
+        let v_2_orig = self.alloc::<U64Register>();
+        let v_3_orig = self.alloc::<U64Register>();
+        let v_4_orig = self.alloc::<U64Register>();
+        let v_5_orig = self.alloc::<U64Register>();
+        let v_6_orig = self.alloc::<U64Register>();
+        let v_7_orig = self.alloc::<U64Register>();
+        let v_8_orig = self.alloc::<U64Register>();
+        let v_9_orig = self.alloc::<U64Register>();
+        let v_10_orig = self.alloc::<U64Register>();
+        let v_11_orig = self.alloc::<U64Register>();
+        let v_12_orig = self.alloc::<U64Register>();
+        let v_13_orig = self.alloc::<U64Register>();
+        let v_14_orig = self.alloc::<U64Register>();
+        let v_15_orig = self.alloc::<U64Register>();
 
         // This is used to store the output work vector after mix
         let v_0_out = self.alloc::<U64Register>();
@@ -282,90 +281,23 @@ impl<L: AirParameters> AirBuilder<L> {
         let v_14_out = self.alloc::<U64Register>();
         let v_15_out = self.alloc::<U64Register>();
 
-        /*
-        self.set_to_expression_first_row(
-            &v_0_out,
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-        );
-        self.set_to_expression_first_row(
-            &v_1_out,
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-        );
-        self.set_to_expression_first_row(
-            &v_2_out,
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-        );
-        self.set_to_expression_first_row(
-            &v_3_out,
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-        );
-        self.set_to_expression_first_row(
-            &v_4_out,
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-        );
-        self.set_to_expression_first_row(
-            &v_5_out,
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-        );
-        self.set_to_expression_first_row(
-            &v_6_out,
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-        );
-        self.set_to_expression_first_row(
-            &v_7_out,
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-        );
-        self.set_to_expression_first_row(
-            &v_8_out,
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-        );
-        self.set_to_expression_first_row(
-            &v_9_out,
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-        );
-        self.set_to_expression_first_row(
-            &v_10_out,
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-        );
-        self.set_to_expression_first_row(
-            &v_11_out,
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-        );
-        self.set_to_expression_first_row(
-            &v_12_out,
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-        );
-        self.set_to_expression_first_row(
-            &v_13_out,
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-        );
-        self.set_to_expression_first_row(
-            &v_14_out,
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-        );
-        self.set_to_expression_first_row(
-            &v_15_out,
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-        );
-        */
-
         // If this is the first bit of the 12 round mix cycle, initialize the work vector, else set it to v_out
-        v_0 = self.select(cycle_12_start_bit, &v_0, &v_0_out);
-        v_1 = self.select(cycle_12_start_bit, &v_1, &v_1_out);
-        v_2 = self.select(cycle_12_start_bit, &v_2, &v_2_out);
-        v_3 = self.select(cycle_12_start_bit, &v_3, &v_3_out);
-        v_4 = self.select(cycle_12_start_bit, &v_4, &v_4_out);
-        v_5 = self.select(cycle_12_start_bit, &v_5, &v_5_out);
-        v_6 = self.select(cycle_12_start_bit, &v_6, &v_6_out);
-        v_7 = self.select(cycle_12_start_bit, &v_7, &v_7_out);
-        v_8 = self.select(cycle_12_start_bit, &v_8, &v_8_out);
-        v_9 = self.select(cycle_12_start_bit, &v_9, &v_9_out);
-        v_10 = self.select(cycle_12_start_bit, &v_10, &v_10_out);
-        v_11 = self.select(cycle_12_start_bit, &v_11, &v_11_out);
-        v_12 = self.select(cycle_12_start_bit, &v_12, &v_12_out);
-        v_13 = self.select(cycle_12_start_bit, &v_13, &v_13_out);
-        v_14 = self.select(cycle_12_start_bit, &v_14, &v_14_out);
-        v_15 = self.select(cycle_12_start_bit, &v_15, &v_15_out);
+        let mut v_0 = self.select(cycle_12_start_bit, &h_input.get(0), &v_0_orig);
+        let mut v_1 = self.select(cycle_12_start_bit, &h_input.get(1), &v_1_orig);
+        let mut v_2 = self.select(cycle_12_start_bit, &h_input.get(2), &v_2_orig);
+        let mut v_3 = self.select(cycle_12_start_bit, &h_input.get(3), &v_3_orig);
+        let mut v_4 = self.select(cycle_12_start_bit, &h_input.get(4), &v_4_orig);
+        let mut v_5 = self.select(cycle_12_start_bit, &h_input.get(5), &v_5_orig);
+        let mut v_6 = self.select(cycle_12_start_bit, &h_input.get(6), &v_6_orig);
+        let mut v_7 = self.select(cycle_12_start_bit, &h_input.get(7), &v_7_orig);
+        let mut v_8 = self.select(cycle_12_start_bit, &iv.get(0), &v_8_orig);
+        let mut v_9 = self.select(cycle_12_start_bit, &iv.get(1), &v_9_orig);
+        let mut v_10 = self.select(cycle_12_start_bit, &iv.get(2), &v_10_orig);
+        let mut v_11 = self.select(cycle_12_start_bit, &iv.get(3), &v_11_orig);
+        let mut v_12 = self.select(cycle_12_start_bit, &iv.get(4), &v_12_orig);
+        let mut v_13 = self.select(cycle_12_start_bit, &iv.get(5), &v_13_orig);
+        let mut v_14 = self.select(cycle_12_start_bit, &iv.get(6), &v_14_orig);
+        let mut v_15 = self.select(cycle_12_start_bit, &iv.get(7), &v_15_orig);
 
         let v_12_for_start_bit = self.bitwise_xor(&v_12, t, operations);
         v_12 = self.select(cycle_12_start_bit, &v_12_for_start_bit, &v_12);
@@ -374,6 +306,25 @@ impl<L: AirParameters> AirBuilder<L> {
         v_14_for_last_block = self.select(cycle_12_start_bit, &v_14_for_last_block, &v_14);
         v_14 = self.select(last_block_bit, &v_14_for_last_block, &v_14);
         // Invert v[14] bits if this is the last block and we are at the start of the mix 12 cycle.
+
+        let v_input = [
+            v_0.clone(),
+            v_1.clone(),
+            v_2.clone(),
+            v_3.clone(),
+            v_4.clone(),
+            v_5.clone(),
+            v_6.clone(),
+            v_7.clone(),
+            v_8.clone(),
+            v_9.clone(),
+            v_10.clone(),
+            v_11.clone(),
+            v_12.clone(),
+            v_13.clone(),
+            v_14.clone(),
+            v_15.clone(),
+        ];
 
         self.blake2b_mix(
             &mut v_0,
@@ -455,22 +406,58 @@ impl<L: AirParameters> AirBuilder<L> {
             operations,
         );
 
-        self.set_to_expression_transition(&v_0_out, v_0.expr());
-        self.set_to_expression_transition(&v_1_out, v_1.expr());
-        self.set_to_expression_transition(&v_2_out, v_2.expr());
-        self.set_to_expression_transition(&v_3_out, v_3.expr());
-        self.set_to_expression_transition(&v_4_out, v_4.expr());
-        self.set_to_expression_transition(&v_5_out, v_5.expr());
-        self.set_to_expression_transition(&v_6_out, v_6.expr());
-        self.set_to_expression_transition(&v_7_out, v_7.expr());
-        self.set_to_expression_transition(&v_8_out, v_8.expr());
-        self.set_to_expression_transition(&v_9_out, v_9.expr());
-        self.set_to_expression_transition(&v_10_out, v_10.expr());
-        self.set_to_expression_transition(&v_11_out, v_11.expr());
-        self.set_to_expression_transition(&v_12_out, v_12.expr());
-        self.set_to_expression_transition(&v_13_out, v_13.expr());
-        self.set_to_expression_transition(&v_14_out, v_14.expr());
-        self.set_to_expression_transition(&v_15_out, v_15.expr());
+        self.set_to_expression(&v_0_out, v_0.expr());
+        self.set_to_expression(&v_1_out, v_1.expr());
+        self.set_to_expression(&v_2_out, v_2.expr());
+        self.set_to_expression(&v_3_out, v_3.expr());
+        self.set_to_expression(&v_4_out, v_4.expr());
+        self.set_to_expression(&v_5_out, v_5.expr());
+        self.set_to_expression(&v_6_out, v_6.expr());
+        self.set_to_expression(&v_7_out, v_7.expr());
+        self.set_to_expression(&v_8_out, v_8.expr());
+        self.set_to_expression(&v_9_out, v_9.expr());
+        self.set_to_expression(&v_10_out, v_10.expr());
+        self.set_to_expression(&v_11_out, v_11.expr());
+        self.set_to_expression(&v_12_out, v_12.expr());
+        self.set_to_expression(&v_13_out, v_13.expr());
+        self.set_to_expression(&v_14_out, v_14.expr());
+        self.set_to_expression(&v_15_out, v_15.expr());
+
+        let v_output = [
+            v_0_out.clone(),
+            v_1_out.clone(),
+            v_2_out.clone(),
+            v_3_out.clone(),
+            v_4_out.clone(),
+            v_5_out.clone(),
+            v_6_out.clone(),
+            v_7_out.clone(),
+            v_8_out.clone(),
+            v_9_out.clone(),
+            v_10_out.clone(),
+            v_11_out.clone(),
+            v_12_out.clone(),
+            v_13_out.clone(),
+            v_14_out.clone(),
+            v_15_out.clone(),
+        ];
+
+        self.set_to_expression_transition(&v_0_orig.next(), v_0_out.expr());
+        self.set_to_expression_transition(&v_1_orig.next(), v_1_out.expr());
+        self.set_to_expression_transition(&v_2_orig.next(), v_2_out.expr());
+        self.set_to_expression_transition(&v_3_orig.next(), v_3_out.expr());
+        self.set_to_expression_transition(&v_4_orig.next(), v_4_out.expr());
+        self.set_to_expression_transition(&v_5_orig.next(), v_5_out.expr());
+        self.set_to_expression_transition(&v_6_orig.next(), v_6_out.expr());
+        self.set_to_expression_transition(&v_7_orig.next(), v_7_out.expr());
+        self.set_to_expression_transition(&v_8_orig.next(), v_8_out.expr());
+        self.set_to_expression_transition(&v_9_orig.next(), v_9_out.expr());
+        self.set_to_expression_transition(&v_10_orig.next(), v_10_out.expr());
+        self.set_to_expression_transition(&v_11_orig.next(), v_11_out.expr());
+        self.set_to_expression_transition(&v_12_orig.next(), v_12_out.expr());
+        self.set_to_expression_transition(&v_13_orig.next(), v_13_out.expr());
+        self.set_to_expression_transition(&v_14_orig.next(), v_14_out.expr());
+        self.set_to_expression_transition(&v_15_orig.next(), v_15_out.expr());
 
         let mut h_0_tmp = self.bitwise_xor(&h_input.get(0), &v_0_out, operations);
         let mut h_1_tmp = self.bitwise_xor(&h_input.get(1), &v_1_out, operations);
@@ -490,46 +477,57 @@ impl<L: AirParameters> AirBuilder<L> {
         h_6_tmp = self.bitwise_xor(&h_6_tmp, &v_14_out, operations);
         h_7_tmp = self.bitwise_xor(&h_7_tmp, &v_15_out, operations);
 
-        self.set_to_expression_transition(
-            &h_output.get(0).next(),
+        self.set_to_expression(
+            &h_output.get(0),
             cycle_12_end_bit.expr() * h_0_tmp.expr()
                 + cycle_12_end_bit.not_expr() * h_input.get(0).expr(),
         );
-        self.set_to_expression_transition(
-            &h_output.get(1).next(),
+        self.set_to_expression(
+            &h_output.get(1),
             cycle_12_end_bit.expr() * h_1_tmp.expr()
                 + cycle_12_end_bit.not_expr() * h_input.get(1).expr(),
         );
-        self.set_to_expression_transition(
-            &h_output.get(2).next(),
+        self.set_to_expression(
+            &h_output.get(2),
             cycle_12_end_bit.expr() * h_2_tmp.expr()
                 + cycle_12_end_bit.not_expr() * h_input.get(2).expr(),
         );
-        self.set_to_expression_transition(
-            &h_output.get(3).next(),
+        self.set_to_expression(
+            &h_output.get(3),
             cycle_12_end_bit.expr() * h_3_tmp.expr()
                 + cycle_12_end_bit.not_expr() * h_input.get(3).expr(),
         );
-        self.set_to_expression_transition(
-            &h_output.get(4).next(),
+        self.set_to_expression(
+            &h_output.get(4),
             cycle_12_end_bit.expr() * h_4_tmp.expr()
                 + cycle_12_end_bit.not_expr() * h_input.get(4).expr(),
         );
-        self.set_to_expression_transition(
-            &h_output.get(5).next(),
+        self.set_to_expression(
+            &h_output.get(5),
             cycle_12_end_bit.expr() * h_5_tmp.expr()
                 + cycle_12_end_bit.not_expr() * h_input.get(5).expr(),
         );
-        self.set_to_expression_transition(
-            &h_output.get(6).next(),
+        self.set_to_expression(
+            &h_output.get(6),
             cycle_12_end_bit.expr() * h_6_tmp.expr()
                 + cycle_12_end_bit.not_expr() * h_input.get(6).expr(),
         );
-        self.set_to_expression_transition(
-            &h_output.get(7).next(),
+        self.set_to_expression(
+            &h_output.get(7),
             cycle_12_end_bit.expr() * h_7_tmp.expr()
                 + cycle_12_end_bit.not_expr() * h_input.get(7).expr(),
         );
+
+        self.set_to_expression_transition(&h_input.get(0).next(), h_output.get(0).expr());
+        self.set_to_expression_transition(&h_input.get(1).next(), h_output.get(1).expr());
+        self.set_to_expression_transition(&h_input.get(2).next(), h_output.get(2).expr());
+        self.set_to_expression_transition(&h_input.get(3).next(), h_output.get(3).expr());
+        self.set_to_expression_transition(&h_input.get(4).next(), h_output.get(4).expr());
+        self.set_to_expression_transition(&h_input.get(5).next(), h_output.get(5).expr());
+        self.set_to_expression_transition(&h_input.get(6).next(), h_output.get(6).expr());
+        self.set_to_expression_transition(&h_input.get(7).next(), h_output.get(7).expr());
+
+        (v_input, v_output)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -570,7 +568,6 @@ impl<L: AirParameters> AirBuilder<L> {
 }
 
 impl BLAKE2BGadget {
-    // TODO:  Need to revisit this
     pub fn write<F: Field, I: IntoIterator>(
         &self,
         padded_messages: I,
@@ -623,6 +620,7 @@ impl BLAKE2BGadget {
                     bytes_compressed,
                     chunk_num == num_chunks - 1,
                 );
+
                 hash_values.extend_from_slice(&state.map(u64_to_le_field_bytes::<F>));
 
                 let chunk_array: [[F; 8]; 16] = chunk
@@ -653,7 +651,7 @@ impl BLAKE2BGadget {
 
         println!("hash_values.len() = {}", hash_values.len());
         assert!(
-            hash_values.len() == 512 * 8,
+            hash_values.len() == 5461 * 8,
             "Padded messages lengths do not add up"
         );
 
@@ -678,7 +676,7 @@ impl BLAKE2BGadget {
         );
 
         // Write to the the local registers
-        for i in 0..512 * 12 {
+        for i in 0..5461 * 12 {
             writer.write(&self.t, &u64_to_le_field_bytes(t_values[i]), i);
             writer.write(&self.first_block_bit, &first_block_bit_values[i], i);
             writer.write(&self.last_block_bit, &last_block_bit_values[i], i);
@@ -694,7 +692,7 @@ impl BLAKE2BGadget {
         let permutation = SIGMA[mix_round_num % 10];
         let mut result = vec![arr[0].clone(); arr.len()];
 
-        for (from_index, &to_index) in permutation.iter().enumerate() {
+        for (to_index, &from_index) in permutation.iter().enumerate() {
             result[to_index] = arr[from_index].clone();
         }
 
@@ -861,7 +859,8 @@ mod tests {
         type Instruction = U32Instruction;
 
         const NUM_FREE_COLUMNS: usize = 2498;
-        const EXTENDED_COLUMNS: usize = 4737;
+        const EXTENDED_COLUMNS: usize = 4740;
+        //const EXTENDED_COLUMNS: usize = 4731;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
         fn num_rows_bits() -> usize {
@@ -890,19 +889,20 @@ mod tests {
         let blake_gadget = builder.process_blake2b(&clk, &mut bus, channel_idx, &mut operations);
 
         builder.register_byte_lookup(operations, &table);
+        //builder.constrain_bus(bus);
 
         let (air, trace_data) = builder.build();
 
         let generator = ArithmeticGenerator::<L>::new(trace_data);
         let writer = generator.new_writer();
 
-        let msg = b"";
+        let msg = b"abc";
         let digest = "0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8";
 
         let mut padded_messages = Vec::new();
         let mut msg_lens = Vec::new();
 
-        for i in 0..512 {
+        for _i in 0..5461 {
             padded_messages.push(BLAKE2BGadget::pad(msg).into_iter().collect::<Vec<_>>());
             msg_lens.push(msg.len() as u64);
         }
@@ -912,8 +912,42 @@ mod tests {
             blake_gadget.write(padded_messages, msg_lens.as_slice(), &writer);
             for i in 0..L::num_rows() {
                 writer.write_row_instructions(&generator.air_data, i);
-                let last_block_bit = writer.read(&blake_gadget.last_block_bit, i);
-                let cycle_12_end_bit = writer.read(&blake_gadget.cycle_12_end_bit, i);
+                if i < 12 {
+                    //let m: [[GoldilocksField; 8]; 16] = writer.read_array(&blake_gadget.m, i);
+                    //println!("i = {:?}, m = {:?}", i, m);
+
+                    let h_input: [[GoldilocksField; 8]; 1] =
+                        writer.read_array(&blake_gadget.h_input, i);
+                    //println!("i = {:?}, h_input = {:?}", i, h_input);
+
+                    let h_output: [[GoldilocksField; 8]; 1] =
+                        writer.read_array(&blake_gadget.h_output, i);
+                    //println!("i = {:?}, h_output = {:?}", i, h_output);
+
+                    let mut v_input = Vec::new();
+                    let mut v_output = Vec::new();
+                    for j in 0..1 {
+                        v_input.push(writer.read(&blake_gadget.v_input[j], i));
+                        v_output.push(writer.read(&blake_gadget.v_output[j], i));
+                    }
+                    println!("i = {:?}, v_input = {:?}", i, v_input);
+                    println!("i = {:?}, v_output = {:?}", i, v_output);
+
+                    if i == 11 {
+                        let hash_state: [[GoldilocksField; 8]; 1] =
+                            writer.read_array(&blake_gadget.hash_state, i);
+                        println!("i = {:?}, hash_state = {:?}", i, hash_state);
+
+                        let h_input: [[GoldilocksField; 8]; 1] =
+                            writer.read_array(&blake_gadget.h_input, i);
+                        println!("i = {:?}, h_input = {:?}", i, h_input);
+
+                        let h_output: [[GoldilocksField; 8]; 1] =
+                            writer.read_array(&blake_gadget.h_output, i);
+                        println!("i = {:?}, h_output = {:?}", i, h_output);
+                    }
+                }
+                /*
                 if last_block_bit == F::ONE && cycle_12_end_bit == F::ONE {
                     let hash: [[GoldilocksField; 8]; 4] =
                         writer.read_array(&blake_gadget.hash_state.get_subarray(0..8), i);
@@ -922,8 +956,10 @@ mod tests {
                         .flatten()
                         .map(|x| x.to_canonical_u64() as u8)
                         .collect_vec();
-                    //assert_eq!(calculated_hash_bytes, expected_digest);
-                }
+                    if i < 12 {
+                        println!("i = {:?}, hash = {:?}", i, calculated_hash_bytes);
+
+                */
             }
             table.write_multiplicities(&writer);
         });

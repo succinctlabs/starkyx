@@ -34,7 +34,7 @@ pub struct LookupTable<T: Register, F: Field, E: CubicParameters<F>> {
 #[derive(Debug, Clone)]
 pub struct LogLookupValues<T: EvalCubic, F: Field, E: CubicParameters<F>> {
     pub(crate) challenge: CubicRegister,
-    pub(crate) values: Vec<T>,
+    pub(crate) trace_values: Vec<T>,
     pub(crate) public_values: Vec<T>,
     pub(crate) row_accumulators: ArrayRegister<CubicRegister>,
     pub(crate) global_accumulators: ArrayRegister<CubicRegister>,
@@ -136,7 +136,7 @@ impl<L: AirParameters> AirBuilder<L> {
 
         LogLookupValues {
             challenge: *challenge,
-            values: trace_values.to_vec(),
+            trace_values: trace_values.to_vec(),
             public_values: public_values.to_vec(),
             row_accumulators,
             global_accumulators,
@@ -191,9 +191,6 @@ impl<L: AirParameters> AirBuilder<L> {
             ));
         }
 
-        // self.constraints
-        //     .push(Constraint::lookup(lookup_data.clone()));
-
         // Add the lookup to the list of lookups
         self.lookup_data.push(lookup_data);
     }
@@ -240,14 +237,11 @@ impl<L: AirParameters> AirBuilder<L> {
             ));
         }
 
-        // self.constraints
-        //     .push(Constraint::lookup(lookup_data.clone()));
-
         // Add the lookup to the list of lookups
         self.lookup_data.push(lookup_data);
     }
 
-    pub fn lookup_log_derivative(
+    pub fn element_lookup_with_table_index(
         &mut self,
         table: &ElementRegister,
         values: &[ElementRegister],
@@ -294,25 +288,8 @@ impl<L: AirParameters> AirBuilder<L> {
             ));
         }
 
-        // self.constraints
-        //     .push(Constraint::lookup(lookup_data.clone()));
-
         // Add the lookup to the list of lookups
         self.lookup_data.push(lookup_data);
-
-        // let lookup_data = Lookup::Element(LogLookup {
-        //     table_data,
-        //     values_data: value_data,
-        //     table_index: Some(table_index),
-        //     _marker: core::marker::PhantomData,
-        // });
-
-        // // Add the lookup constraints
-        // self.constraints
-        //     .push(Constraint::lookup(lookup_data.clone()));
-
-        // // Add the lookup to the list of lookups
-        // self.lookup_data.push(lookup_data);
     }
 
     pub fn lookup_log_derivative_no_index(
@@ -328,20 +305,6 @@ impl<L: AirParameters> AirBuilder<L> {
         let multiplicities = table_data.multiplicities;
 
         self.element_lookup_from_table_and_values(table_data, values_data);
-
-        // let lookup_data = Lookup::Element(LogLookup {
-        //     table_data,
-        //     values_data: value_data,
-        //     table_index: None,
-        //     _marker: core::marker::PhantomData,
-        // });
-
-        // // Add the lookup constraints
-        // self.constraints
-        //     .push(Constraint::lookup(lookup_data.clone()));
-
-        // // Add the lookup to the list of lookups
-        // self.lookup_data.push(lookup_data);
 
         multiplicities
     }
@@ -360,20 +323,6 @@ impl<L: AirParameters> AirBuilder<L> {
         let multiplicities = table_data.multiplicities;
 
         self.cubic_lookup_from_table_and_values(table_data, values_data);
-
-        // let lookup_data = Lookup::CubicElement(LogLookup {
-        //     table_data,
-        //     values_data: value_data,
-        //     table_index: None,
-        //     _marker: core::marker::PhantomData,
-        // });
-
-        // // Add the lookup constraints
-        // self.constraints
-        //     .push(Constraint::lookup(lookup_data.clone()));
-
-        // // Add the lookup to the list of lookups
-        // self.lookup_data.push(lookup_data);
 
         multiplicities
     }
@@ -581,7 +530,7 @@ mod tests {
         let challenge = builder.alloc_challenge::<CubicRegister>();
         let lookup_table = builder.lookup_table(&challenge, &table_values);
         let lookup_values = builder.lookup_values(&challenge, &values);
-        assert_eq!(lookup_values.values.len(), M);
+        assert_eq!(lookup_values.trace_values.len(), M);
         assert_eq!(lookup_values.public_values.len(), PUB + GLOB);
         let multiplicities = lookup_table.multiplicities;
         builder.cubic_lookup_from_table_and_values(lookup_table, lookup_values);

@@ -307,8 +307,12 @@ mod tests {
 
         let num_ops = 20;
 
-        for _ in 0..num_ops {
-            let shift = rng.gen::<u64>() as usize;
+        for i in 0..num_ops {
+            let shift = if i == 0 {
+                32usize
+            } else {
+                rng.gen::<u64>() as usize
+            };
             shr_shift_vals.push(shift);
 
             let a_shr = builder.alloc::<ByteArrayRegister<N>>();
