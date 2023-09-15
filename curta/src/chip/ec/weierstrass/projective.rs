@@ -2,7 +2,7 @@
 use core::marker::PhantomData;
 use core::ops::{Add, Mul};
 
-use num::BigUint;
+use num::{BigUint, Zero};
 use plonky2::field::types::PrimeField64;
 
 use super::WeierstrassParameter;
@@ -43,6 +43,9 @@ impl<E: EllipticCurveParameters> SWProjectivePoint<E> {
 impl<E: EllipticCurveParameters> Eq for SWProjectivePoint<E> {}
 impl<E: EllipticCurveParameters> PartialEq for SWProjectivePoint<E> {
     fn eq(&self, other: &Self) -> bool {
+        if self.z.is_zero() {
+            return other.z.is_zero();
+        }
         let modulus = &E::BaseField::modulus();
         let zz1 = (&self.z * &self.z) % modulus;
         let zzz1 = (&zz1 * &self.z) % modulus;
