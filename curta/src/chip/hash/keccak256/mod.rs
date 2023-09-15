@@ -8,7 +8,7 @@ use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
 pub struct Keccak256Gadget {
    pub state: ArrayRegister<ByteArrayRegister<8>>,
    pub(crate) round_constant: U64Register,
-   pub a: U64Register
+//    pub a: U64Register
 }
 
 #[derive(Debug, Clone)]
@@ -69,6 +69,7 @@ impl<L: AirParameters> AirBuilder<L> {
         // i == x axis, refer to column, j == y axis, refer to row, this diff from most competitve programmer's convention, but follow the keccak spec, so pls tolerate. so bit weird but a[i,j] actually refer to j * 5 + i NOT i * 5 + j.
         // alloc round_const, write it later outside circuit, constrain later
         let round_const = self.alloc::<U64Register>();
+
         // unsure this is correct..
         // how to constrain it to come constant, i.e. the fixed column for the circuit?
         // for i in 0..24 {
@@ -78,39 +79,40 @@ impl<L: AirParameters> AirBuilder<L> {
         // maybe need to boundary the initial state?
         // define boundary constraint for theta
         let state = self.alloc_array::<U64Register>(25);
-        let a = self.alloc::<U64Register>();
-        for x in 0..5 {
-            for y in 0..5 {
-                // let res = self.add_u64(&state.get(x + y*5), &a, operations);
-                self.set_to_expression_transition(&state.get(x + y*5).next(), state.get(x + y*5).expr() + a.expr());
-            }
-        }
-        self.set_to_expression_transition(&a.next(), a.expr());
+        // let a = self.alloc::<U64Register>();
+        // for x in 0..5 {
+        //     for y in 0..5 {
+        //         // let res = self.add_u64(&state.get(x + y*5), &a, operations);
+        //         self.set_to_expression_transition(&state.get(x + y*5).next(), state.get(x + y*5).expr() + a.expr());
+        //     }
+        // }
+        // self.set_to_expression_transition(&a.next(), a.expr());
         // theta
         // how to constrain an array value follows a transition constraint in for loop? 
-        // let c_arr = self.alloc_array::<U64Register>(5);
-        // let d_arr = self.alloc_array::<U64Register>(5);
-        // for x in 0..5 {
-        //     let mut c_i = state.get(x); 
-        //     for y in 1..5 {
-        //         c_i = self.bitwise_xor(&c_i, &state.get(y * 5 + x), operations);
-        //     }
-        //     // Does it suffice to constrain for every row of c_i, it need to satisfy its relationship with state at the same row?
-        //     self.assert_equal_transition(&c_arr.get(x), &c_i);
-        // }
-        // // initial state doesn't exist? or don't want to constrain? first row of it is empty?
-        // let state_after_theta = self.alloc_array::<U64Register>(25);
+        let c_arr = self.alloc_array::<U64Register>(5);
+        for x in 0..5 {
+            let mut c_i = state.get(x); 
+            for y in 1..5 {
+                c_i = self.bitwise_xor(&c_i, &state.get(y * 5 + x), operations);
+            }
+            // Does it suffice to constrain for every row of c_i, it need to satisfy its relationship with state at the same row?
+            self.set_to_expression(&c_arr.get(x), c_i.expr());
+        }
+
+        let d_arr = self.alloc_array::<U64Register>(5);
+        // initial state doesn't exist? or don't want to constrain? first row of it is empty?
+        let state_after_theta = self.alloc_array::<U64Register>(25);
         
-        // for x in 0..5 {
-        //     let temp = self.bit_rotate_right(&c_arr.get((x + 1) % 5), 1, operations);
-        //     let d_i = self.bitwise_xor(&c_arr.get((x+4)%5), &temp, operations);
-        //     self.assert_equal_transition(&d_arr.get(x), &d_i);
-        //     for y in 0..5 {
-        //         // make sure state_after_theta follows the theta transition of state
-        //         let tmp = self.bitwise_xor(&state.get(y * 5 + x), &d_i, operations);
-        //         self.set_to_expression_transition(&(state_after_theta.get(y * 5 + x)), tmp.expr());
-        //     }
-        // }
+        for x in 0..5 {
+            let temp = self.bit_rotate_right(&c_arr.get((x + 1) % 5), 1, operations);
+            let d_i = self.bitwise_xor(&c_arr.get((x+4)%5), &temp, operations);
+            self.set_to_expression(&d_arr.get(x), d_i.expr());
+            for y in 0..5 {
+                // make sure state_after_theta follows the theta transition of state
+                let tmp = self.bitwise_xor(&state.get(y * 5 + x), &d_i, operations);
+                self.set_to_expression(&(state_after_theta.get(y * 5 + x)), tmp.expr());
+            }
+        }
 
         // let state_after_rhopi = self.alloc_array::<U64Register>(25);
         // // 0,0 has no change, direct copy constraint 
@@ -158,7 +160,7 @@ impl<L: AirParameters> AirBuilder<L> {
         // }
 
         Keccak256Gadget {
-            a,
+            // a,
             state,
             round_constant: round_const
         }
@@ -233,17 +235,20 @@ mod tests {
         table.write_table_entries(&writer);
 
         // write the initial value of state to 0th row
-        for i in 0..25 {
-            writer.write(&keccak_f_gadget.state.get(i), &u64_to_le_field_bytes(0), 0);
-        }
+        // for i in 0..25 {
+        //     writer.write(&keccak_f_gadget.state.get(i), &u64_to_le_field_bytes(0), 0);
+        // }
         // write the intial a
-        writer.write(&keccak_f_gadget.a, &u64_to_le_field_bytes(5), 0);
+        // writer.write(&keccak_f_gadget.a, &u64_to_le_field_bytes(5), 0);
         // println!("{}", L::num_rows());
         println!("{}", generator.air_data.instructions.len());
 
         for i in 0..L::num_rows() {
             let round_constant_value = u64_to_le_field_bytes::<F>(KECCAKF_RNDC[i % 24]);
             writer.write(&keccak_f_gadget.round_constant, &round_constant_value, i);
+            for i in 0..25 {
+                writer.write(&keccak_f_gadget.state.get(i), &u64_to_le_field_bytes(0), i);
+            }
             writer.write_row_instructions(&generator.air_data, i);
         }
 
