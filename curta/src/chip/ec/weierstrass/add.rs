@@ -188,6 +188,7 @@ impl<L: AirParameters> AirBuilder<L> {
 mod tests {
     use num::bigint::RandBigInt;
     use rand::thread_rng;
+    use serde::{Deserialize, Serialize};
 
     use super::*;
     use crate::chip::builder::tests::*;
@@ -197,7 +198,7 @@ mod tests {
     };
     use crate::chip::field::instruction::FpInstruction;
 
-    #[derive(Clone, Debug, Copy)]
+    #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
     pub struct SWAddTest;
 
     impl AirParameters for SWAddTest {
@@ -253,7 +254,7 @@ mod tests {
         test_recursive_starky(stark, config, generator, &[]);
     }
 
-    #[derive(Clone, Debug, Copy)]
+    #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
     pub struct SWDoublingTest;
 
     impl AirParameters for SWDoublingTest {

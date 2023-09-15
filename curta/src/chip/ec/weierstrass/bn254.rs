@@ -1,5 +1,6 @@
 //! Parameters for bn254 base field.
 use num::BigUint;
+use serde::{Deserialize, Serialize};
 
 use super::projective::SWProjectivePoint;
 use super::WeierstrassParameter;
@@ -10,7 +11,7 @@ use crate::chip::field::parameters::FieldParameters;
 /// Bn254 curve parameter
 pub struct Bn254;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 /// Bn254 base field parameter
 pub struct Bn254BaseField;
 
