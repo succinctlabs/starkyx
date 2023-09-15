@@ -9,13 +9,13 @@ use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 
 impl<F: PrimeField> TraceWriter<F> {
-    pub(crate) fn write_multiplicities_from_fn<E: CubicParameters<F>, T: Register>(
+    pub fn write_multiplicities_from_fn<E: CubicParameters<F>, T: Register>(
         &self,
         num_rows: usize,
         table_data: &LookupTable<T, F, E>,
         table_index: impl Fn(T::Value<F>) -> usize,
         trace_values: &[T],
-        global_values: &[T],
+        public_values: &[T],
     ) {
         // Calculate multiplicities
         let mut multiplicities = vec![F::ZERO; num_rows];
@@ -34,7 +34,7 @@ impl<F: PrimeField> TraceWriter<F> {
 
         // Count the multiplicities in the public values
         let public_slice = self.public.read().unwrap();
-        for value in global_values.iter() {
+        for value in public_values.iter() {
             let val = value.read_from_slice(&public_slice);
             let index = table_index(val);
             assert!(index < num_rows);

@@ -1,3 +1,6 @@
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+
 use self::constraint::Constraint;
 use self::instruction::Instruction;
 use crate::math::extension::cubic::parameters::CubicParameters;
@@ -19,7 +22,10 @@ pub mod trace;
 pub mod uint;
 pub mod utils;
 
-pub trait AirParameters {
+use core::fmt::Debug;
+pub trait AirParameters:
+    'static + Clone + Send + Sync + Sized + Debug + Serialize + DeserializeOwned
+{
     type Field: PrimeField64;
 
     type CubicParams: CubicParameters<Self::Field>;
@@ -47,16 +53,25 @@ pub trait AirParameters {
     fn num_rows() -> usize {
         1 << Self::num_rows_bits()
     }
+
+    /// a unique identifier for the air parameters.
+    ///
+    /// by default, this method uses the type name of the air parameters. In case the Rust
+    /// 'TypeId' is not functioning properly, this method should be overridden.
+    fn id() -> String {
+        format!("{:?}", std::any::TypeId::of::<Self>()).to_string()
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct Chip<L: AirParameters> {
     constraints: Vec<Constraint<L>>,
     global_constraints: Vec<Constraint<L>>,
     execution_trace_length: usize,
     num_challenges: usize,
-    num_public_inputs: usize,
-    num_global_values: usize,
+    pub num_public_values: usize,
+    pub num_global_values: usize,
 }
 
 impl<L: AirParameters> Starky<Chip<L>> {

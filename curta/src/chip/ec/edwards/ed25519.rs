@@ -1,14 +1,15 @@
 use num::{BigUint, Num, One};
+use serde::{Deserialize, Serialize};
 
 use super::EdwardsParameters;
 use crate::chip::ec::point::AffinePoint;
 use crate::chip::ec::EllipticCurveParameters;
 use crate::chip::field::parameters::{FieldParameters, MAX_NB_LIMBS};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Ed25519;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Ed25519BaseField;
 
 impl FieldParameters for Ed25519BaseField {

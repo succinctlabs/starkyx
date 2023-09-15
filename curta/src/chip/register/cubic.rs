@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use super::array::ArrayRegister;
 use super::cell::CellType;
 use super::element::ElementRegister;
@@ -9,7 +11,7 @@ use crate::math::extension::cubic::element::CubicElement;
 use crate::math::prelude::*;
 
 /// A register for a single element/column in the trace. The value is not constrainted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CubicRegister(MemorySlice);
 
 pub trait EvalCubic: Register {

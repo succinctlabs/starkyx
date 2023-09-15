@@ -1,6 +1,8 @@
 use alloc::sync::Arc;
 use core::hash::{Hash, Hasher};
 
+use serde::{Deserialize, Serialize};
+
 use super::assign::AssignInstruction;
 use super::bit::BitConstraint;
 use super::cycle::Cycle;
@@ -13,7 +15,7 @@ use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AirInstruction<F, I> {
     CustomInstruction(I),
     WriteInstruction(WriteInstruction),

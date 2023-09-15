@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use super::add::ByteArrayAdd;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
@@ -11,7 +13,7 @@ use crate::chip::uint::bytes::lookup_table::{ByteInstructionSet, ByteInstruction
 use crate::chip::uint::bytes::operations::instruction::ByteOperationInstruction;
 use crate::math::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum U32Instruction {
     Bit(ByteInstructionSet),
     Add(ByteArrayAdd<4>),
@@ -96,7 +98,7 @@ mod tests {
     use crate::chip::AirParameters;
     use crate::math::field::Field;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     struct U32OpTest;
 
     impl AirParameters for U32OpTest {
@@ -114,7 +116,7 @@ mod tests {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     struct U64OpTest;
 
     impl AirParameters for U64OpTest {

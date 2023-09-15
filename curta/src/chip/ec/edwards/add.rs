@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use super::EdwardsParameters;
 use crate::chip::builder::AirBuilder;
 use crate::chip::ec::point::AffinePointRegister;
@@ -11,7 +13,7 @@ use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EdAddGadget<E: EdwardsParameters> {
     p: AffinePointRegister<E>,
     q: AffinePointRegister<E>,
@@ -116,6 +118,7 @@ impl<F: PrimeField64> TraceWriter<F> {
 mod tests {
     use num::bigint::RandBigInt;
     use rand::thread_rng;
+    use serde::{Deserialize, Serialize};
 
     use super::*;
     use crate::chip::builder::tests::*;
@@ -123,7 +126,7 @@ mod tests {
     use crate::chip::ec::gadget::{EllipticCurveGadget, EllipticCurveWriter};
     use crate::chip::field::instruction::FpInstruction;
 
-    #[derive(Clone, Debug, Copy)]
+    #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
     pub struct Ed25519AddTest;
 
     impl AirParameters for Ed25519AddTest {

@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use self::cell::CellType;
 use self::memory::MemorySlice;
 use super::arithmetic::expression::ArithmeticExpression;
@@ -44,7 +46,16 @@ pub trait RegisterSized {
 /// ever use the register type directly to access values. If you want to access the values, you
 /// should instead compose multiple different register types into a struct.
 pub trait Register:
-    RegisterSerializable + RegisterSized + 'static + Sized + Clone + Send + Sync + Copy
+    RegisterSerializable
+    + RegisterSized
+    + 'static
+    + Sized
+    + Clone
+    + Send
+    + Sync
+    + Copy
+    + Serialize
+    + for<'de> Deserialize<'de>
 {
     type Value<T>;
 

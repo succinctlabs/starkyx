@@ -1,6 +1,8 @@
 use core::marker::PhantomData;
 use core::ops::Range;
 
+use serde::{Deserialize, Serialize};
+
 use super::memory::MemorySlice;
 use super::{CellType, Register, RegisterSerializable};
 use crate::air::parser::AirParser;
@@ -10,7 +12,7 @@ use crate::math::field::Field;
 
 /// A helper struct for representing an array of registers. In particular, it makes it easier
 /// to access the memory slice as well as converting from a memory slice to the struct.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct ArrayRegister<T: Register> {
     register: MemorySlice,
     length: usize,

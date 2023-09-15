@@ -6,6 +6,7 @@ pub mod shared_memory;
 use core::cmp::Ordering;
 
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 
 use self::shared_memory::SharedMemory;
 use super::arithmetic::expression::ArithmeticExpression;
@@ -37,10 +38,10 @@ pub struct AirBuilder<L: AirParameters> {
     pub(crate) bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
     pub(crate) lookup_data: Vec<Lookup<L::Field, L::CubicParams>>,
     pub(crate) evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
-    range_table: Option<ElementRegister>,
+    range_data: Option<Lookup<L::Field, L::CubicParams>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AirTraceData<L: AirParameters> {
     pub num_challenges: usize,
     pub num_public_inputs: usize,
@@ -51,7 +52,7 @@ pub struct AirTraceData<L: AirParameters> {
     pub bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
     pub lookup_data: Vec<Lookup<L::Field, L::CubicParams>>,
     pub evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
-    pub range_table: Option<ElementRegister>,
+    pub range_data: Option<Lookup<L::Field, L::CubicParams>>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
@@ -76,7 +77,7 @@ impl<L: AirParameters> AirBuilder<L> {
             bus_channels: Vec::new(),
             lookup_data: Vec::new(),
             evaluation_data: Vec::new(),
-            range_table: None,
+            range_data: None,
         }
     }
 
@@ -149,11 +150,6 @@ impl<L: AirParameters> AirBuilder<L> {
             .push(Constraint::from_instruction_set(instruction));
 
         Ok(())
-    }
-
-    #[inline]
-    pub fn range_fn(element: L::Field) -> usize {
-        element.as_canonical_u64() as usize
     }
 
     pub fn clock(&mut self) -> ElementRegister {
@@ -236,7 +232,7 @@ impl<L: AirParameters> AirBuilder<L> {
                 global_constraints: self.global_constraints,
                 num_challenges: self.shared_memory.challenge_index(),
                 execution_trace_length,
-                num_public_inputs: self.shared_memory.public_index(),
+                num_public_values: self.shared_memory.public_index(),
                 num_global_values: self.shared_memory.global_index(),
             },
             AirTraceData {
@@ -249,7 +245,7 @@ impl<L: AirParameters> AirBuilder<L> {
                 bus_channels: self.bus_channels,
                 lookup_data: self.lookup_data,
                 evaluation_data: self.evaluation_data,
-                range_table: self.range_table,
+                range_data: self.range_data,
             },
         )
     }
@@ -277,7 +273,7 @@ pub(crate) mod tests {
     pub use crate::plonky2::stark::Starky;
     pub use crate::trace::window_parser::TraceWindowParser;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct FibonacciParameters;
 
     impl AirParameters for FibonacciParameters {
@@ -288,7 +284,7 @@ pub(crate) mod tests {
         const NUM_FREE_COLUMNS: usize = 2;
 
         fn num_rows_bits() -> usize {
-            5
+            10
         }
     }
 
@@ -307,7 +303,7 @@ pub(crate) mod tests {
         let constr_2 = builder.set_to_expression_transition(&x_1.next(), x_0.expr() + x_1.expr());
 
         let (mut air, mut air_data) = builder.build();
-        air.num_public_inputs = 3;
+        air.num_public_values = 3;
         air_data.num_public_inputs = 3;
 
         let public_inputs = [
@@ -359,7 +355,7 @@ pub(crate) mod tests {
         ];
 
         let (mut air, mut air_data) = builder.build();
-        air.num_public_inputs = 3;
+        air.num_public_values = 3;
         air_data.num_public_inputs = 3;
 
         let generator = ArithmeticGenerator::<L>::new(air_data);
@@ -383,7 +379,7 @@ pub(crate) mod tests {
         test_recursive_starky(stark, config, generator, &public_inputs);
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct SimpleTestParameters;
 
     impl AirParameters for SimpleTestParameters {

@@ -1,4 +1,5 @@
 use num::BigUint;
+use serde::{Deserialize, Serialize};
 
 use super::parameters::FieldParameters;
 use super::register::FieldRegister;
@@ -19,7 +20,8 @@ use crate::math::prelude::*;
 use crate::polynomial::parser::PolynomialParser;
 use crate::polynomial::{to_u16_le_limbs_polynomial, Polynomial};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct FpDenInstruction<P: FieldParameters> {
     a: FieldRegister<P>,
     b: FieldRegister<P>,
@@ -182,7 +184,7 @@ mod tests {
     use crate::chip::builder::tests::*;
     use crate::chip::field::parameters::tests::Fp25519;
 
-    #[derive(Clone, Debug, Copy)]
+    #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
     struct DenTest;
 
     impl AirParameters for DenTest {

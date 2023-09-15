@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use super::{
     NUM_CHALLENGES, OPCODE_AND, OPCODE_NOT, OPCODE_RANGE, OPCODE_ROT, OPCODE_SHR, OPCODE_XOR,
 };
@@ -11,7 +13,7 @@ use crate::chip::uint::bytes::register::ByteRegister;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum ByteOperation<T> {
     And(T, T, T),
     Xor(T, T, T),
@@ -126,7 +128,7 @@ impl ByteOperation<ByteRegister> {
             ByteOperation::ShrCarry(a, b, result, carry) => {
                 let a_val = from_field(writer.read(a, row_index));
                 let b_mod = b & 0x7;
-                let (res_val, carry_val) = if b_mod != 0 {
+                let (res_val, mut carry_val) = if b_mod != 0 {
                     let res_val = a_val >> b_mod;
                     let carry_val = (a_val << (8 - b_mod)) >> (8 - b_mod);
                     debug_assert_eq!(
@@ -139,7 +141,11 @@ impl ByteOperation<ByteRegister> {
                 };
                 writer.write(result, &as_field(res_val), row_index);
                 writer.write(carry, &as_field(carry_val), row_index);
-                ByteOperation::Rot(a_val, *b, res_val + (carry_val << (8 - b_mod)))
+
+                if carry_val != 0 {
+                    carry_val <<= 8 - b_mod;
+                }
+                ByteOperation::Rot(a_val, *b, res_val + carry_val)
             }
             ByteOperation::Rot(a, b, c) => {
                 let a_val = from_field(writer.read(a, row_index));

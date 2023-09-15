@@ -1,4 +1,5 @@
 use num::BigUint;
+use serde::{Deserialize, Serialize};
 
 use super::EllipticCurveParameters;
 use crate::chip::field::register::FieldRegister;
@@ -21,7 +22,7 @@ impl<E: EllipticCurveParameters> AffinePoint<E> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[allow(non_snake_case)]
 pub struct AffinePointRegister<E: EllipticCurveParameters> {
     pub x: FieldRegister<E::BaseField>,

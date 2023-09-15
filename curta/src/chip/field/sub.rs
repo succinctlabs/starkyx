@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use super::add::FpAddInstruction;
 use super::parameters::FieldParameters;
 use super::register::FieldRegister;
@@ -17,7 +19,8 @@ use crate::polynomial::to_u16_le_limbs_polynomial;
 /// Fp subtraction.
 ///
 /// prove a - b = c by asserting b + c = a.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct FpSubInstruction<P: FieldParameters> {
     inner: FpAddInstruction<P>,
 }
@@ -127,7 +130,7 @@ mod tests {
     use crate::chip::field::parameters::tests::Fp25519;
     use crate::polynomial::Polynomial;
 
-    #[derive(Clone, Debug, Copy)]
+    #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
     struct FpSubTest;
 
     impl AirParameters for FpSubTest {
