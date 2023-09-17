@@ -43,7 +43,6 @@ pub const KECCAKF_RNDC: [u64; 24] = [
     0x0000000080000001, 0x8000000080008008,
 ];
 
-
 // impl constraint for keccack256 
 // state register 
 // todo: figure out round_constant and rotation offset
@@ -55,7 +54,6 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn keccak_f(&mut self,
         operations: &mut ByteLookupOperations,
     ) -> Keccak256Gadget where
-    // SHOULD it be u64instructions?
     L::Instruction: U32Instructions {
         // alloate 5*5 u64 register for storing 25 8byte lanes
         // state is 25 * 64 bit
@@ -183,10 +181,35 @@ impl Keccak256Gadget {
         // also figure out how to pad and discard for variable length input, discard may need some bit array tricks.
         todo!()
     }
+
+    // pad for keccak256 
+    pub fn pad(msg: &[u8]) -> Vec<u8> {
+        const R: usize = 1088;
+        let mut bits = Self::into_bits(msg);
+        bits.push(1);
+        while (bits.len() + 1) % R != 0 {
+            bits.push(0);
+        }
+        bits.push(1);
+        bits
+    }
+
+    /// Converts bytes into bits
+    pub fn into_bits(bytes: &[u8]) -> Vec<u8> {
+        let mut bits: Vec<u8> = vec![0; bytes.len() * 8];
+        for (byte_idx, byte) in bytes.iter().enumerate() {
+            for idx in 0u64..8 {
+                bits[byte_idx * 8 + (idx as usize)] = (*byte >> idx) & 1;
+            }
+        }
+        bits
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use serde::{Serialize, Deserialize};
+
     use super::*;
     pub use crate::chip::builder::tests::*;
     use crate::chip::builder::AirBuilder;
@@ -194,7 +217,7 @@ mod tests {
     use crate::chip::uint::util::u64_to_le_field_bytes;
     use crate::chip::AirParameters;
 
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
     pub struct Keccak256Test;
 
     impl AirParameters for Keccak256Test {
@@ -210,6 +233,13 @@ mod tests {
         fn num_rows_bits() -> usize {
             16
         }
+    }
+
+    #[test]
+    fn test_pad() {
+        let msg = "abc".as_bytes();
+        let res = Keccak256Gadget::pad(msg);
+        assert_eq!(res.len() % 1088, 0);
     }
 
     #[test]
@@ -260,7 +290,6 @@ mod tests {
 
         // after one round result should be at row_index = 1
         
-
         // for i in 0..L::num_rows() {
         //     println!("{:?}", writer.read(&keccak_f_gadget.round_constant, i));
         // }
