@@ -26,6 +26,7 @@ pub type U64Value<T> = <U64Register as Register>::Value<T>;
 const NUM_MIX_ROUNDS: usize = 12;
 const MSG_ARRAY_SIZE: usize = 16;
 const HASH_ARRAY_SIZE: usize = 8;
+const CYCLE_12: usize = 12;
 
 #[derive(Debug, Clone)]
 pub struct BLAKE2BGadget {
@@ -35,11 +36,10 @@ pub struct BLAKE2BGadget {
     pub h_output: ArrayRegister<U64Register>,
     pub v_input: [U64Register; 16],
     pub v_output: [U64Register; 16],
-    pub first_block_bit: BitRegister,    // need to constrain
-    pub last_block_bit: BitRegister,     // need to constrain
-    pub cycle_12_start_bit: BitRegister, // need to constrain
-    pub cycle_12_end_bit: BitRegister,   // need to constrain
+    pub last_chunk_bit: BitRegister,
     pub unused_row: BitRegister,
+    pub cycle_12_registers: ArrayRegister<BitRegister>,
+    pub padding_bit: BitRegister,
 
     // Public values
     pub msg_chunks: ArrayRegister<U64Register>,
@@ -47,6 +47,8 @@ pub struct BLAKE2BGadget {
     pub initial_hash_compress: ArrayRegister<U64Register>,
     pub hash_state: ArrayRegister<U64Register>,
     pub inversion_const: U64Register,
+    pub t_public: ArrayRegister<U64Register>,
+    pub last_chunk_bit_public: ArrayRegister<BitRegister>,
 }
 
 #[derive(Debug, Clone)]
@@ -55,7 +57,7 @@ pub struct BLAKE2BPublicData<T> {
     pub end_bits: Vec<T>,
 }
 
-const INITIAL_HASH: [u64; 8] = [
+const INITIAL_HASH: [u64; HASH_ARRAY_SIZE] = [
     0x6a09e667f2bdc928,
     0xbb67ae8584caa73b,
     0x3c6ef372fe94f82b,
@@ -70,7 +72,7 @@ const INITIAL_HASH: [u64; 8] = [
 // we assume that the output is 32 bytes
 // So that means the initial hash entry to be
 // 0x6a09e667f3bcc908 xor 0x01010020
-const INITIAL_HASH_COMPRESS: [u64; 8] = [
+const INITIAL_HASH_COMPRESS: [u64; HASH_ARRAY_SIZE] = [
     0x6a09e667f3bcc908,
     0xbb67ae8584caa73b,
     0x3c6ef372fe94f82b,
@@ -84,7 +86,7 @@ const INITIAL_HASH_COMPRESS: [u64; 8] = [
 const INVERSION_CONST: u64 = 0xFFFFFFFFFFFFFFFF;
 
 const SIGMA_LEN: usize = 10;
-const SIGMA: [[usize; 16]; SIGMA_LEN] = [
+const SIGMA: [[usize; MSG_ARRAY_SIZE]; SIGMA_LEN] = [
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     [14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3],
     [11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4],
@@ -115,19 +117,32 @@ impl<L: AirParameters> AirBuilder<L> {
         let m = self.alloc_array::<U64Register>(MSG_ARRAY_SIZE);
         let h_input = self.alloc_array::<U64Register>(HASH_ARRAY_SIZE);
         let h_output = self.alloc_array::<U64Register>(HASH_ARRAY_SIZE);
-        let first_block_bit = self.alloc::<BitRegister>(); // need to constrain
-        let last_block_bit = self.alloc::<BitRegister>();
         let unused_row = self.alloc::<BitRegister>();
-
-        let cycle_12_start_bit = self.alloc::<BitRegister>(); // need to constrain
-        let cycle_12_end_bit = self.alloc::<BitRegister>(); // need to constrain
+        let last_chunk_bit = self.alloc::<BitRegister>();
+        let cycle_12_registers = self.alloc_array::<BitRegister>(CYCLE_12);
+        let padding_bit = self.alloc::<BitRegister>();
 
         // Public values
         let msg_chunks = self.alloc_array_public::<U64Register>(num_chunks * MSG_ARRAY_SIZE);
         let initial_hash = self.alloc_array_public::<U64Register>(HASH_ARRAY_SIZE);
         let initial_hash_compress = self.alloc_array_public::<U64Register>(HASH_ARRAY_SIZE);
         let hash_state = self.alloc_array_public::<U64Register>(num_chunks * HASH_ARRAY_SIZE);
+        let t_public = self.alloc_array_public::<U64Register>(num_chunks);
         let inversion_const = self.alloc_public::<U64Register>();
+        let last_chunk_bit_public = self.alloc_array_public::<BitRegister>(num_chunks);
+
+        // Set the cycle 12 registers first row
+        self.set_to_expression_first_row(
+            &cycle_12_registers.get(0),
+            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(1)),
+        );
+
+        for i in 1..CYCLE_12 {
+            self.set_to_expression_first_row(
+                &cycle_12_registers.get(i),
+                ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
+            );
+        }
 
         // Get message chunk challenges
         let message_chunk_challenges = self
@@ -137,9 +152,17 @@ impl<L: AirParameters> AirBuilder<L> {
         let state_challenges = self
             .alloc_challenge_array::<CubicRegister>(U64Register::size_of() * HASH_ARRAY_SIZE + 1);
 
+        // Get the last chunk callenges
+        let last_chunk_challenges = self.alloc_challenge_array::<CubicRegister>(2);
+
+        // Get the msg_last_row challenges
+        let t_challenges = self.alloc_challenge_array::<CubicRegister>(U64Register::size_of() + 1);
+
         // Put public hash state, end_bits, and all the msg chunk permutations into the bus
         for i in 0..num_chunks {
+            // Output to the bus the global hash state
             let row_num = i * NUM_MIX_ROUNDS + 11;
+
             let state_digest = self.accumulate_public_expressions(
                 &state_challenges,
                 &[
@@ -151,14 +174,16 @@ impl<L: AirParameters> AirBuilder<L> {
             );
             bus.output_global_value(&state_digest);
 
+            // Output to the bus the global msgs (all their permutations)
             for k in 0..NUM_MIX_ROUNDS {
                 let row = i * NUM_MIX_ROUNDS + k;
+                let row_expr =
+                    ArithmeticExpression::from_constant(L::Field::from_canonical_usize(row));
+
                 let sigma = SIGMA[k % SIGMA_LEN];
                 let mut values = Vec::new();
 
-                values.push(ArithmeticExpression::from_constant(
-                    L::Field::from_canonical_usize(row),
-                ));
+                values.push(row_expr.clone());
 
                 for index in sigma.iter() {
                     values.push(msg_chunks.get(i * MSG_ARRAY_SIZE + index).expr());
@@ -168,7 +193,28 @@ impl<L: AirParameters> AirBuilder<L> {
                     .accumulate_public_expressions(&message_chunk_challenges, values.as_slice());
 
                 bus.output_global_value(&msg_digest);
+
+                if k == 0 {
+                    let last_chunk_digest = self.accumulate_public_expressions(
+                        &last_chunk_challenges,
+                        &[row_expr, last_chunk_bit_public.get(i).expr()],
+                    );
+
+                    bus.output_global_value(&last_chunk_digest);
+                }
             }
+
+            // Output to the bus the global msg last row bits (all their permutations)
+            let t_digest = self.accumulate_public_expressions(
+                &t_challenges,
+                &[
+                    ArithmeticExpression::from_constant(L::Field::from_canonical_usize(
+                        i * NUM_MIX_ROUNDS,
+                    )),
+                    t_public.get(i).expr(),
+                ],
+            );
+            bus.output_global_value(&t_digest);
         }
 
         // Need to send to the bus accumulated messages for remaining rows that are not part of a chunk
@@ -197,6 +243,22 @@ impl<L: AirParameters> AirBuilder<L> {
         );
         self.input_to_bus(bus_channel_idx, clk_msg_digest);
 
+        let clk_last_chunk_digest = self
+            .accumulate_expressions(&last_chunk_challenges, &[clk.expr(), last_chunk_bit.expr()]);
+
+        self.input_to_bus_filtered(
+            bus_channel_idx,
+            clk_last_chunk_digest,
+            cycle_12_registers.get(0).expr() * padding_bit.not_expr(),
+        );
+
+        let t_digest = self.accumulate_expressions(&t_challenges, &[clk.expr(), t.expr()]);
+        self.input_to_bus_filtered(
+            bus_channel_idx,
+            t_digest,
+            cycle_12_registers.get(0).expr() * padding_bit.not_expr(),
+        );
+
         // Set h_input to the initial hash if we are at the first block and at the first loop of the cycle_12
         // Otherwise set it to h_output
         for (h_in, init) in h_input.iter().zip(initial_hash.iter()) {
@@ -204,16 +266,15 @@ impl<L: AirParameters> AirBuilder<L> {
         }
 
         let (v_input, v_output) = self.blake2b_compress(
-            clk,
             &m,
             &h_input,
             &h_output,
             &initial_hash_compress,
             &inversion_const,
             &t,
-            &last_block_bit,
-            &cycle_12_start_bit,
-            &cycle_12_end_bit,
+            &last_chunk_bit,
+            &cycle_12_registers.get(0),
+            &cycle_12_registers.get(CYCLE_12 - 1),
             &unused_row,
             operations,
         );
@@ -223,15 +284,29 @@ impl<L: AirParameters> AirBuilder<L> {
             &[clk.expr(), h_output.get_subarray(0..HASH_ARRAY_SIZE).expr()],
         );
 
-        self.input_to_bus_filtered(bus_channel_idx, clk_hash_next, cycle_12_end_bit.expr());
+        self.input_to_bus_filtered(
+            bus_channel_idx,
+            clk_hash_next,
+            cycle_12_registers.get(CYCLE_12 - 1).expr(),
+        );
 
         for ((h_in, init), h_out) in h_input.iter().zip(initial_hash.iter()).zip(h_output.iter()) {
             self.set_to_expression_transition(
                 &h_in.next(),
-                last_block_bit.expr()
-                    * (cycle_12_end_bit.expr() * init.expr()
-                        + cycle_12_end_bit.not_expr() * h_out.expr())
-                    + (last_block_bit.not_expr() * h_out.expr()),
+                last_chunk_bit.expr()
+                    * (cycle_12_registers.get(CYCLE_12 - 1).expr() * init.expr()
+                        + cycle_12_registers.get(CYCLE_12 - 1).not_expr() * h_out.expr())
+                    + (last_chunk_bit.not_expr() * h_out.expr()),
+            );
+        }
+
+        // Set transition constraint for the cycle_12_registers
+        for i in 0..CYCLE_12 {
+            let next_i = (i + 1) % CYCLE_12;
+
+            self.set_to_expression_transition(
+                &cycle_12_registers.get(next_i).next(),
+                cycle_12_registers.get(i).expr(),
             );
         }
 
@@ -242,30 +317,30 @@ impl<L: AirParameters> AirBuilder<L> {
             h_output,
             v_input,
             v_output,
-            first_block_bit,
-            last_block_bit,
+            last_chunk_bit,
             unused_row,
-            cycle_12_start_bit,
-            cycle_12_end_bit,
+            cycle_12_registers,
+            padding_bit,
             msg_chunks,
             initial_hash,
             initial_hash_compress,
             hash_state,
             inversion_const,
+            t_public,
+            last_chunk_bit_public,
         }
     }
 
     #[allow(clippy::too_many_arguments)]
     fn blake2b_compress(
         &mut self,
-        clk: &ElementRegister,
         m: &ArrayRegister<U64Register>,
         h_input: &ArrayRegister<U64Register>,
         h_output: &ArrayRegister<U64Register>,
         iv_pub: &ArrayRegister<U64Register>,
         inversion_const_pub: &U64Register,
         t: &U64Register, // assumes t is not more than u64
-        last_block_bit: &BitRegister,
+        last_chunk_bit: &BitRegister,
         cycle_12_start_bit: &BitRegister,
         cycle_12_end_bit: &BitRegister,
         unused_row: &BitRegister,
@@ -343,7 +418,7 @@ impl<L: AirParameters> AirBuilder<L> {
 
         let mut v_14_for_last_block = self.bitwise_xor(&v_14, &inversion_const, operations);
         v_14_for_last_block = self.select(cycle_12_start_bit, &v_14_for_last_block, &v_14);
-        v_14 = self.select(last_block_bit, &v_14_for_last_block, &v_14);
+        v_14 = self.select(last_chunk_bit, &v_14_for_last_block, &v_14);
         // Invert v[14] bits if this is the last block and we are at the start of the mix 12 cycle.
 
         let v_input = [
@@ -628,8 +703,7 @@ impl BLAKE2BGadget {
     {
         let max_num_chunks = num_rows / NUM_MIX_ROUNDS;
 
-        let mut first_block_bit_values = Vec::new();
-        let mut last_block_bit_values = Vec::new();
+        let mut last_chunk_bit_values = Vec::new();
         let mut cycle_12_start_bit_values = Vec::new();
         let mut cycle_12_end_bit_values = Vec::new();
         let mut m_chunks = Vec::new();
@@ -638,18 +712,17 @@ impl BLAKE2BGadget {
         // Public values
         let mut hash_values = Vec::new();
         let mut msg_chunks = Vec::<[F; 8]>::new();
+        let mut last_chunk_bit_public = Vec::new();
+        let mut t_values_public = Vec::new();
 
         let mut num_written_chunks = 0usize;
         for (padded_msg, message_len) in padded_messages.into_iter().zip(message_lens.iter()) {
             let padded_msg = padded_msg.borrow();
             let msg_num_chunks = padded_msg.len() / 128;
 
-            first_block_bit_values.extend_from_slice(&[F::ONE; NUM_MIX_ROUNDS]);
-            first_block_bit_values
+            last_chunk_bit_values
                 .extend_from_slice(&vec![F::ZERO; (msg_num_chunks - 1) * NUM_MIX_ROUNDS]);
-            last_block_bit_values
-                .extend_from_slice(&vec![F::ZERO; (msg_num_chunks - 1) * NUM_MIX_ROUNDS]);
-            last_block_bit_values.extend_from_slice(&[F::ONE; NUM_MIX_ROUNDS]);
+            last_chunk_bit_values.extend_from_slice(&[F::ONE; NUM_MIX_ROUNDS]);
 
             let mut state = INITIAL_HASH;
             let mut bytes_compressed = 0;
@@ -663,11 +736,15 @@ impl BLAKE2BGadget {
 
                 if last_chunk {
                     bytes_compressed = *message_len;
+                    last_chunk_bit_public.push(F::ONE);
                 } else {
                     bytes_compressed += 128;
+                    last_chunk_bit_public.push(F::ZERO);
                 }
 
-                t_values.extend_from_slice(&[bytes_compressed; NUM_MIX_ROUNDS]);
+                t_values.push(bytes_compressed);
+                t_values.extend_from_slice(&[0; NUM_MIX_ROUNDS - 1]);
+                t_values_public.push(u64_to_le_field_bytes::<F>(bytes_compressed));
 
                 state = BLAKE2BGadget::compress(
                     chunk,
@@ -722,39 +799,41 @@ impl BLAKE2BGadget {
             0,
         );
 
-        // Need to pad hash state.
-        //hash_values.extend_from_slice(&vec![[F::ZERO; 8]; num_chunks * 8 - hash_values.len()]);
-        writer.write_array(&self.hash_state, &hash_values, 0);
-
-        // Pad msg chunks
-        //msg_chunks.extend_from_slice(&vec![[F::ZERO; 8]; num_chunks * 16 - msg_chunks.len()]);
-        writer.write_array(&self.msg_chunks, &msg_chunks, 0);
         writer.write(
             &self.inversion_const,
             &u64_to_le_field_bytes(INVERSION_CONST),
             0,
         );
 
+        writer.write_array(&self.hash_state, &hash_values, 0);
+
+        writer.write_array(&self.last_chunk_bit_public, &last_chunk_bit_public, 0);
+
+        writer.write_array(&self.msg_chunks, &msg_chunks, 0);
+
+        writer.write_array(&self.t_public, &t_values_public, 0);
+
         // Write to the the local registers
         for i in 0..num_written_chunks * NUM_MIX_ROUNDS {
             writer.write(&self.t, &u64_to_le_field_bytes(t_values[i]), i);
-            writer.write(&self.first_block_bit, &first_block_bit_values[i], i);
-            writer.write(&self.last_block_bit, &last_block_bit_values[i], i);
-            writer.write(&self.cycle_12_start_bit, &cycle_12_start_bit_values[i], i);
-            writer.write(&self.cycle_12_end_bit, &cycle_12_end_bit_values[i], i);
+            writer.write(&self.last_chunk_bit, &last_chunk_bit_values[i], i);
             writer.write_array(&self.m, &m_chunks[i], i);
             writer.write(&self.unused_row, &F::ZERO, i);
+            writer.write(&self.padding_bit, &F::ZERO, i);
         }
+
+        let num_padding_bits = num_rows % NUM_MIX_ROUNDS;
 
         // Need to pad the rest of the rows
         //for i in num_rows_to_write..num_rows {
         for i in num_written_chunks * NUM_MIX_ROUNDS..num_rows {
-            if i % NUM_MIX_ROUNDS == 11 {
-                writer.write(&self.cycle_12_end_bit, &F::ONE, i);
-            } else {
-                writer.write(&self.cycle_12_end_bit, &F::ZERO, i);
-            }
             writer.write(&self.unused_row, &F::ONE, i);
+
+            if i >= num_rows - num_padding_bits {
+                writer.write(&self.padding_bit, &F::ONE, i);
+            } else {
+                writer.write(&self.padding_bit, &F::ZERO, i);
+            }
         }
     }
 
@@ -930,8 +1009,8 @@ mod tests {
 
         type Instruction = U32Instruction;
 
-        const NUM_FREE_COLUMNS: usize = 2499;
-        const EXTENDED_COLUMNS: usize = 4740;
+        const NUM_FREE_COLUMNS: usize = 2509;
+        const EXTENDED_COLUMNS: usize = 4755;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
         fn num_rows_bits() -> usize {
@@ -1005,8 +1084,9 @@ mod tests {
             for i in 0..L::num_rows() {
                 writer.write_row_instructions(&generator.air_data, i);
 
-                let last_block_bit = writer.read(&blake_gadget.last_block_bit, i);
-                let cycle_12_end_bit = writer.read(&blake_gadget.cycle_12_end_bit, i);
+                let last_block_bit = writer.read(&blake_gadget.last_chunk_bit, i);
+                let cycle_12_end_bit =
+                    writer.read(&blake_gadget.cycle_12_registers.get(CYCLE_12 - 1), i);
                 if last_block_bit == F::ONE && cycle_12_end_bit == F::ONE {
                     let hash: [[GoldilocksField; HASH_ARRAY_SIZE]; 4] =
                         writer.read_array(&blake_gadget.h_output.get_subarray(0..8), i);
@@ -1091,6 +1171,15 @@ mod tests {
                     let cycle_end_bit = writer.read(&blake_gadget.cycle_12_end_bit, i);
                     assert!(cycle_end_bit == F::ONE);
                 }
+                */
+
+                /*
+                let cycle_12_registers: [GoldilocksField; 12] =
+                    writer.read_array(&blake_gadget.cycle_12_registers.get_subarray(0..12), i);
+                println!("i = {:?}, cycle_12_registers = {:?}", i, cycle_12_registers);
+
+                let padding_bit = writer.read(&blake_gadget.padding_bit, i);
+                println!("i = {:?}, padding_bit = {:?}", i, padding_bit);
                 */
             }
             table.write_multiplicities(&writer);
