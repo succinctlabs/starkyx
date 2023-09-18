@@ -1,5 +1,5 @@
 //! Parameters for bn254 base field.
-use num::{BigUint, Zero};
+use num::{BigUint, Num, Zero};
 use serde::{Deserialize, Serialize};
 
 use super::projective::SWProjectivePoint;
@@ -36,9 +36,15 @@ impl EllipticCurveParameters for Bn254 {
     type BaseField = Bn254BaseField;
 }
 
+/// Bn254 Weierstrass curve: y^2 = x^3 + 3
 impl WeierstrassParameter for Bn254 {
     const A: [u16; crate::chip::field::parameters::MAX_NB_LIMBS] = [
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0,
+    ];
+
+    const B: [u16; crate::chip::field::parameters::MAX_NB_LIMBS] = [
+        3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0,
     ];
 
@@ -50,10 +56,18 @@ impl WeierstrassParameter for Bn254 {
     }
 
     fn prime_group_order() -> num::BigUint {
-        todo!()
+        BigUint::from_str_radix(
+            "21888242871839275222246405745257275088548364400416034343698204186575808495617",
+            10,
+        )
+        .unwrap()
     }
 
     fn a_biguint() -> BigUint {
         BigUint::zero()
+    }
+
+    fn b_biguint() -> BigUint {
+        BigUint::from(3u32)
     }
 }

@@ -223,8 +223,8 @@ mod tests {
 
         let mut builder = AirBuilder::<L>::new();
 
-        let p = builder.alloc_swec_point();
-        let q = builder.alloc_swec_point();
+        let p = builder.alloc_sw_point();
+        let q = builder.alloc_sw_point();
 
         let _gadget = builder.sw_projective_add::<E>(&p, &q);
 
@@ -239,8 +239,8 @@ mod tests {
         let q_int = &base * &b;
         let writer = generator.new_writer();
         (0..L::num_rows()).into_par_iter().for_each(|i| {
-            writer.write_swec_point(&p, &p_int, i);
-            writer.write_swec_point(&q, &q_int, i);
+            writer.write_sw_point(&p, &p_int, i);
+            writer.write_sw_point(&q, &q_int, i);
             writer.write_row_instructions(&generator.air_data, i);
         });
 
@@ -279,7 +279,7 @@ mod tests {
 
         let mut builder = AirBuilder::<L>::new();
 
-        let p = builder.alloc_swec_point();
+        let p = builder.alloc_sw_point();
 
         let _gadget = builder.sw_projective_doubling::<E>(&p);
 
@@ -292,7 +292,7 @@ mod tests {
         let p_int = &base * &a;
         let writer = generator.new_writer();
         (0..L::num_rows()).into_par_iter().for_each(|i| {
-            writer.write_swec_point(&p, &p_int, i);
+            writer.write_sw_point(&p, &p_int, i);
             writer.write_row_instructions(&generator.air_data, i);
         });
 
