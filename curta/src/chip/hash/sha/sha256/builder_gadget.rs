@@ -6,14 +6,11 @@ use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use serde::{Deserialize, Serialize};
 
-use super::generator::{SHA256AirParameters, SHA256Generator, SHA256HintGenerator};
+use super::generator::{SHA256Generator, SHA256HintGenerator, SHA256StarkData};
 use super::SHA256PublicData;
-use crate::chip::builder::AirBuilder;
-use crate::chip::AirParameters;
 use crate::math::prelude::CubicParameters;
-use crate::plonky2::stark::config::{CurtaConfig, StarkyConfig};
+use crate::plonky2::stark::config::CurtaConfig;
 use crate::plonky2::stark::gadget::StarkGadget;
-use crate::plonky2::stark::Starky;
 
 #[derive(Debug, Clone, Copy)]
 pub struct CurtaBytes<const N: usize>(pub [Target; N]);
@@ -79,33 +76,14 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
         let public_sha_targets =
             SHA256PublicData::add_virtual(self, &gadget.digests, &gadget.chunk_sizes);
 
-        // Make the air
-        let mut air_builder = AirBuilder::<SHA256AirParameters<F, E>>::new();
-        let clk = air_builder.clock();
-
-        let (mut operations, table) = air_builder.byte_operations();
-
-        let mut bus = air_builder.new_bus();
-        let channel_idx = bus.new_channel(&mut air_builder);
-
-        let sha_gadget =
-            air_builder.process_sha_256_batch(&clk, &mut bus, channel_idx, &mut operations);
-
-        air_builder.register_byte_lookup(operations, &table);
-        air_builder.constrain_bus(bus);
-
-        let (air, _) = air_builder.build();
+        let stark_data = SHA256Generator::<F, E, C, D>::stark_data();
+        let SHA256StarkData { stark, config, .. } = stark_data;
 
         let public_input_target = public_sha_targets.public_input_targets(self);
-
-        let stark = Starky::new(air);
-        let config =
-            StarkyConfig::<C, D>::standard_fast_config(SHA256AirParameters::<F, E>::num_rows());
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
         self.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_target);
 
         let sha_generator = SHA256Generator::<F, E, C, D> {
-            gadget: sha_gadget,
             padded_messages: gadget.padded_messages,
             chunk_sizes: gadget.chunk_sizes,
             pub_values_target: public_sha_targets,
