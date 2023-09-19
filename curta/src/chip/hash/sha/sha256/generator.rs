@@ -11,17 +11,17 @@ use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::util::serialization::{Buffer, Read, Write};
 use serde::{Deserialize, Serialize};
 
+use crate::chip::builder::AirBuilder;
 use crate::plonky2::stark::Starky;
 use crate::plonky2::stark::prover::StarkyProver;
 use crate::plonky2::stark::verifier::set_stark_proof_target;
 use super::{SHA256Gadget, SHA256PublicData, INITIAL_HASH, ROUND_CONSTANTS};
 use crate::chip::register::Register;
 use crate::chip::trace::generator::ArithmeticGenerator;
-use crate::chip::uint::bytes::lookup_table::table::ByteLookupTable;
 use crate::chip::uint::operations::instruction::U32Instruction;
 use crate::chip::uint::register::U32Register;
 use crate::chip::uint::util::u32_to_le_field_bytes;
-use crate::chip::{AirParameters, Chip};
+use crate::chip::AirParameters;
 use crate::math::prelude::{CubicParameters, *};
 use crate::plonky2::stark::config::{StarkyConfig, CurtaConfig};
 use crate::plonky2::stark::proof::StarkProofTarget;
@@ -50,15 +50,13 @@ pub struct SHA256HintGenerator {
 #[serde(bound = "")]
 pub struct SHA256Generator<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> {
     pub gadget: SHA256Gadget,
-    pub table: ByteLookupTable,
     pub padded_messages: Vec<Target>,
     pub chunk_sizes: Vec<usize>,
-    pub trace_generator: ArithmeticGenerator<SHA256AirParameters<F, E>>,
     pub pub_values_target: SHA256PublicData<Target>,
     pub config: StarkyConfig<C, D>,
-    pub stark: Starky<Chip<SHA256AirParameters<F, E>>>,
     pub proof_target: StarkProofTarget<D>,
     pub public_input_targets: Vec<Target>,
+    pub _marker: PhantomData<(F, E)>,
 }
 
 impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for SHA256AirParameters<F, E> {
@@ -115,6 +113,28 @@ impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F =F>, E: CubicParameters<F
     }
 
     fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
+        let mut air_builder = AirBuilder::<SHA256AirParameters<F, E>>::new();
+        let clk = air_builder.clock();
+
+        let (mut operations, table) = air_builder.byte_operations();
+
+        let mut bus = air_builder.new_bus();
+        let channel_idx = bus.new_channel(&mut air_builder);
+
+        let gadget =
+            air_builder.process_sha_256_batch(&clk, &mut bus, channel_idx, &mut operations);
+
+        air_builder.register_byte_lookup(operations, &table);
+        air_builder.constrain_bus(bus);
+
+        let (air, trace_data) = air_builder.build();
+
+        let stark = Starky::new(air);
+        let config =
+            StarkyConfig::<C, D>::standard_fast_config(SHA256AirParameters::<F, E>::num_rows());
+
+        let trace_generator = ArithmeticGenerator::<SHA256AirParameters<F, E>>::new(trace_data);
+
         let padded_messages = self
             .padded_messages
             .iter()
@@ -129,13 +149,13 @@ impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F =F>, E: CubicParameters<F
         });
 
         // Write trace values
-        let writer = self.trace_generator.new_writer();
-        self.table.write_table_entries(&writer);
-        let sha_public_values = self.gadget.write(message_chunks, &writer);
+        let writer = trace_generator.new_writer();
+        table.write_table_entries(&writer);
+        let sha_public_values = gadget.write(message_chunks, &writer);
         for i in 0..SHA256AirParameters::<F, E>::num_rows() {
-            writer.write_row_instructions(&self.trace_generator.air_data, i);
+            writer.write_row_instructions(&trace_generator.air_data, i);
         }
-        self.table.write_multiplicities(&writer);
+        table.write_multiplicities(&writer);
 
         // Fill sha public values into the output buffer
         self.pub_values_target
@@ -144,9 +164,9 @@ impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F =F>, E: CubicParameters<F
         let public_inputs : Vec<_> = writer.public.read().unwrap().clone();
 
         let proof = StarkyProver::<F, C, D>::prove(
-            &self.config,
-            &self.stark,
-            &self.trace_generator,
+            &config,
+            &stark,
+            &trace_generator,
             &public_inputs,
         )
         .unwrap();

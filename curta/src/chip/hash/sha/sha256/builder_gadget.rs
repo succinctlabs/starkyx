@@ -4,11 +4,11 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
+use serde::{Serialize, Deserialize};
 
 use super::generator::{SHA256AirParameters, SHA256Generator, SHA256HintGenerator};
 use super::SHA256PublicData;
 use crate::chip::builder::AirBuilder;
-use crate::chip::trace::generator::ArithmeticGenerator;
 use crate::chip::AirParameters;
 use crate::math::prelude::CubicParameters;
 use crate::plonky2::stark::config::{CurtaConfig, StarkyConfig};
@@ -18,7 +18,7 @@ use crate::plonky2::stark::Starky;
 #[derive(Debug, Clone, Copy)]
 pub struct CurtaBytes<const N: usize>(pub [Target; N]);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SHA256BuilderGadget<F, E, const D: usize> {
     pub padded_messages: Vec<Target>,
     pub digests: Vec<Target>,
@@ -94,9 +94,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
         air_builder.register_byte_lookup(operations, &table);
         air_builder.constrain_bus(bus);
 
-        let (air, trace_data) = air_builder.build();
-
-        let generator = ArithmeticGenerator::<SHA256AirParameters<F, E>>::new(trace_data);
+        let (air, _) = air_builder.build();
 
         let public_input_target = public_sha_targets.public_input_targets(self);
 
@@ -106,17 +104,15 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
         self.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_target);
 
-        let sha_generator = SHA256Generator {
+        let sha_generator = SHA256Generator::<F, E, C, D> {
             gadget: sha_gadget,
-            table,
             padded_messages: gadget.padded_messages,
             chunk_sizes: gadget.chunk_sizes,
-            trace_generator: generator,
             pub_values_target: public_sha_targets,
             config,
-            stark,
             proof_target: virtual_proof,
             public_input_targets: public_input_target,
+            _marker: PhantomData,
         };
 
         self.add_simple_generator(sha_generator);
