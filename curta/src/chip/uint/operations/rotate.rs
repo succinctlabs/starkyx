@@ -26,7 +26,6 @@ impl<L: AirParameters> AirBuilder<L> {
         let byte_rotation = rotation / 8;
         let bit_rotation = rotation % 8;
 
-        // println!("{}, {} , {}", rotation, byte_rotation, bit_rotation);
         let mult = L::Field::from_canonical_u32(1 << (8 - bit_rotation));
 
         let a_bytes = a.to_le_bytes();
