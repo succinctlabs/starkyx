@@ -111,7 +111,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
             table,
             padded_messages: gadget.padded_messages,
             chunk_sizes: gadget.chunk_sizes,
-            trace_generator: generator.clone(),
+            trace_generator: generator,
             pub_values_target: public_sha_targets,
             config,
             stark,
