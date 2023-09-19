@@ -65,7 +65,7 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn bit_rotate_right<const N: usize>(
         &mut self,
         a: &ByteArrayRegister<N>,
-        rotation: usize, 
+        rotation: usize,
         operations: &mut ByteLookupOperations,
     ) -> ByteArrayRegister<N>
     where
