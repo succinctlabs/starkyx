@@ -150,13 +150,13 @@ pub(crate) mod tests {
     use serde::de::DeserializeOwned;
 
     use super::*;
+    use super::generator::simple::SimpleStarkWitnessGenerator;
     use crate::air::fibonacci::FibonacciAir;
     use crate::chip::builder::tests::ArithmeticGenerator;
     use crate::chip::{AirParameters, Chip};
     use crate::math::prelude::*;
     use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
     use crate::plonky2::stark::gadget::StarkGadget;
-    use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
     use crate::plonky2::stark::prover::StarkyProver;
     use crate::plonky2::stark::verifier::StarkyVerifier;
     use crate::plonky2::{Plonky2Air, StarkyAir};

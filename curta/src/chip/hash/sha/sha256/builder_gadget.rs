@@ -13,7 +13,6 @@ use crate::chip::AirParameters;
 use crate::math::prelude::CubicParameters;
 use crate::plonky2::stark::config::{CurtaConfig, StarkyConfig};
 use crate::plonky2::stark::gadget::StarkGadget;
-use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
 use crate::plonky2::stark::Starky;
 
 #[derive(Debug, Clone, Copy)]
@@ -101,6 +100,12 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
 
         let public_input_target = public_sha_targets.public_input_targets(self);
 
+        let stark = Starky::new(air);
+        let config =
+            StarkyConfig::<C, D>::standard_fast_config(SHA256AirParameters::<F, E>::num_rows());
+        let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
+        self.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_target);
+
         let sha_generator = SHA256Generator {
             gadget: sha_gadget,
             table,
@@ -108,24 +113,13 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
             chunk_sizes: gadget.chunk_sizes,
             trace_generator: generator.clone(),
             pub_values_target: public_sha_targets,
+            config,
+            stark,
+            proof_target: virtual_proof,
+            public_input_targets: public_input_target,
         };
 
         self.add_simple_generator(sha_generator);
-
-        let stark = Starky::new(air);
-        let config =
-            StarkyConfig::<C, D>::standard_fast_config(SHA256AirParameters::<F, E>::num_rows());
-        let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
-        self.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_target);
-
-        let stark_generator = SimpleStarkWitnessGenerator::new(
-            config,
-            stark,
-            virtual_proof,
-            public_input_target,
-            generator,
-        );
-        self.add_simple_generator(stark_generator);
     }
 }
 

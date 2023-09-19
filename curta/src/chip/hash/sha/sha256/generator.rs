@@ -11,6 +11,9 @@ use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::util::serialization::{Buffer, Read, Write};
 use serde::{Deserialize, Serialize};
 
+use crate::plonky2::stark::Starky;
+use crate::plonky2::stark::prover::StarkyProver;
+use crate::plonky2::stark::verifier::set_stark_proof_target;
 use super::{SHA256Gadget, SHA256PublicData, INITIAL_HASH, ROUND_CONSTANTS};
 use crate::chip::register::Register;
 use crate::chip::trace::generator::ArithmeticGenerator;
@@ -18,8 +21,10 @@ use crate::chip::uint::bytes::lookup_table::table::ByteLookupTable;
 use crate::chip::uint::operations::instruction::U32Instruction;
 use crate::chip::uint::register::U32Register;
 use crate::chip::uint::util::u32_to_le_field_bytes;
-use crate::chip::AirParameters;
+use crate::chip::{AirParameters, Chip};
 use crate::math::prelude::{CubicParameters, *};
+use crate::plonky2::stark::config::{StarkyConfig, CurtaConfig};
+use crate::plonky2::stark::proof::StarkProofTarget;
 use crate::utils::serde::{BufferRead, BufferWrite};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -43,13 +48,17 @@ pub struct SHA256HintGenerator {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
-pub struct SHA256Generator<F: PrimeField64, E: CubicParameters<F>> {
+pub struct SHA256Generator<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> {
     pub gadget: SHA256Gadget,
     pub table: ByteLookupTable,
     pub padded_messages: Vec<Target>,
     pub chunk_sizes: Vec<usize>,
     pub trace_generator: ArithmeticGenerator<SHA256AirParameters<F, E>>,
     pub pub_values_target: SHA256PublicData<Target>,
+    pub config: StarkyConfig<C, D>,
+    pub stark: Starky<Chip<SHA256AirParameters<F, E>>>,
+    pub proof_target: StarkProofTarget<D>,
+    pub public_input_targets: Vec<Target>,
 }
 
 impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for SHA256AirParameters<F, E> {
@@ -67,14 +76,14 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for SHA256AirParamete
     }
 }
 
-impl<F: RichField, E: CubicParameters<F>> SHA256Generator<F, E> {
+impl<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> SHA256Generator<F, E, C, D> {
     pub fn id() -> String {
         "SHA256Generator".to_string()
     }
 }
 
-impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SimpleGenerator<F, D>
-    for SHA256Generator<F, E>
+impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F =F>, E: CubicParameters<F>, const D: usize> SimpleGenerator<F, D>
+    for SHA256Generator<F, E, C, D>
 {
     fn id(&self) -> String {
         Self::id()
@@ -131,6 +140,20 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
         // Fill sha public values into the output buffer
         self.pub_values_target
             .set_targets(sha_public_values, out_buffer);
+
+        let public_inputs : Vec<_> = writer.public.read().unwrap().clone();
+
+        let proof = StarkyProver::<F, C, D>::prove(
+            &self.config,
+            &self.stark,
+            &self.trace_generator,
+            &public_inputs,
+        )
+        .unwrap();
+
+        set_stark_proof_target(out_buffer, &self.proof_target, &proof);
+
+        self.trace_generator.reset();
 
         // Reset the table.
         self.table.reset();
