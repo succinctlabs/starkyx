@@ -1,5 +1,6 @@
 use alloc::sync::Arc;
 use core::array::from_fn;
+use core::sync::atomic::Ordering;
 
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -39,6 +40,16 @@ pub struct ByteLookupTable {
     results_bits: [ArrayRegister<BitRegister>; NUM_BIT_OPPS],
     pub multiplicity_data: Arc<MultiplicityData>,
     pub digests: Vec<CubicRegister>,
+}
+
+impl ByteLookupTable {
+    pub fn reset(&self) {
+        for v in self.multiplicity_data.multiplicities_values.0.iter() {
+            for q in v {
+                q.store(0, Ordering::SeqCst);
+            }
+        }
+    }
 }
 
 impl<L: AirParameters> AirBuilder<L> {

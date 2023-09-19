@@ -19,7 +19,7 @@ use crate::trace::AirTrace;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WriterData<T> {
-    trace: RwLock<AirTrace<T>>,
+    pub(crate) trace: RwLock<AirTrace<T>>,
     pub(crate) global: RwLock<Vec<T>>,
     pub(crate) public: RwLock<Vec<T>>,
     pub(crate) challenges: RwLock<Vec<T>>,

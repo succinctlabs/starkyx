@@ -79,6 +79,8 @@ where
     ) {
         let public_inputs = witness.get_targets(&self.public_input_targets);
 
+        println!("{:?}", self.trace_generator.writer.public);
+
         let proof = StarkyProver::<L::Field, C, D>::prove(
             &self.config,
             &self.stark,
@@ -88,6 +90,8 @@ where
         .unwrap();
 
         set_stark_proof_target(out_buffer, &self.proof_target, &proof);
+
+        self.trace_generator.reset();
     }
 
     fn serialize(

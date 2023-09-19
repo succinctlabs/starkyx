@@ -131,6 +131,9 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
         // Fill sha public values into the output buffer
         self.pub_values_target
             .set_targets(sha_public_values, out_buffer);
+
+        // Reset the table.
+        self.table.reset();
     }
 }
 
