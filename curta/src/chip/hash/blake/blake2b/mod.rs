@@ -26,6 +26,7 @@ pub type U64Value<T> = <U64Register as Register>::Value<T>;
 const NUM_MIX_ROUNDS: usize = 12;
 const MSG_ARRAY_SIZE: usize = 16;
 const HASH_ARRAY_SIZE: usize = 8;
+const WORK_VECTOR_SIZE: usize = 16;
 const CYCLE_12: usize = 12;
 
 #[derive(Debug, Clone)]
@@ -202,6 +203,405 @@ impl<L: AirParameters> AirBuilder<L> {
         }
     }
 
+    fn cycle_12(&mut self) -> (BitRegister, BitRegister) {
+        let cycle_12_registers = self.alloc_array::<BitRegister>(CYCLE_12);
+
+        // Set the cycle 12 registers first row
+        self.set_to_expression_first_row(
+            &cycle_12_registers.get(0),
+            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(1)),
+        );
+
+        for i in 1..CYCLE_12 {
+            self.set_to_expression_first_row(
+                &cycle_12_registers.get(i),
+                ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
+            );
+        }
+
+        // Set transition constraint for the cycle_12_registers
+        for i in 0..CYCLE_12 {
+            let next_i = (i + 1) % CYCLE_12;
+
+            self.set_to_expression_transition(
+                &cycle_12_registers.get(next_i).next(),
+                cycle_12_registers.get(i).expr(),
+            );
+        }
+
+        (
+            cycle_12_registers.get(0),
+            cycle_12_registers.get(CYCLE_12 - 1),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn blake2b_compress(
+        &mut self,
+        m: &ArrayRegister<U64Register>,
+        h_input: &ArrayRegister<U64Register>,
+        h_output: &ArrayRegister<U64Register>,
+        iv_pub: &ArrayRegister<U64Register>,
+        inversion_const_pub: &U64Register,
+        t: &U64Register, // assumes t is not more than u64
+        last_chunk_bit: &BitRegister,
+        cycle_12_start_bit: &BitRegister,
+        cycle_12_end_bit: &BitRegister,
+        unused_row: &BitRegister,
+        operations: &mut ByteLookupOperations,
+    ) where
+        L::Instruction: U32Instructions,
+    {
+        let v_compress_init = self.blake2b_compress_initialize(
+            iv_pub,
+            inversion_const_pub,
+            h_input,
+            t,
+            last_chunk_bit,
+            operations,
+        );
+
+        // This is set to the previous row's v_mix_output.
+        // Note that this array will not be read for the first row of the compress cycle.
+        // v_compress_init will be read instead
+        let v_mix_input = self.alloc_array::<U64Register>(WORK_VECTOR_SIZE);
+
+        let mut v_work_vec_0 =
+            self.select(cycle_12_start_bit, &v_compress_init[0], &v_mix_input.get(0));
+        let mut v_work_vec_1 =
+            self.select(cycle_12_start_bit, &v_compress_init[1], &v_mix_input.get(1));
+        let mut v_work_vec_2 =
+            self.select(cycle_12_start_bit, &v_compress_init[2], &v_mix_input.get(2));
+        let mut v_work_vec_3 =
+            self.select(cycle_12_start_bit, &v_compress_init[3], &v_mix_input.get(3));
+        let mut v_work_vec_4 =
+            self.select(cycle_12_start_bit, &v_compress_init[4], &v_mix_input.get(4));
+        let mut v_work_vec_5 =
+            self.select(cycle_12_start_bit, &v_compress_init[5], &v_mix_input.get(5));
+        let mut v_work_vec_6 =
+            self.select(cycle_12_start_bit, &v_compress_init[6], &v_mix_input.get(6));
+        let mut v_work_vec_7 =
+            self.select(cycle_12_start_bit, &v_compress_init[7], &v_mix_input.get(7));
+        let mut v_work_vec_8 =
+            self.select(cycle_12_start_bit, &v_compress_init[8], &v_mix_input.get(8));
+        let mut v_work_vec_9 =
+            self.select(cycle_12_start_bit, &v_compress_init[9], &v_mix_input.get(9));
+        let mut v_work_vec_10 = self.select(
+            cycle_12_start_bit,
+            &v_compress_init[10],
+            &v_mix_input.get(10),
+        );
+        let mut v_work_vec_11 = self.select(
+            cycle_12_start_bit,
+            &v_compress_init[11],
+            &v_mix_input.get(11),
+        );
+        let mut v_work_vec_12 = self.select(
+            cycle_12_start_bit,
+            &v_compress_init[12],
+            &v_mix_input.get(12),
+        );
+        let mut v_work_vec_13 = self.select(
+            cycle_12_start_bit,
+            &v_compress_init[13],
+            &v_mix_input.get(13),
+        );
+        let mut v_work_vec_14 = self.select(
+            cycle_12_start_bit,
+            &v_compress_init[14],
+            &v_mix_input.get(14),
+        );
+        let mut v_work_vec_15 = self.select(
+            cycle_12_start_bit,
+            &v_compress_init[15],
+            &v_mix_input.get(15),
+        );
+
+        let v_mix_output = self.alloc_array::<U64Register>(WORK_VECTOR_SIZE);
+        self.blake2b_mix_rounds(
+            &mut v_work_vec_0,
+            &mut v_work_vec_1,
+            &mut v_work_vec_2,
+            &mut v_work_vec_3,
+            &mut v_work_vec_4,
+            &mut v_work_vec_5,
+            &mut v_work_vec_6,
+            &mut v_work_vec_7,
+            &mut v_work_vec_8,
+            &mut v_work_vec_9,
+            &mut v_work_vec_10,
+            &mut v_work_vec_11,
+            &mut v_work_vec_12,
+            &mut v_work_vec_13,
+            &mut v_work_vec_14,
+            &mut v_work_vec_15,
+            m,
+            &v_mix_output,
+            operations,
+        );
+
+        self.set_to_expression_transition(&v_mix_input.get(0).next(), v_mix_output.get(0).expr());
+        self.set_to_expression_transition(&v_mix_input.get(1).next(), v_mix_output.get(1).expr());
+        self.set_to_expression_transition(&v_mix_input.get(2).next(), v_mix_output.get(2).expr());
+        self.set_to_expression_transition(&v_mix_input.get(3).next(), v_mix_output.get(3).expr());
+        self.set_to_expression_transition(&v_mix_input.get(4).next(), v_mix_output.get(4).expr());
+        self.set_to_expression_transition(&v_mix_input.get(5).next(), v_mix_output.get(5).expr());
+        self.set_to_expression_transition(&v_mix_input.get(6).next(), v_mix_output.get(6).expr());
+        self.set_to_expression_transition(&v_mix_input.get(7).next(), v_mix_output.get(7).expr());
+        self.set_to_expression_transition(&v_mix_input.get(8).next(), v_mix_output.get(8).expr());
+        self.set_to_expression_transition(&v_mix_input.get(9).next(), v_mix_output.get(9).expr());
+        self.set_to_expression_transition(&v_mix_input.get(10).next(), v_mix_output.get(10).expr());
+        self.set_to_expression_transition(&v_mix_input.get(11).next(), v_mix_output.get(11).expr());
+        self.set_to_expression_transition(&v_mix_input.get(12).next(), v_mix_output.get(12).expr());
+        self.set_to_expression_transition(&v_mix_input.get(13).next(), v_mix_output.get(13).expr());
+        self.set_to_expression_transition(&v_mix_input.get(14).next(), v_mix_output.get(14).expr());
+        self.set_to_expression_transition(&v_mix_input.get(15).next(), v_mix_output.get(15).expr());
+
+        let mut h_0_tmp = self.bitwise_xor(&h_input.get(0), &v_mix_output.get(0), operations);
+        let mut h_1_tmp = self.bitwise_xor(&h_input.get(1), &v_mix_output.get(1), operations);
+        let mut h_2_tmp = self.bitwise_xor(&h_input.get(2), &v_mix_output.get(2), operations);
+        let mut h_3_tmp = self.bitwise_xor(&h_input.get(3), &v_mix_output.get(3), operations);
+        let mut h_4_tmp = self.bitwise_xor(&h_input.get(4), &v_mix_output.get(4), operations);
+        let mut h_5_tmp = self.bitwise_xor(&h_input.get(5), &v_mix_output.get(5), operations);
+        let mut h_6_tmp = self.bitwise_xor(&h_input.get(6), &v_mix_output.get(6), operations);
+        let mut h_7_tmp = self.bitwise_xor(&h_input.get(7), &v_mix_output.get(7), operations);
+
+        h_0_tmp = self.bitwise_xor(&h_0_tmp, &v_mix_output.get(8), operations);
+        h_1_tmp = self.bitwise_xor(&h_1_tmp, &v_mix_output.get(9), operations);
+        h_2_tmp = self.bitwise_xor(&h_2_tmp, &v_mix_output.get(10), operations);
+        h_3_tmp = self.bitwise_xor(&h_3_tmp, &v_mix_output.get(11), operations);
+        h_4_tmp = self.bitwise_xor(&h_4_tmp, &v_mix_output.get(12), operations);
+        h_5_tmp = self.bitwise_xor(&h_5_tmp, &v_mix_output.get(13), operations);
+        h_6_tmp = self.bitwise_xor(&h_6_tmp, &v_mix_output.get(14), operations);
+        h_7_tmp = self.bitwise_xor(&h_7_tmp, &v_mix_output.get(15), operations);
+
+        let u64_register_zero = ArithmeticExpression::from_constant_vec(vec![L::Field::ZERO; 8]);
+
+        // set h_output to zero if within the padded section
+        self.set_to_expression(
+            &h_output.get(0),
+            unused_row.expr() * u64_register_zero.clone()
+                + (unused_row.not_expr()
+                    * (cycle_12_end_bit.expr() * h_0_tmp.expr()
+                        + cycle_12_end_bit.not_expr() * h_input.get(0).expr())),
+        );
+        self.set_to_expression(
+            &h_output.get(1),
+            unused_row.expr() * u64_register_zero.clone()
+                + (unused_row.not_expr()
+                    * (cycle_12_end_bit.expr() * h_1_tmp.expr()
+                        + cycle_12_end_bit.not_expr() * h_input.get(1).expr())),
+        );
+        self.set_to_expression(
+            &h_output.get(2),
+            unused_row.expr() * u64_register_zero.clone()
+                + (unused_row.not_expr()
+                    * (cycle_12_end_bit.expr() * h_2_tmp.expr()
+                        + cycle_12_end_bit.not_expr() * h_input.get(2).expr())),
+        );
+        self.set_to_expression(
+            &h_output.get(3),
+            unused_row.expr() * u64_register_zero.clone()
+                + (unused_row.not_expr()
+                    * (cycle_12_end_bit.expr() * h_3_tmp.expr()
+                        + cycle_12_end_bit.not_expr() * h_input.get(3).expr())),
+        );
+        self.set_to_expression(
+            &h_output.get(4),
+            unused_row.expr() * u64_register_zero.clone()
+                + (unused_row.not_expr()
+                    * (cycle_12_end_bit.expr() * h_4_tmp.expr()
+                        + cycle_12_end_bit.not_expr() * h_input.get(4).expr())),
+        );
+        self.set_to_expression(
+            &h_output.get(5),
+            unused_row.expr() * u64_register_zero.clone()
+                + (unused_row.not_expr()
+                    * (cycle_12_end_bit.expr() * h_5_tmp.expr()
+                        + cycle_12_end_bit.not_expr() * h_input.get(5).expr())),
+        );
+        self.set_to_expression(
+            &h_output.get(6),
+            unused_row.expr() * u64_register_zero.clone()
+                + (unused_row.not_expr()
+                    * (cycle_12_end_bit.expr() * h_6_tmp.expr()
+                        + cycle_12_end_bit.not_expr() * h_input.get(6).expr())),
+        );
+        self.set_to_expression(
+            &h_output.get(7),
+            unused_row.expr() * u64_register_zero
+                + (unused_row.not_expr()
+                    * (cycle_12_end_bit.expr() * h_7_tmp.expr()
+                        + cycle_12_end_bit.not_expr() * h_input.get(7).expr())),
+        );
+    }
+
+    fn blake2b_compress_initialize(
+        &mut self,
+        iv_pub: &ArrayRegister<U64Register>,
+        inversion_const_pub: &U64Register,
+        h_input: &ArrayRegister<U64Register>,
+        t: &U64Register, // assumes t is not more than u64
+        last_chunk_bit: &BitRegister,
+        operations: &mut ByteLookupOperations,
+    ) -> [U64Register; WORK_VECTOR_SIZE]
+    where
+        L::Instruction: U32Instructions,
+    {
+        // Need to create non public registers for IV and inversion_const.  Operations that use both public and private registers causes issues.
+        let iv = self.alloc_array::<U64Register>(HASH_ARRAY_SIZE);
+        for i in 0..HASH_ARRAY_SIZE {
+            self.set_to_expression(&iv.get(i), iv_pub.get(i).expr());
+        }
+
+        let inversion_const = self.alloc::<U64Register>();
+        self.set_to_expression(&inversion_const, inversion_const_pub.expr());
+
+        // Allocate v_compress_input.
+        // This is read only on the first row of cycle 12
+        let v_compress_input_0 = &h_input.get(0);
+        let v_compress_input_1 = &h_input.get(1);
+        let v_compress_input_2 = &h_input.get(2);
+        let v_compress_input_3 = &h_input.get(3);
+        let v_compress_input_4 = &h_input.get(4);
+        let v_compress_input_5 = &h_input.get(5);
+        let v_compress_input_6 = &h_input.get(6);
+        let v_compress_input_7 = &h_input.get(7);
+        let v_compress_input_8 = &iv.get(0);
+        let v_compress_input_9 = &iv.get(1);
+        let v_compress_input_10 = &iv.get(2);
+        let v_compress_input_11 = &iv.get(3);
+        let mut v_compress_input_12 = &iv.get(4);
+        let v_compress_input_13 = &iv.get(5);
+        let mut v_compress_input_14 = &iv.get(6);
+        let v_compress_input_15 = &iv.get(7);
+
+        // If this is the first bit of the 12 round mix cycle, initialize the work vector, else set it to v_out
+        let v_12_t = self.bitwise_xor(v_compress_input_12, t, operations);
+        v_compress_input_12 = &v_12_t;
+        // We assume that the t is not more than u64, so we don't modify v_compress_input_13
+
+        // Invert v[14] bits if this is the last block and we are at the start of the mix 12 cycle.
+        let v_14_inverted = &self.bitwise_xor(v_compress_input_14, &inversion_const, operations);
+        let v_compress_input_v14_last_block =
+            self.select::<U64Register>(last_chunk_bit, v_14_inverted, v_compress_input_14);
+        v_compress_input_14 = &v_compress_input_v14_last_block;
+
+        [
+            *v_compress_input_0,
+            *v_compress_input_1,
+            *v_compress_input_2,
+            *v_compress_input_3,
+            *v_compress_input_4,
+            *v_compress_input_5,
+            *v_compress_input_6,
+            *v_compress_input_7,
+            *v_compress_input_8,
+            *v_compress_input_9,
+            *v_compress_input_10,
+            *v_compress_input_11,
+            *v_compress_input_12,
+            *v_compress_input_13,
+            *v_compress_input_14,
+            *v_compress_input_15,
+        ]
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn blake2b_mix_rounds<'a>(
+        &'a mut self,
+        v_0: &'a mut U64Register,
+        v_1: &'a mut U64Register,
+        v_2: &'a mut U64Register,
+        v_3: &'a mut U64Register,
+        v_4: &'a mut U64Register,
+        v_5: &'a mut U64Register,
+        v_6: &'a mut U64Register,
+        v_7: &'a mut U64Register,
+        v_8: &'a mut U64Register,
+        v_9: &'a mut U64Register,
+        v_10: &'a mut U64Register,
+        v_11: &'a mut U64Register,
+        v_12: &'a mut U64Register,
+        v_13: &'a mut U64Register,
+        v_14: &'a mut U64Register,
+        v_15: &'a mut U64Register,
+        m: &ArrayRegister<U64Register>,
+        v_output: &ArrayRegister<U64Register>,
+        operations: &mut ByteLookupOperations,
+    ) where
+        L::Instruction: U32Instructions,
+    {
+        self.blake2b_mix(v_0, v_4, v_8, v_12, &m.get(0), &m.get(1), operations);
+
+        self.blake2b_mix(v_1, v_5, v_9, v_13, &m.get(2), &m.get(3), operations);
+
+        self.blake2b_mix(v_2, v_6, v_10, v_14, &m.get(4), &m.get(5), operations);
+
+        self.blake2b_mix(v_3, v_7, v_11, v_15, &m.get(6), &m.get(7), operations);
+
+        self.blake2b_mix(v_0, v_5, v_10, v_15, &m.get(8), &m.get(9), operations);
+
+        self.blake2b_mix(v_1, v_6, v_11, v_12, &m.get(10), &m.get(11), operations);
+
+        self.blake2b_mix(v_2, v_7, v_8, v_13, &m.get(12), &m.get(13), operations);
+
+        self.blake2b_mix(v_3, v_4, v_9, v_14, &m.get(14), &m.get(15), operations);
+
+        self.set_to_expression(&v_output.get(0), v_0.expr());
+        self.set_to_expression(&v_output.get(1), v_1.expr());
+        self.set_to_expression(&v_output.get(2), v_2.expr());
+        self.set_to_expression(&v_output.get(3), v_3.expr());
+        self.set_to_expression(&v_output.get(4), v_4.expr());
+        self.set_to_expression(&v_output.get(5), v_5.expr());
+        self.set_to_expression(&v_output.get(6), v_6.expr());
+        self.set_to_expression(&v_output.get(7), v_7.expr());
+        self.set_to_expression(&v_output.get(8), v_8.expr());
+        self.set_to_expression(&v_output.get(9), v_9.expr());
+        self.set_to_expression(&v_output.get(10), v_10.expr());
+        self.set_to_expression(&v_output.get(11), v_11.expr());
+        self.set_to_expression(&v_output.get(12), v_12.expr());
+        self.set_to_expression(&v_output.get(13), v_13.expr());
+        self.set_to_expression(&v_output.get(14), v_14.expr());
+        self.set_to_expression(&v_output.get(15), v_15.expr());
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn blake2b_mix(
+        &mut self,
+        v_a: &mut U64Register,
+        v_b: &mut U64Register,
+        v_c: &mut U64Register,
+        v_d: &mut U64Register,
+        x: &U64Register,
+        y: &U64Register,
+        operations: &mut ByteLookupOperations,
+    ) where
+        L::Instruction: U32Instructions,
+    {
+        *v_a = self.add_u64(v_a, v_b, operations);
+        *v_a = self.add_u64(v_a, x, operations);
+
+        *v_d = self.bitwise_xor(v_d, v_a, operations);
+        *v_d = self.bit_rotate_right(v_d, 32, operations);
+
+        *v_c = self.add_u64(v_c, v_d, operations);
+
+        *v_b = self.bitwise_xor(v_b, v_c, operations);
+        *v_b = self.bit_rotate_right(v_b, 24, operations);
+
+        *v_a = self.add_u64(v_a, v_b, operations);
+        *v_a = self.add_u64(v_a, y, operations);
+
+        *v_d = self.bitwise_xor(v_d, v_a, operations);
+        *v_d = self.bit_rotate_right(v_d, 16, operations);
+
+        *v_c = self.add_u64(v_c, v_d, operations);
+
+        *v_b = self.bitwise_xor(v_b, v_c, operations);
+        *v_b = self.bit_rotate_right(v_b, 63, operations);
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn add_bus_constraints(
         &mut self,
@@ -330,356 +730,6 @@ impl<L: AirParameters> AirBuilder<L> {
             &[clk.expr(), m.get_subarray(0..MSG_ARRAY_SIZE).expr()],
         );
         self.input_to_bus_filtered(bus_channel_idx, clk_msg_digest, padding_bit.not_expr());
-    }
-
-    fn cycle_12(&mut self) -> (BitRegister, BitRegister) {
-        let cycle_12_registers = self.alloc_array::<BitRegister>(CYCLE_12);
-
-        // Set the cycle 12 registers first row
-        self.set_to_expression_first_row(
-            &cycle_12_registers.get(0),
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(1)),
-        );
-
-        for i in 1..CYCLE_12 {
-            self.set_to_expression_first_row(
-                &cycle_12_registers.get(i),
-                ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-            );
-        }
-
-        // Set transition constraint for the cycle_12_registers
-        for i in 0..CYCLE_12 {
-            let next_i = (i + 1) % CYCLE_12;
-
-            self.set_to_expression_transition(
-                &cycle_12_registers.get(next_i).next(),
-                cycle_12_registers.get(i).expr(),
-            );
-        }
-
-        (
-            cycle_12_registers.get(0),
-            cycle_12_registers.get(CYCLE_12 - 1),
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn blake2b_compress(
-        &mut self,
-        m: &ArrayRegister<U64Register>,
-        h_input: &ArrayRegister<U64Register>,
-        h_output: &ArrayRegister<U64Register>,
-        iv_pub: &ArrayRegister<U64Register>,
-        inversion_const_pub: &U64Register,
-        t: &U64Register, // assumes t is not more than u64
-        last_chunk_bit: &BitRegister,
-        cycle_12_start_bit: &BitRegister,
-        cycle_12_end_bit: &BitRegister,
-        unused_row: &BitRegister,
-        operations: &mut ByteLookupOperations,
-    ) where
-        L::Instruction: U32Instructions,
-    {
-        // Need to create non public registers for IV and inversion_const.  Operating on public and private registers causes issues.
-        let iv = self.alloc_array::<U64Register>(HASH_ARRAY_SIZE);
-        for i in 0..HASH_ARRAY_SIZE {
-            self.set_to_expression(&iv.get(i), iv_pub.get(i).expr());
-        }
-
-        let inversion_const = self.alloc::<U64Register>();
-        self.set_to_expression(&inversion_const, inversion_const_pub.expr());
-
-        // Allocate the work vector
-        // This is used to store the current value of the work vector during the mix loop
-        let v_0_orig = self.alloc::<U64Register>();
-        let v_1_orig = self.alloc::<U64Register>();
-        let v_2_orig = self.alloc::<U64Register>();
-        let v_3_orig = self.alloc::<U64Register>();
-        let v_4_orig = self.alloc::<U64Register>();
-        let v_5_orig = self.alloc::<U64Register>();
-        let v_6_orig = self.alloc::<U64Register>();
-        let v_7_orig = self.alloc::<U64Register>();
-        let v_8_orig = self.alloc::<U64Register>();
-        let v_9_orig = self.alloc::<U64Register>();
-        let v_10_orig = self.alloc::<U64Register>();
-        let v_11_orig = self.alloc::<U64Register>();
-        let v_12_orig = self.alloc::<U64Register>();
-        let v_13_orig = self.alloc::<U64Register>();
-        let v_14_orig = self.alloc::<U64Register>();
-        let v_15_orig = self.alloc::<U64Register>();
-
-        // This is used to store the output work vector after mix
-        let v_0_out = self.alloc::<U64Register>();
-        let v_1_out = self.alloc::<U64Register>();
-        let v_2_out = self.alloc::<U64Register>();
-        let v_3_out = self.alloc::<U64Register>();
-        let v_4_out = self.alloc::<U64Register>();
-        let v_5_out = self.alloc::<U64Register>();
-        let v_6_out = self.alloc::<U64Register>();
-        let v_7_out = self.alloc::<U64Register>();
-        let v_8_out = self.alloc::<U64Register>();
-        let v_9_out = self.alloc::<U64Register>();
-        let v_10_out = self.alloc::<U64Register>();
-        let v_11_out = self.alloc::<U64Register>();
-        let v_12_out = self.alloc::<U64Register>();
-        let v_13_out = self.alloc::<U64Register>();
-        let v_14_out = self.alloc::<U64Register>();
-        let v_15_out = self.alloc::<U64Register>();
-
-        // If this is the first bit of the 12 round mix cycle, initialize the work vector, else set it to v_out
-        let mut v_0 = self.select(cycle_12_start_bit, &h_input.get(0), &v_0_orig);
-        let mut v_1 = self.select(cycle_12_start_bit, &h_input.get(1), &v_1_orig);
-        let mut v_2 = self.select(cycle_12_start_bit, &h_input.get(2), &v_2_orig);
-        let mut v_3 = self.select(cycle_12_start_bit, &h_input.get(3), &v_3_orig);
-        let mut v_4 = self.select(cycle_12_start_bit, &h_input.get(4), &v_4_orig);
-        let mut v_5 = self.select(cycle_12_start_bit, &h_input.get(5), &v_5_orig);
-        let mut v_6 = self.select(cycle_12_start_bit, &h_input.get(6), &v_6_orig);
-        let mut v_7 = self.select(cycle_12_start_bit, &h_input.get(7), &v_7_orig);
-        let mut v_8 = self.select(cycle_12_start_bit, &iv.get(0), &v_8_orig);
-        let mut v_9 = self.select(cycle_12_start_bit, &iv.get(1), &v_9_orig);
-        let mut v_10 = self.select(cycle_12_start_bit, &iv.get(2), &v_10_orig);
-        let mut v_11 = self.select(cycle_12_start_bit, &iv.get(3), &v_11_orig);
-        let mut v_12 = self.select(cycle_12_start_bit, &iv.get(4), &v_12_orig);
-        let mut v_13 = self.select(cycle_12_start_bit, &iv.get(5), &v_13_orig);
-        let mut v_14 = self.select(cycle_12_start_bit, &iv.get(6), &v_14_orig);
-        let mut v_15 = self.select(cycle_12_start_bit, &iv.get(7), &v_15_orig);
-
-        let v_12_for_start_bit = self.bitwise_xor(&v_12, t, operations);
-        v_12 = self.select(cycle_12_start_bit, &v_12_for_start_bit, &v_12);
-
-        let mut v_14_for_last_block = self.bitwise_xor(&v_14, &inversion_const, operations);
-        v_14_for_last_block = self.select(cycle_12_start_bit, &v_14_for_last_block, &v_14);
-        v_14 = self.select(last_chunk_bit, &v_14_for_last_block, &v_14);
-        // Invert v[14] bits if this is the last block and we are at the start of the mix 12 cycle.
-
-        self.blake2b_mix(
-            &mut v_0,
-            &mut v_4,
-            &mut v_8,
-            &mut v_12,
-            &m.get(0),
-            &m.get(1),
-            operations,
-        );
-
-        self.blake2b_mix(
-            &mut v_1,
-            &mut v_5,
-            &mut v_9,
-            &mut v_13,
-            &m.get(2),
-            &m.get(3),
-            operations,
-        );
-
-        self.blake2b_mix(
-            &mut v_2,
-            &mut v_6,
-            &mut v_10,
-            &mut v_14,
-            &m.get(4),
-            &m.get(5),
-            operations,
-        );
-
-        self.blake2b_mix(
-            &mut v_3,
-            &mut v_7,
-            &mut v_11,
-            &mut v_15,
-            &m.get(6),
-            &m.get(7),
-            operations,
-        );
-
-        self.blake2b_mix(
-            &mut v_0,
-            &mut v_5,
-            &mut v_10,
-            &mut v_15,
-            &m.get(8),
-            &m.get(9),
-            operations,
-        );
-
-        self.blake2b_mix(
-            &mut v_1,
-            &mut v_6,
-            &mut v_11,
-            &mut v_12,
-            &m.get(10),
-            &m.get(11),
-            operations,
-        );
-
-        self.blake2b_mix(
-            &mut v_2,
-            &mut v_7,
-            &mut v_8,
-            &mut v_13,
-            &m.get(12),
-            &m.get(13),
-            operations,
-        );
-
-        self.blake2b_mix(
-            &mut v_3,
-            &mut v_4,
-            &mut v_9,
-            &mut v_14,
-            &m.get(14),
-            &m.get(15),
-            operations,
-        );
-
-        self.set_to_expression(&v_0_out, v_0.expr());
-        self.set_to_expression(&v_1_out, v_1.expr());
-        self.set_to_expression(&v_2_out, v_2.expr());
-        self.set_to_expression(&v_3_out, v_3.expr());
-        self.set_to_expression(&v_4_out, v_4.expr());
-        self.set_to_expression(&v_5_out, v_5.expr());
-        self.set_to_expression(&v_6_out, v_6.expr());
-        self.set_to_expression(&v_7_out, v_7.expr());
-        self.set_to_expression(&v_8_out, v_8.expr());
-        self.set_to_expression(&v_9_out, v_9.expr());
-        self.set_to_expression(&v_10_out, v_10.expr());
-        self.set_to_expression(&v_11_out, v_11.expr());
-        self.set_to_expression(&v_12_out, v_12.expr());
-        self.set_to_expression(&v_13_out, v_13.expr());
-        self.set_to_expression(&v_14_out, v_14.expr());
-        self.set_to_expression(&v_15_out, v_15.expr());
-
-        self.set_to_expression_transition(&v_0_orig.next(), v_0_out.expr());
-        self.set_to_expression_transition(&v_1_orig.next(), v_1_out.expr());
-        self.set_to_expression_transition(&v_2_orig.next(), v_2_out.expr());
-        self.set_to_expression_transition(&v_3_orig.next(), v_3_out.expr());
-        self.set_to_expression_transition(&v_4_orig.next(), v_4_out.expr());
-        self.set_to_expression_transition(&v_5_orig.next(), v_5_out.expr());
-        self.set_to_expression_transition(&v_6_orig.next(), v_6_out.expr());
-        self.set_to_expression_transition(&v_7_orig.next(), v_7_out.expr());
-        self.set_to_expression_transition(&v_8_orig.next(), v_8_out.expr());
-        self.set_to_expression_transition(&v_9_orig.next(), v_9_out.expr());
-        self.set_to_expression_transition(&v_10_orig.next(), v_10_out.expr());
-        self.set_to_expression_transition(&v_11_orig.next(), v_11_out.expr());
-        self.set_to_expression_transition(&v_12_orig.next(), v_12_out.expr());
-        self.set_to_expression_transition(&v_13_orig.next(), v_13_out.expr());
-        self.set_to_expression_transition(&v_14_orig.next(), v_14_out.expr());
-        self.set_to_expression_transition(&v_15_orig.next(), v_15_out.expr());
-
-        let mut h_0_tmp = self.bitwise_xor(&h_input.get(0), &v_0_out, operations);
-        let mut h_1_tmp = self.bitwise_xor(&h_input.get(1), &v_1_out, operations);
-        let mut h_2_tmp = self.bitwise_xor(&h_input.get(2), &v_2_out, operations);
-        let mut h_3_tmp = self.bitwise_xor(&h_input.get(3), &v_3_out, operations);
-        let mut h_4_tmp = self.bitwise_xor(&h_input.get(4), &v_4_out, operations);
-        let mut h_5_tmp = self.bitwise_xor(&h_input.get(5), &v_5_out, operations);
-        let mut h_6_tmp = self.bitwise_xor(&h_input.get(6), &v_6_out, operations);
-        let mut h_7_tmp = self.bitwise_xor(&h_input.get(7), &v_7_out, operations);
-
-        h_0_tmp = self.bitwise_xor(&h_0_tmp, &v_8_out, operations);
-        h_1_tmp = self.bitwise_xor(&h_1_tmp, &v_9_out, operations);
-        h_2_tmp = self.bitwise_xor(&h_2_tmp, &v_10_out, operations);
-        h_3_tmp = self.bitwise_xor(&h_3_tmp, &v_11_out, operations);
-        h_4_tmp = self.bitwise_xor(&h_4_tmp, &v_12_out, operations);
-        h_5_tmp = self.bitwise_xor(&h_5_tmp, &v_13_out, operations);
-        h_6_tmp = self.bitwise_xor(&h_6_tmp, &v_14_out, operations);
-        h_7_tmp = self.bitwise_xor(&h_7_tmp, &v_15_out, operations);
-
-        let u64_register_zero = ArithmeticExpression::from_constant_vec(vec![L::Field::ZERO; 8]);
-
-        // set h_output to zero if within the padded section
-        self.set_to_expression(
-            &h_output.get(0),
-            unused_row.expr() * u64_register_zero.clone()
-                + (unused_row.not_expr()
-                    * (cycle_12_end_bit.expr() * h_0_tmp.expr()
-                        + cycle_12_end_bit.not_expr() * h_input.get(0).expr())),
-        );
-        self.set_to_expression(
-            &h_output.get(1),
-            unused_row.expr() * u64_register_zero.clone()
-                + (unused_row.not_expr()
-                    * (cycle_12_end_bit.expr() * h_1_tmp.expr()
-                        + cycle_12_end_bit.not_expr() * h_input.get(1).expr())),
-        );
-        self.set_to_expression(
-            &h_output.get(2),
-            unused_row.expr() * u64_register_zero.clone()
-                + (unused_row.not_expr()
-                    * (cycle_12_end_bit.expr() * h_2_tmp.expr()
-                        + cycle_12_end_bit.not_expr() * h_input.get(2).expr())),
-        );
-        self.set_to_expression(
-            &h_output.get(3),
-            unused_row.expr() * u64_register_zero.clone()
-                + (unused_row.not_expr()
-                    * (cycle_12_end_bit.expr() * h_3_tmp.expr()
-                        + cycle_12_end_bit.not_expr() * h_input.get(3).expr())),
-        );
-        self.set_to_expression(
-            &h_output.get(4),
-            unused_row.expr() * u64_register_zero.clone()
-                + (unused_row.not_expr()
-                    * (cycle_12_end_bit.expr() * h_4_tmp.expr()
-                        + cycle_12_end_bit.not_expr() * h_input.get(4).expr())),
-        );
-        self.set_to_expression(
-            &h_output.get(5),
-            unused_row.expr() * u64_register_zero.clone()
-                + (unused_row.not_expr()
-                    * (cycle_12_end_bit.expr() * h_5_tmp.expr()
-                        + cycle_12_end_bit.not_expr() * h_input.get(5).expr())),
-        );
-        self.set_to_expression(
-            &h_output.get(6),
-            unused_row.expr() * u64_register_zero.clone()
-                + (unused_row.not_expr()
-                    * (cycle_12_end_bit.expr() * h_6_tmp.expr()
-                        + cycle_12_end_bit.not_expr() * h_input.get(6).expr())),
-        );
-        self.set_to_expression(
-            &h_output.get(7),
-            unused_row.expr() * u64_register_zero
-                + (unused_row.not_expr()
-                    * (cycle_12_end_bit.expr() * h_7_tmp.expr()
-                        + cycle_12_end_bit.not_expr() * h_input.get(7).expr())),
-        );
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn blake2b_mix(
-        &mut self,
-        v_a: &mut U64Register,
-        v_b: &mut U64Register,
-        v_c: &mut U64Register,
-        v_d: &mut U64Register,
-        x: &U64Register,
-        y: &U64Register,
-        operations: &mut ByteLookupOperations,
-    ) where
-        L::Instruction: U32Instructions,
-    {
-        *v_a = self.add_u64(v_a, v_b, operations);
-        *v_a = self.add_u64(v_a, x, operations);
-
-        *v_d = self.bitwise_xor(v_d, v_a, operations);
-        *v_d = self.bit_rotate_right(v_d, 32, operations);
-
-        *v_c = self.add_u64(v_c, v_d, operations);
-
-        *v_b = self.bitwise_xor(v_b, v_c, operations);
-        *v_b = self.bit_rotate_right(v_b, 24, operations);
-
-        *v_a = self.add_u64(v_a, v_b, operations);
-        *v_a = self.add_u64(v_a, y, operations);
-
-        *v_d = self.bitwise_xor(v_d, v_a, operations);
-        *v_d = self.bit_rotate_right(v_d, 16, operations);
-
-        *v_c = self.add_u64(v_c, v_d, operations);
-
-        *v_b = self.bitwise_xor(v_b, v_c, operations);
-        *v_b = self.bit_rotate_right(v_b, 63, operations);
     }
 }
 
@@ -847,9 +897,9 @@ impl BLAKE2BGadget {
         state: &mut [u64; HASH_ARRAY_SIZE],
         bytes_compressed: u64,
         last_chunk: bool,
-    ) -> [u64; 8] {
+    ) -> [u64; HASH_ARRAY_SIZE] {
         // Set up the work vector V
-        let mut v: [u64; 16] = [0; 16];
+        let mut v: [u64; WORK_VECTOR_SIZE] = [0; WORK_VECTOR_SIZE];
 
         v[..8].copy_from_slice(&state[..HASH_ARRAY_SIZE]);
         v[8..16].copy_from_slice(&INITIAL_HASH_COMPRESS);
@@ -942,18 +992,26 @@ impl BLAKE2BGadget {
             );
         }
 
-        for i in 0..8 {
+        for i in 0..HASH_ARRAY_SIZE {
             state[i] ^= v[i];
         }
 
-        for i in 0..8 {
+        for i in 0..HASH_ARRAY_SIZE {
             state[i] ^= v[i + 8];
         }
 
         *state
     }
 
-    fn mix(v: &mut [u64; 16], a: usize, b: usize, c: usize, d: usize, x: u64, y: u64) {
+    fn mix(
+        v: &mut [u64; WORK_VECTOR_SIZE],
+        a: usize,
+        b: usize,
+        c: usize,
+        d: usize,
+        x: u64,
+        y: u64,
+    ) {
         v[a] = v[a].wrapping_add(v[b]).wrapping_add(x);
         v[d] = (v[d] ^ v[a]).rotate_right(32);
         v[c] = v[c].wrapping_add(v[d]);
