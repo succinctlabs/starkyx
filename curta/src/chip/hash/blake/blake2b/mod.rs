@@ -745,47 +745,41 @@ impl BLAKE2BGadget {
     {
         let max_num_chunks = num_rows / NUM_MIX_ROUNDS;
 
-        let mut last_chunk_bit_values = Vec::new();
-        let mut cycle_12_start_bit_values = Vec::new();
-        let mut cycle_12_end_bit_values = Vec::new();
-        let mut m_chunks = Vec::new();
-        let mut t_values = Vec::new();
-
         // Public values
-        let mut hash_values = Vec::new();
-        let mut msg_chunks = Vec::<[F; 8]>::new();
+        let mut hash_values_public = Vec::new();
+        let mut msg_chunks_public = Vec::<[F; 8]>::new();
         let mut last_chunk_bit_public = Vec::new();
         let mut t_values_public = Vec::new();
 
         let mut num_written_chunks = 0usize;
+        let mut row_num = 0;
         for (padded_msg, message_len) in padded_messages.into_iter().zip(message_lens.iter()) {
             let padded_msg = padded_msg.borrow();
             let msg_num_chunks = padded_msg.len() / 128;
-
-            last_chunk_bit_values
-                .extend_from_slice(&vec![F::ZERO; (msg_num_chunks - 1) * NUM_MIX_ROUNDS]);
-            last_chunk_bit_values.extend_from_slice(&[F::ONE; NUM_MIX_ROUNDS]);
+            assert!(padded_msg.len() % 128 == 0, "Message not padded correctly");
 
             let mut state = INITIAL_HASH;
             let mut bytes_compressed = 0;
-            for (chunk_num, chunk) in padded_msg.chunks_exact(128).enumerate() {
-                cycle_12_start_bit_values.push(F::ONE);
-                cycle_12_start_bit_values.extend_from_slice(&[F::ZERO; NUM_MIX_ROUNDS - 1]);
-                cycle_12_end_bit_values.extend_from_slice(&[F::ZERO; NUM_MIX_ROUNDS - 1]);
-                cycle_12_end_bit_values.push(F::ONE);
 
+            for (chunk_num, chunk) in padded_msg.chunks_exact(128).enumerate() {
                 let last_chunk = chunk_num == msg_num_chunks - 1;
+                let last_chunk_bit;
 
                 if last_chunk {
                     bytes_compressed = *message_len;
-                    last_chunk_bit_public.push(F::ONE);
+                    last_chunk_bit = F::ONE;
                 } else {
                     bytes_compressed += 128;
-                    last_chunk_bit_public.push(F::ZERO);
+                    last_chunk_bit = F::ZERO;
                 }
 
-                t_values.push(bytes_compressed);
-                t_values.extend_from_slice(&[0; NUM_MIX_ROUNDS - 1]);
+                last_chunk_bit_public.push(last_chunk_bit);
+
+                writer.write(
+                    &self.t,
+                    &u64_to_le_field_bytes::<F>(bytes_compressed),
+                    row_num,
+                );
                 t_values_public.push(u64_to_le_field_bytes::<F>(bytes_compressed));
 
                 state = BLAKE2BGadget::compress(
@@ -794,9 +788,9 @@ impl BLAKE2BGadget {
                     bytes_compressed,
                     chunk_num == msg_num_chunks - 1,
                 );
+                hash_values_public.extend_from_slice(&state.map(u64_to_le_field_bytes::<F>));
 
-                hash_values.extend_from_slice(&state.map(u64_to_le_field_bytes::<F>));
-
+                // Get the message chunk array
                 let chunk_array: [[F; 8]; MSG_ARRAY_SIZE] = chunk
                     .chunks_exact(8)
                     .map(|chunk| {
@@ -813,12 +807,16 @@ impl BLAKE2BGadget {
                     .try_into()
                     .expect("should be slice of 16 elements");
 
-                msg_chunks.extend_from_slice(&chunk_array);
+                msg_chunks_public.extend_from_slice(&chunk_array);
 
-                // Permute the messages
+                // Write the last_chunk_bit and m columns
                 for i in 0..NUM_MIX_ROUNDS {
+                    writer.write(&self.last_chunk_bit, &last_chunk_bit, row_num);
+
                     let permuted_chunk_array = self.permute_msgs(&chunk_array, i);
-                    m_chunks.push(permuted_chunk_array);
+                    writer.write_array(&self.m, &permuted_chunk_array, row_num);
+
+                    row_num += 1;
                 }
 
                 num_written_chunks += 1;
@@ -826,7 +824,15 @@ impl BLAKE2BGadget {
             }
         }
 
-        assert!(hash_values.len() == num_written_chunks * 8);
+        assert!(hash_values_public.len() == num_written_chunks * 8);
+        assert!(last_chunk_bit_public[last_chunk_bit_public.len() - 1] == F::ONE);
+        assert!(
+            last_chunk_bit_public
+                .iter()
+                .filter(|x| **x == F::ONE)
+                .count()
+                == message_lens.len()
+        );
 
         // Write to the public registers
         writer.write_array(
@@ -834,40 +840,24 @@ impl BLAKE2BGadget {
             INITIAL_HASH.map(u64_to_le_field_bytes),
             0,
         );
-
         writer.write_array(
             &self.initial_hash_compress,
             INITIAL_HASH_COMPRESS.map(u64_to_le_field_bytes),
             0,
         );
-
         writer.write(
             &self.inversion_const,
             &u64_to_le_field_bytes(INVERSION_CONST),
             0,
         );
-
-        writer.write_array(&self.hash_state, &hash_values, 0);
-
+        writer.write_array(&self.hash_state, &hash_values_public, 0);
         writer.write_array(&self.last_chunk_bit_public, &last_chunk_bit_public, 0);
-
-        writer.write_array(&self.msg_chunks, &msg_chunks, 0);
-
+        writer.write_array(&self.msg_chunks, &msg_chunks_public, 0);
         writer.write_array(&self.t_public, &t_values_public, 0);
-
-        // Write to the the local registers
-        for i in 0..num_written_chunks * NUM_MIX_ROUNDS {
-            writer.write(&self.t, &u64_to_le_field_bytes(t_values[i]), i);
-            writer.write(&self.last_chunk_bit, &last_chunk_bit_values[i], i);
-            writer.write_array(&self.m, &m_chunks[i], i);
-            writer.write(&self.unused_row, &F::ZERO, i);
-            writer.write(&self.padding_bit, &F::ZERO, i);
-        }
 
         let num_padding_bits = num_rows % NUM_MIX_ROUNDS;
 
         // Need to pad the rest of the rows
-        //for i in num_rows_to_write..num_rows {
         for i in num_written_chunks * NUM_MIX_ROUNDS..num_rows {
             writer.write(&self.unused_row, &F::ONE, i);
 
@@ -1059,7 +1049,7 @@ mod tests {
 
         type Instruction = U32Instruction;
 
-        const NUM_FREE_COLUMNS: usize = 2509;
+        const NUM_FREE_COLUMNS: usize = 2493;
         const EXTENDED_COLUMNS: usize = 4755;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
