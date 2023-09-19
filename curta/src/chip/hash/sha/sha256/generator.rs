@@ -11,11 +11,8 @@ use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::util::serialization::{Buffer, Read, Write};
 use serde::{Deserialize, Serialize};
 
-use crate::chip::builder::AirBuilder;
-use crate::plonky2::stark::Starky;
-use crate::plonky2::stark::prover::StarkyProver;
-use crate::plonky2::stark::verifier::set_stark_proof_target;
 use super::{SHA256Gadget, SHA256PublicData, INITIAL_HASH, ROUND_CONSTANTS};
+use crate::chip::builder::AirBuilder;
 use crate::chip::register::Register;
 use crate::chip::trace::generator::ArithmeticGenerator;
 use crate::chip::uint::operations::instruction::U32Instruction;
@@ -23,8 +20,11 @@ use crate::chip::uint::register::U32Register;
 use crate::chip::uint::util::u32_to_le_field_bytes;
 use crate::chip::AirParameters;
 use crate::math::prelude::{CubicParameters, *};
-use crate::plonky2::stark::config::{StarkyConfig, CurtaConfig};
+use crate::plonky2::stark::config::{CurtaConfig, StarkyConfig};
 use crate::plonky2::stark::proof::StarkProofTarget;
+use crate::plonky2::stark::prover::StarkyProver;
+use crate::plonky2::stark::verifier::set_stark_proof_target;
+use crate::plonky2::stark::Starky;
 use crate::utils::serde::{BufferRead, BufferWrite};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -80,8 +80,12 @@ impl<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> SHA256Generator<
     }
 }
 
-impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F =F>, E: CubicParameters<F>, const D: usize> SimpleGenerator<F, D>
-    for SHA256Generator<F, E, C, D>
+impl<
+        F: RichField + Extendable<D>,
+        C: CurtaConfig<D, F = F>,
+        E: CubicParameters<F>,
+        const D: usize,
+    > SimpleGenerator<F, D> for SHA256Generator<F, E, C, D>
 {
     fn id(&self) -> String {
         Self::id()
@@ -161,15 +165,11 @@ impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F =F>, E: CubicParameters<F
         self.pub_values_target
             .set_targets(sha_public_values, out_buffer);
 
-        let public_inputs : Vec<_> = writer.public.read().unwrap().clone();
+        let public_inputs: Vec<_> = writer.public.read().unwrap().clone();
 
-        let proof = StarkyProver::<F, C, D>::prove(
-            &config,
-            &stark,
-            &trace_generator,
-            &public_inputs,
-        )
-        .unwrap();
+        let proof =
+            StarkyProver::<F, C, D>::prove(&config, &stark, &trace_generator, &public_inputs)
+                .unwrap();
 
         set_stark_proof_target(out_buffer, &self.proof_target, &proof);
 

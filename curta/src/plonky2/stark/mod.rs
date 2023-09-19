@@ -149,8 +149,8 @@ pub(crate) mod tests {
     use plonky2::util::timing::TimingTree;
     use serde::de::DeserializeOwned;
 
-    use super::*;
     use super::generator::simple::SimpleStarkWitnessGenerator;
+    use super::*;
     use crate::air::fibonacci::FibonacciAir;
     use crate::chip::builder::tests::ArithmeticGenerator;
     use crate::chip::{AirParameters, Chip};
