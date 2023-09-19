@@ -153,10 +153,10 @@ impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F =F>, E: CubicParameters<F
 
         set_stark_proof_target(out_buffer, &self.proof_target, &proof);
 
-        self.trace_generator.reset();
+        // self.trace_generator.reset();
 
-        // Reset the table.
-        self.table.reset();
+        // // Reset the table.
+        // self.table.reset();
     }
 }
 
