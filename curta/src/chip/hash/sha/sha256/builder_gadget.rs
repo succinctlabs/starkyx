@@ -87,7 +87,6 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
             pub_values_target: public_sha_targets,
             config,
             proof_target: virtual_proof,
-            public_input_targets: public_input_target,
             _marker: PhantomData,
         };
 

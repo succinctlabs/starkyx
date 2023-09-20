@@ -6,6 +6,7 @@ use core::borrow::Borrow;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
+use self::generator::BLAKE2BPublicData;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
@@ -51,12 +52,6 @@ pub struct BLAKE2BGadget {
     pub t_public: ArrayRegister<U64Register>,
     pub last_chunk_bit_public: ArrayRegister<BitRegister>,
     pub hash_state: ArrayRegister<U64Register>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BLAKE2BPublicData<T> {
-    pub hash_state: Vec<U64Value<T>>,
-    pub end_bits: Vec<T>,
 }
 
 const INITIAL_HASH: [u64; HASH_ARRAY_SIZE] = [
@@ -741,7 +736,8 @@ impl BLAKE2BGadget {
         message_lens: &[u64],
         writer: &TraceWriter<F>,
         num_rows: usize,
-    ) where
+    ) -> BLAKE2BPublicData<F>
+    where
         I::Item: Borrow<[u8]>,
     {
         let max_num_chunks = num_rows / NUM_MIX_ROUNDS;
@@ -867,6 +863,13 @@ impl BLAKE2BGadget {
             } else {
                 writer.write(&self.padding_bit, &F::ZERO, i);
             }
+        }
+
+        BLAKE2BPublicData {
+            msg_chunks: msg_chunks_public,
+            t: t_values_public,
+            last_chunk_bit: last_chunk_bit_public,
+            hash_state: hash_values_public,
         }
     }
 
@@ -1165,12 +1168,12 @@ mod tests {
             test_starky(&stark, &config, &generator, &public_inputs)
         );
 
-        // // Generate recursive proof
-        // timed!(
-        //     timing,
-        //     "Recursive proof generation and verification",
-        //     test_recursive_starky(stark, config, generator, &public_inputs)
-        // );
+        // Generate recursive proof
+        timed!(
+            timing,
+            "Recursive proof generation and verification",
+            test_recursive_starky(stark, config, generator, &public_inputs)
+        );
 
         timing.print();
     }

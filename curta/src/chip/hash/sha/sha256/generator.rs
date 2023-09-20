@@ -55,7 +55,6 @@ pub struct SHA256Generator<F: PrimeField64, E: CubicParameters<F>, C, const D: u
     pub pub_values_target: SHA256PublicData<Target>,
     pub config: StarkyConfig<C, D>,
     pub proof_target: StarkProofTarget<D>,
-    pub public_input_targets: Vec<Target>,
     pub _marker: PhantomData<(F, E)>,
 }
 
