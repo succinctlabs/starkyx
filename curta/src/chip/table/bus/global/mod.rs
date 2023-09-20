@@ -10,6 +10,8 @@ pub mod constraint;
 
 use core::marker::PhantomData;
 
+use serde::{Deserialize, Serialize};
+
 use super::channel::BusChannel;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::cubic::CubicRegister;
@@ -20,7 +22,7 @@ use crate::chip::AirParameters;
 /// The main bus enforcing the constraint
 ///
 /// Prod(Channels) = 1
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Bus<E> {
     /// The channels of the bus
     channels: Vec<CubicRegister>,
@@ -92,6 +94,7 @@ impl<E: Clone> Bus<E> {
 #[cfg(test)]
 mod tests {
     use plonky2::field::types::Sample;
+    use serde::{Deserialize, Serialize};
 
     use super::*;
     use crate::chip::builder::tests::*;
@@ -101,7 +104,7 @@ mod tests {
     use crate::math::extension::cubic::element::CubicElement;
     use crate::math::prelude::*;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     struct BusTest;
 
     impl AirParameters for BusTest {

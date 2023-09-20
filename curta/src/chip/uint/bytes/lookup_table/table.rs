@@ -1,7 +1,9 @@
 use alloc::sync::Arc;
 use core::array::from_fn;
+use core::sync::atomic::Ordering;
 
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 
 use super::super::operations::NUM_BIT_OPPS;
 use super::multiplicity_data::MultiplicityData;
@@ -28,7 +30,7 @@ use crate::chip::AirParameters;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ByteLookupTable {
     pub a: ByteRegister,
     pub b: ByteRegister,
@@ -38,6 +40,16 @@ pub struct ByteLookupTable {
     results_bits: [ArrayRegister<BitRegister>; NUM_BIT_OPPS],
     pub multiplicity_data: Arc<MultiplicityData>,
     pub digests: Vec<CubicRegister>,
+}
+
+impl ByteLookupTable {
+    pub fn reset(&self) {
+        for v in self.multiplicity_data.multiplicities_values.0.iter() {
+            for q in v {
+                q.store(0, Ordering::SeqCst);
+            }
+        }
+    }
 }
 
 impl<L: AirParameters> AirBuilder<L> {

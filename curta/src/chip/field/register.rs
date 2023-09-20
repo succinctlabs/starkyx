@@ -1,5 +1,7 @@
 use core::marker::PhantomData;
 
+use serde::{Deserialize, Serialize};
+
 use super::parameters::FieldParameters;
 use crate::chip::register::cell::CellType;
 use crate::chip::register::memory::MemorySlice;
@@ -8,7 +10,7 @@ use crate::polynomial::Polynomial;
 
 /// A register for representing a field element. The value is decomposed into a series of U16 limbs
 /// which is controlled by `NB_LIMBS` in FieldParameters. Each limb is range checked using a lookup.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct FieldRegister<P: FieldParameters> {
     register: MemorySlice,
     _marker: PhantomData<P>,

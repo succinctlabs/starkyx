@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 
 use super::{LogLookupValues, LookupTable};
 use crate::air::extension::cubic::CubicParser;
@@ -8,7 +9,8 @@ use crate::chip::register::cubic::{CubicRegister, EvalCubic};
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum LookupConstraint<T: EvalCubic, F: Field, E: CubicParameters<F>> {
     Table(LookupTable<T, F, E>),
     ValuesLocal(LogLookupValues<T, F, E>),

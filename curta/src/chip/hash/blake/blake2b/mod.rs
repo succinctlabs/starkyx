@@ -4,6 +4,7 @@ pub mod generator;
 use core::borrow::Borrow;
 
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
@@ -29,7 +30,7 @@ const HASH_ARRAY_SIZE: usize = 8;
 const WORK_VECTOR_SIZE: usize = 16;
 const CYCLE_12: usize = 12;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BLAKE2BGadget {
     pub padding_bit: BitRegister,
     pub cycle_12_start_bit: BitRegister,
@@ -52,7 +53,7 @@ pub struct BLAKE2BGadget {
     pub hash_state: ArrayRegister<U64Register>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BLAKE2BPublicData<T> {
     pub hash_state: Vec<U64Value<T>>,
     pub end_bits: Vec<T>,
@@ -1040,7 +1041,7 @@ mod tests {
     use crate::chip::uint::operations::instruction::U32Instruction;
     use crate::chip::AirParameters;
 
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
     pub struct BLAKE2BTest;
 
     impl AirParameters for BLAKE2BTest {

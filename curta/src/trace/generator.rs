@@ -1,9 +1,15 @@
+use core::fmt::Debug;
+
 use anyhow::{anyhow, Error};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 
 use super::AirTrace;
 use crate::math::prelude::*;
 
-pub trait TraceGenerator<F, A> {
+pub trait TraceGenerator<F, A>:
+    'static + Debug + Send + Sync + Serialize + DeserializeOwned
+{
     type Error;
     fn generate_round(
         &self,
@@ -15,7 +21,8 @@ pub trait TraceGenerator<F, A> {
     ) -> Result<AirTrace<F>, Self::Error>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct ConstantGenerator<F: Field> {
     trace: AirTrace<F>,
 }

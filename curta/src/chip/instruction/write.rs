@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use super::{Instruction, InstructionId};
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
@@ -5,7 +7,7 @@ use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct WriteInstruction(pub MemorySlice);
 
 impl<AP: AirParser> AirConstraint<AP> for WriteInstruction {

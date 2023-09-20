@@ -1,11 +1,13 @@
 use alloc::sync::Arc;
 
+use serde::{Deserialize, Serialize};
+
 use crate::air::parser::AirParser;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::Register;
 use crate::math::prelude::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ArithmeticExpressionSlice<F> {
     /// A contiguous chunk of elemnt of a trace column.
     Input(MemorySlice),

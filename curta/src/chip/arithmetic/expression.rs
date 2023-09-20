@@ -1,6 +1,8 @@
 use alloc::sync::Arc;
 use core::ops::{Add, Mul, Sub};
 
+use serde::{Deserialize, Serialize};
+
 use super::expression_slice::ArithmeticExpressionSlice;
 use crate::air::parser::AirParser;
 use crate::chip::register::memory::MemorySlice;
@@ -19,7 +21,7 @@ use crate::math::prelude::*;
 /// If Z = [Z_1] is a vector of length 1, we also define
 /// - P * Z = [P_1 * Z_1, ..., P_n * Z_1]
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ArithmeticExpression<F> {
     pub(crate) expression: ArithmeticExpressionSlice<F>,
     pub size: usize,

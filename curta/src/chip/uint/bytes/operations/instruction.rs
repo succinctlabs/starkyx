@@ -1,5 +1,7 @@
 use alloc::sync::Arc;
 
+use serde::{Deserialize, Serialize};
+
 use super::value::ByteOperation;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
@@ -10,7 +12,7 @@ use crate::chip::uint::bytes::lookup_table::multiplicity_data::MultiplicityData;
 use crate::chip::uint::bytes::register::ByteRegister;
 use crate::math::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ByteOperationInstruction {
     multiplicity_data: Arc<MultiplicityData>,
     inner: ByteOperation<ByteRegister>,

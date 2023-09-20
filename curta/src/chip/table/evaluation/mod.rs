@@ -1,6 +1,8 @@
 use core::borrow::Borrow;
 use core::marker::PhantomData;
 
+use serde::{Deserialize, Serialize};
+
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::constraint::Constraint;
@@ -17,7 +19,8 @@ use crate::math::prelude::*;
 pub mod constraint;
 pub mod trace;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum Digest<F: Field, E: CubicParameters<F>> {
     Values(Vec<ArrayRegister<ElementRegister>>),
     Extended(CubicRegister),
@@ -33,7 +36,8 @@ pub struct BitEvaluation<F: Field> {
     pub cycle: Cycle<F>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct Evaluation<F: Field, E: CubicParameters<F>> {
     pub beta: CubicRegister,
     beta_powers: CubicRegister,
@@ -167,7 +171,7 @@ mod tests {
     use crate::chip::register::bit::BitRegister;
     use crate::chip::register::Register;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct EvalTest;
 
     impl AirParameters for EvalTest {

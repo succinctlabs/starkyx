@@ -1,10 +1,12 @@
+use serde::{Deserialize, Serialize};
+
 use super::parser::AirParser;
 use super::{RAir, RAirData};
 use crate::air::RoundDatum;
 use crate::math::prelude::*;
 use crate::trace::AirTrace;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FibonacciAir;
 
 impl FibonacciAir {

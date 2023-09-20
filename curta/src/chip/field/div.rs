@@ -1,4 +1,5 @@
 use num::BigUint;
+use serde::{Deserialize, Serialize};
 
 use super::mul::FpMulInstruction;
 use super::parameters::FieldParameters;
@@ -20,7 +21,8 @@ use crate::polynomial::to_u16_le_limbs_polynomial;
 /// Fp Division. Computes `a / b = result`.
 ///
 /// This is done by computing `b_inv = b^(-1)` followed by `a * b_inv = result`.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct FpDivInstruction<P: FieldParameters> {
     /// a `FpMulInstruction` to compute `b_inv = b^(-1)`.
     denominator: FpMulInstruction<P>,
@@ -164,7 +166,7 @@ mod tests {
     use crate::chip::field::parameters::tests::Fp25519;
     use crate::polynomial::Polynomial;
 
-    #[derive(Clone, Debug, Copy)]
+    #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
     struct FpDivTest;
 
     impl AirParameters for FpDivTest {

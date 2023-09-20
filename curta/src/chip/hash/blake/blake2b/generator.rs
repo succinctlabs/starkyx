@@ -8,18 +8,17 @@ use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
 use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::util::serialization::{Buffer, Read, Write};
+use serde::{Deserialize, Serialize};
 
-use super::{BLAKE2BPublicData, INITIAL_HASH};
+use super::INITIAL_HASH;
 use crate::chip::hash::blake::blake2b::BLAKE2BGadget;
-use crate::chip::trace::generator::ArithmeticGenerator;
-use crate::chip::uint::bytes::lookup_table::table::ByteLookupTable;
 use crate::chip::uint::operations::instruction::U32Instruction;
 use crate::chip::uint::util::u64_to_le_field_bytes;
 use crate::chip::AirParameters;
 use crate::math::field::PrimeField64;
 use crate::math::prelude::CubicParameters;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct BLAKE2BAirParameters<F, E>(pub PhantomData<(F, E)>);
 
 impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for BLAKE2BAirParameters<F, E> {
@@ -35,16 +34,6 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for BLAKE2BAirParamet
     fn num_rows_bits() -> usize {
         16
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct BLAKE2BGenerator<F: PrimeField64, E: CubicParameters<F>> {
-    pub gadget: BLAKE2BGadget,
-    pub table: ByteLookupTable,
-    pub padded_messages: Vec<Target>,
-    pub chunk_sizes: Vec<usize>,
-    pub trace_generator: ArithmeticGenerator<BLAKE2BAirParameters<F, E>>,
-    pub pub_values_target: BLAKE2BPublicData<Target>,
 }
 
 #[derive(Debug, Clone)]

@@ -1,9 +1,11 @@
 use alloc::sync::Arc;
 
 use anyhow::{Error, Result};
+use serde::{Deserialize, Serialize};
 
 use super::writer::TraceWriter;
 use crate::chip::builder::AirTraceData;
+use crate::chip::register::element::ElementRegister;
 use crate::chip::table::lookup::Lookup;
 use crate::chip::{AirParameters, Chip};
 use crate::math::prelude::*;
@@ -11,13 +13,33 @@ use crate::maybe_rayon::*;
 use crate::trace::generator::TraceGenerator;
 use crate::trace::AirTrace;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct ArithmeticGenerator<L: AirParameters> {
-    writer: TraceWriter<L::Field>,
+    pub writer: TraceWriter<L::Field>,
     pub air_data: AirTraceData<L>,
 }
 
 impl<L: AirParameters> ArithmeticGenerator<L> {
+    pub fn reset(&self) {
+        let trace_new = AirTrace::new_with_capacity(L::num_columns(), L::num_rows());
+        let global_new = Vec::new();
+        let challenges_new = Vec::new();
+        let public_new = Vec::new();
+
+        let mut trace = self.writer.0.trace.write().unwrap();
+        *trace = trace_new;
+
+        let mut global = self.writer.0.global.write().unwrap();
+        *global = global_new;
+
+        let mut challenges = self.writer.0.challenges.write().unwrap();
+        *challenges = challenges_new;
+
+        let mut public = self.writer.0.public.write().unwrap();
+        *public = public_new;
+    }
+
     pub fn new(air_data: AirTraceData<L>) -> Self {
         let num_public_inputs = air_data.num_public_inputs;
         let num_global_values = air_data.num_global_values;
@@ -31,6 +53,11 @@ impl<L: AirParameters> ArithmeticGenerator<L> {
             ),
             air_data,
         }
+    }
+
+    #[inline]
+    pub fn range_fn(element: L::Field) -> usize {
+        element.as_canonical_u64() as usize
     }
 
     pub fn new_writer(&self) -> TraceWriter<L::Field> {
@@ -67,26 +94,24 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                 let num_rows = L::num_rows();
 
                 // Write the range check table and multiplicitiies
-                if let Some(table) = &self.air_data.range_table {
+                if let Some(Lookup::Element(lookup_data)) = &self.air_data.range_data {
+                    let (table_data, values_data) =
+                        (&lookup_data.table_data, &lookup_data.values_data);
+                    assert_eq!(table_data.table.len(), 1);
+                    let table = table_data.table[0];
                     for i in 0..num_rows {
                         self.writer
-                            .write(table, &L::Field::from_canonical_usize(i), i);
+                            .write(&table, &L::Field::from_canonical_usize(i), i);
                     }
-                }
 
-                // Write multiplicities for lookup table with search functions
-                for data in self.air_data.lookup_data.iter() {
-                    if let Lookup::Element(log_data) = data {
-                        if let Some(table_index) = log_data.table_index {
-                            self.writer.write_multiplicities_from_fn(
-                                num_rows,
-                                &log_data.table_data,
-                                table_index,
-                                &log_data.values_data.trace_values,
-                                &log_data.values_data.public_values,
-                            );
-                        }
-                    }
+                    self.writer
+                        .write_multiplicities_from_fn::<L::CubicParams, ElementRegister>(
+                            num_rows,
+                            table_data,
+                            Self::range_fn,
+                            &values_data.trace_values,
+                            &values_data.public_values,
+                        );
                 }
 
                 let trace = self.trace_clone();

@@ -1,10 +1,12 @@
+use serde::{Deserialize, Serialize};
+
 use super::bytes::register::ByteRegister;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cell::CellType;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct ByteArrayRegister<const N: usize>(MemorySlice);
 
 pub type U8Register = ByteArrayRegister<1>;
@@ -76,7 +78,7 @@ mod tests {
     use crate::chip::AirParameters;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
 
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
     pub struct RegisterConversionTest;
 
     impl AirParameters for RegisterConversionTest {

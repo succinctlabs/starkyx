@@ -24,6 +24,7 @@ use curta::chip::hash::sha::sha256::SHA256Gadget;
 use curta::chip::hash::CurtaBytes;
 use curta::math::goldilocks::cubic::GoldilocksCubicParameters;
 use curta::math::prelude::*;
+use curta::plonky2::stark::config::CurtaPoseidonGoldilocksConfig;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
@@ -38,6 +39,7 @@ fn main() {
     // Define some type aliases for convenience
     type F = GoldilocksField;
     type E = GoldilocksCubicParameters;
+    type SC = CurtaPoseidonGoldilocksConfig;
     type C = PoseidonGoldilocksConfig;
     const D: usize = 2;
 
@@ -91,7 +93,7 @@ fn main() {
     }
 
     // Register the SHA constraints in the builder
-    builder.constrain_sha256_gadget::<C>(gadget);
+    builder.constrain_sha256_gadget::<SC>(gadget);
 
     // Build the circuit
     let data = builder.build::<C>();

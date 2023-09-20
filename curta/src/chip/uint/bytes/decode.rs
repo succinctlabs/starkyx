@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use super::register::ByteRegister;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
@@ -9,7 +11,7 @@ use crate::chip::register::Register;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct ByteDecodeInstruction {
     byte: ByteRegister,
     bits: ArrayRegister<BitRegister>,
@@ -57,7 +59,7 @@ mod tests {
     use crate::chip::builder::AirBuilder;
     use crate::chip::AirParameters;
 
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
     struct DecodeTest;
 
     impl AirParameters for DecodeTest {

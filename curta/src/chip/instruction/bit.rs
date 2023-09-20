@@ -1,10 +1,12 @@
+use serde::{Deserialize, Serialize};
+
 use super::ConstraintInstruction;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::register::memory::MemorySlice;
 use crate::math::prelude::*;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct BitConstraint(pub MemorySlice);
 
 impl ConstraintInstruction for BitConstraint {}

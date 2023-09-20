@@ -115,6 +115,7 @@ impl<L: AirParameters> AirBuilder<L> {
 pub mod tests {
 
     use rand::{thread_rng, Rng};
+    use serde::{Deserialize, Serialize};
 
     use super::*;
     use crate::chip::bool::SelectInstruction;
@@ -122,7 +123,7 @@ pub mod tests {
     use crate::chip::builder::AirBuilder;
     use crate::chip::AirParameters;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct RotateTest<const N: usize, const M: usize>;
 
     impl<const N: usize, const M: usize> AirParameters for RotateTest<N, M> {

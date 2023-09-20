@@ -1,4 +1,5 @@
 use plonky2::field::goldilocks_field::GoldilocksField;
+use serde::{Deserialize, Serialize};
 
 use super::gadget::EdScalarMulGadget;
 use crate::chip::builder::{AirBuilder, AirTraceData};
@@ -24,7 +25,7 @@ const NUM_FREE_COLUMNS: usize = 77;
 const EXTENDED_COLUMNS: usize = 2293;
 pub const ED_NUM_COLUMNS: usize = NUM_ARITHMETIC_COLUMNS + NUM_FREE_COLUMNS + EXTENDED_COLUMNS;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScalarMulEd25519<F: PrimeField64, E: CubicParameters<F>>(
     core::marker::PhantomData<(F, E)>,
 );

@@ -4,19 +4,13 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
+use serde::{Deserialize, Serialize};
 
 use super::generator::BLAKE2BHintGenerator;
-use super::BLAKE2BPublicData;
-use crate::chip::builder::AirBuilder;
-use crate::chip::hash::sha::sha256::generator::SHA256AirParameters;
 use crate::chip::hash::CurtaBytes;
 use crate::math::prelude::CubicParameters;
-use crate::plonky2::stark::config::StarkyConfig;
-use crate::plonky2::stark::gadget::StarkGadget;
-use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BLAKE2BBuilderGadget<F, E, const D: usize> {
     pub padded_message: Vec<Target>,
     pub digest: Vec<Target>,
@@ -34,14 +28,6 @@ pub trait BLAKE2BBuilder<F: RichField + Extendable<D>, E: CubicParameters<F>, co
         message_len: Target,
         gadget: &mut Self::Gadget,
     ) -> CurtaBytes<32>;
-
-    /*
-    fn constrain_blake2b_gadget<C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone>(
-        &mut self,
-        gadget: Self::Gadget,
-    ) where
-        C::Hasher: AlgebraicHasher<F>;
-        */
 }
 
 impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> BLAKE2BBuilder<F, E, D>
@@ -70,63 +56,6 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> BLAKE2
         gadget.digest.extend_from_slice(&digest_bytes);
         CurtaBytes(digest_bytes)
     }
-
-    /*
-    fn constrain_blake2b_gadget<C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone>(
-        &mut self,
-        gadget: Self::Gadget,
-    ) where
-        C::Hasher: AlgebraicHasher<F>,
-    {
-        // Allocate public input targets
-        let public_blake2b_targets =
-            BLAKE2BPublicData::add_virtual(self, &gadget.digest, &gadget.chunk_size);
-
-        // Make the air
-        let mut air_builder = AirBuilder::<BLAKE2BAirParameters<F, E>>::new();
-        let clk = air_builder.clock();
-
-        let (mut operations, table) = air_builder.byte_operations();
-
-        let mut bus = air_builder.new_bus();
-        let channel_idx = bus.new_channel(&mut air_builder);
-
-        air_builder.blake2b_compress();
-
-        let (air, trace_data) = air_builder.build();
-
-        let generator = ArithmeticGenerator::<BLAKE2BAirParameters<F, E>>::new(trace_data);
-
-        let public_input_target = public_blake2b_targets.public_input_targets(self);
-
-        let blake_generator = BLAKE2BGenerator {
-            gadget: blake_gadget,
-            table,
-            padded_message: gadget.padded_message,
-            chunk_size: gadget.chunk_size,
-            trace_generator: generator.clone(),
-            pub_values_target: public_blake_target,
-        };
-
-        self.add_simple_generator(blake_generator);
-
-        let stark = Starky::new(air);
-        let config =
-            StarkyConfig::<F, C, D>::standard_fast_config(SHA256AirParameters::<F, E>::num_rows());
-        let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
-        self.verify_stark_proof(&config, &stark, virtual_proof.clone(), &public_input_target);
-
-        let stark_generator = SimpleStarkWitnessGenerator::new(
-            config,
-            stark,
-            virtual_proof,
-            public_input_target,
-            generator,
-        );
-
-        self.add_simple_generator(stark_generator);
-    }
-    */
 }
 
 #[cfg(test)]

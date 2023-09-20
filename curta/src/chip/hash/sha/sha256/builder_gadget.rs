@@ -4,21 +4,16 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
+use serde::{Deserialize, Serialize};
 
-use super::generator::{SHA256AirParameters, SHA256Generator, SHA256HintGenerator};
+use super::generator::{SHA256Generator, SHA256HintGenerator, SHA256StarkData};
 use super::SHA256PublicData;
-use crate::chip::builder::AirBuilder;
 use crate::chip::hash::CurtaBytes;
-use crate::chip::trace::generator::ArithmeticGenerator;
-use crate::chip::AirParameters;
 use crate::math::prelude::CubicParameters;
-use crate::plonky2::stark::config::StarkyConfig;
+use crate::plonky2::stark::config::CurtaConfig;
 use crate::plonky2::stark::gadget::StarkGadget;
-use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
-use crate::plonky2::stark::Starky;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SHA256BuilderGadget<F, E, const D: usize> {
     pub padded_messages: Vec<Target>,
     pub digests: Vec<Target>,
@@ -37,11 +32,10 @@ pub trait SHA256Builder<F: RichField + Extendable<D>, E: CubicParameters<F>, con
         gadget: &mut Self::Gadget,
     ) -> CurtaBytes<32>;
 
-    fn constrain_sha256_gadget<C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone>(
+    fn constrain_sha256_gadget<C: CurtaConfig<D, F = F, FE = F::Extension>>(
         &mut self,
         gadget: Self::Gadget,
-    ) where
-        C::Hasher: AlgebraicHasher<F>;
+    );
 }
 
 impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256Builder<F, E, D>
@@ -72,63 +66,32 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> SHA256
         CurtaBytes(digest_bytes)
     }
 
-    fn constrain_sha256_gadget<C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone>(
+    fn constrain_sha256_gadget<C: CurtaConfig<D, F = F, FE = F::Extension>>(
         &mut self,
         gadget: Self::Gadget,
-    ) where
-        C::Hasher: AlgebraicHasher<F>,
-    {
+    ) {
         // Allocate public input targets
         let public_sha_targets =
             SHA256PublicData::add_virtual(self, &gadget.digests, &gadget.chunk_sizes);
 
-        // Make the air
-        let mut air_builder = AirBuilder::<SHA256AirParameters<F, E>>::new();
-        let clk = air_builder.clock();
-
-        let (mut operations, table) = air_builder.byte_operations();
-
-        let mut bus = air_builder.new_bus();
-        let channel_idx = bus.new_channel(&mut air_builder);
-
-        let sha_gadget =
-            air_builder.process_sha_256_batch(&clk, &mut bus, channel_idx, &mut operations);
-
-        air_builder.register_byte_lookup(operations, &table);
-        air_builder.constrain_bus(bus);
-
-        let (air, trace_data) = air_builder.build();
-
-        let generator = ArithmeticGenerator::<SHA256AirParameters<F, E>>::new(trace_data);
+        let stark_data = SHA256Generator::<F, E, C, D>::stark_data();
+        let SHA256StarkData { stark, config, .. } = stark_data;
 
         let public_input_target = public_sha_targets.public_input_targets(self);
+        let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
+        self.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_target);
 
-        let sha_generator = SHA256Generator {
-            gadget: sha_gadget,
-            table,
+        let sha_generator = SHA256Generator::<F, E, C, D> {
             padded_messages: gadget.padded_messages,
             chunk_sizes: gadget.chunk_sizes,
-            trace_generator: generator.clone(),
             pub_values_target: public_sha_targets,
+            config,
+            proof_target: virtual_proof,
+            public_input_targets: public_input_target,
+            _marker: PhantomData,
         };
 
         self.add_simple_generator(sha_generator);
-
-        let stark = Starky::new(air);
-        let config =
-            StarkyConfig::<F, C, D>::standard_fast_config(SHA256AirParameters::<F, E>::num_rows());
-        let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
-        self.verify_stark_proof(&config, &stark, virtual_proof.clone(), &public_input_target);
-
-        let stark_generator = SimpleStarkWitnessGenerator::new(
-            config,
-            stark,
-            virtual_proof,
-            public_input_target,
-            generator,
-        );
-
-        self.add_simple_generator(stark_generator);
     }
 }
 
@@ -146,11 +109,13 @@ mod tests {
     use super::*;
     pub use crate::chip::builder::tests::*;
     use crate::chip::hash::sha::sha256::SHA256Gadget;
+    use crate::plonky2::stark::config::CurtaPoseidonGoldilocksConfig;
 
     #[test]
     fn test_sha_256_plonky_gadget() {
         type F = GoldilocksField;
         type E = GoldilocksCubicParameters;
+        type SC = CurtaPoseidonGoldilocksConfig;
         type C = PoseidonGoldilocksConfig;
         const D: usize = 2;
 
@@ -194,7 +159,7 @@ mod tests {
             }
         }
 
-        builder.constrain_sha256_gadget::<C>(gadget);
+        builder.constrain_sha256_gadget::<SC>(gadget);
 
         let data = builder.build::<C>();
         let mut pw = PartialWitness::new();

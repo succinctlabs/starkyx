@@ -4,6 +4,7 @@
 pub mod log_der;
 
 use log_der::LogLookup;
+use serde::{Deserialize, Serialize};
 
 use self::log_der::constraint::LookupConstraint;
 use crate::air::extension::cubic::CubicParser;
@@ -14,13 +15,15 @@ use crate::chip::trace::writer::TraceWriter;
 use crate::math::extension::cubic::parameters::CubicParameters;
 use crate::math::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum Lookup<F: Field, E: CubicParameters<F>> {
     Element(LogLookup<ElementRegister, F, E>),
     CubicElement(LogLookup<CubicRegister, F, E>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum LookupChipConstraint<F: Field, E: CubicParameters<F>> {
     Element(LookupConstraint<ElementRegister, F, E>),
     CubicElement(LookupConstraint<CubicRegister, F, E>),

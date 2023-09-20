@@ -10,8 +10,8 @@ pub mod chip;
 pub mod math;
 pub mod maybe_rayon;
 pub mod polynomial;
-pub mod stark;
 pub mod trace;
+pub mod utils;
 
 #[cfg(feature = "plonky2")]
 pub mod plonky2;
