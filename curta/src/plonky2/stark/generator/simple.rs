@@ -79,8 +79,6 @@ where
     ) {
         let public_inputs = witness.get_targets(&self.public_input_targets);
 
-        println!("{:?}", self.trace_generator.writer.public);
-
         let proof = StarkyProver::<L::Field, C, D>::prove(
             &self.config,
             &self.stark,
