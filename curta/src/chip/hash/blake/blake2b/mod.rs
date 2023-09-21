@@ -132,7 +132,9 @@ impl<L: AirParameters> AirBuilder<L> {
         let last_chunk_bit_public = self.alloc_array_public::<BitRegister>(num_chunks);
         let hash_state = self.alloc_array_public::<U64Register>(num_chunks * HASH_ARRAY_SIZE);
 
-        let (cycle_12_start_bit, cycle_12_end_bit) = self.cycle_12();
+        let loop_iterations = self.loop_instr(CYCLE_12);
+        let cycle_12_start_bit = loop_iterations.get(0);
+        let cycle_12_end_bit = loop_iterations.get(CYCLE_12 - 1);
 
         // Set h_input to the initial hash if we are at the first block and at the first loop of the cycle_12
         // Otherwise set it to h_output
@@ -204,38 +206,11 @@ impl<L: AirParameters> AirBuilder<L> {
         }
     }
 
-    fn cycle_12(&mut self) -> (BitRegister, BitRegister) {
-        let cycle_12_registers = self.alloc_array::<BitRegister>(CYCLE_12);
-
-        // Set the cycle 12 registers first row
-        self.set_to_expression_first_row(
-            &cycle_12_registers.get(0),
-            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(1)),
-        );
-
-        for i in 1..CYCLE_12 {
-            self.set_to_expression_first_row(
-                &cycle_12_registers.get(i),
-                ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
-            );
-        }
-
-        // Set transition constraint for the cycle_12_registers
-        for i in 0..CYCLE_12 {
-            let next_i = (i + 1) % CYCLE_12;
-
-            self.set_to_expression_transition(
-                &cycle_12_registers.get(next_i).next(),
-                cycle_12_registers.get(i).expr(),
-            );
-        }
-
-        (
-            cycle_12_registers.get(0),
-            cycle_12_registers.get(CYCLE_12 - 1),
-        )
-    }
-
+    // Note that we assume that t's max value is 2**64-1.
+    // The blake2b specification actually does allow t to be up to 2**128-1
+    // (see https://en.wikipedia.org/wiki/BLAKE_(hash_function).
+    // Also, we currently only support digest size of 32 bytes and no usage of a key.
+    // This restricted support means that we don't have do mutate h0.
     #[allow(clippy::too_many_arguments)]
     fn blake2b_compress(
         &mut self,
@@ -244,7 +219,7 @@ impl<L: AirParameters> AirBuilder<L> {
         h_output: &ArrayRegister<U64Register>,
         iv_pub: &ArrayRegister<U64Register>,
         inversion_const_pub: &U64Register,
-        t: &U64Register, // assumes t is not more than u64
+        t: &U64Register,
         last_chunk_bit: &BitRegister,
         cycle_12_start_bit: &BitRegister,
         cycle_12_end_bit: &BitRegister,
@@ -437,19 +412,22 @@ impl<L: AirParameters> AirBuilder<L> {
         );
     }
 
+    // As noted before, we assume that t's max value is 2**64-1.
+    // That assumption and restricted support means that we don't have to mutate V13.
     fn blake2b_compress_initialize(
         &mut self,
         iv_pub: &ArrayRegister<U64Register>,
         inversion_const_pub: &U64Register,
         h_input: &ArrayRegister<U64Register>,
-        t: &U64Register, // assumes t is not more than u64
+        t: &U64Register,
         last_chunk_bit: &BitRegister,
         operations: &mut ByteLookupOperations,
     ) -> [U64Register; WORK_VECTOR_SIZE]
     where
         L::Instruction: U32Instructions,
     {
-        // Need to create non public registers for IV and inversion_const.  Operations that use both public and private registers causes issues.
+        // Need to create non public registers for IV and inversion_const.
+        // Operations that use both public and private registers causes issues.
         let iv = self.alloc_array::<U64Register>(HASH_ARRAY_SIZE);
         for i in 0..HASH_ARRAY_SIZE {
             self.set_to_expression(&iv.get(i), iv_pub.get(i).expr());

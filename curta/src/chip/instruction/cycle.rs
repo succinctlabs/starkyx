@@ -4,7 +4,9 @@ use super::set::AirInstruction;
 use super::Instruction;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
+use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
+use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
@@ -53,6 +55,35 @@ impl<L: AirParameters> AirBuilder<L> {
             .unwrap();
 
         cycle
+    }
+
+    pub fn loop_instr(&mut self, num_iterations: usize) -> ArrayRegister<BitRegister> {
+        let iterations_registers = self.alloc_array::<BitRegister>(num_iterations);
+
+        // Set the cycle 12 registers first row
+        self.set_to_expression_first_row(
+            &iterations_registers.get(0),
+            ArithmeticExpression::from_constant(L::Field::from_canonical_usize(1)),
+        );
+
+        for i in 1..num_iterations {
+            self.set_to_expression_first_row(
+                &iterations_registers.get(i),
+                ArithmeticExpression::from_constant(L::Field::from_canonical_usize(0)),
+            );
+        }
+
+        // Set transition constraint for the cycle_12_registers
+        for i in 0..num_iterations {
+            let next_i = (i + 1) % num_iterations;
+
+            self.set_to_expression_transition(
+                &iterations_registers.get(next_i).next(),
+                iterations_registers.get(i).expr(),
+            );
+        }
+
+        iterations_registers
     }
 }
 
