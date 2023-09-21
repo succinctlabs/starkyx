@@ -8,12 +8,10 @@ use serde::{Deserialize, Serialize};
 
 use super::generator::{SHA256Generator, SHA256HintGenerator, SHA256StarkData};
 use super::SHA256PublicData;
+use crate::chip::hash::CurtaBytes;
 use crate::math::prelude::CubicParameters;
 use crate::plonky2::stark::config::CurtaConfig;
 use crate::plonky2::stark::gadget::StarkGadget;
-
-#[derive(Debug, Clone, Copy)]
-pub struct CurtaBytes<const N: usize>(pub [Target; N]);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SHA256BuilderGadget<F, E, const D: usize> {
