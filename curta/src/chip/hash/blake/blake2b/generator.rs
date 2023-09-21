@@ -62,7 +62,7 @@ pub struct BLAKE2BGenerator<
     pub pub_values_target: BLAKE2BPublicData<Target>,
     pub config: StarkyConfig<C, D>,
     pub proof_target: StarkProofTarget<D>,
-    _phantom: PhantomData<(F, E, L)>,
+    pub _phantom: PhantomData<(F, E, L)>,
 }
 
 pub struct BLAKE2BStarkData<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> {
@@ -312,7 +312,7 @@ impl BLAKE2BPublicData<Target> {
             )
             .chain(self.msg_chunks.iter().flatten().copied())
             .chain(self.t.iter().flatten().copied())
-            .chain(self.last_chunk_bit.into_iter())
+            .chain(self.last_chunk_bit.clone().into_iter())
             .chain(self.hash_state.iter().flatten().copied())
             .collect()
     }

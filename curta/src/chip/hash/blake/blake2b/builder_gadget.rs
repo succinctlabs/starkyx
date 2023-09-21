@@ -124,13 +124,17 @@ mod tests {
 
     use super::*;
     pub use crate::chip::builder::tests::*;
+    use crate::chip::hash::blake::blake2b::generator::BLAKE2BAirParameters;
     use crate::chip::hash::blake::blake2b::BLAKE2BGadget;
+    use crate::plonky2::stark::config::CurtaPoseidonGoldilocksConfig;
 
     #[test]
     fn test_blake_2b_plonky_gadget() {
         type F = GoldilocksField;
         type E = GoldilocksCubicParameters;
+        type SC = CurtaPoseidonGoldilocksConfig;
         type C = PoseidonGoldilocksConfig;
+        type L = BLAKE2BAirParameters<F, E>;
         const D: usize = 2;
 
         let _ = env_logger::builder().is_test(true).try_init();
@@ -140,7 +144,7 @@ mod tests {
         let config = CircuitConfig::standard_recursion_config();
         let mut builder = CircuitBuilder::<F, D>::new(config);
 
-        let mut gadget: BLAKE2BBuilderGadget<F, E, D> = builder.init_blake2b();
+        let mut gadget: BLAKE2BBuilderGadget<F, E, D, L> = builder.init_blake2b();
 
         let msg_target = CurtaBytes(builder.add_virtual_target_arr::<256>());
         let msg_length_target = builder.add_virtual_target();
@@ -156,7 +160,7 @@ mod tests {
             builder.connect(*d, *e);
         }
 
-        builder.constrain_blake2b_gadget::<C>(gadget);
+        builder.constrain_blake2b_gadget::<SC>(gadget);
 
         let data = builder.build::<C>();
         let mut pw = PartialWitness::new();

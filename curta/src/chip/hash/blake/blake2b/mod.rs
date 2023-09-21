@@ -1041,31 +1041,14 @@ mod tests {
     use super::*;
     pub use crate::chip::builder::tests::*;
     use crate::chip::builder::AirBuilder;
-    use crate::chip::uint::operations::instruction::U32Instruction;
+    use crate::chip::hash::blake::blake2b::generator::BLAKE2BAirParameters;
     use crate::chip::AirParameters;
-
-    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-    pub struct BLAKE2BTest;
-
-    impl AirParameters for BLAKE2BTest {
-        type Field = GoldilocksField;
-        type CubicParams = GoldilocksCubicParameters;
-
-        type Instruction = U32Instruction;
-
-        const NUM_FREE_COLUMNS: usize = 2493;
-        const EXTENDED_COLUMNS: usize = 4755;
-        const NUM_ARITHMETIC_COLUMNS: usize = 0;
-
-        fn num_rows_bits() -> usize {
-            16
-        }
-    }
 
     #[test]
     fn test_blake2b_stark() {
         type F = GoldilocksField;
-        type L = BLAKE2BTest;
+        type E = GoldilocksCubicParameters;
+        type L = BLAKE2BAirParameters<F, E>;
         type SC = PoseidonGoldilocksStarkConfig;
 
         let _ = env_logger::builder().is_test(true).try_init();
