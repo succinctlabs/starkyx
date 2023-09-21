@@ -179,6 +179,7 @@ impl<
 
         let max_num_chunks = L::num_rows() / 128;
         assert!(padded_messages.len() <= max_num_chunks * 128);
+        println!("padded_messages len is {}", padded_messages.len());
 
         let msg_sizes = self
             .msg_lens
@@ -202,6 +203,7 @@ impl<
         let writer = trace_generator.new_writer();
         table.write_table_entries(&writer);
         let blake_public_values = gadget.write(message_chunks, &msg_sizes, &writer, L::num_rows());
+
         for i in 0..L::num_rows() {
             writer.write_row_instructions(&trace_generator.air_data, i);
         }
@@ -212,6 +214,8 @@ impl<
             .set_targets(blake_public_values, out_buffer);
 
         let public_inputs: Vec<_> = writer.public.read().unwrap().clone();
+
+        println!("public_inputs is {:?}", public_inputs);
 
         let proof =
             StarkyProver::<F, C, D>::prove(&config, &stark, &trace_generator, &public_inputs)
