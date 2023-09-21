@@ -16,7 +16,7 @@ use crate::chip::utils::{biguint_to_bits_le, field_limbs_to_biguint};
 use crate::chip::AirParameters;
 use crate::polynomial::to_u16_le_limbs_polynomial;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 /// short Weierstrass projective point
 pub struct SWProjectivePoint<E: EllipticCurveParameters> {
     /// x coordinate
@@ -40,7 +40,6 @@ impl<E: EllipticCurveParameters> SWProjectivePoint<E> {
     }
 }
 
-impl<E: EllipticCurveParameters> Eq for SWProjectivePoint<E> {}
 impl<E: EllipticCurveParameters> PartialEq for SWProjectivePoint<E> {
     fn eq(&self, other: &Self) -> bool {
         if self.z.is_zero() {
@@ -192,37 +191,37 @@ impl<E: EllipticCurveParameters> SWProjectivePointRegister<E> {
 pub trait SWProjectiveEllipticCurveGadget<E: EllipticCurveParameters> {
     /// Allocates registers for a SW Projective elliptic curve point without
     /// range-checking.
-    fn alloc_unchecked_swec_point(&mut self) -> SWProjectivePointRegister<E>;
+    fn alloc_unchecked_sw_point(&mut self) -> SWProjectivePointRegister<E>;
 
     /// Allocates local registers for a SW Projective point
-    fn alloc_local_swec_point(&mut self) -> SWProjectivePointRegister<E>;
+    fn alloc_local_sw_point(&mut self) -> SWProjectivePointRegister<E>;
 
     /// Allocates next registers for a SW Projective point
-    fn alloc_next_swec_point(&mut self) -> SWProjectivePointRegister<E>;
+    fn alloc_next_sw_point(&mut self) -> SWProjectivePointRegister<E>;
 
     /// Allocates registers for a SW Projective point
-    fn alloc_swec_point(&mut self) -> SWProjectivePointRegister<E> {
-        self.alloc_local_swec_point()
+    fn alloc_sw_point(&mut self) -> SWProjectivePointRegister<E> {
+        self.alloc_local_sw_point()
     }
 
     /// Allocates global registers for a SW Projective point
-    fn alloc_global_swec_point(&mut self) -> SWProjectivePointRegister<E>;
+    fn alloc_global_sw_point(&mut self) -> SWProjectivePointRegister<E>;
 
     /// Allocates public registers for a SW Projective point
-    fn alloc_public_swec_point(&mut self) -> SWProjectivePointRegister<E>;
+    fn alloc_public_sw_point(&mut self) -> SWProjectivePointRegister<E>;
 }
 
 /// I/O for SW elliptic curve registers
 pub trait SWEllipticCurveWriter<E: EllipticCurveParameters> {
     /// Read SW elliptic curve point from registers
-    fn read_swec_point(
+    fn read_sw_point(
         &self,
         data: &SWProjectivePointRegister<E>,
         row_index: usize,
     ) -> SWProjectivePoint<E>;
 
     /// Write SW elliptic curve point into registers
-    fn write_swec_point(
+    fn write_sw_point(
         &self,
         data: &SWProjectivePointRegister<E>,
         value: &SWProjectivePoint<E>,
@@ -235,7 +234,7 @@ impl<L: AirParameters, E: EllipticCurveParameters> SWProjectiveEllipticCurveGadg
 {
     /// Allocates registers for a SW Projective elliptic curve point without
     /// range-checking.
-    fn alloc_unchecked_swec_point(&mut self) -> SWProjectivePointRegister<E> {
+    fn alloc_unchecked_sw_point(&mut self) -> SWProjectivePointRegister<E> {
         let x = FieldRegister::<E::BaseField>::from_register(
             self.get_local_memory(E::BaseField::NB_LIMBS),
         );
@@ -248,28 +247,28 @@ impl<L: AirParameters, E: EllipticCurveParameters> SWProjectiveEllipticCurveGadg
         SWProjectivePointRegister::new(x, y, z)
     }
 
-    fn alloc_local_swec_point(&mut self) -> SWProjectivePointRegister<E> {
+    fn alloc_local_sw_point(&mut self) -> SWProjectivePointRegister<E> {
         let x = self.alloc::<FieldRegister<E::BaseField>>();
         let y = self.alloc::<FieldRegister<E::BaseField>>();
         let z = self.alloc::<FieldRegister<E::BaseField>>();
         SWProjectivePointRegister::new(x, y, z)
     }
 
-    fn alloc_next_swec_point(&mut self) -> SWProjectivePointRegister<E> {
+    fn alloc_next_sw_point(&mut self) -> SWProjectivePointRegister<E> {
         let x = self.alloc::<FieldRegister<E::BaseField>>();
         let y = self.alloc::<FieldRegister<E::BaseField>>();
         let z = self.alloc::<FieldRegister<E::BaseField>>();
         SWProjectivePointRegister::new(x, y, z)
     }
 
-    fn alloc_global_swec_point(&mut self) -> SWProjectivePointRegister<E> {
+    fn alloc_global_sw_point(&mut self) -> SWProjectivePointRegister<E> {
         let x = self.alloc::<FieldRegister<E::BaseField>>();
         let y = self.alloc::<FieldRegister<E::BaseField>>();
         let z = self.alloc::<FieldRegister<E::BaseField>>();
         SWProjectivePointRegister::new(x, y, z)
     }
 
-    fn alloc_public_swec_point(&mut self) -> SWProjectivePointRegister<E> {
+    fn alloc_public_sw_point(&mut self) -> SWProjectivePointRegister<E> {
         let x = self.alloc::<FieldRegister<E::BaseField>>();
         let y = self.alloc::<FieldRegister<E::BaseField>>();
         let z = self.alloc::<FieldRegister<E::BaseField>>();
@@ -278,7 +277,7 @@ impl<L: AirParameters, E: EllipticCurveParameters> SWProjectiveEllipticCurveGadg
 }
 
 impl<F: PrimeField64, E: EllipticCurveParameters> SWEllipticCurveWriter<E> for TraceWriter<F> {
-    fn read_swec_point(
+    fn read_sw_point(
         &self,
         data: &SWProjectivePointRegister<E>,
         row_index: usize,
@@ -294,7 +293,7 @@ impl<F: PrimeField64, E: EllipticCurveParameters> SWEllipticCurveWriter<E> for T
         SWProjectivePoint::<E>::new(x, y, z)
     }
 
-    fn write_swec_point(
+    fn write_sw_point(
         &self,
         data: &SWProjectivePointRegister<E>,
         value: &SWProjectivePoint<E>,
