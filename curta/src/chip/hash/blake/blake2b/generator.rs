@@ -215,8 +215,6 @@ impl<
 
         let public_inputs: Vec<_> = writer.public.read().unwrap().clone();
 
-        println!("public_inputs is {:?}", public_inputs);
-
         let proof =
             StarkyProver::<F, C, D>::prove(&config, &stark, &trace_generator, &public_inputs)
                 .unwrap();
