@@ -268,16 +268,25 @@ impl BLAKE2BPublicData<Target> {
         values: BLAKE2BPublicData<F>,
         out_buffer: &mut GeneratedValues<F>,
     ) {
+        assert!(
+            self.msg_chunks.len() == values.msg_chunks.len(),
+            "msg_chunks length mismatch"
+        );
         for (pub_msg_chunk_target, pub_msg_chunk_value) in
             self.msg_chunks.iter().zip_eq(values.msg_chunks.iter())
         {
             out_buffer.set_target_arr(pub_msg_chunk_target, pub_msg_chunk_value);
         }
 
+        assert!(self.t.len() == values.t.len(), "t length mismatch");
         for (pub_t_target, pub_t_value) in self.t.iter().zip_eq(values.t.iter()) {
             out_buffer.set_target_arr(pub_t_target, pub_t_value);
         }
 
+        assert!(
+            self.last_chunk_bit.len() == values.last_chunk_bit.len(),
+            "last_chunk_bit length mismatch"
+        );
         for (pub_last_chunk_bit_target, pub_last_chunk_bit_value) in self
             .last_chunk_bit
             .iter()
@@ -286,6 +295,10 @@ impl BLAKE2BPublicData<Target> {
             out_buffer.set_target(*pub_last_chunk_bit_target, *pub_last_chunk_bit_value);
         }
 
+        assert!(
+            self.hash_state.len() == values.hash_state.len(),
+            "hash_state length mismatch"
+        );
         for (hash_target, hash_value) in self.hash_state.iter().zip_eq(values.hash_state.iter()) {
             out_buffer.set_target_arr(hash_target, hash_value);
         }
