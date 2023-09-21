@@ -12,7 +12,9 @@ use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::util::serialization::{Buffer, Read, Write};
 use serde::{Deserialize, Serialize};
 
-use super::{U64Value, HASH_ARRAY_SIZE, INITIAL_HASH, MSG_ARRAY_SIZE, NUM_MIX_ROUNDS};
+use super::{
+    U64Value, HASH_ARRAY_SIZE, INITIAL_HASH, INVERSION_CONST, MSG_ARRAY_SIZE, NUM_MIX_ROUNDS,
+};
 use crate::chip::builder::AirBuilder;
 use crate::chip::hash::blake::blake2b::BLAKE2BGadget;
 use crate::chip::trace::generator::ArithmeticGenerator;
@@ -56,7 +58,7 @@ pub struct BLAKE2BGenerator<
     L: AirParameters + 'static + Clone + Debug + Send + Sync,
 > {
     pub padded_messages: Vec<Target>,
-    pub msg_sizes: Vec<Target>,
+    pub msg_lens: Vec<Target>,
     pub pub_values_target: BLAKE2BPublicData<Target>,
     pub config: StarkyConfig<C, D>,
     pub proof_target: StarkProofTarget<D>,
@@ -156,7 +158,7 @@ impl<
     fn dependencies(&self) -> Vec<Target> {
         let mut dependencies = Vec::new();
         dependencies.extend_from_slice(self.padded_messages.as_slice());
-        dependencies.extend_from_slice(self.msg_sizes.as_slice());
+        dependencies.extend_from_slice(self.msg_lens.as_slice());
         dependencies
     }
 
@@ -179,7 +181,7 @@ impl<
         assert!(padded_messages.len() <= max_num_chunks * 128);
 
         let msg_sizes = self
-            .msg_sizes
+            .msg_lens
             .iter()
             .map(|x| witness.get_target(*x).as_canonical_u64())
             .collect::<Vec<_>>();
@@ -287,6 +289,32 @@ impl BLAKE2BPublicData<Target> {
         for (hash_target, hash_value) in self.hash_state.iter().zip_eq(values.hash_state.iter()) {
             out_buffer.set_target_arr(hash_target, hash_value);
         }
+    }
+
+    pub fn public_input_targets<F: RichField + Extendable<D>, const D: usize>(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+    ) -> Vec<Target> {
+        INITIAL_HASH
+            .map(|value| u64_to_le_field_bytes(value).map(|x| builder.constant(x)))
+            .into_iter()
+            .flatten()
+            .chain(
+                INITIAL_HASH
+                    .map(|value| u64_to_le_field_bytes(value).map(|x| builder.constant(x)))
+                    .into_iter()
+                    .flatten(),
+            )
+            .chain(
+                u64_to_le_field_bytes(INVERSION_CONST)
+                    .map(|x| builder.constant(x))
+                    .into_iter(),
+            )
+            .chain(self.msg_chunks.iter().flatten().copied())
+            .chain(self.t.iter().flatten().copied())
+            .chain(self.last_chunk_bit.into_iter())
+            .chain(self.hash_state.iter().flatten().copied())
+            .collect()
     }
 }
 

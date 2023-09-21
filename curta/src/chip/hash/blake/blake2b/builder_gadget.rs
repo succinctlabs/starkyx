@@ -5,19 +5,15 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use serde::{Deserialize, Serialize};
 
-use super::generator::{BLAKE2BAirParameters, BLAKE2BHintGenerator};
+use super::generator::{BLAKE2BGenerator, BLAKE2BHintGenerator, BLAKE2BStarkData};
 use super::BLAKE2BPublicData;
-use crate::chip::builder::AirBuilder;
-use crate::chip::hash::sha::sha256::generator::SHA256AirParameters;
 use crate::chip::hash::CurtaBytes;
 use crate::chip::AirParameters;
 use crate::math::prelude::CubicParameters;
-use crate::plonky2::stark::config::StarkyConfig;
+use crate::plonky2::stark::config::CurtaConfig;
 use crate::plonky2::stark::gadget::StarkGadget;
-use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BLAKE2BBuilderGadget<
@@ -50,11 +46,10 @@ pub trait BLAKE2BBuilder<
         gadget: &mut Self::Gadget,
     ) -> CurtaBytes<32>;
 
-    fn constrain_blake2b_gadget<C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone>(
+    fn constrain_blake2b_gadget<C: CurtaConfig<D, F = F, FE = F::Extension>>(
         &mut self,
         gadget: Self::Gadget,
-    ) where
-        C::Hasher: AlgebraicHasher<F>;
+    );
 }
 
 impl<
@@ -90,59 +85,30 @@ impl<
         CurtaBytes(digest_bytes)
     }
 
-    fn constrain_blake2b_gadget<C: GenericConfig<D, F = F, FE = F::Extension> + 'static + Clone>(
+    fn constrain_blake2b_gadget<C: CurtaConfig<D, F = F, FE = F::Extension>>(
         &mut self,
         gadget: Self::Gadget,
-    ) where
-        C::Hasher: AlgebraicHasher<F>,
-    {
+    ) {
         // Allocate public input targets
-        let public_blake2b_targets =
-            BLAKE2BPublicData::add_virtual(self, &gadget.digests, &gadget.msg_lengths);
+        let public_blake2b_targets = BLAKE2BPublicData::add_virtual::<F, D, L>(self);
 
-        // Make the air
-        let mut air_builder = AirBuilder::<BLAKE2BAirParameters<F, E>>::new();
-        let clk = air_builder.clock();
-
-        let (mut operations, table) = air_builder.byte_operations();
-
-        let mut bus = air_builder.new_bus();
-        let channel_idx = bus.new_channel(&mut air_builder);
-
-        air_builder.blake2b_compress();
-
-        let (air, trace_data) = air_builder.build();
-
-        let generator = ArithmeticGenerator::<BLAKE2BAirParameters<F, E>>::new(trace_data);
+        let stark_data = BLAKE2BGenerator::<F, E, C, D, L>::stark_data();
+        let BLAKE2BStarkData { stark, config, .. } = stark_data;
 
         let public_input_target = public_blake2b_targets.public_input_targets(self);
+        let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
+        self.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_target);
 
-        let blake_generator = BLAKE2BGenerator {
-            gadget: blake_gadget,
-            table,
-            padded_message: gadget.padded_message,
-            chunk_size: gadget.chunk_size,
-            trace_generator: generator.clone(),
-            pub_values_target: public_blake_target,
+        let blake2b_generator = BLAKE2BGenerator::<F, E, C, D, L> {
+            padded_messages: gadget.padded_messages,
+            msg_lens: gadget.msg_lengths,
+            pub_values_target: public_blake2b_targets,
+            config,
+            proof_target: virtual_proof,
+            _phantom: PhantomData,
         };
 
-        self.add_simple_generator(blake_generator);
-
-        let stark = Starky::new(air);
-        let config =
-            StarkyConfig::<F, C, D>::standard_fast_config(SHA256AirParameters::<F, E>::num_rows());
-        let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
-        self.verify_stark_proof(&config, &stark, virtual_proof.clone(), &public_input_target);
-
-        let stark_generator = SimpleStarkWitnessGenerator::new(
-            config,
-            stark,
-            virtual_proof,
-            public_input_target,
-            generator,
-        );
-
-        self.add_simple_generator(stark_generator);
+        self.add_simple_generator(blake2b_generator);
     }
 }
 
@@ -190,7 +156,7 @@ mod tests {
             builder.connect(*d, *e);
         }
 
-        //builder.constrain_blake2b_gadget::<C>(gadget);
+        builder.constrain_blake2b_gadget::<C>(gadget);
 
         let data = builder.build::<C>();
         let mut pw = PartialWitness::new();
