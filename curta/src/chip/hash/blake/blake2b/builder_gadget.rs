@@ -8,7 +8,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use serde::{Deserialize, Serialize};
 
 use super::generator::{BLAKE2BGenerator, BLAKE2BHintGenerator, BLAKE2BStarkData};
-use super::BLAKE2BPublicData;
+use super::{BLAKE2BPublicData, NUM_MIX_ROUNDS};
 use crate::chip::hash::CurtaBytes;
 use crate::chip::AirParameters;
 use crate::math::prelude::CubicParameters;
@@ -50,6 +50,8 @@ pub trait BLAKE2BBuilder<
         &mut self,
         gadget: Self::Gadget,
     );
+
+    fn max_num_chunks() -> usize;
 }
 
 impl<
@@ -110,6 +112,10 @@ impl<
         };
 
         self.add_simple_generator(blake2b_generator);
+    }
+
+    fn max_num_chunks() -> usize {
+        L::num_rows() / NUM_MIX_ROUNDS
     }
 }
 
