@@ -98,9 +98,8 @@ impl<
 
         let public_input_target = public_blake2b_targets.public_input_targets(self);
 
-        self.watch("public_input_target", public_input_target);
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
-        //self.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_target);
+        self.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_target);
 
         let blake2b_generator = BLAKE2BGenerator::<F, E, C, D, L> {
             padded_messages: gadget.padded_messages,
