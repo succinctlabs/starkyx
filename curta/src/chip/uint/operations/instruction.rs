@@ -11,15 +11,23 @@ use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::decode::ByteDecodeInstruction;
 use crate::chip::uint::bytes::lookup_table::{ByteInstructionSet, ByteInstructions};
 use crate::chip::uint::bytes::operations::instruction::ByteOperationInstruction;
+use crate::chip::uint::register::U64Register;
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum U32Instruction {
     Bit(ByteInstructionSet),
     Add(ByteArrayAdd<4>),
+    Select(SelectInstruction<U64Register>),
 }
 
-pub trait U32Instructions: ByteInstructions + From<U32Instruction> + From<ByteArrayAdd<4>> {}
+pub trait U32Instructions:
+    ByteInstructions
+    + From<U32Instruction>
+    + From<ByteArrayAdd<4>>
+    + From<SelectInstruction<U64Register>>
+{
+}
 
 impl ByteInstructions for U32Instruction {}
 
@@ -30,6 +38,7 @@ impl<AP: AirParser> AirConstraint<AP> for U32Instruction {
         match self {
             Self::Bit(op) => op.eval(parser),
             Self::Add(op) => op.eval(parser),
+            Self::Select(op) => op.eval(parser),
         }
     }
 }
@@ -39,6 +48,7 @@ impl<F: PrimeField64> Instruction<F> for U32Instruction {
         match self {
             Self::Bit(op) => Instruction::<F>::inputs(op),
             Self::Add(op) => Instruction::<F>::inputs(op),
+            Self::Select(op) => Instruction::<F>::inputs(op),
         }
     }
 
@@ -46,6 +56,7 @@ impl<F: PrimeField64> Instruction<F> for U32Instruction {
         match self {
             Self::Bit(op) => Instruction::<F>::trace_layout(op),
             Self::Add(op) => Instruction::<F>::trace_layout(op),
+            Self::Select(op) => Instruction::<F>::trace_layout(op),
         }
     }
 
@@ -53,6 +64,7 @@ impl<F: PrimeField64> Instruction<F> for U32Instruction {
         match self {
             Self::Bit(op) => Instruction::<F>::write(op, writer, row_index),
             Self::Add(op) => Instruction::<F>::write(op, writer, row_index),
+            Self::Select(op) => Instruction::<F>::write(op, writer, row_index),
         }
     }
 }
@@ -84,6 +96,12 @@ impl From<SelectInstruction<BitRegister>> for U32Instruction {
 impl From<ByteDecodeInstruction> for U32Instruction {
     fn from(op: ByteDecodeInstruction) -> Self {
         Self::Bit(op.into())
+    }
+}
+
+impl From<SelectInstruction<U64Register>> for U32Instruction {
+    fn from(op: SelectInstruction<U64Register>) -> Self {
+        Self::Select(op)
     }
 }
 
