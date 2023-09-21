@@ -77,8 +77,6 @@ impl<L: AirParameters> AirBuilder<L> {
             temp_next: double_gadget.result,
             add_gadget,
             double_gadget,
-            // select_x_ins,
-            // select_y_ins,
         }
     }
 
