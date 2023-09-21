@@ -25,7 +25,7 @@ pub struct BLAKE2BBuilderGadget<
     pub padded_messages: Vec<Target>,
     pub msg_lengths: Vec<Target>,
     pub digests: Vec<Target>,
-    _marker: PhantomData<(F, E, L)>,
+    pub _marker: PhantomData<(F, E, L)>,
 }
 
 pub trait BLAKE2BBuilder<
