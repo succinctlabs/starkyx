@@ -187,9 +187,9 @@ impl<
             .collect::<Vec<_>>();
 
         let message_chunks = msg_sizes.iter().scan(0, |idx, size| {
-            let mut num_chunks = *size as usize / 128 + 1;
-            // If the size is a multiple of 128 and not zero, then we need to add an extra chunk
-            if *size != 0 && *size % 128 == 0 {
+            let mut num_chunks = *size as usize / 128;
+
+            if (*size % 128 != 0) || (*size == 0) {
                 num_chunks += 1;
             }
 
