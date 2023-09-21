@@ -320,14 +320,10 @@ impl BLAKE2BPublicData<Target> {
                     .into_iter()
                     .flatten(),
             )
-            .chain(
-                u64_to_le_field_bytes(INVERSION_CONST)
-                    .map(|x| builder.constant(x))
-                    .into_iter(),
-            )
+            .chain(u64_to_le_field_bytes(INVERSION_CONST).map(|x| builder.constant(x)))
             .chain(self.msg_chunks.iter().flatten().copied())
             .chain(self.t.iter().flatten().copied())
-            .chain(self.last_chunk_bit.clone().into_iter())
+            .chain(self.last_chunk_bit.clone())
             .chain(self.hash_state.iter().flatten().copied())
             .collect()
     }

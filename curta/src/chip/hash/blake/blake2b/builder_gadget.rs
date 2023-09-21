@@ -14,7 +14,6 @@ use crate::chip::AirParameters;
 use crate::math::prelude::CubicParameters;
 use crate::plonky2::stark::config::CurtaConfig;
 use crate::plonky2::stark::gadget::StarkGadget;
-use crate::utils::watcher::Watcher;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BLAKE2BBuilderGadget<
