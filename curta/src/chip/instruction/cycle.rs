@@ -26,6 +26,21 @@ pub struct Cycle<F> {
     group: Vec<F>,
 }
 
+pub struct Loop {
+    num_iterations: usize,
+    iterations_registers: ArrayRegister<BitRegister>,
+}
+
+impl Loop {
+    pub fn get_iteration_reg(&self, index: usize) -> BitRegister {
+        assert!(
+            index < self.num_iterations,
+            "trying to get an iteration register that is out of bounds"
+        );
+        self.iterations_registers.get(index)
+    }
+}
+
 impl<L: AirParameters> AirBuilder<L> {
     pub fn cycle(&mut self, length_log: usize) -> Cycle<L::Field> {
         let start_bit = self.alloc::<BitRegister>();
@@ -57,7 +72,7 @@ impl<L: AirParameters> AirBuilder<L> {
         cycle
     }
 
-    pub fn loop_instr(&mut self, num_iterations: usize) -> ArrayRegister<BitRegister> {
+    pub fn loop_instr(&mut self, num_iterations: usize) -> Loop {
         let iterations_registers = self.alloc_array::<BitRegister>(num_iterations);
 
         // Set the cycle 12 registers first row
@@ -83,7 +98,10 @@ impl<L: AirParameters> AirBuilder<L> {
             );
         }
 
-        iterations_registers
+        Loop {
+            num_iterations,
+            iterations_registers,
+        }
     }
 }
 

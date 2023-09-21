@@ -133,8 +133,8 @@ impl<L: AirParameters> AirBuilder<L> {
         let hash_state = self.alloc_array_public::<U64Register>(num_chunks * HASH_ARRAY_SIZE);
 
         let loop_iterations = self.loop_instr(CYCLE_12);
-        let cycle_12_start_bit = loop_iterations.get(0);
-        let cycle_12_end_bit = loop_iterations.get(CYCLE_12 - 1);
+        let cycle_12_start_bit = loop_iterations.get_iteration_reg(0);
+        let cycle_12_end_bit = loop_iterations.get_iteration_reg(CYCLE_12 - 1);
 
         // Set h_input to the initial hash if we are at the first block and at the first loop of the cycle_12
         // Otherwise set it to h_output
