@@ -10,10 +10,14 @@ pub mod add;
 pub mod bn254;
 pub mod projective;
 
-/// Parameters for Weierstrass elliptic curve
+/// Parameters for Weierstrass elliptic curve of the form
+/// y^2 = x^3 + a * x + b
 pub trait WeierstrassParameter: EllipticCurveParameters {
     /// Constant `a` of the Weierstrass curve
     const A: [u16; MAX_NB_LIMBS];
+
+    /// Constant `b` of the Weierstrass curve
+    const B: [u16; MAX_NB_LIMBS];
 
     /// Returns a generator
     fn generator() -> SWProjectivePoint<Self>;
@@ -30,6 +34,15 @@ pub trait WeierstrassParameter: EllipticCurveParameters {
         modulus
     }
 
+    /// Returns the constant `b`
+    fn b_biguint() -> BigUint {
+        let mut modulus = BigUint::zero();
+        for (i, limb) in Self::B.iter().enumerate() {
+            modulus += BigUint::from(*limb) << (16 * i);
+        }
+        modulus
+    }
+
     /// Number of bits for scalar
     fn nb_scalar_bits() -> usize {
         Self::BaseField::NB_LIMBS * 16
@@ -38,8 +51,8 @@ pub trait WeierstrassParameter: EllipticCurveParameters {
     /// Returns a neutral point
     fn neutral() -> SWProjectivePoint<Self> {
         SWProjectivePoint::new(
-            BigUint::from(0u32),
-            BigUint::from(0u32),
+            BigUint::from(1u32),
+            BigUint::from(1u32),
             BigUint::from(0u32),
         )
     }

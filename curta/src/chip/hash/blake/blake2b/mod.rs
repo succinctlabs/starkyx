@@ -1149,11 +1149,11 @@ mod tests {
         );
 
         // Generate recursive proof
-        // timed!(
-        //     timing,
-        //     "Recursive proof generation and verification",
-        //     test_recursive_starky(stark, config, generator, &public_inputs)
-        // );
+        timed!(
+            timing,
+            "Recursive proof generation and verification",
+            test_recursive_starky(stark, config, generator, &public_inputs)
+        );
 
         timing.print();
     }
