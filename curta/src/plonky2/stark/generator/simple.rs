@@ -88,6 +88,8 @@ where
         .unwrap();
 
         set_stark_proof_target(out_buffer, &self.proof_target, &proof);
+
+        self.trace_generator.reset();
     }
 
     fn serialize(

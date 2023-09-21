@@ -21,6 +21,25 @@ pub struct ArithmeticGenerator<L: AirParameters> {
 }
 
 impl<L: AirParameters> ArithmeticGenerator<L> {
+    pub fn reset(&self) {
+        let trace_new = AirTrace::new_with_capacity(L::num_columns(), L::num_rows());
+        let global_new = Vec::new();
+        let challenges_new = Vec::new();
+        let public_new = Vec::new();
+
+        let mut trace = self.writer.0.trace.write().unwrap();
+        *trace = trace_new;
+
+        let mut global = self.writer.0.global.write().unwrap();
+        *global = global_new;
+
+        let mut challenges = self.writer.0.challenges.write().unwrap();
+        *challenges = challenges_new;
+
+        let mut public = self.writer.0.public.write().unwrap();
+        *public = public_new;
+    }
+
     pub fn new(air_data: AirTraceData<L>) -> Self {
         let num_public_inputs = air_data.num_public_inputs;
         let num_global_values = air_data.num_global_values;

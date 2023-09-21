@@ -14,13 +14,16 @@ use serde::{Deserialize, Serialize};
 
 use super::air::ScalarMulEd25519;
 use super::gadget::EdScalarMulGadget;
+use crate::chip::builder::AirTraceData;
 use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
 use crate::chip::ec::edwards::EdwardsParameters;
 use crate::chip::ec::gadget::EllipticCurveWriter;
-use crate::chip::ec::point::AffinePoint;
+use crate::chip::ec::point::{AffinePoint, AffinePointRegister};
 use crate::chip::ec::EllipticCurveParameters;
 use crate::chip::field::instruction::FpInstruction;
 use crate::chip::instruction::set::AirInstruction;
+use crate::chip::register::array::ArrayRegister;
+use crate::chip::register::element::ElementRegister;
 use crate::chip::register::RegisterSerializable;
 use crate::chip::trace::generator::ArithmeticGenerator;
 use crate::chip::utils::{biguint_to_16_digits_field, biguint_to_bits_le, field_limbs_to_biguint};
@@ -30,7 +33,9 @@ use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 use crate::plonky2::stark::config::{CurtaConfig, StarkyConfig};
 use crate::plonky2::stark::gadget::StarkGadget;
-use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
+use crate::plonky2::stark::proof::StarkProofTarget;
+use crate::plonky2::stark::prover::StarkyProver;
+use crate::plonky2::stark::verifier::set_stark_proof_target;
 use crate::plonky2::stark::Starky;
 use crate::utils::serde::{BufferRead, BufferWrite};
 
@@ -73,6 +78,15 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
         points: &[AffinePointTarget],
         scalars: &[Vec<Target>],
     ) -> Vec<AffinePointTarget> {
+        // Input results
+        let results = (0..256)
+            .map(|_| {
+                let x = self.add_virtual_target_arr();
+                let y = self.add_virtual_target_arr();
+                AffinePointTarget { x, y }
+            })
+            .collect::<Vec<_>>();
+
         let (
             air,
             trace_data,
@@ -103,15 +117,6 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
             public_input_target_option[p_x_0..p_y_1].copy_from_slice(&point_targets);
         }
 
-        // Input results
-        let results = (0..256)
-            .map(|_| {
-                let x = self.add_virtual_target_arr();
-                let y = self.add_virtual_target_arr();
-                AffinePointTarget { x, y }
-            })
-            .collect::<Vec<_>>();
-
         for (point_register, point_target) in output_points.iter().zip(results.iter()) {
             let (p_x_0, p_x_1) = point_register.x.register().get_range();
             let (p_y_0, p_y_1) = point_register.y.register().get_range();
@@ -133,33 +138,28 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
         let stark = Starky::new(air);
         let config =
             StarkyConfig::<C, D>::standard_fast_config(ScalarMulEd25519::<F, E>::num_rows());
-        let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
+        let proof_target = self.add_virtual_stark_proof(&stark, &config);
 
-        let trace_generator = ArithmeticGenerator::<ScalarMulEd25519<F, E>>::new(trace_data);
-
-        self.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_target);
-
-        let stark_generator = SimpleStarkWitnessGenerator::new(
-            config,
-            stark,
-            virtual_proof,
-            public_input_target,
-            trace_generator.clone(),
-        );
+        self.verify_stark_proof(&config, &stark, &proof_target, &public_input_target);
 
         let generator = SimpleScalarMulEd25519Generator::<F, E, C, D> {
             gadget,
             points: points.to_vec(),
             scalars: scalars.to_vec(),
-            trace_generator,
             results: results.clone(),
             set_last,
             set_bit,
-            _marker: core::marker::PhantomData,
+            config,
+            stark,
+            trace_data,
+            proof_target,
+            scalars_limbs_input,
+            input_points,
+            output_points,
         };
 
         self.add_simple_generator(generator);
-        self.add_simple_generator(stark_generator);
+
         results
     }
 
@@ -234,8 +234,13 @@ pub struct SimpleScalarMulEd25519Generator<
     results: Vec<AffinePointTarget>,
     set_last: AirInstruction<F, FpInstruction<Ed25519BaseField>>,
     set_bit: AirInstruction<F, FpInstruction<Ed25519BaseField>>,
-    trace_generator: ArithmeticGenerator<ScalarMulEd25519<F, E>>,
-    _marker: core::marker::PhantomData<(F, C, E)>,
+    config: StarkyConfig<C, D>,
+    stark: Starky<Chip<ScalarMulEd25519<F, E>>>,
+    trace_data: AirTraceData<ScalarMulEd25519<F, E>>,
+    proof_target: StarkProofTarget<D>,
+    scalars_limbs_input: Vec<ArrayRegister<ElementRegister>>,
+    input_points: Vec<AffinePointRegister<Ed25519>>,
+    output_points: Vec<AffinePointRegister<Ed25519>>,
 }
 
 impl<
@@ -253,7 +258,13 @@ impl<
         results: Vec<AffinePointTarget>,
         set_last: AirInstruction<F, FpInstruction<Ed25519BaseField>>,
         set_bit: AirInstruction<F, FpInstruction<Ed25519BaseField>>,
-        trace_generator: ArithmeticGenerator<ScalarMulEd25519<F, E>>,
+        config: StarkyConfig<C, D>,
+        stark: Starky<Chip<ScalarMulEd25519<F, E>>>,
+        trace_data: AirTraceData<ScalarMulEd25519<F, E>>,
+        proof_target: StarkProofTarget<D>,
+        scalars_limbs_input: Vec<ArrayRegister<ElementRegister>>,
+        input_points: Vec<AffinePointRegister<Ed25519>>,
+        output_points: Vec<AffinePointRegister<Ed25519>>,
     ) -> Self {
         Self {
             gadget,
@@ -262,8 +273,13 @@ impl<
             results,
             set_last,
             set_bit,
-            trace_generator,
-            _marker: core::marker::PhantomData,
+            config,
+            stark,
+            trace_data,
+            proof_target,
+            scalars_limbs_input,
+            input_points,
+            output_points,
         }
     }
 
@@ -296,14 +312,27 @@ impl<
     }
 
     fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
+        // Generate the trace
+        let trace_generator = ArithmeticGenerator::new(self.trace_data.clone());
+
+        let writer = trace_generator.new_writer();
+
         let scalars = self
             .scalars
             .par_iter()
-            .map(|x| {
-                x.iter()
-                    .map(|limb| witness.get_target(*limb))
-                    .map(|x| F::as_canonical_u64(&x) as u32)
-                    .collect::<Vec<_>>()
+            .zip(self.scalars_limbs_input.par_iter())
+            .map(|(x, register)| {
+                let limbs = x
+                    .iter()
+                    .zip(register.iter())
+                    .map(|(limb, reg)| (witness.get_target(*limb), reg))
+                    .map(|(x, reg)| {
+                        writer.write(&reg, &x, 0);
+                        F::as_canonical_u64(&x) as u32
+                    })
+                    .collect::<Vec<_>>();
+
+                limbs
             })
             .map(BigUint::new)
             .collect::<Vec<_>>();
@@ -320,10 +349,11 @@ impl<
             .collect::<Vec<_>>();
         assert_eq!(points.len(), 256);
 
-        // Generate the trace
-        let trace_generator = &self.trace_generator;
+        // Write the public inputs
+        for (register, point) in self.input_points.iter().zip(points.iter()) {
+            writer.write_ec_point(register, point, 0);
+        }
 
-        let writer = trace_generator.new_writer();
         let (tx, rx) = channel();
         let res = self.gadget.double_and_add_gadget.result;
         let temp = self.gadget.double_and_add_gadget.temp;
@@ -332,7 +362,6 @@ impl<
         let tx_vec = (0..256).map(|_| tx.clone()).collect::<Vec<_>>();
         tx_vec.into_par_iter().enumerate().for_each(|(k, tx)| {
             let starting_row = 256 * k;
-            // let gadget = self.gadget.clone();
             writer.write_ec_point(&res, &Ed25519::neutral(), starting_row);
             writer.write_ec_point(&temp, &points[k], starting_row);
             let scalar_bits = biguint_to_bits_le(&scalars[k], nb_bits);
@@ -345,6 +374,7 @@ impl<
         });
         drop(tx);
         for (i, res) in rx.iter() {
+            writer.write_ec_point(&self.output_points[i], &res, 0);
             let res_limbs_x: [_; 16] = biguint_to_16_digits_field(&res.x, 16).try_into().unwrap();
             let res_limbs_y: [_; 16] = biguint_to_16_digits_field(&res.y, 16).try_into().unwrap();
             out_buffer.set_target_arr(&self.results[i].x, &res_limbs_x);
@@ -354,6 +384,18 @@ impl<
             writer.write_instruction(&self.set_last, j);
             writer.write_instruction(&self.set_bit, j);
         }
+
+        let public_inputs: Vec<_> = writer.public.read().unwrap().clone();
+
+        let proof = StarkyProver::<F, C, D>::prove(
+            &self.config,
+            &self.stark,
+            &trace_generator,
+            &public_inputs,
+        )
+        .unwrap();
+
+        set_stark_proof_target(out_buffer, &self.proof_target, &proof);
     }
 
     fn serialize(

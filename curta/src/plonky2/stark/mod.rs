@@ -149,6 +149,7 @@ pub(crate) mod tests {
     use plonky2::util::timing::TimingTree;
     use serde::de::DeserializeOwned;
 
+    use super::generator::simple::SimpleStarkWitnessGenerator;
     use super::*;
     use crate::air::fibonacci::FibonacciAir;
     use crate::chip::builder::tests::ArithmeticGenerator;
@@ -156,7 +157,6 @@ pub(crate) mod tests {
     use crate::math::prelude::*;
     use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
     use crate::plonky2::stark::gadget::StarkGadget;
-    use crate::plonky2::stark::generator::simple::SimpleStarkWitnessGenerator;
     use crate::plonky2::stark::prover::StarkyProver;
     use crate::plonky2::stark::verifier::StarkyVerifier;
     use crate::plonky2::{Plonky2Air, StarkyAir};
