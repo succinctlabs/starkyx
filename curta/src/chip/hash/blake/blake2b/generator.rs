@@ -13,7 +13,8 @@ use plonky2::util::serialization::{Buffer, Read, Write};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    U64Value, HASH_ARRAY_SIZE, INITIAL_HASH, INVERSION_CONST, MSG_ARRAY_SIZE, NUM_MIX_ROUNDS,
+    U64Value, HASH_ARRAY_SIZE, INITIAL_HASH, INITIAL_HASH_COMPRESS, INVERSION_CONST,
+    MSG_ARRAY_SIZE, NUM_MIX_ROUNDS,
 };
 use crate::chip::builder::AirBuilder;
 use crate::chip::hash::blake::blake2b::BLAKE2BGadget;
@@ -179,7 +180,6 @@ impl<
 
         let max_num_chunks = L::num_rows() / 128;
         assert!(padded_messages.len() <= max_num_chunks * 128);
-        println!("padded_messages len is {}", padded_messages.len());
 
         let msg_sizes = self
             .msg_lens
@@ -317,7 +317,7 @@ impl BLAKE2BPublicData<Target> {
             .into_iter()
             .flatten()
             .chain(
-                INITIAL_HASH
+                INITIAL_HASH_COMPRESS
                     .map(|value| u64_to_le_field_bytes(value).map(|x| builder.constant(x)))
                     .into_iter()
                     .flatten(),
