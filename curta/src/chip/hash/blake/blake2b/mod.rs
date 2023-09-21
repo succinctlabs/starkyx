@@ -208,9 +208,10 @@ impl<L: AirParameters> AirBuilder<L> {
 
     // Note that we assume that t's max value is 2**64-1.
     // The blake2b specification actually does allow t to be up to 2**128-1
-    // (see https://en.wikipedia.org/wiki/BLAKE_(hash_function).
+    // (see https://en.wikipedia.org/wiki/BLAKE_(hash_function)).
     // Also, we currently only support digest size of 32 bytes and no usage of a key.
-    // This restricted support means that we don't have do mutate h0.
+    // This restricted support means that we can have a seperate constant for h0 in compress
+    // instead of having to mutate it.
     #[allow(clippy::too_many_arguments)]
     fn blake2b_compress(
         &mut self,
