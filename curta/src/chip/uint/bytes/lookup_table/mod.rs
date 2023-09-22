@@ -190,9 +190,7 @@ mod tests {
         const EXTENDED_COLUMNS: usize = 447;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
-        fn num_rows_bits() -> usize {
-            16
-        }
+
     }
 
     #[test]

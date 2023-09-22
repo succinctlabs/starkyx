@@ -48,12 +48,6 @@ pub trait AirParameters:
         Self::NUM_ARITHMETIC_COLUMNS + Self::NUM_FREE_COLUMNS + Self::EXTENDED_COLUMNS
     }
 
-    fn num_rows_bits() -> usize;
-
-    // fn num_rows() -> usize {
-    //     1 << Self::num_rows_bits()
-    // }
-
     /// a unique identifier for the air parameters.
     ///
     /// by default, this method uses the type name of the air parameters. In case the Rust

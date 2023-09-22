@@ -157,9 +157,7 @@ mod tests {
         const EXTENDED_COLUMNS: usize = 2265;
         type Instruction = FpInstruction<Ed25519BaseField>;
 
-        fn num_rows_bits() -> usize {
-            16
-        }
+
     }
 
     #[test]

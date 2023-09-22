@@ -174,9 +174,7 @@ mod tests {
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
         const NUM_FREE_COLUMNS: usize = 5;
 
-        fn num_rows_bits() -> usize {
-            8
-        }
+
     }
 
     #[test]

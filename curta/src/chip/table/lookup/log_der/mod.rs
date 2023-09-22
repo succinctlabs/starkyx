@@ -300,9 +300,7 @@ mod tests {
 
         type Instruction = EmptyInstruction<GoldilocksField>;
 
-        fn num_rows_bits() -> usize {
-            16
-        }
+
     }
 
     #[test]
@@ -376,9 +374,7 @@ mod tests {
 
         type Instruction = EmptyInstruction<GoldilocksField>;
 
-        fn num_rows_bits() -> usize {
-            16
-        }
+
     }
 
     #[test]

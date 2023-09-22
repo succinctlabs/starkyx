@@ -143,9 +143,7 @@ mod tests {
 
         type Instruction = FpSubInstruction<Fp25519>;
 
-        fn num_rows_bits() -> usize {
-            16
-        }
+
     }
 
     #[test]

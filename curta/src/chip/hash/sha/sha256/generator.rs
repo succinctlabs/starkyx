@@ -77,9 +77,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for SHA256AirParamete
     const EXTENDED_COLUMNS: usize = 927;
     const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
-    fn num_rows_bits() -> usize {
-        16
-    }
+
 }
 
 impl<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> SHA256Generator<F, E, C, D> {

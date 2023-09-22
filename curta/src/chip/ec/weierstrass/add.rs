@@ -210,9 +210,7 @@ mod tests {
         const EXTENDED_COLUMNS: usize = 3327;
         type Instruction = FpInstruction<Bn254BaseField>;
 
-        fn num_rows_bits() -> usize {
-            16
-        }
+
     }
 
     #[test]
@@ -267,9 +265,7 @@ mod tests {
         const EXTENDED_COLUMNS: usize = 3393;
         type Instruction = FpInstruction<Bn254BaseField>;
 
-        fn num_rows_bits() -> usize {
-            16
-        }
+
     }
 
     #[test]

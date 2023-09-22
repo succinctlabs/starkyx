@@ -182,9 +182,7 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 8;
         const EXTENDED_COLUMNS: usize = 36;
 
-        fn num_rows_bits() -> usize {
-            16
-        }
+
     }
 
     #[test]

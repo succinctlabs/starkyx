@@ -151,9 +151,7 @@ pub mod tests {
 
         const NUM_FREE_COLUMNS: usize = 2 * N + M * N + N;
 
-        fn num_rows_bits() -> usize {
-            9
-        }
+
     }
 
     #[test]

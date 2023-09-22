@@ -31,9 +31,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for BLAKE2BAirParamet
     const EXTENDED_COLUMNS: usize = 927;
     const NUM_ARITHMETIC_COLUMNS: usize = 0;
 
-    fn num_rows_bits() -> usize {
-        16
-    }
+
 }
 
 #[derive(Debug, Clone)]

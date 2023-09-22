@@ -283,9 +283,7 @@ pub(crate) mod tests {
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
         const NUM_FREE_COLUMNS: usize = 2;
 
-        fn num_rows_bits() -> usize {
-            10
-        }
+
     }
 
     #[test]
@@ -392,9 +390,7 @@ pub(crate) mod tests {
         const NUM_FREE_COLUMNS: usize = 4;
         const EXTENDED_COLUMNS: usize = 13;
 
-        fn num_rows_bits() -> usize {
-            14
-        }
+
     }
 
     #[test]

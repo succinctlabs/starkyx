@@ -121,9 +121,7 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 4;
         type Instruction = SelectInstruction<BitRegister>;
 
-        fn num_rows_bits() -> usize {
-            10
-        }
+
     }
 
     // #[test]

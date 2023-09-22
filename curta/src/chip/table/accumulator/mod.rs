@@ -125,9 +125,7 @@ pub mod tests {
 
         type Instruction = EmptyInstruction<GoldilocksField>;
 
-        fn num_rows_bits() -> usize {
-            10
-        }
+
     }
 
     #[test]
