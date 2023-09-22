@@ -175,11 +175,12 @@ impl<L: AirParameters> AirBuilder<L> {
             );
             bus.insert_global_value(&round_constant_public_input_digest);
 
+            let num_rows = 1<<16;
             let round_constants_public_output_digest = self.accumulate_public_expressions(
                 &round_constant_challenges,
                 &[
                     ArithmeticExpression::from_constant(L::Field::from_canonical_usize(
-                        L::num_rows() - 1 + k - 63,
+                        num_rows - 1 + k - 63,
                     )),
                     round_constants_public.get(k).expr(),
                 ],
@@ -638,7 +639,9 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1<<16;
+
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 
         let short_msg_1 = decode("").unwrap();
@@ -680,7 +683,7 @@ mod tests {
         timed!(timing, "Write the execusion trace", {
             table.write_table_entries(&writer);
             sha_gadget.write(padded_messages, &writer);
-            for i in 0..L::num_rows() {
+            for i in 0..num_rows {
                 writer.write_row_instructions(&generator.air_data, i);
                 let end_bit = writer.read(&sha_gadget.end_bit, i);
                 if end_bit == F::ONE {
@@ -696,7 +699,7 @@ mod tests {
 
         let public_inputs = writer.0.public.read().unwrap().clone();
         let stark = Starky::new(air);
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         timed!(

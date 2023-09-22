@@ -156,7 +156,8 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1<<16;
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 
         for (i, x) in x_in_pub.iter().enumerate() {
@@ -166,20 +167,20 @@ mod tests {
                 writer.write(&x_out_pub.get(i), &x_pub_val, 0);
             } else {
                 let row = i - num_public_out;
-                writer.write(&x_2, &x_pub_val, L::num_rows() - row - 1);
+                writer.write(&x_2, &x_pub_val, num_rows - row - 1);
                 writer.write(&bit, &F::ZERO, row);
             }
         }
-        for i in (num_public_in - num_public_out)..L::num_rows() {
+        for i in (num_public_in - num_public_out)..num_rows {
             let a = CubicElement([GoldilocksField::rand(); 3]);
             writer.write(&bit, &F::ONE, i);
             writer.write(&x_1, &a, i);
-            writer.write(&x_2, &a, L::num_rows() - i - 1);
+            writer.write(&x_2, &a, num_rows - i - 1);
         }
 
         let stark = Starky::from_chip(air);
 
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         let public_inputs = writer.0.public.read().unwrap().clone();
 

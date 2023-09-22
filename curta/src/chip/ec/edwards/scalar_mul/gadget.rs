@@ -181,7 +181,8 @@ mod tests {
         let _scalar_mul_gadget = builder.ed_scalar_mul::<E>(&scalar_bit, &res, &temp);
 
         let (air, trace_data) = builder.build();
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1<<16;
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let writer = generator.new_writer();
         let nb_bits = E::nb_scalar_bits();
@@ -205,7 +206,7 @@ mod tests {
             });
         });
         let stark = Starky::new(air);
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         timed!(

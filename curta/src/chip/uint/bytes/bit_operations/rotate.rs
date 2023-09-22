@@ -159,7 +159,8 @@ pub mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1<<9;
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 
         let mut rng = thread_rng();
@@ -173,7 +174,7 @@ pub mod tests {
         };
 
         let to_val = |bits: &[u8]| bits.iter().enumerate().map(|(i, b)| b << i).sum::<u8>();
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             let a_val = rng.gen::<u8>();
             let b_val = rng.gen::<u8>();
             let a_bits = to_bits_le(a_val);
@@ -195,7 +196,7 @@ pub mod tests {
         }
 
         let stark = Starky::new(air);
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &[]);
@@ -223,7 +224,8 @@ pub mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1<<9;
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 
         let mut rng = thread_rng();
@@ -237,7 +239,7 @@ pub mod tests {
         };
 
         let to_val = |bits: &[u8]| bits.iter().enumerate().map(|(i, b)| b << i).sum::<u8>();
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             let a_val = rng.gen::<u8>();
             let b_val = rng.gen::<u8>();
             let a_bits = to_bits_le(a_val);
@@ -260,7 +262,7 @@ pub mod tests {
         }
 
         let stark = Starky::new(air);
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &[]);

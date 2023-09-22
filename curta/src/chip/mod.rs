@@ -50,9 +50,9 @@ pub trait AirParameters:
 
     fn num_rows_bits() -> usize;
 
-    fn num_rows() -> usize {
-        1 << Self::num_rows_bits()
-    }
+    // fn num_rows() -> usize {
+    //     1 << Self::num_rows_bits()
+    // }
 
     /// a unique identifier for the air parameters.
     ///

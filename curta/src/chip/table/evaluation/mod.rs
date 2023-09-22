@@ -209,10 +209,11 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1<<16;
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let (tx, rx) = channel();
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             let writer = generator.new_writer();
             let handle = tx.clone();
             writer.write_instruction(&cycle, i);
@@ -230,7 +231,7 @@ mod tests {
             assert!(msg == 1);
         }
         let stark = Starky::new(air);
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &[]);
@@ -264,10 +265,11 @@ mod tests {
             .flat_map(|i| vec![F::ONE, F::from_canonical_usize(256 * i)])
             .collect::<Vec<_>>();
 
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+            let num_rows = 1<<16;
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let (tx, rx) = channel();
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             let writer = generator.new_writer();
             let handle = tx.clone();
             writer.write_instruction(&cycle, i);
@@ -282,7 +284,7 @@ mod tests {
             assert!(msg == 1);
         }
         let stark = Starky::new(air);
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &public_inputs);

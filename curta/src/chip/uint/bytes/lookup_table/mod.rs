@@ -306,7 +306,9 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1 << 16;
+
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 
         table.write_table_entries(&writer);
@@ -332,7 +334,7 @@ mod tests {
         let public_inputs = public_write.clone();
         drop(public_write);
 
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             let mut rng = thread_rng();
             for k in 0..NUM_VALS {
                 let a_v = rng.gen::<u8>();
@@ -370,7 +372,7 @@ mod tests {
         table.write_multiplicities(&writer);
 
         let stark = Starky::new(air);
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &public_inputs);

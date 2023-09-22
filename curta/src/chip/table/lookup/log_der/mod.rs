@@ -328,11 +328,12 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1<<16;
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 
         // Set the table vals
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             let table_vals = [GoldilocksField::rand(); N];
             for (reg, val) in table_values.iter().zip(table_vals) {
                 writer.write(reg, &val, i);
@@ -341,8 +342,8 @@ mod tests {
 
         let mut rng = thread_rng();
         // Se the lookup vals
-        for i in 0..L::num_rows() {
-            let j_vals = [rng.gen_range(0..L::num_rows()); M];
+        for i in 0..num_rows {
+            let j_vals = [rng.gen_range(0..num_rows); M];
             let k_vals = [rng.gen_range(0..N); M];
             for (value, (&j, &k)) in values.iter().zip(j_vals.iter().zip(k_vals.iter())) {
                 let val = writer.read(&table_values[k], j);
@@ -354,7 +355,7 @@ mod tests {
 
         let stark = Starky::from_chip(air);
 
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &[]);
@@ -403,11 +404,12 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1<<16;
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 
         // Set the table vals
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             let table_vals = [CubicElement::from_slice(&[GoldilocksField::rand(); 3]); N];
             for (reg, val) in table_values.iter().zip(table_vals) {
                 writer.write(reg, &val, i);
@@ -416,8 +418,8 @@ mod tests {
 
         let mut rng = thread_rng();
         // Se the lookup vals
-        for i in 0..L::num_rows() {
-            let j_vals = [rng.gen_range(0..L::num_rows()); M];
+        for i in 0..num_rows {
+            let j_vals = [rng.gen_range(0..num_rows); M];
             let k_vals = [rng.gen_range(0..N); M];
             for (value, (&j, &k)) in values.iter().zip(j_vals.iter().zip(k_vals.iter())) {
                 let val = writer.read(&table_values[k], j);
@@ -429,7 +431,7 @@ mod tests {
 
         let stark = Starky::from_chip(air);
 
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &[]);
@@ -487,11 +489,12 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1<<16;
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 
         // Set the table vals
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             let table_vals = [CubicElement::from_slice(&[GoldilocksField::rand(); 3]); N];
             for (reg, val) in table_values.iter().zip(table_vals) {
                 writer.write(reg, &val, i);
@@ -500,8 +503,8 @@ mod tests {
 
         let mut rng = thread_rng();
         // Set the lookup vals
-        for i in 0..L::num_rows() {
-            let j_vals = [rng.gen_range(0..L::num_rows()); M];
+        for i in 0..num_rows {
+            let j_vals = [rng.gen_range(0..num_rows); M];
             let k_vals = [rng.gen_range(0..N); M];
             for (value, (&j, &k)) in values.iter().zip(j_vals.iter().zip(k_vals.iter())) {
                 let val = writer.read(&table_values[k], j);
@@ -514,7 +517,7 @@ mod tests {
         // Set the public values
         let mut public_inputs: Vec<F> = vec![F::ZERO; air.num_public_values];
         for public_value in public_values.iter() {
-            let j = rng.gen_range(0..L::num_rows());
+            let j = rng.gen_range(0..num_rows);
             let k = rng.gen_range(0..N);
             let val = writer.read(&table_values[k], j);
             public_value.assign_to_raw_slice(&mut public_inputs, &val);
@@ -523,7 +526,7 @@ mod tests {
         }
 
         for global_value in global_values.iter() {
-            let j = rng.gen_range(0..L::num_rows());
+            let j = rng.gen_range(0..num_rows);
             let k = rng.gen_range(0..N);
             let val = writer.read(&table_values[k], j);
             writer.write(global_value, &val, 0);
@@ -533,7 +536,7 @@ mod tests {
 
         let stark = Starky::from_chip(air);
 
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &public_inputs);

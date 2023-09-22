@@ -15,7 +15,6 @@ use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperat
 use crate::chip::uint::bytes::lookup_table::table::ByteLookupTable;
 use crate::chip::uint::bytes::operations::value::ByteOperation;
 use crate::chip::uint::bytes::register::ByteRegister;
-use crate::chip::AirParameters;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ByteTarget(pub Target);
@@ -183,7 +182,9 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
         // Build the air
         let (air, trace_data) = air_builder.build();
 
-        let trace_generator = ArithmeticGenerator::<ByteGadgetParameters<F, E, D>>::new(trace_data);
+        let num_rows = 1 << 16;
+
+        let trace_generator = ArithmeticGenerator::<ByteGadgetParameters<F, E, D>>::new(trace_data, num_rows);
 
         let public_input_target = operations
             .iter()
@@ -197,7 +198,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
 
         let stark = Starky::new(air);
         let config =
-            StarkyConfig::<C, D>::standard_fast_config(ByteGadgetParameters::<F, E, D>::num_rows());
+            StarkyConfig::<C, D>::standard_fast_config(num_rows);
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
         self.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_target);
 

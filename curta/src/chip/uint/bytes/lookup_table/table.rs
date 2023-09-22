@@ -72,7 +72,9 @@ impl<L: AirParameters> AirBuilder<L> {
         let b_bits = self.alloc_array::<BitRegister>(8);
         let results_bits = from_fn::<_, NUM_BIT_OPPS, _>(|_| self.alloc_array::<BitRegister>(8));
 
-        let multiplicity_data = MultiplicityData::new(L::num_rows(), multiplicities);
+
+
+        let multiplicity_data = MultiplicityData::new(1<<16, multiplicities);
 
         // Constrain the bit instructions
         for (k, &opcode) in OPCODE_INDICES.iter().enumerate() {

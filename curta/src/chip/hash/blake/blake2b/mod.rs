@@ -112,7 +112,8 @@ impl<L: AirParameters> AirBuilder<L> {
     where
         L::Instruction: U32Instructions,
     {
-        let num_chunks = L::num_rows() / NUM_MIX_ROUNDS;
+        let num_rows = 1<<16;
+        let num_chunks = num_rows / NUM_MIX_ROUNDS;
 
         // Registers to be written to
         let m = self.alloc_array::<U64Register>(MSG_ARRAY_SIZE);
@@ -1063,7 +1064,8 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1<<16;
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 
         let msgs = [
@@ -1099,9 +1101,9 @@ mod tests {
 
         timed!(timing, "Write the execusion trace", {
             table.write_table_entries(&writer);
-            blake_gadget.write(padded_messages, msg_lens.as_slice(), &writer, L::num_rows());
+            blake_gadget.write(padded_messages, msg_lens.as_slice(), &writer, num_rows);
             let mut msg_to_check = 0;
-            for i in 0..L::num_rows() {
+            for i in 0..num_rows {
                 writer.write_row_instructions(&generator.air_data, i);
 
                 let last_block_bit = writer.read(&blake_gadget.last_chunk_bit, i);
@@ -1135,7 +1137,7 @@ mod tests {
 
         let public_inputs = writer.0.public.read().unwrap().clone();
         let stark = Starky::new(air);
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         timed!(

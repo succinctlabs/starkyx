@@ -306,20 +306,21 @@ pub(crate) mod tests {
         air.num_public_values = 3;
         air_data.num_public_inputs = 3;
 
+        let num_rows = 1<<10;
         let public_inputs = [
             F::ZERO,
             F::ONE,
-            FibonacciAir::fibonacci(L::num_rows() - 1, F::ZERO, F::ONE),
+            FibonacciAir::fibonacci(num_rows - 1, F::ZERO, F::ONE),
         ];
 
-        let generator = ArithmeticGenerator::<L>::new(air_data);
+        let generator = ArithmeticGenerator::<L>::new(air_data, num_rows);
 
         let writer = generator.new_writer();
 
         writer.write(&x_0, &F::ZERO, 0);
         writer.write(&x_1, &F::ONE, 0);
 
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             writer.write_instruction(&constr_1, i);
             writer.write_instruction(&constr_2, i);
         }
@@ -348,29 +349,30 @@ pub(crate) mod tests {
         // x1' <- x0 + x1
         let constr_2 = builder.set_to_expression_transition(&x_1.next(), x_0.expr() + x_1.expr());
 
+        let num_rows = 1<<10;
         let public_inputs = [
             F::ZERO,
             F::ONE,
-            FibonacciAir::fibonacci(L::num_rows() - 1, F::ZERO, F::ONE),
+            FibonacciAir::fibonacci(num_rows - 1, F::ZERO, F::ONE),
         ];
 
         let (mut air, mut air_data) = builder.build();
         air.num_public_values = 3;
         air_data.num_public_inputs = 3;
 
-        let generator = ArithmeticGenerator::<L>::new(air_data);
+        let generator = ArithmeticGenerator::<L>::new(air_data, num_rows);
 
         let writer = generator.new_writer();
 
         writer.write(&x_0, &F::ZERO, 0);
         writer.write(&x_1, &F::ONE, 0);
 
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             writer.write_instruction(&constr_1, i);
             writer.write_instruction(&constr_2, i);
         }
         let stark = Starky::new(air);
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &public_inputs);
@@ -411,10 +413,11 @@ pub(crate) mod tests {
         builder.assert_equal(&clk, &clk_expected);
 
         let (air, trace_data) = builder.build();
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1<<14;
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let (tx, rx) = channel();
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             let writer = generator.new_writer();
             let handle = tx.clone();
             // rayon::spawn(move || {
@@ -430,7 +433,7 @@ pub(crate) mod tests {
             assert!(msg == 1);
         }
         let stark = Starky::new(air);
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &[]);
@@ -456,13 +459,15 @@ pub(crate) mod tests {
 
         builder.assert_equal(&clk, &clk_expected);
 
+        let num_rows = 1<<14;
+
         let (air, trace_data) = builder.build();
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let writer = generator.new_writer();
         writer.write(&y_1, &F::from_canonical_u32(45), 0);
         writer.write(&y_2, &F::from_canonical_u32(45), 0);
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             writer.write(&x_0, &F::ZERO, i);
             writer.write(&x_1, &F::from_canonical_usize(0), i);
             writer.write(&clk_expected, &F::from_canonical_usize(i), i);
@@ -470,7 +475,7 @@ pub(crate) mod tests {
         }
 
         let stark = Starky::new(air);
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         let public_inputs = writer.public.read().unwrap().clone();
         // Generate proof and verify as a stark
