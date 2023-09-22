@@ -132,7 +132,7 @@ impl<
     > SimpleGenerator<F, D> for BLAKE2BGenerator<F, E, C, D, L>
 {
     fn id(&self) -> String {
-        "BLAKE2B generator".to_string()
+        Self::id()
     }
 
     fn serialize(
