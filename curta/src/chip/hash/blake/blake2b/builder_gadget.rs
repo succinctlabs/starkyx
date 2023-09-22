@@ -28,6 +28,14 @@ pub struct BLAKE2BBuilderGadget<
     pub _marker: PhantomData<(F, E, L)>,
 }
 
+impl<F, E, const D: usize, L: AirParameters + 'static + Clone + Debug + Send + Sync>
+    BLAKE2BBuilderGadget<F, E, D, L>
+{
+    pub fn max_num_chunks() -> usize {
+        L::num_rows() / NUM_MIX_ROUNDS
+    }
+}
+
 pub trait BLAKE2BBuilder<
     F: RichField + Extendable<D>,
     E: CubicParameters<F>,
@@ -50,8 +58,6 @@ pub trait BLAKE2BBuilder<
         &mut self,
         gadget: Self::Gadget,
     );
-
-    fn max_num_chunks() -> usize;
 }
 
 impl<
@@ -112,10 +118,6 @@ impl<
         };
 
         self.add_simple_generator(blake2b_generator);
-    }
-
-    fn max_num_chunks() -> usize {
-        L::num_rows() / NUM_MIX_ROUNDS
     }
 }
 
