@@ -271,7 +271,7 @@ impl BLAKE2BPublicData<Target> {
             hash_state_targets.extend((0..4).map(|_| builder.add_virtual_target_arr::<8>()));
         }
 
-        for _ in digests.len()..num_chunks * HASH_ARRAY_SIZE {
+        for _ in hash_state_targets.len()..num_chunks * HASH_ARRAY_SIZE {
             hash_state_targets.push(builder.add_virtual_target_arr::<8>());
         }
 
