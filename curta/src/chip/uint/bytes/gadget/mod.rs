@@ -184,7 +184,8 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
 
         let num_rows = 1 << 16;
 
-        let trace_generator = ArithmeticGenerator::<ByteGadgetParameters<F, E, D>>::new(trace_data, num_rows);
+        let trace_generator =
+            ArithmeticGenerator::<ByteGadgetParameters<F, E, D>>::new(trace_data, num_rows);
 
         let public_input_target = operations
             .iter()
@@ -197,8 +198,7 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize>
         self.add_simple_generator(byte_generator);
 
         let stark = Starky::new(air);
-        let config =
-            StarkyConfig::<C, D>::standard_fast_config(num_rows);
+        let config = StarkyConfig::<C, D>::standard_fast_config(num_rows);
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
         self.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_target);
 

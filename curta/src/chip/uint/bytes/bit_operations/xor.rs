@@ -80,8 +80,6 @@ pub mod tests {
         type Instruction = Xor<N>;
 
         const NUM_FREE_COLUMNS: usize = 4 * N;
-
-
     }
 
     #[test]
@@ -105,7 +103,7 @@ pub mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let num_rows = 1<<9;
+        let num_rows = 1 << 9;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 

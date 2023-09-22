@@ -282,8 +282,6 @@ pub(crate) mod tests {
         type Instruction = EmptyInstruction<GoldilocksField>;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
         const NUM_FREE_COLUMNS: usize = 2;
-
-
     }
 
     #[test]
@@ -304,7 +302,7 @@ pub(crate) mod tests {
         air.num_public_values = 3;
         air_data.num_public_inputs = 3;
 
-        let num_rows = 1<<10;
+        let num_rows = 1 << 10;
         let public_inputs = [
             F::ZERO,
             F::ONE,
@@ -347,7 +345,7 @@ pub(crate) mod tests {
         // x1' <- x0 + x1
         let constr_2 = builder.set_to_expression_transition(&x_1.next(), x_0.expr() + x_1.expr());
 
-        let num_rows = 1<<10;
+        let num_rows = 1 << 10;
         let public_inputs = [
             F::ZERO,
             F::ONE,
@@ -389,8 +387,6 @@ pub(crate) mod tests {
         const NUM_ARITHMETIC_COLUMNS: usize = 2;
         const NUM_FREE_COLUMNS: usize = 4;
         const EXTENDED_COLUMNS: usize = 13;
-
-
     }
 
     #[test]
@@ -409,7 +405,7 @@ pub(crate) mod tests {
         builder.assert_equal(&clk, &clk_expected);
 
         let (air, trace_data) = builder.build();
-        let num_rows = 1<<14;
+        let num_rows = 1 << 14;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let (tx, rx) = channel();
@@ -455,7 +451,7 @@ pub(crate) mod tests {
 
         builder.assert_equal(&clk, &clk_expected);
 
-        let num_rows = 1<<14;
+        let num_rows = 1 << 14;
 
         let (air, trace_data) = builder.build();
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);

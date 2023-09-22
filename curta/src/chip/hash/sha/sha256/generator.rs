@@ -76,8 +76,6 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for SHA256AirParamete
     const NUM_FREE_COLUMNS: usize = 551;
     const EXTENDED_COLUMNS: usize = 927;
     const NUM_ARITHMETIC_COLUMNS: usize = 0;
-
-
 }
 
 impl<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> SHA256Generator<F, E, C, D> {
@@ -107,12 +105,12 @@ impl<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> SHA256Generator<
 
         let (air, trace_data) = air_builder.build();
 
-        let num_rows = 1<<16;
+        let num_rows = 1 << 16;
         let stark = Starky::new(air);
-        let config =
-            StarkyConfig::<C, D>::standard_fast_config(num_rows);
+        let config = StarkyConfig::<C, D>::standard_fast_config(num_rows);
 
-        let trace_generator = ArithmeticGenerator::<SHA256AirParameters<F, E>>::new(trace_data, num_rows);
+        let trace_generator =
+            ArithmeticGenerator::<SHA256AirParameters<F, E>>::new(trace_data, num_rows);
 
         SHA256StarkData {
             stark,
@@ -183,7 +181,7 @@ impl<
         });
 
         // Write trace values
-        let num_rows = 1<<16;
+        let num_rows = 1 << 16;
         let writer = trace_generator.new_writer();
         table.write_table_entries(&writer);
         let sha_public_values = gadget.write(message_chunks, &writer);

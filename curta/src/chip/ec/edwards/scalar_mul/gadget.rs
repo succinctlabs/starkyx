@@ -156,8 +156,6 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 72;
         const EXTENDED_COLUMNS: usize = 2265;
         type Instruction = FpInstruction<Ed25519BaseField>;
-
-
     }
 
     #[test]
@@ -179,7 +177,7 @@ mod tests {
         let _scalar_mul_gadget = builder.ed_scalar_mul::<E>(&scalar_bit, &res, &temp);
 
         let (air, trace_data) = builder.build();
-        let num_rows = 1<<16;
+        let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let writer = generator.new_writer();

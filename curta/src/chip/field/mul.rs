@@ -178,8 +178,6 @@ mod tests {
         const EXTENDED_COLUMNS: usize = 219;
 
         type Instruction = FpMulInstruction<Fp25519>;
-
-
     }
 
     #[test]
@@ -198,7 +196,7 @@ mod tests {
         let mul_insr = builder.fp_mul(&a, &b);
 
         let (air, trace_data) = builder.build();
-        let num_rows = 1<<16;
+        let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let (tx, rx) = channel();

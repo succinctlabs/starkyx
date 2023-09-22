@@ -209,8 +209,6 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 2;
         const EXTENDED_COLUMNS: usize = 3327;
         type Instruction = FpInstruction<Bn254BaseField>;
-
-
     }
 
     #[test]
@@ -227,7 +225,7 @@ mod tests {
         let _gadget = builder.sw_projective_add::<E>(&p, &q);
 
         let (air, trace_data) = builder.build();
-        let num_rows = 1<<16;
+        let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let base = E::generator();
@@ -264,8 +262,6 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 2;
         const EXTENDED_COLUMNS: usize = 3393;
         type Instruction = FpInstruction<Bn254BaseField>;
-
-
     }
 
     #[test]
@@ -281,7 +277,7 @@ mod tests {
         let _gadget = builder.sw_projective_doubling::<E>(&p);
 
         let (air, trace_data) = builder.build();
-        let num_rows = 1<<16;
+        let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let base = E::generator();

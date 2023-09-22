@@ -189,8 +189,6 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 281;
         const EXTENDED_COLUMNS: usize = 447;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
-
-
     }
 
     #[test]

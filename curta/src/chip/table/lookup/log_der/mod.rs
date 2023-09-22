@@ -299,8 +299,6 @@ mod tests {
         const EXTENDED_COLUMNS: usize = (3 * (M / 2)) + 3 * N + 2 * 3;
 
         type Instruction = EmptyInstruction<GoldilocksField>;
-
-
     }
 
     #[test]
@@ -326,7 +324,7 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let num_rows = 1<<16;
+        let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 
@@ -373,8 +371,6 @@ mod tests {
         const EXTENDED_COLUMNS: usize = (3 * (3 * M / 2)) + 3 * 3 * N + 2 * 3;
 
         type Instruction = EmptyInstruction<GoldilocksField>;
-
-
     }
 
     #[test]
@@ -400,7 +396,7 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let num_rows = 1<<16;
+        let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 
@@ -485,7 +481,7 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let num_rows = 1<<16;
+        let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 

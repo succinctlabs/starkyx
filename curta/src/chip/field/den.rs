@@ -196,8 +196,6 @@ mod tests {
         const EXTENDED_COLUMNS: usize = 219;
 
         type Instruction = FpDenInstruction<Fp25519>;
-
-
     }
 
     #[test]
@@ -218,7 +216,7 @@ mod tests {
         let den_ins = builder.fp_den(&a, &b, sign);
 
         let (air, trace_data) = builder.build();
-        let num_rows = 1<<16;
+        let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let (tx, rx) = channel();

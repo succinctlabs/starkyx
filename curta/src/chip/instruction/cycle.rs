@@ -173,8 +173,6 @@ mod tests {
 
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
         const NUM_FREE_COLUMNS: usize = 5;
-
-
     }
 
     #[test]
@@ -187,7 +185,7 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let num_rows = 1<<8;
+        let num_rows = 1 << 8;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let (tx, rx) = channel();
         for i in 0..num_rows {

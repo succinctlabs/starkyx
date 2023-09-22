@@ -181,8 +181,6 @@ mod tests {
         const NUM_ARITHMETIC_COLUMNS: usize = 2;
         const NUM_FREE_COLUMNS: usize = 8;
         const EXTENDED_COLUMNS: usize = 36;
-
-
     }
 
     #[test]
@@ -207,7 +205,7 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let num_rows = 1<<16;
+        let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let (tx, rx) = channel();
@@ -263,7 +261,7 @@ mod tests {
             .flat_map(|i| vec![F::ONE, F::from_canonical_usize(256 * i)])
             .collect::<Vec<_>>();
 
-            let num_rows = 1<<16;
+        let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let (tx, rx) = channel();

@@ -3,7 +3,6 @@ pub mod generator;
 
 use core::borrow::Borrow;
 
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::chip::arithmetic::expression::ArithmeticExpression;
@@ -112,7 +111,7 @@ impl<L: AirParameters> AirBuilder<L> {
     where
         L::Instruction: U32Instructions,
     {
-        let num_rows = 1<<16;
+        let num_rows = 1 << 16;
         let num_chunks = num_rows / NUM_MIX_ROUNDS;
 
         // Registers to be written to
@@ -778,12 +777,12 @@ impl BLAKE2BGadget {
                         chunk
                             .iter()
                             .map(|y| F::from_canonical_u8(*y))
-                            .collect_vec()
+                            .collect::<Vec<_>>()
                             .as_slice()
                             .try_into()
                             .expect("should be slice of 8 elements")
                     })
-                    .collect_vec()
+                    .collect::<Vec<_>>()
                     .as_slice()
                     .try_into()
                     .expect("should be slice of 16 elements");
@@ -883,7 +882,7 @@ impl BLAKE2BGadget {
         let msg_u64_chunks = msg_chunk
             .chunks_exact(8)
             .map(|x| u64::from_le_bytes(x.try_into().unwrap()))
-            .collect_vec();
+            .collect::<Vec<_>>();
 
         for i in 0..NUM_MIX_ROUNDS {
             let s = SIGMA[i % 10];
@@ -1033,8 +1032,6 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 2493;
         const EXTENDED_COLUMNS: usize = 4755;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
-
-
     }
 
     #[test]
@@ -1062,7 +1059,7 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let num_rows = 1<<16;
+        let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 

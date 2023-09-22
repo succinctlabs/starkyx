@@ -200,8 +200,6 @@ mod tests {
         const EXTENDED_COLUMNS: usize = 243;
 
         type Instruction = FpInnerProductInstruction<Fp25519>;
-
-
     }
 
     #[test]
@@ -223,7 +221,7 @@ mod tests {
         let quad = builder.fp_inner_product(&vec![a, b], &vec![c, d]);
 
         let (air, trace_data) = builder.build();
-        let num_rows = 1<<16;
+        let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let (tx, rx) = channel();

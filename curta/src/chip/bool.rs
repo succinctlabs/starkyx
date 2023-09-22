@@ -120,8 +120,6 @@ mod tests {
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
         const NUM_FREE_COLUMNS: usize = 4;
         type Instruction = SelectInstruction<BitRegister>;
-
-
     }
 
     // #[test]

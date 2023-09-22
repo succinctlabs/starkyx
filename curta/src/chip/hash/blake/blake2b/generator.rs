@@ -1,6 +1,5 @@
 use core::marker::PhantomData;
 
-use itertools::Itertools;
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::generator::{GeneratedValues, SimpleGenerator};
@@ -30,8 +29,6 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for BLAKE2BAirParamet
     const NUM_FREE_COLUMNS: usize = 551;
     const EXTENDED_COLUMNS: usize = 927;
     const NUM_ARITHMETIC_COLUMNS: usize = 0;
-
-
 }
 
 #[derive(Debug, Clone)]
@@ -125,7 +122,7 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for BLA
         let binding = state[0..4]
             .iter()
             .flat_map(|x| u64_to_le_field_bytes::<F>(*x))
-            .collect_vec();
+            .collect::<Vec<_>>();
         let digest_bytes = binding.as_slice();
 
         out_buffer.set_target_arr(&self.digest_bytes, digest_bytes);

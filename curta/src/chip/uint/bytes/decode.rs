@@ -69,8 +69,6 @@ mod tests {
         type Instruction = ByteDecodeInstruction;
 
         const NUM_FREE_COLUMNS: usize = 16;
-
-
     }
 
     #[test]
@@ -88,7 +86,7 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let num_rows = 1<<9;
+        let num_rows = 1 << 9;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let writer = generator.new_writer();

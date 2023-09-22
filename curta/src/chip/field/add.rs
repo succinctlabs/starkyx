@@ -217,8 +217,6 @@ mod tests {
         const EXTENDED_COLUMNS: usize = 219;
 
         type Instruction = FpAddInstruction<Fp25519>;
-
-
     }
 
     #[test]
@@ -237,7 +235,7 @@ mod tests {
         let _add_insr = builder.fp_add(&a, &b);
 
         let (air, trace_data) = builder.build();
-        let num_rows = 1<<16;
+        let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let trace_initial = (0..num_rows)

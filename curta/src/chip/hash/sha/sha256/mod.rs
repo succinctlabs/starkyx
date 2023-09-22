@@ -175,7 +175,7 @@ impl<L: AirParameters> AirBuilder<L> {
             );
             bus.insert_global_value(&round_constant_public_input_digest);
 
-            let num_rows = 1<<16;
+            let num_rows = 1 << 16;
             let round_constants_public_output_digest = self.accumulate_public_expressions(
                 &round_constant_challenges,
                 &[
@@ -607,8 +607,6 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 551;
         const EXTENDED_COLUMNS: usize = 927;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
-
-
     }
 
     #[test]
@@ -637,7 +635,7 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let num_rows = 1<<16;
+        let num_rows = 1 << 16;
 
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();

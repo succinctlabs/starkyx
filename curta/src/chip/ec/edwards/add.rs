@@ -137,8 +137,6 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 2;
         const EXTENDED_COLUMNS: usize = 1209;
         type Instruction = FpInstruction<Ed25519BaseField>;
-
-
     }
 
     #[test]
@@ -154,7 +152,7 @@ mod tests {
 
         let _gadget = builder.ed_add::<E>(&p, &q);
 
-        let num_rows = 1<<16;
+        let num_rows = 1 << 16;
         let (air, trace_data) = builder.build();
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 

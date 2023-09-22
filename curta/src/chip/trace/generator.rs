@@ -18,7 +18,7 @@ use crate::trace::AirTrace;
 pub struct ArithmeticGenerator<L: AirParameters> {
     pub writer: TraceWriter<L::Field>,
     pub air_data: AirTraceData<L>,
-    pub num_rows : usize,
+    pub num_rows: usize,
 }
 
 impl<L: AirParameters> ArithmeticGenerator<L> {

@@ -147,8 +147,6 @@ mod tests {
         const EXTENDED_COLUMNS: usize = 21;
 
         type Instruction = EmptyInstruction<GoldilocksField>;
-
-
     }
 
     #[test]
@@ -184,7 +182,7 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let num_rows = 1<<10;
+        let num_rows = 1 << 10;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
         for i in 0..num_rows {

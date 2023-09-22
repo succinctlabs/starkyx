@@ -128,8 +128,6 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 1200;
         const EXTENDED_COLUMNS: usize = 1400;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
-
-
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -144,8 +142,6 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 2200;
         const EXTENDED_COLUMNS: usize = 2800;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
-
-
     }
 
     #[test]
