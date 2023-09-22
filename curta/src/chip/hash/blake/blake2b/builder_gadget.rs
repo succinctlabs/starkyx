@@ -95,7 +95,8 @@ impl<
         gadget: Self::Gadget,
     ) {
         // Allocate public input targets
-        let public_blake2b_targets = BLAKE2BPublicData::add_virtual::<F, D, L>(self);
+        let public_blake2b_targets =
+            BLAKE2BPublicData::add_virtual::<F, D, L>(self, gadget.digests.as_slice());
 
         let stark_data = BLAKE2BGenerator::<F, E, C, D, L>::stark_data();
         let BLAKE2BStarkData { stark, config, .. } = stark_data;

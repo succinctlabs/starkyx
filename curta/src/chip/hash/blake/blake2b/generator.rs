@@ -238,6 +238,7 @@ impl BLAKE2BPublicData<Target> {
         L: AirParameters + 'static + Clone + Debug + Send + Sync,
     >(
         builder: &mut CircuitBuilder<F, D>,
+        digests: &[Target],
     ) -> Self {
         let num_chunks = L::num_rows() / NUM_MIX_ROUNDS;
 
@@ -253,9 +254,18 @@ impl BLAKE2BPublicData<Target> {
             .map(|_| builder.add_virtual_target_arr::<8>())
             .collect::<Vec<_>>();
 
-        let hash_state_targets = (0..num_chunks * HASH_ARRAY_SIZE)
-            .map(|_| builder.add_virtual_target_arr::<8>())
-            .collect::<Vec<_>>();
+        let mut hash_state_targets = Vec::new();
+        assert!(digests.len() <= num_chunks * HASH_ARRAY_SIZE);
+
+        let u64_digest_byte = digests.chunks_exact(8).map(|arr| {
+            let array: [Target; 8] = arr.try_into().unwrap();
+            array
+        });
+        hash_state_targets.extend(u64_digest_byte);
+
+        for _ in digests.len()..num_chunks * HASH_ARRAY_SIZE {
+            hash_state_targets.push(builder.add_virtual_target_arr::<8>());
+        }
 
         BLAKE2BPublicData {
             msg_chunks: msg_chunks_targets,
