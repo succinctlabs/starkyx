@@ -1,3 +1,4 @@
+use core::fmt::Debug;
 use core::marker::PhantomData;
 
 use plonky2::field::extension::Extendable;
@@ -6,18 +7,34 @@ use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use serde::{Deserialize, Serialize};
 
-use super::generator::BLAKE2BHintGenerator;
+use super::generator::{BLAKE2BGenerator, BLAKE2BHintGenerator, BLAKE2BStarkData};
+use super::{BLAKE2BPublicData, NUM_MIX_ROUNDS};
 use crate::chip::hash::CurtaBytes;
+use crate::chip::AirParameters;
 use crate::math::prelude::CubicParameters;
+use crate::plonky2::stark::config::CurtaConfig;
+use crate::plonky2::stark::gadget::StarkGadget;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BLAKE2BBuilderGadget<F, E, const D: usize> {
-    pub padded_message: Vec<Target>,
-    pub digest: Vec<Target>,
-    _marker: PhantomData<(F, E)>,
+pub struct BLAKE2BBuilderGadget<L: AirParameters + 'static + Clone + Debug + Send + Sync> {
+    pub padded_messages: Vec<Target>,
+    pub msg_lengths: Vec<Target>,
+    pub digests: Vec<Target>,
+    _phantom: PhantomData<L>,
 }
 
-pub trait BLAKE2BBuilder<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> {
+impl<L: AirParameters + 'static + Clone + Debug + Send + Sync> BLAKE2BBuilderGadget<L> {
+    pub fn max_num_chunks(&mut self) -> usize {
+        L::num_rows() / NUM_MIX_ROUNDS
+    }
+}
+
+pub trait BLAKE2BBuilder<
+    F: RichField + Extendable<D>,
+    const D: usize,
+    L: AirParameters + 'static + Clone + Debug + Send + Sync,
+>
+{
     type Gadget;
 
     fn init_blake2b(&mut self) -> Self::Gadget;
@@ -28,18 +45,30 @@ pub trait BLAKE2BBuilder<F: RichField + Extendable<D>, E: CubicParameters<F>, co
         message_len: Target,
         gadget: &mut Self::Gadget,
     ) -> CurtaBytes<32>;
+
+    fn constrain_blake2b_gadget<
+        E: CubicParameters<F>,
+        C: CurtaConfig<D, F = F, FE = F::Extension>,
+    >(
+        &mut self,
+        gadget: Self::Gadget,
+    );
 }
 
-impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> BLAKE2BBuilder<F, E, D>
-    for CircuitBuilder<F, D>
+impl<
+        F: RichField + Extendable<D>,
+        const D: usize,
+        L: AirParameters + 'static + Clone + Debug + Send + Sync,
+    > BLAKE2BBuilder<F, D, L> for CircuitBuilder<F, D>
 {
-    type Gadget = BLAKE2BBuilderGadget<F, E, D>;
+    type Gadget = BLAKE2BBuilderGadget<L>;
 
     fn init_blake2b(&mut self) -> Self::Gadget {
         BLAKE2BBuilderGadget {
-            padded_message: Vec::new(),
-            digest: Vec::new(),
-            _marker: PhantomData,
+            padded_messages: Vec::new(),
+            msg_lengths: Vec::new(),
+            digests: Vec::new(),
+            _phantom: PhantomData,
         }
     }
 
@@ -49,12 +78,43 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> BLAKE2
         message_len: Target,
         gadget: &mut Self::Gadget,
     ) -> CurtaBytes<32> {
-        gadget.padded_message.extend_from_slice(&padded_message.0);
+        gadget.padded_messages.extend_from_slice(&padded_message.0);
         let digest_bytes = self.add_virtual_target_arr::<32>();
         let hint = BLAKE2BHintGenerator::new(&padded_message.0, message_len, digest_bytes);
         self.add_simple_generator(hint);
-        gadget.digest.extend_from_slice(&digest_bytes);
+        gadget.digests.extend_from_slice(&digest_bytes);
+        gadget.msg_lengths.push(message_len);
         CurtaBytes(digest_bytes)
+    }
+
+    fn constrain_blake2b_gadget<
+        E: CubicParameters<F>,
+        C: CurtaConfig<D, F = F, FE = F::Extension>,
+    >(
+        &mut self,
+        gadget: Self::Gadget,
+    ) {
+        // Allocate public input targets
+        let public_blake2b_targets = BLAKE2BPublicData::add_virtual::<F, D, L>(self);
+
+        let stark_data = BLAKE2BGenerator::<F, E, C, D, L>::stark_data();
+        let BLAKE2BStarkData { stark, config, .. } = stark_data;
+
+        let public_input_target = public_blake2b_targets.public_input_targets(self);
+
+        let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
+        self.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_target);
+
+        let blake2b_generator = BLAKE2BGenerator::<F, E, C, D, L> {
+            padded_messages: gadget.padded_messages,
+            msg_lens: gadget.msg_lengths,
+            pub_values_target: public_blake2b_targets,
+            config,
+            proof_target: virtual_proof,
+            _phantom: PhantomData,
+        };
+
+        self.add_simple_generator(blake2b_generator);
     }
 }
 
@@ -70,13 +130,17 @@ mod tests {
 
     use super::*;
     pub use crate::chip::builder::tests::*;
+    use crate::chip::hash::blake::blake2b::generator::BLAKE2BAirParameters;
     use crate::chip::hash::blake::blake2b::BLAKE2BGadget;
+    use crate::plonky2::stark::config::CurtaPoseidonGoldilocksConfig;
 
     #[test]
     fn test_blake_2b_plonky_gadget() {
         type F = GoldilocksField;
         type E = GoldilocksCubicParameters;
+        type SC = CurtaPoseidonGoldilocksConfig;
         type C = PoseidonGoldilocksConfig;
+        type L = BLAKE2BAirParameters<F, E>;
         const D: usize = 2;
 
         let _ = env_logger::builder().is_test(true).try_init();
@@ -86,7 +150,7 @@ mod tests {
         let config = CircuitConfig::standard_recursion_config();
         let mut builder = CircuitBuilder::<F, D>::new(config);
 
-        let mut gadget: BLAKE2BBuilderGadget<F, E, D> = builder.init_blake2b();
+        let mut gadget: BLAKE2BBuilderGadget<L> = builder.init_blake2b();
 
         let msg_target = CurtaBytes(builder.add_virtual_target_arr::<256>());
         let msg_length_target = builder.add_virtual_target();
@@ -102,7 +166,7 @@ mod tests {
             builder.connect(*d, *e);
         }
 
-        //builder.constrain_blake2b_gadget::<C>(gadget);
+        builder.constrain_blake2b_gadget::<E, SC>(gadget);
 
         let data = builder.build::<C>();
         let mut pw = PartialWitness::new();

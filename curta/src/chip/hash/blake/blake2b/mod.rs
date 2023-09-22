@@ -6,6 +6,7 @@ use core::borrow::Borrow;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
+use self::generator::BLAKE2BPublicData;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
@@ -51,12 +52,6 @@ pub struct BLAKE2BGadget {
     pub t_public: ArrayRegister<U64Register>,
     pub last_chunk_bit_public: ArrayRegister<BitRegister>,
     pub hash_state: ArrayRegister<U64Register>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BLAKE2BPublicData<T> {
-    pub hash_state: Vec<U64Value<T>>,
-    pub end_bits: Vec<T>,
 }
 
 const INITIAL_HASH: [u64; HASH_ARRAY_SIZE] = [
@@ -720,7 +715,8 @@ impl BLAKE2BGadget {
         message_lens: &[u64],
         writer: &TraceWriter<F>,
         num_rows: usize,
-    ) where
+    ) -> BLAKE2BPublicData<F>
+    where
         I::Item: Borrow<[u8]>,
     {
         let max_num_chunks = num_rows / NUM_MIX_ROUNDS;
@@ -830,10 +826,28 @@ impl BLAKE2BGadget {
             &u64_to_le_field_bytes(INVERSION_CONST),
             0,
         );
-        writer.write_array(&self.hash_state, &hash_values_public, 0);
-        writer.write_array(&self.last_chunk_bit_public, &last_chunk_bit_public, 0);
+
+        // pad msg_chunks_public to max_num_chunks * MSG_ARRAY_SIZE
+        msg_chunks_public.extend(vec![
+            [F::ZERO; 8];
+            (max_num_chunks - num_written_chunks) * MSG_ARRAY_SIZE
+        ]);
         writer.write_array(&self.msg_chunks, &msg_chunks_public, 0);
+
+        // pad t_values_public to max_num_chunks
+        t_values_public.extend(vec![[F::ZERO; 8]; max_num_chunks - num_written_chunks]);
         writer.write_array(&self.t_public, &t_values_public, 0);
+
+        // pad last_chunk_bit_public to max_num_chunks
+        last_chunk_bit_public.extend(vec![F::ZERO; max_num_chunks - num_written_chunks]);
+        writer.write_array(&self.last_chunk_bit_public, &last_chunk_bit_public, 0);
+
+        // pad hash_values_public to max_num_chunks * HASH_ARRAY_SIZE
+        hash_values_public.extend(vec![
+            [F::ZERO; 8];
+            (max_num_chunks - num_written_chunks) * HASH_ARRAY_SIZE
+        ]);
+        writer.write_array(&self.hash_state, &hash_values_public, 0);
 
         let num_padding_bits = num_rows % NUM_MIX_ROUNDS;
 
@@ -846,6 +860,13 @@ impl BLAKE2BGadget {
             } else {
                 writer.write(&self.padding_bit, &F::ZERO, i);
             }
+        }
+
+        BLAKE2BPublicData {
+            msg_chunks: msg_chunks_public,
+            t: t_values_public,
+            last_chunk_bit: last_chunk_bit_public,
+            hash_state: hash_values_public,
         }
     }
 
@@ -1017,31 +1038,14 @@ mod tests {
     use super::*;
     pub use crate::chip::builder::tests::*;
     use crate::chip::builder::AirBuilder;
-    use crate::chip::uint::operations::instruction::U32Instruction;
+    use crate::chip::hash::blake::blake2b::generator::BLAKE2BAirParameters;
     use crate::chip::AirParameters;
-
-    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-    pub struct BLAKE2BTest;
-
-    impl AirParameters for BLAKE2BTest {
-        type Field = GoldilocksField;
-        type CubicParams = GoldilocksCubicParameters;
-
-        type Instruction = U32Instruction;
-
-        const NUM_FREE_COLUMNS: usize = 2493;
-        const EXTENDED_COLUMNS: usize = 4755;
-        const NUM_ARITHMETIC_COLUMNS: usize = 0;
-
-        fn num_rows_bits() -> usize {
-            16
-        }
-    }
 
     #[test]
     fn test_blake2b_stark() {
         type F = GoldilocksField;
-        type L = BLAKE2BTest;
+        type E = GoldilocksCubicParameters;
+        type L = BLAKE2BAirParameters<F, E>;
         type SC = PoseidonGoldilocksStarkConfig;
 
         let _ = env_logger::builder().is_test(true).try_init();
@@ -1144,12 +1148,12 @@ mod tests {
             test_starky(&stark, &config, &generator, &public_inputs)
         );
 
-        // // Generate recursive proof
-        // timed!(
-        //     timing,
-        //     "Recursive proof generation and verification",
-        //     test_recursive_starky(stark, config, generator, &public_inputs)
-        // );
+        // Generate recursive proof
+        timed!(
+            timing,
+            "Recursive proof generation and verification",
+            test_recursive_starky(stark, config, generator, &public_inputs)
+        );
 
         timing.print();
     }
