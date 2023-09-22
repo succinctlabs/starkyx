@@ -16,29 +16,21 @@ use crate::plonky2::stark::config::CurtaConfig;
 use crate::plonky2::stark::gadget::StarkGadget;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BLAKE2BBuilderGadget<
-    F,
-    E,
-    const D: usize,
-    L: AirParameters + 'static + Clone + Debug + Send + Sync,
-> {
+pub struct BLAKE2BBuilderGadget<L: AirParameters + 'static + Clone + Debug + Send + Sync> {
     pub padded_messages: Vec<Target>,
     pub msg_lengths: Vec<Target>,
     pub digests: Vec<Target>,
-    pub _marker: PhantomData<(F, E, L)>,
+    _phantom: PhantomData<L>,
 }
 
-impl<F, E, const D: usize, L: AirParameters + 'static + Clone + Debug + Send + Sync>
-    BLAKE2BBuilderGadget<F, E, D, L>
-{
-    pub fn max_num_chunks() -> usize {
+impl<L: AirParameters + 'static + Clone + Debug + Send + Sync> BLAKE2BBuilderGadget<L> {
+    pub fn max_num_chunks(&mut self) -> usize {
         L::num_rows() / NUM_MIX_ROUNDS
     }
 }
 
 pub trait BLAKE2BBuilder<
     F: RichField + Extendable<D>,
-    E: CubicParameters<F>,
     const D: usize,
     L: AirParameters + 'static + Clone + Debug + Send + Sync,
 >
@@ -54,7 +46,10 @@ pub trait BLAKE2BBuilder<
         gadget: &mut Self::Gadget,
     ) -> CurtaBytes<32>;
 
-    fn constrain_blake2b_gadget<C: CurtaConfig<D, F = F, FE = F::Extension>>(
+    fn constrain_blake2b_gadget<
+        E: CubicParameters<F>,
+        C: CurtaConfig<D, F = F, FE = F::Extension>,
+    >(
         &mut self,
         gadget: Self::Gadget,
     );
@@ -62,19 +57,18 @@ pub trait BLAKE2BBuilder<
 
 impl<
         F: RichField + Extendable<D>,
-        E: CubicParameters<F>,
         const D: usize,
         L: AirParameters + 'static + Clone + Debug + Send + Sync,
-    > BLAKE2BBuilder<F, E, D, L> for CircuitBuilder<F, D>
+    > BLAKE2BBuilder<F, D, L> for CircuitBuilder<F, D>
 {
-    type Gadget = BLAKE2BBuilderGadget<F, E, D, L>;
+    type Gadget = BLAKE2BBuilderGadget<L>;
 
     fn init_blake2b(&mut self) -> Self::Gadget {
         BLAKE2BBuilderGadget {
             padded_messages: Vec::new(),
             msg_lengths: Vec::new(),
             digests: Vec::new(),
-            _marker: PhantomData,
+            _phantom: PhantomData,
         }
     }
 
@@ -93,7 +87,10 @@ impl<
         CurtaBytes(digest_bytes)
     }
 
-    fn constrain_blake2b_gadget<C: CurtaConfig<D, F = F, FE = F::Extension>>(
+    fn constrain_blake2b_gadget<
+        E: CubicParameters<F>,
+        C: CurtaConfig<D, F = F, FE = F::Extension>,
+    >(
         &mut self,
         gadget: Self::Gadget,
     ) {
@@ -153,7 +150,7 @@ mod tests {
         let config = CircuitConfig::standard_recursion_config();
         let mut builder = CircuitBuilder::<F, D>::new(config);
 
-        let mut gadget: BLAKE2BBuilderGadget<F, E, D, L> = builder.init_blake2b();
+        let mut gadget: BLAKE2BBuilderGadget<L> = builder.init_blake2b();
 
         let msg_target = CurtaBytes(builder.add_virtual_target_arr::<256>());
         let msg_length_target = builder.add_virtual_target();
@@ -169,7 +166,7 @@ mod tests {
             builder.connect(*d, *e);
         }
 
-        builder.constrain_blake2b_gadget::<SC>(gadget);
+        builder.constrain_blake2b_gadget::<E, SC>(gadget);
 
         let data = builder.build::<C>();
         let mut pw = PartialWitness::new();
