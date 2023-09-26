@@ -20,6 +20,7 @@ pub struct BLAKE2BBuilderGadget<L: AirParameters + 'static + Clone + Debug + Sen
     pub padded_messages: Vec<Target>,
     pub msg_lengths: Vec<Target>,
     pub digests: Vec<Target>,
+    pub chunk_sizes: Vec<usize>,
     _phantom: PhantomData<L>,
 }
 
@@ -68,6 +69,7 @@ impl<
             padded_messages: Vec::new(),
             msg_lengths: Vec::new(),
             digests: Vec::new(),
+            chunk_sizes: Vec::new(),
             _phantom: PhantomData,
         }
     }
@@ -95,7 +97,11 @@ impl<
         gadget: Self::Gadget,
     ) {
         // Allocate public input targets
-        let public_blake2b_targets = BLAKE2BPublicData::add_virtual::<F, D, L>(self);
+        let public_blake2b_targets = BLAKE2BPublicData::add_virtual::<F, D, L>(
+            self,
+            gadget.digests.as_slice(),
+            gadget.chunk_sizes.as_slice(),
+        );
 
         let stark_data = BLAKE2BGenerator::<F, E, C, D, L>::stark_data();
         let BLAKE2BStarkData { stark, config, .. } = stark_data;

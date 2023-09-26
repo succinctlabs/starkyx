@@ -129,7 +129,7 @@ impl<
     > SimpleGenerator<F, D> for BLAKE2BGenerator<F, E, C, D, L>
 {
     fn id(&self) -> String {
-        "BLAKE2B generator".to_string()
+        Self::id()
     }
 
     fn serialize(
@@ -236,6 +236,8 @@ impl BLAKE2BPublicData<Target> {
         L: AirParameters + 'static + Clone + Debug + Send + Sync,
     >(
         builder: &mut CircuitBuilder<F, D>,
+        digests: &[Target],
+        chunk_sizes: &[usize],
     ) -> Self {
         let num_rows = 1 << 16;
         let num_chunks = num_rows / NUM_MIX_ROUNDS;
@@ -252,9 +254,25 @@ impl BLAKE2BPublicData<Target> {
             .map(|_| builder.add_virtual_target_arr::<8>())
             .collect::<Vec<_>>();
 
-        let hash_state_targets = (0..num_chunks * HASH_ARRAY_SIZE)
-            .map(|_| builder.add_virtual_target_arr::<8>())
-            .collect::<Vec<_>>();
+        let mut hash_state_targets = Vec::new();
+        assert!(digests.len() / 8 <= num_chunks * HASH_ARRAY_SIZE);
+        assert!(digests.len() % 8 == 0);
+
+        for (digest, chunk_size) in digests.chunks_exact(32).zip_eq(chunk_sizes.iter()) {
+            hash_state_targets
+                .extend((0..8 * (chunk_size - 1)).map(|_| builder.add_virtual_target_arr::<8>()));
+
+            let u64_digest_byte = digest.chunks_exact(8).map(|arr| {
+                let array: [Target; 8] = arr.try_into().unwrap();
+                array
+            });
+            hash_state_targets.extend(u64_digest_byte);
+            hash_state_targets.extend((0..4).map(|_| builder.add_virtual_target_arr::<8>()));
+        }
+
+        for _ in hash_state_targets.len()..num_chunks * HASH_ARRAY_SIZE {
+            hash_state_targets.push(builder.add_virtual_target_arr::<8>());
+        }
 
         BLAKE2BPublicData {
             msg_chunks: msg_chunks_targets,
