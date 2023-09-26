@@ -1,25 +1,21 @@
 use alloc::sync::Arc;
 
 use super::multiplicity_data::MultiplicityData;
-use crate::chip::register::array::ArrayRegister;
-use crate::chip::register::cubic::CubicRegister;
+use crate::chip::register::element::ElementRegister;
 
 #[derive(Debug, Clone)]
 pub struct ByteLookupOperations {
     pub multiplicity_data: Arc<MultiplicityData>,
-    pub row_acc_challenges: ArrayRegister<CubicRegister>,
-    pub values: Vec<CubicRegister>,
+    pub values: Vec<ElementRegister>,
 }
 
 impl ByteLookupOperations {
     pub fn new(
         multiplicity_data: Arc<MultiplicityData>,
-        row_acc_challenges: ArrayRegister<CubicRegister>,
     ) -> Self {
         let values = Vec::new();
         ByteLookupOperations {
             multiplicity_data,
-            row_acc_challenges,
             values,
         }
     }

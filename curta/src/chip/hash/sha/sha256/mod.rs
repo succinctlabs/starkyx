@@ -604,10 +604,13 @@ mod tests {
 
         type Instruction = U32Instruction;
 
-        const NUM_FREE_COLUMNS: usize = 551;
-        const EXTENDED_COLUMNS: usize = 927;
+        const NUM_FREE_COLUMNS: usize = 745;
+        const EXTENDED_COLUMNS: usize = 345;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
     }
+
+    // 551 + 927
+    // 745 + 345 
 
     #[test]
     fn test_sha_256_stark() {
