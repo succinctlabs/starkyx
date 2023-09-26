@@ -33,8 +33,6 @@ pub struct SHA256AirParameters<F, E>(pub PhantomData<(F, E)>);
 
 pub type U32Target = <U32Register as Register>::Value<Target>;
 
-pub const SHA256_COLUMNS: usize = 551 + 927;
-
 #[derive(Debug, Clone)]
 pub struct MessageChunks {
     pub values: Vec<u8>,
