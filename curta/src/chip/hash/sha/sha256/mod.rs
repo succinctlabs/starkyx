@@ -609,6 +609,9 @@ mod tests {
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
     }
 
+    // 551 + 927
+    // 745 + 345
+
     #[test]
     fn test_sha_256_stark() {
         type F = GoldilocksField;
