@@ -15,7 +15,7 @@ use crate::chip::uint::register::{to_le_limbs, ByteArrayRegister, U32Register, U
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
-///
+/// Adding byte arrays as elements mod 2^{8 * N}
 ///
 /// Assumes 2^N < FIELD_SIZE
 #[derive(Debug, Clone, Serialize, Deserialize)]
