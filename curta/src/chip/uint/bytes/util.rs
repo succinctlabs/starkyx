@@ -6,7 +6,7 @@ pub fn byte_decomposition<AP: AirParser, const N: usize>(
     values: &[AP::Var; N],
     parser: &mut AP,
 ) -> AP::Var {
-    let two_powers: [_; N] = core::array::from_fn(|i| AP::Field::from_canonical_u32(1 << 8 * i));
+    let two_powers: [_; N] = core::array::from_fn(|i| AP::Field::from_canonical_u32(1 << (8 * i)));
 
     let mut element_value = parser.zero();
     for (value, power) in values.iter().zip(two_powers) {
@@ -22,7 +22,7 @@ pub fn byte_decomposition_value<AP: AirParser, const N: usize>(
     values: &[AP::Var; N],
     parser: &mut AP,
 ) -> AP::Var {
-    let two_powers: [_; N] = core::array::from_fn(|i| AP::Field::from_canonical_u32(1 << 8 * i));
+    let two_powers: [_; N] = core::array::from_fn(|i| AP::Field::from_canonical_u32(1 << (8 * i)));
 
     let mut element_value = parser.zero();
     for (value, power) in values.iter().zip(two_powers) {
