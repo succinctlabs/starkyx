@@ -3,6 +3,7 @@ pub mod decode;
 pub mod lookup_table;
 pub mod operations;
 pub mod register;
+pub mod util;
 
 #[cfg(feature = "plonky2")]
 pub mod gadget;

@@ -1,15 +1,17 @@
 use serde::{Deserialize, Serialize};
 
-use super::{
-    NUM_CHALLENGES, OPCODE_AND, OPCODE_NOT, OPCODE_RANGE, OPCODE_ROT, OPCODE_SHR, OPCODE_XOR,
-};
-use crate::chip::arithmetic::expression::ArithmeticExpression;
+use super::{OPCODE_AND, OPCODE_NOT, OPCODE_RANGE, OPCODE_ROT, OPCODE_SHR, OPCODE_XOR};
+use crate::air::parser::AirParser;
+use crate::air::AirConstraint;
 use crate::chip::builder::AirBuilder;
+use crate::chip::instruction::ConstraintInstruction;
+use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::bit_operations::util::u8_to_bits_le;
 use crate::chip::uint::bytes::register::ByteRegister;
+use crate::chip::uint::bytes::util::byte_decomposition;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
@@ -26,39 +28,103 @@ pub enum ByteOperation<T> {
     Range(T),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ByteOperationDigestConstraint {
+    operation: ByteOperation<ByteRegister>,
+    digest: ElementRegister,
+}
+
+impl ByteOperationDigestConstraint {
+    pub fn new(operation: ByteOperation<ByteRegister>, digest: ElementRegister) -> Self {
+        Self { operation, digest }
+    }
+}
+
+impl<AP: AirParser> AirConstraint<AP> for ByteOperationDigestConstraint {
+    fn eval(&self, parser: &mut AP) {
+        self.operation.lookup_digest_constraint(parser, self.digest);
+    }
+}
+
+impl ConstraintInstruction for ByteOperationDigestConstraint {}
+
 impl ByteOperation<ByteRegister> {
-    pub fn expression_array<F: Field>(&self) -> [ArithmeticExpression<F>; NUM_CHALLENGES] {
-        let opcode = ArithmeticExpression::from(self.field_opcode::<F>());
+    pub fn lookup_digest_constraint<AP: AirParser>(
+        &self,
+        parser: &mut AP,
+        element: ElementRegister,
+    ) {
+        let opcode = parser.constant(self.field_opcode::<AP::Field>());
+        let element = element.eval(parser);
         match self {
-            ByteOperation::And(a, b, result) => [opcode, a.expr(), b.expr(), result.expr()],
-            ByteOperation::Xor(a, b, result) => [opcode, a.expr(), b.expr(), result.expr()],
-            ByteOperation::Shr(a, b, c) => [opcode, a.expr(), b.expr(), c.expr()],
-            ByteOperation::ShrConst(a, b, c) => [
-                opcode,
-                a.expr(),
-                ArithmeticExpression::from_constant(F::from_canonical_u8(*b)),
-                c.expr(),
-            ],
-            ByteOperation::ShrCarry(a, shift, result, carry) => [
-                opcode,
-                a.expr(),
-                ArithmeticExpression::from_constant(F::from_canonical_u8(*shift)),
-                result.expr() + (carry.expr() * F::from_canonical_u16(1u16 << (8 - shift))),
-            ],
-            ByteOperation::Rot(a, b, result) => [opcode, a.expr(), b.expr(), result.expr()],
-            ByteOperation::RotConst(a, b, c) => [
-                opcode,
-                a.expr(),
-                ArithmeticExpression::from_constant(F::from_canonical_u8(*b)),
-                c.expr(),
-            ],
-            ByteOperation::Not(a, b) => [opcode, a.expr(), b.expr(), ArithmeticExpression::zero()],
-            ByteOperation::Range(a) => [
-                opcode,
-                a.expr(),
-                ArithmeticExpression::zero(),
-                ArithmeticExpression::zero(),
-            ],
+            ByteOperation::And(a, b, result) => {
+                let a = a.eval(parser);
+                let b = b.eval(parser);
+                let result = result.eval(parser);
+                let constraint = byte_decomposition(element, &[opcode, a, b, result], parser);
+                parser.constraint(constraint);
+            }
+            ByteOperation::Xor(a, b, result) => {
+                let a = a.eval(parser);
+                let b = b.eval(parser);
+                let result = result.eval(parser);
+                let constraint = byte_decomposition(element, &[opcode, a, b, result], parser);
+                parser.constraint(constraint);
+            }
+            ByteOperation::Shr(a, b, c) => {
+                let a = a.eval(parser);
+                let b = b.eval(parser);
+                let c = c.eval(parser);
+                let constraint = byte_decomposition(element, &[opcode, a, b, c], parser);
+                parser.constraint(constraint);
+            }
+            ByteOperation::ShrConst(a, b, c) => {
+                let a = a.eval(parser);
+                let b = parser.constant(AP::Field::from_canonical_u8(*b));
+                let c = c.eval(parser);
+                let constraint = byte_decomposition(element, &[opcode, a, b, c], parser);
+                parser.constraint(constraint);
+            }
+            ByteOperation::ShrCarry(a, shift, result, carry) => {
+                let a = a.eval(parser);
+                let shift_val = parser.constant(AP::Field::from_canonical_u8(*shift));
+                let carry = carry.eval(parser);
+                let result = result.eval(parser);
+
+                let mut c =
+                    parser.mul_const(carry, AP::Field::from_canonical_u16(1u16 << (8 - shift)));
+                c = parser.add(result, c);
+
+                let constraint = byte_decomposition(element, &[opcode, a, shift_val, c], parser);
+                parser.constraint(constraint);
+            }
+            ByteOperation::Rot(a, b, result) => {
+                let a = a.eval(parser);
+                let b = b.eval(parser);
+                let c = result.eval(parser);
+                let constraint = byte_decomposition(element, &[opcode, a, b, c], parser);
+                parser.constraint(constraint);
+            }
+            ByteOperation::RotConst(a, b, c) => {
+                let a = a.eval(parser);
+                let b = parser.constant(AP::Field::from_canonical_u8(*b));
+                let c = c.eval(parser);
+                let constraint = byte_decomposition(element, &[opcode, a, b, c], parser);
+                parser.constraint(constraint);
+            }
+            ByteOperation::Not(a, b) => {
+                let a = a.eval(parser);
+                let b = b.eval(parser);
+                let zero = parser.zero();
+                let constraint = byte_decomposition(element, &[opcode, a, b, zero], parser);
+                parser.constraint(constraint);
+            }
+            ByteOperation::Range(a) => {
+                let a = a.eval(parser);
+                let zero = parser.zero();
+                let constraint = byte_decomposition(element, &[opcode, a, zero, zero], parser);
+                parser.constraint(constraint);
+            }
         }
     }
 
@@ -175,7 +241,7 @@ impl ByteOperation<ByteRegister> {
 }
 
 impl<T> ByteOperation<T> {
-    pub const fn opcode(&self) -> u32 {
+    pub const fn opcode(&self) -> u8 {
         match self {
             ByteOperation::And(_, _, _) => OPCODE_AND,
             ByteOperation::Xor(_, _, _) => OPCODE_XOR,
@@ -189,7 +255,7 @@ impl<T> ByteOperation<T> {
         }
     }
 
-    pub fn from_opcode_and_values(opcode: u32, a: T, b: T, c: Option<T>) -> Self {
+    pub fn from_opcode_and_values(opcode: u8, a: T, b: T, c: Option<T>) -> Self {
         match opcode {
             OPCODE_AND => ByteOperation::And(a, b, c.unwrap()),
             OPCODE_XOR => ByteOperation::Xor(a, b, c.unwrap()),
@@ -202,7 +268,7 @@ impl<T> ByteOperation<T> {
     }
 
     pub fn field_opcode<F: Field>(&self) -> F {
-        F::from_canonical_u32(self.opcode())
+        F::from_canonical_u8(self.opcode())
     }
 }
 
@@ -231,6 +297,24 @@ impl ByteOperation<u8> {
 
     pub fn range(a: u8) -> Self {
         ByteOperation::Range(a)
+    }
+
+    pub fn lookup_digest_value(&self) -> u32 {
+        let opcode = self.opcode();
+        match self {
+            ByteOperation::And(a, b, result) => u32::from_le_bytes([opcode, *a, *b, *result]),
+            ByteOperation::Xor(a, b, result) => u32::from_le_bytes([opcode, *a, *b, *result]),
+            ByteOperation::Shr(a, b, c) => u32::from_le_bytes([opcode, *a, *b, *c]),
+            ByteOperation::ShrConst(a, b, c) => u32::from_le_bytes([opcode, *a, *b, *c]),
+            ByteOperation::ShrCarry(a, shift, result, carry) => {
+                let res_val = *result as u16 + (*carry as u16 * (1u16 << (8 - shift)));
+                u32::from_le_bytes([opcode, *a, *shift, res_val as u8])
+            }
+            ByteOperation::Rot(a, b, result) => u32::from_le_bytes([opcode, *a, *b, *result]),
+            ByteOperation::RotConst(a, b, c) => u32::from_le_bytes([opcode, *a, *b, *c]),
+            ByteOperation::Not(a, b) => u32::from_le_bytes([opcode, *a, *b, 0]),
+            ByteOperation::Range(a) => u32::from_le_bytes([opcode, *a, 0, 0]),
+        }
     }
 
     pub fn as_field_op<F: Field>(&self) -> ByteOperation<F> {

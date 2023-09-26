@@ -1,6 +1,5 @@
 use alloc::sync::Arc;
 use core::array::from_fn;
-use core::sync::atomic::Ordering;
 
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -12,7 +11,6 @@ use crate::chip::bool::SelectInstruction;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
-use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::Register;
 use crate::chip::trace::writer::TraceWriter;
@@ -21,7 +19,7 @@ use crate::chip::uint::bytes::bit_operations::not::Not;
 use crate::chip::uint::bytes::bit_operations::util::u8_to_bits_le;
 use crate::chip::uint::bytes::bit_operations::xor::Xor;
 use crate::chip::uint::bytes::decode::ByteDecodeInstruction;
-use crate::chip::uint::bytes::operations::value::ByteOperation;
+use crate::chip::uint::bytes::operations::value::{ByteOperation, ByteOperationDigestConstraint};
 use crate::chip::uint::bytes::operations::{
     OPCODE_AND, OPCODE_INDICES, OPCODE_NOT, OPCODE_RANGE, OPCODE_ROT, OPCODE_SHR, OPCODE_XOR,
 };
@@ -39,24 +37,11 @@ pub struct ByteLookupTable {
     b_bits: ArrayRegister<BitRegister>,
     results_bits: [ArrayRegister<BitRegister>; NUM_BIT_OPPS],
     pub multiplicity_data: Arc<MultiplicityData>,
-    pub digests: Vec<CubicRegister>,
-}
-
-impl ByteLookupTable {
-    pub fn reset(&self) {
-        for v in self.multiplicity_data.multiplicities_values.0.iter() {
-            for q in v {
-                q.store(0, Ordering::SeqCst);
-            }
-        }
-    }
+    pub digests: Vec<ElementRegister>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn new_byte_lookup_table(
-        &mut self,
-        row_acc_challenges: ArrayRegister<CubicRegister>,
-    ) -> ByteLookupTable
+    pub fn new_byte_lookup_table(&mut self) -> ByteLookupTable
     where
         L::Instruction: From<ByteInstructionSet>
             + From<SelectInstruction<BitRegister>>
@@ -72,7 +57,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let b_bits = self.alloc_array::<BitRegister>(8);
         let results_bits = from_fn::<_, NUM_BIT_OPPS, _>(|_| self.alloc_array::<BitRegister>(8));
 
-        let multiplicity_data = MultiplicityData::new(1 << 16, multiplicities);
+        let multiplicity_data = MultiplicityData::new(multiplicities);
 
         // Constrain the bit instructions
         for (k, &opcode) in OPCODE_INDICES.iter().enumerate() {
@@ -123,9 +108,11 @@ impl<L: AirParameters> AirBuilder<L> {
         for (k, opcode) in OPCODE_INDICES.iter().enumerate() {
             let operation =
                 ByteOperation::from_opcode_and_values(*opcode, a, b, results.get(k).copied());
-            let acc_expressions = operation.expression_array();
-            let digest = self.accumulate_expressions(&row_acc_challenges, &acc_expressions);
+            let digest = self.alloc::<ElementRegister>();
             digests.push(digest);
+
+            let digest_constraint = ByteOperationDigestConstraint::new(operation, digest);
+            self.register_instruction::<ByteInstructionSet>(digest_constraint.into());
         }
 
         ByteLookupTable {
@@ -154,6 +141,8 @@ impl ByteLookupTable {
                 for (k, operation) in operations_dict[&i].iter().enumerate() {
                     let as_field_bits = |&x| u8_to_bits_le(x).map(|b| F::from_canonical_u8(b));
                     let as_field = |&x| F::from_canonical_u8(x);
+                    let digest_val = F::from_canonical_u32(operation.lookup_digest_value());
+                    self.digests[k].assign_to_raw_slice(row, &digest_val);
                     match operation {
                         ByteOperation::And(a, b, c) => {
                             // Write field values
@@ -191,10 +180,5 @@ impl ByteLookupTable {
                     }
                 }
             });
-    }
-
-    pub fn write_multiplicities<F: Field>(&self, writer: &TraceWriter<F>) {
-        // Assign multiplicities to the trace
-        self.multiplicity_data.write_multiplicities(writer);
     }
 }

@@ -33,8 +33,6 @@ pub struct SHA256AirParameters<F, E>(pub PhantomData<(F, E)>);
 
 pub type U32Target = <U32Register as Register>::Value<Target>;
 
-pub const SHA256_COLUMNS: usize = 551 + 927;
-
 #[derive(Debug, Clone)]
 pub struct MessageChunks {
     pub values: Vec<u8>,
@@ -72,8 +70,8 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for SHA256AirParamete
 
     type Instruction = U32Instruction;
 
-    const NUM_FREE_COLUMNS: usize = 551;
-    const EXTENDED_COLUMNS: usize = 927;
+    const NUM_FREE_COLUMNS: usize = 745;
+    const EXTENDED_COLUMNS: usize = 345;
     const NUM_ARITHMETIC_COLUMNS: usize = 0;
 }
 
@@ -187,7 +185,6 @@ impl<
         for i in 0..num_rows {
             writer.write_row_instructions(&trace_generator.air_data, i);
         }
-        table.write_multiplicities(&writer);
 
         // Fill sha public values into the output buffer
         self.pub_values_target

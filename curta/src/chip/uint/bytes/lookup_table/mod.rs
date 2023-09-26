@@ -7,6 +7,7 @@ use super::bit_operations::not::Not;
 use super::bit_operations::xor::Xor;
 use super::decode::ByteDecodeInstruction;
 use super::operations::instruction::ByteOperationInstruction;
+use super::operations::value::ByteOperationDigestConstraint;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::bool::SelectInstruction;
@@ -16,7 +17,6 @@ use crate::chip::register::bit::BitRegister;
 use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
-use crate::chip::uint::bytes::operations::NUM_CHALLENGES;
 use crate::chip::AirParameters;
 
 pub mod builder_operations;
@@ -33,6 +33,7 @@ pub enum ByteInstructionSet {
     BitNot(Not<8>),
     BitSelect(SelectInstruction<BitRegister>),
     Decode(ByteDecodeInstruction),
+    Digest(ByteOperationDigestConstraint),
 }
 
 pub trait ByteInstructions:
@@ -40,6 +41,7 @@ pub trait ByteInstructions:
     + From<ByteOperationInstruction>
     + From<SelectInstruction<BitRegister>>
     + From<ByteDecodeInstruction>
+    + From<ByteOperationDigestConstraint>
 {
 }
 
@@ -52,11 +54,8 @@ impl<L: AirParameters> AirBuilder<L> {
             + From<SelectInstruction<BitRegister>>
             + From<ByteDecodeInstruction>,
     {
-        let row_acc_challenges = self.alloc_challenge_array::<CubicRegister>(NUM_CHALLENGES);
-
-        let lookup_table = self.new_byte_lookup_table(row_acc_challenges);
-        let operations =
-            ByteLookupOperations::new(lookup_table.multiplicity_data.clone(), row_acc_challenges);
+        let lookup_table = self.new_byte_lookup_table();
+        let operations = ByteLookupOperations::new(lookup_table.multiplicity_data.clone());
 
         (operations, lookup_table)
     }
@@ -76,7 +75,7 @@ impl<L: AirParameters> AirBuilder<L> {
         );
         let lookup_values = self.lookup_values(&lookup_challenge, &operation_values.values);
 
-        self.cubic_lookup_from_table_and_values(lookup_table, lookup_values);
+        self.element_lookup_from_table_and_values(lookup_table, lookup_values);
     }
 }
 
@@ -89,6 +88,7 @@ impl<AP: AirParser> AirConstraint<AP> for ByteInstructionSet {
             Self::BitNot(op) => op.eval(parser),
             Self::BitSelect(op) => op.eval(parser),
             Self::Decode(instruction) => instruction.eval(parser),
+            Self::Digest(instruction) => instruction.eval(parser),
         }
     }
 }
@@ -102,6 +102,7 @@ impl<F: PrimeField64> Instruction<F> for ByteInstructionSet {
             Self::BitNot(op) => Instruction::<F>::inputs(op),
             Self::BitSelect(op) => Instruction::<F>::inputs(op),
             Self::Decode(instruction) => Instruction::<F>::inputs(instruction),
+            Self::Digest(instruction) => Instruction::<F>::inputs(instruction),
         }
     }
 
@@ -113,6 +114,7 @@ impl<F: PrimeField64> Instruction<F> for ByteInstructionSet {
             Self::BitNot(op) => Instruction::<F>::trace_layout(op),
             Self::BitSelect(op) => Instruction::<F>::trace_layout(op),
             Self::Decode(instruction) => Instruction::<F>::trace_layout(instruction),
+            Self::Digest(instruction) => Instruction::<F>::trace_layout(instruction),
         }
     }
 
@@ -124,6 +126,7 @@ impl<F: PrimeField64> Instruction<F> for ByteInstructionSet {
             Self::BitNot(op) => Instruction::<F>::write(op, writer, row_index),
             Self::BitSelect(op) => Instruction::<F>::write(op, writer, row_index),
             Self::Decode(instruction) => Instruction::<F>::write(instruction, writer, row_index),
+            Self::Digest(instruction) => Instruction::<F>::write(instruction, writer, row_index),
         }
     }
 }
@@ -164,6 +167,12 @@ impl From<ByteDecodeInstruction> for ByteInstructionSet {
     }
 }
 
+impl From<ByteOperationDigestConstraint> for ByteInstructionSet {
+    fn from(instruction: ByteOperationDigestConstraint) -> Self {
+        Self::Digest(instruction)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rand::{thread_rng, Rng};
@@ -186,8 +195,8 @@ mod tests {
 
         type Instruction = ByteInstructionSet;
 
-        const NUM_FREE_COLUMNS: usize = 281;
-        const EXTENDED_COLUMNS: usize = 447;
+        const NUM_FREE_COLUMNS: usize = 377;
+        const EXTENDED_COLUMNS: usize = 159;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
     }
 
@@ -327,7 +336,6 @@ mod tests {
         );
         a_not.assign_to_raw_slice(&mut public_write, &F::from_canonical_u8(!a_pub_val));
         b_not.assign_to_raw_slice(&mut public_write, &F::from_canonical_u8(!b_pub_val));
-        let public_inputs = public_write.clone();
         drop(public_write);
 
         for i in 0..num_rows {
@@ -365,10 +373,10 @@ mod tests {
             writer.write_row_instructions(&generator.air_data, i);
         }
         writer.write_global_instructions(&generator.air_data);
-        table.write_multiplicities(&writer);
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
+        let public_inputs = writer.public.read().unwrap().clone();
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &public_inputs);

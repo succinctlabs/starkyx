@@ -11,6 +11,7 @@ use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::decode::ByteDecodeInstruction;
 use crate::chip::uint::bytes::lookup_table::{ByteInstructionSet, ByteInstructions};
 use crate::chip::uint::bytes::operations::instruction::ByteOperationInstruction;
+use crate::chip::uint::bytes::operations::value::ByteOperationDigestConstraint;
 use crate::chip::uint::register::U64Register;
 use crate::math::prelude::*;
 
@@ -105,6 +106,12 @@ impl From<SelectInstruction<U64Register>> for U32Instruction {
     }
 }
 
+impl From<ByteOperationDigestConstraint> for U32Instruction {
+    fn from(op: ByteOperationDigestConstraint) -> Self {
+        Self::Bit(op.into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rand::{thread_rng, Rng};
@@ -125,8 +132,8 @@ mod tests {
 
         type Instruction = U32Instruction;
 
-        const NUM_FREE_COLUMNS: usize = 1200;
-        const EXTENDED_COLUMNS: usize = 1400;
+        const NUM_FREE_COLUMNS: usize = 1467;
+        const EXTENDED_COLUMNS: usize = 450;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
     }
 
@@ -139,8 +146,8 @@ mod tests {
 
         type Instruction = U32Instruction;
 
-        const NUM_FREE_COLUMNS: usize = 2200;
-        const EXTENDED_COLUMNS: usize = 2800;
+        const NUM_FREE_COLUMNS: usize = 1437;
+        const EXTENDED_COLUMNS: usize = 450;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
     }
 
@@ -251,7 +258,6 @@ mod tests {
 
             writer.write_row_instructions(&generator.air_data, i);
         }
-        table.write_multiplicities(&writer);
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
@@ -374,7 +380,6 @@ mod tests {
 
             writer.write_row_instructions(&generator.air_data, i);
         }
-        table.write_multiplicities(&writer);
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);

@@ -1134,7 +1134,6 @@ mod tests {
                     msg_to_check %= msgs.len();
                 }
             }
-            table.write_multiplicities(&writer);
         });
 
         let public_inputs = writer.0.public.read().unwrap().clone();

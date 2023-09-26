@@ -202,7 +202,6 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Simple
             writer.write_row_instructions(&self.trace_generator.air_data, i);
         }
         writer.write_global_instructions(&self.trace_generator.air_data);
-        self.table.write_multiplicities(&writer);
     }
 
     fn serialize(
