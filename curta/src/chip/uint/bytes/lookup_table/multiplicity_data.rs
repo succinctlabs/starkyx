@@ -13,14 +13,12 @@ use crate::chip::uint::bytes::operations::{
 };
 use crate::math::prelude::*;
 
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MultiplicityData {
     multiplicities: ArrayRegister<ElementRegister>,
     operations_multipcitiy_dict: HashMap<ByteOperation<u8>, (usize, usize)>,
     pub operations_dict: HashMap<usize, Vec<ByteOperation<u8>>>,
 }
-
 
 impl MultiplicityData {
     pub fn new(multiplicities: ArrayRegister<ElementRegister>) -> Self {

@@ -376,7 +376,6 @@ mod tests {
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
-
         let public_inputs = writer.public.read().unwrap().clone();
 
         // Generate proof and verify as a stark
