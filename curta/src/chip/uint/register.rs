@@ -90,10 +90,6 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 2;
         const EXTENDED_COLUMNS: usize = 2;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
-
-        fn num_rows_bits() -> usize {
-            16
-        }
     }
 
     #[test]

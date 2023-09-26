@@ -27,7 +27,7 @@ use crate::chip::register::element::ElementRegister;
 use crate::chip::register::RegisterSerializable;
 use crate::chip::trace::generator::ArithmeticGenerator;
 use crate::chip::utils::{biguint_to_16_digits_field, biguint_to_bits_le, field_limbs_to_biguint};
-use crate::chip::{AirParameters, Chip};
+use crate::chip::Chip;
 use crate::math::extension::CubicParameters;
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
@@ -136,8 +136,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
             .collect::<Vec<_>>();
 
         let stark = Starky::new(air);
-        let config =
-            StarkyConfig::<C, D>::standard_fast_config(ScalarMulEd25519::<F, E>::num_rows());
+        let config = StarkyConfig::<C, D>::standard_fast_config(1 << 16);
         let proof_target = self.add_virtual_stark_proof(&stark, &config);
 
         self.verify_stark_proof(&config, &stark, &proof_target, &public_input_target);
@@ -313,7 +312,7 @@ impl<
 
     fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
         // Generate the trace
-        let trace_generator = ArithmeticGenerator::new(self.trace_data.clone());
+        let trace_generator = ArithmeticGenerator::new(self.trace_data.clone(), 1 << 16);
 
         let writer = trace_generator.new_writer();
 

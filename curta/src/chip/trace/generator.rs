@@ -18,11 +18,12 @@ use crate::trace::AirTrace;
 pub struct ArithmeticGenerator<L: AirParameters> {
     pub writer: TraceWriter<L::Field>,
     pub air_data: AirTraceData<L>,
+    pub num_rows: usize,
 }
 
 impl<L: AirParameters> ArithmeticGenerator<L> {
     pub fn reset(&self) {
-        let trace_new = AirTrace::new_with_capacity(L::num_columns(), L::num_rows());
+        let trace_new = AirTrace::new_with_capacity(L::num_columns(), self.num_rows);
         let global_new = Vec::new();
         let challenges_new = Vec::new();
         let public_new = Vec::new();
@@ -40,18 +41,19 @@ impl<L: AirParameters> ArithmeticGenerator<L> {
         *public = public_new;
     }
 
-    pub fn new(air_data: AirTraceData<L>) -> Self {
+    pub fn new(air_data: AirTraceData<L>, num_rows: usize) -> Self {
         let num_public_inputs = air_data.num_public_inputs;
         let num_global_values = air_data.num_global_values;
         Self {
             writer: TraceWriter::new_with_value(
                 L::Field::ZERO,
                 L::num_columns(),
-                L::num_rows(),
+                num_rows,
                 num_public_inputs,
                 num_global_values,
             ),
             air_data,
+            num_rows,
         }
     }
 
@@ -91,7 +93,7 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                 public_write[id_0..id_1].copy_from_slice(&public_inputs[id_0..id_1]);
                 drop(public_write);
 
-                let num_rows = L::num_rows();
+                let num_rows = self.num_rows;
 
                 // Write the range check table and multiplicitiies
                 if let Some(Lookup::Element(lookup_data)) = &self.air_data.range_data {
@@ -125,7 +127,7 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                 })
             }
             1 => {
-                let num_rows = L::num_rows();
+                let num_rows = self.num_rows;
 
                 // Insert the challenges into the generator
                 let writer = self.new_writer();

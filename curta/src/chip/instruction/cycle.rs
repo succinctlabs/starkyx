@@ -19,10 +19,9 @@ use crate::math::prelude::*;
 pub struct Cycle<F> {
     pub start_bit: BitRegister,
     pub end_bit: BitRegister,
-    num_cycles: usize,
+    start_bit_witness: ElementRegister,
+    end_bit_witness: ElementRegister,
     element: ElementRegister,
-    pub start_counter: ElementRegister,
-    pub end_counter: ElementRegister,
     group: Vec<F>,
 }
 
@@ -46,23 +45,15 @@ impl<L: AirParameters> AirBuilder<L> {
         let start_bit = self.alloc::<BitRegister>();
         let end_bit = self.alloc::<BitRegister>();
         let element = self.alloc::<ElementRegister>();
-        let start_counter = self.alloc::<ElementRegister>();
-        let end_counter = self.alloc::<ElementRegister>();
+        let start_bit_witness = self.alloc::<ElementRegister>();
+        let end_bit_witness = self.alloc::<ElementRegister>();
         let group = L::Field::two_adic_subgroup(length_log);
-        let num_rows = L::num_rows();
-        let num_cycles = num_rows / group.len();
-        assert_eq!(
-            num_rows % group.len(),
-            0,
-            "Number of rows must be divisible by the size of the group"
-        );
         let cycle = Cycle {
             start_bit,
             end_bit,
-            num_cycles,
             element,
-            start_counter,
-            end_counter,
+            start_bit_witness,
+            end_bit_witness,
             group,
         };
 
@@ -119,45 +110,46 @@ impl<AP: AirParser<Field = F>, F: Field> AirConstraint<AP> for Cycle<F> {
         let group_constraint = parser.sub(element_next, element_times_generator);
         parser.constraint_transition(group_constraint);
 
-        // Impose compatibility of the bit and the group so that
+        // Impose compatibility of the bit and the group so that following relations hold:
         // start_bit = 1 <=> element == 1, end_bit = 1 <=> element == gen_inv
+
+        // In order to achieve this, we impose the following constraints on the start_bit and the
+        // end_bit:
+        // 1. start_bit * (element - 1) = 0. This implies that start_bit = 1 => element = 1.
+        // 2. end_bit * (element - generator_inv) = 0 <=> end_bit = 1 => element = generator_inv.
+        // 3. The field value `element - (1 - start_bit)` is invertible. This implies that
+        // 4. The field value `element - generator_inv * (1 - end_bit)` is invertible. This implies
+
         // Impose start_bit * (element - 1) = 0, this implies that start_bit = 1 => element = 1
         let start_bit = self.start_bit.eval(parser);
         let elem_minus_one = parser.sub_const(element, F::ONE);
         let start_bit_constraint = parser.mul(start_bit, elem_minus_one);
         parser.constraint(start_bit_constraint);
 
-        let count = F::from_canonical_usize(self.num_cycles);
-        // Impose start_counter constraints, to verify that start_bit = 1 every time element = 1
-        let start_counter = self.start_counter.eval(parser);
-        parser.constraint_first_row(start_counter);
-        let start_counter_next = self.start_counter.next().eval(parser);
-        let start_counter_diff = parser.sub(start_counter_next, start_counter);
-        let start_counter_constraint = parser.sub(start_counter_diff, start_bit);
-        parser.constraint_transition(start_counter_constraint);
+        // Impose `element - (1 - start_bit)` is invertible using the witness as an inverse.
+        let start_bit_witness = self.start_bit_witness.eval(parser);
+        let elem_minus_one_minus_start_bit = parser.add(elem_minus_one, start_bit);
+        let mut start_bit_witness_constraint =
+            parser.mul(elem_minus_one_minus_start_bit, start_bit_witness);
+        start_bit_witness_constraint = parser.sub_const(start_bit_witness_constraint, F::ONE);
+        parser.constraint(start_bit_witness_constraint);
 
-        let start_plus_bit = parser.add(start_counter, start_bit);
-        let start_counter_last_constraint = parser.sub_const(start_plus_bit, count);
-        parser.constraint_last_row(start_counter_last_constraint);
-
-        // Impose end_bit * (element - 1) = 0, this implies that end_bit = 1 => element = gen_inv
+        // First, we impose end_bit * (element - generator_inv)  = 0.
         let generator_inv = self.group.last().unwrap();
         let end_bit = self.end_bit.eval(parser);
-        let elem_minus_one = parser.sub_const(element, *generator_inv);
-        let end_bit_constraint = parser.mul(end_bit, elem_minus_one);
+        let elem_minus_gen_inv = parser.sub_const(element, *generator_inv);
+        let end_bit_constraint = parser.mul(end_bit, elem_minus_gen_inv);
         parser.constraint(end_bit_constraint);
 
-        // Impose end_counter constraints, to verify that end_bit = 1 every time element = gen_inv
-        let end_counter = self.end_counter.eval(parser);
-        parser.constraint_first_row(end_counter);
-        let end_counter_next = self.end_counter.next().eval(parser);
-        let end_counter_diff = parser.sub(end_counter_next, end_counter);
-        let end_counter_constraint = parser.sub(end_counter_diff, end_bit);
-        parser.constraint_transition(end_counter_constraint);
-
-        let end_plus_bit = parser.add(end_counter, end_bit);
-        let end_counter_last_constraint = parser.sub_const(end_plus_bit, count);
-        parser.constraint_last_row(end_counter_last_constraint);
+        // Second, we impose that the field value `element - generator_inv * (1 - end_bit)` is
+        // invertible. This implies that element = generator_inv => end_bit = 1.
+        let end_bit_witness = self.end_bit_witness.eval(parser);
+        let end_bit_gen_inv = parser.mul_const(end_bit, *generator_inv);
+        let elem_minus_gen_inv_minus_end_bit = parser.add(elem_minus_gen_inv, end_bit_gen_inv);
+        let mut end_bit_witness_constraint =
+            parser.mul(elem_minus_gen_inv_minus_end_bit, end_bit_witness);
+        end_bit_witness_constraint = parser.sub_const(end_bit_witness_constraint, F::ONE);
+        parser.constraint(end_bit_witness_constraint);
     }
 }
 
@@ -166,9 +158,9 @@ impl<F: Field> Instruction<F> for Cycle<F> {
         vec![
             *self.start_bit.register(),
             *self.end_bit.register(),
+            *self.start_bit_witness.register(),
+            *self.end_bit_witness.register(),
             *self.element.register(),
-            *self.start_counter.register(),
-            *self.end_counter.register(),
         ]
     }
 
@@ -182,24 +174,40 @@ impl<F: Field> Instruction<F> for Cycle<F> {
 
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let cycle = row_index % self.group.len();
-        writer.write(&self.element, &self.group[cycle], row_index);
-        let counter = F::from_canonical_usize(row_index / self.group.len());
-
+        let element = self.group[cycle];
+        let gen_inverse = *self.group.last().unwrap();
+        writer.write(&self.element, &element, row_index);
         if cycle == 0 {
             writer.write(&self.start_bit, &F::ONE, row_index);
             writer.write(&self.end_bit, &F::ZERO, row_index);
-            writer.write(&self.start_counter, &(counter), row_index);
-            writer.write(&self.end_counter, &counter, row_index);
+            writer.write(&self.start_bit_witness, &element.inverse(), row_index);
+            writer.write(
+                &self.end_bit_witness,
+                &(element - gen_inverse).inverse(),
+                row_index,
+            );
         } else if cycle == self.group.len() - 1 {
             writer.write(&self.start_bit, &F::ZERO, row_index);
             writer.write(&self.end_bit, &F::ONE, row_index);
-            writer.write(&self.start_counter, &(counter + F::ONE), row_index);
-            writer.write(&self.end_counter, &counter, row_index);
+            writer.write(
+                &self.start_bit_witness,
+                &(element - F::ONE).inverse(),
+                row_index,
+            );
+            writer.write(&self.end_bit_witness, &element.inverse(), row_index);
         } else {
             writer.write(&self.start_bit, &F::ZERO, row_index);
             writer.write(&self.end_bit, &F::ZERO, row_index);
-            writer.write(&self.start_counter, &(counter + F::ONE), row_index);
-            writer.write(&self.end_counter, &counter, row_index);
+            writer.write(
+                &self.start_bit_witness,
+                &(element - F::ONE).inverse(),
+                row_index,
+            );
+            writer.write(
+                &self.end_bit_witness,
+                &(element - gen_inverse).inverse(),
+                row_index,
+            );
         }
     }
 }
@@ -223,10 +231,6 @@ mod tests {
 
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
         const NUM_FREE_COLUMNS: usize = 5;
-
-        fn num_rows_bits() -> usize {
-            8
-        }
     }
 
     #[test]
@@ -239,9 +243,10 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1 << 8;
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let (tx, rx) = channel();
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             let writer = generator.new_writer();
             let handle = tx.clone();
             let cycle = cycle.clone();
@@ -264,7 +269,7 @@ mod tests {
         }
 
         let stark = Starky::new(air);
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &[]);

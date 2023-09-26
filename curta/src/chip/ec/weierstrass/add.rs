@@ -209,10 +209,6 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 2;
         const EXTENDED_COLUMNS: usize = 3327;
         type Instruction = FpInstruction<Bn254BaseField>;
-
-        fn num_rows_bits() -> usize {
-            16
-        }
     }
 
     #[test]
@@ -229,7 +225,8 @@ mod tests {
         let _gadget = builder.sw_projective_add::<E>(&p, &q);
 
         let (air, trace_data) = builder.build();
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1 << 16;
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let base = E::generator();
         let mut rng = thread_rng();
@@ -238,14 +235,14 @@ mod tests {
         let p_int = &base * &a;
         let q_int = &base * &b;
         let writer = generator.new_writer();
-        (0..L::num_rows()).into_par_iter().for_each(|i| {
+        (0..num_rows).into_par_iter().for_each(|i| {
             writer.write_sw_point(&p, &p_int, i);
             writer.write_sw_point(&q, &q_int, i);
             writer.write_row_instructions(&generator.air_data, i);
         });
 
         let stark = Starky::new(air);
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &[]);
@@ -265,10 +262,6 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 2;
         const EXTENDED_COLUMNS: usize = 3393;
         type Instruction = FpInstruction<Bn254BaseField>;
-
-        fn num_rows_bits() -> usize {
-            16
-        }
     }
 
     #[test]
@@ -284,20 +277,21 @@ mod tests {
         let _gadget = builder.sw_projective_doubling::<E>(&p);
 
         let (air, trace_data) = builder.build();
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1 << 16;
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let base = E::generator();
         let mut rng = thread_rng();
         let a = rng.gen_biguint(256);
         let p_int = &base * &a;
         let writer = generator.new_writer();
-        (0..L::num_rows()).into_par_iter().for_each(|i| {
+        (0..num_rows).into_par_iter().for_each(|i| {
             writer.write_sw_point(&p, &p_int, i);
             writer.write_row_instructions(&generator.air_data, i);
         });
 
         let stark = Starky::new(air);
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &[]);

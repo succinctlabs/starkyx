@@ -38,10 +38,6 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for ScalarMulEd25519<
     const NUM_FREE_COLUMNS: usize = NUM_FREE_COLUMNS;
     const EXTENDED_COLUMNS: usize = EXTENDED_COLUMNS;
     type Instruction = FpInstruction<Ed25519BaseField>;
-
-    fn num_rows_bits() -> usize {
-        16
-    }
 }
 
 impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {

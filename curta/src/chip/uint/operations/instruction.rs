@@ -128,10 +128,6 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 1200;
         const EXTENDED_COLUMNS: usize = 1400;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
-
-        fn num_rows_bits() -> usize {
-            16
-        }
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -146,10 +142,6 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 2200;
         const EXTENDED_COLUMNS: usize = 2800;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
-
-        fn num_rows_bits() -> usize {
-            16
-        }
     }
 
     #[test]
@@ -218,7 +210,9 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1 << 16;
+
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 
         table.write_table_entries(&writer);
@@ -226,7 +220,7 @@ mod tests {
         let to_field = |a: u32| a.to_le_bytes().map(F::from_canonical_u8);
 
         let mut rng = thread_rng();
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             let a_val = rng.gen::<u32>();
             let b_val = rng.gen::<u32>();
             writer.write(&a, &to_field(a_val), i);
@@ -260,7 +254,7 @@ mod tests {
         table.write_multiplicities(&writer);
 
         let stark = Starky::new(air);
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &[]);
@@ -339,7 +333,9 @@ mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1 << 16;
+
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 
         table.write_table_entries(&writer);
@@ -347,7 +343,7 @@ mod tests {
         let to_field = |a: u64| a.to_le_bytes().map(F::from_canonical_u8);
 
         let mut rng = thread_rng();
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             let a_val = rng.gen::<u64>();
             let b_val = rng.gen::<u64>();
             writer.write(&a, &to_field(a_val), i);
@@ -381,7 +377,7 @@ mod tests {
         table.write_multiplicities(&writer);
 
         let stark = Starky::new(air);
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &[]);

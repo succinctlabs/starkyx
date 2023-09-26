@@ -26,7 +26,7 @@ pub struct BLAKE2BBuilderGadget<L: AirParameters + 'static + Clone + Debug + Sen
 
 impl<L: AirParameters + 'static + Clone + Debug + Send + Sync> BLAKE2BBuilderGadget<L> {
     pub fn max_num_chunks(&mut self) -> usize {
-        L::num_rows() / NUM_MIX_ROUNDS
+        (1 << 16) / NUM_MIX_ROUNDS
     }
 }
 

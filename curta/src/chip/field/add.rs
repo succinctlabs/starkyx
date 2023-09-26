@@ -217,10 +217,6 @@ mod tests {
         const EXTENDED_COLUMNS: usize = 219;
 
         type Instruction = FpAddInstruction<Fp25519>;
-
-        fn num_rows_bits() -> usize {
-            16
-        }
     }
 
     #[test]
@@ -239,10 +235,10 @@ mod tests {
         let _add_insr = builder.fp_add(&a, &b);
 
         let (air, trace_data) = builder.build();
+        let num_rows = 1 << 16;
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
-
-        let trace_initial = (0..L::num_rows())
+        let trace_initial = (0..num_rows)
             .into_par_iter()
             .map(|_| {
                 let mut rng = thread_rng();
@@ -267,7 +263,7 @@ mod tests {
             });
 
         let stark = Starky::new(air);
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &[]);

@@ -21,8 +21,4 @@ impl<F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> AirPar
     const EXTENDED_COLUMNS: usize = 51;
 
     type Instruction = ByteInstructionSet;
-
-    fn num_rows_bits() -> usize {
-        16
-    }
 }

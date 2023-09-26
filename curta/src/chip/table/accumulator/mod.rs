@@ -124,10 +124,6 @@ pub mod tests {
         const EXTENDED_COLUMNS: usize = 6;
 
         type Instruction = EmptyInstruction<GoldilocksField>;
-
-        fn num_rows_bits() -> usize {
-            10
-        }
     }
 
     #[test]
@@ -196,17 +192,18 @@ pub mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1 << 10;
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let writer = generator.new_writer();
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             writer.write(&x_1, &GoldilocksField::rand(), i);
             writer.write(&x_2, &GoldilocksField::rand(), i);
         }
 
         let stark = Starky::from_chip(air);
 
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &[]);
@@ -264,10 +261,11 @@ pub mod tests {
 
         let (air, trace_data) = builder.build();
 
-        let generator = ArithmeticGenerator::<L>::new(trace_data);
+        let num_rows = 1 << 10;
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
         let writer = generator.new_writer();
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             writer.write_row_instructions(&generator.air_data, i);
         }
 
@@ -275,7 +273,7 @@ pub mod tests {
 
         let stark = Starky::from_chip(air);
 
-        let config = SC::standard_fast_config(L::num_rows());
+        let config = SC::standard_fast_config(num_rows);
 
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &public_inputs);

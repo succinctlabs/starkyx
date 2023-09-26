@@ -44,10 +44,6 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for BLAKE2BAirParamet
     const NUM_FREE_COLUMNS: usize = 2493;
     const EXTENDED_COLUMNS: usize = 4755;
     const NUM_ARITHMETIC_COLUMNS: usize = 0;
-
-    fn num_rows_bits() -> usize {
-        16
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,10 +104,11 @@ impl<
         let (air, trace_data) = air_builder.build();
 
         let stark = Starky::new(air);
-        let config =
-            StarkyConfig::<C, D>::standard_fast_config(BLAKE2BAirParameters::<F, E>::num_rows());
+        let num_rows = 1 << 16;
+        let config = StarkyConfig::<C, D>::standard_fast_config(num_rows);
 
-        let trace_generator = ArithmeticGenerator::<BLAKE2BAirParameters<F, E>>::new(trace_data);
+        let trace_generator =
+            ArithmeticGenerator::<BLAKE2BAirParameters<F, E>>::new(trace_data, num_rows);
 
         BLAKE2BStarkData {
             stark,
@@ -178,7 +175,8 @@ impl<
             .map(|x| witness.get_target(*x).as_canonical_u64() as u8)
             .collect::<Vec<_>>();
 
-        let max_num_chunks = L::num_rows() / 128;
+        let num_rows = 1 << 16;
+        let max_num_chunks = num_rows / 128;
         assert!(padded_messages.len() <= max_num_chunks * 128);
 
         let msg_sizes = self
@@ -202,9 +200,9 @@ impl<
         // Write trace values
         let writer = trace_generator.new_writer();
         table.write_table_entries(&writer);
-        let blake_public_values = gadget.write(message_chunks, &msg_sizes, &writer, L::num_rows());
+        let blake_public_values = gadget.write(message_chunks, &msg_sizes, &writer, num_rows);
 
-        for i in 0..L::num_rows() {
+        for i in 0..num_rows {
             writer.write_row_instructions(&trace_generator.air_data, i);
         }
         table.write_multiplicities(&writer);
@@ -241,7 +239,8 @@ impl BLAKE2BPublicData<Target> {
         digests: &[Target],
         chunk_sizes: &[usize],
     ) -> Self {
-        let num_chunks = L::num_rows() / NUM_MIX_ROUNDS;
+        let num_rows = 1 << 16;
+        let num_chunks = num_rows / NUM_MIX_ROUNDS;
 
         let msg_chunks_targets = (0..num_chunks * MSG_ARRAY_SIZE)
             .map(|_| builder.add_virtual_target_arr::<8>())
@@ -438,7 +437,7 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for BLA
         let binding = state[0..4]
             .iter()
             .flat_map(|x| u64_to_le_field_bytes::<F>(*x))
-            .collect_vec();
+            .collect::<Vec<_>>();
         let digest_bytes = binding.as_slice();
 
         out_buffer.set_target_arr(&self.digest_bytes, digest_bytes);
