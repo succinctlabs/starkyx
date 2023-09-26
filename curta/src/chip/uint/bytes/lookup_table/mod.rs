@@ -55,8 +55,7 @@ impl<L: AirParameters> AirBuilder<L> {
             + From<ByteDecodeInstruction>,
     {
         let lookup_table = self.new_byte_lookup_table();
-        let operations =
-            ByteLookupOperations::new(lookup_table.multiplicity_data.clone());
+        let operations = ByteLookupOperations::new(lookup_table.multiplicity_data.clone());
 
         (operations, lookup_table)
     }
@@ -374,7 +373,6 @@ mod tests {
             writer.write_row_instructions(&generator.air_data, i);
         }
         writer.write_global_instructions(&generator.air_data);
-        table.write_multiplicities(&writer);
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);

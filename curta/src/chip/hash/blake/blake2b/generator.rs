@@ -205,7 +205,6 @@ impl<
         for i in 0..num_rows {
             writer.write_row_instructions(&trace_generator.air_data, i);
         }
-        table.write_multiplicities(&writer);
 
         // Fill blake2b public values into the output buffer
         self.pub_values_target

@@ -10,9 +10,7 @@ pub struct ByteLookupOperations {
 }
 
 impl ByteLookupOperations {
-    pub fn new(
-        multiplicity_data: Arc<MultiplicityData>,
-    ) -> Self {
+    pub fn new(multiplicity_data: Arc<MultiplicityData>) -> Self {
         let values = Vec::new();
         ByteLookupOperations {
             multiplicity_data,

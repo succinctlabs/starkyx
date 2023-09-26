@@ -187,7 +187,6 @@ impl<
         for i in 0..num_rows {
             writer.write_row_instructions(&trace_generator.air_data, i);
         }
-        table.write_multiplicities(&writer);
 
         // Fill sha public values into the output buffer
         self.pub_values_target

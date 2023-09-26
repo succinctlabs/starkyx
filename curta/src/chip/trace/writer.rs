@@ -265,6 +265,51 @@ impl<F: Field> TraceWriter<F> {
             self.write_instruction(instruction, 0);
         }
     }
+
+    /// An atomic fetch and modify operation on a register.
+    #[inline]
+    pub fn fetch_and_modify<T: Register>(
+        &self,
+        data: &T,
+        op: impl FnOnce(&T::Value<F>) -> T::Value<F>,
+        row_index: usize,
+    ) {
+        match data.register() {
+            MemorySlice::Local(..) => {
+                let mut trace = self.0.trace.write().unwrap();
+                let window = trace.window(row_index);
+                let parser = TraceWindowParser::new(window, &[], &[], &[]);
+                let value = data.eval(&parser);
+
+                let new_value = op(&value);
+                data.register()
+                    .assign(&mut trace.view_mut(), 0, T::align(&new_value), row_index);
+            }
+            MemorySlice::Next(..) => {
+                let mut trace = self.0.trace.write().unwrap();
+                let window = trace.window(row_index);
+                let parser = TraceWindowParser::new(window, &[], &[], &[]);
+                let value = data.eval(&parser);
+
+                let new_value = op(&value);
+                data.register()
+                    .assign(&mut trace.view_mut(), 0, T::align(&new_value), row_index);
+            }
+            MemorySlice::Global(..) => {
+                let mut global = self.0.global.write().unwrap();
+                let value = data.read_from_slice(&global);
+                let new_value = op(&value);
+                data.assign_to_raw_slice(&mut global, &new_value);
+            }
+            MemorySlice::Public(..) => {
+                let mut public = self.0.public.write().unwrap();
+                let value = data.read_from_slice(&public);
+                let new_value = op(&value);
+                data.assign_to_raw_slice(&mut public, &new_value);
+            }
+            MemorySlice::Challenge(..) => unreachable!("Challenge registers are read-only"),
+        }
+    }
 }
 
 impl<T> Deref for TraceWriter<T> {

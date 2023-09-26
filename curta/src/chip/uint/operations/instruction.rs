@@ -258,7 +258,6 @@ mod tests {
 
             writer.write_row_instructions(&generator.air_data, i);
         }
-        table.write_multiplicities(&writer);
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
@@ -381,7 +380,6 @@ mod tests {
 
             writer.write_row_instructions(&generator.air_data, i);
         }
-        table.write_multiplicities(&writer);
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);

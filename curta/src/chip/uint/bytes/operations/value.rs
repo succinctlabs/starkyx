@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{
-    OPCODE_AND, OPCODE_NOT, OPCODE_RANGE, OPCODE_ROT, OPCODE_SHR, OPCODE_XOR,
-};
+use super::{OPCODE_AND, OPCODE_NOT, OPCODE_RANGE, OPCODE_ROT, OPCODE_SHR, OPCODE_XOR};
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::builder::AirBuilder;
@@ -51,7 +49,6 @@ impl<AP: AirParser> AirConstraint<AP> for ByteOperationDigestConstraint {
 impl ConstraintInstruction for ByteOperationDigestConstraint {}
 
 impl ByteOperation<ByteRegister> {
-
     pub fn lookup_digest_constraint<AP: AirParser>(
         &self,
         parser: &mut AP,

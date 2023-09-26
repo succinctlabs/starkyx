@@ -1,6 +1,5 @@
 use alloc::sync::Arc;
 use core::array::from_fn;
-use core::sync::atomic::Ordering;
 
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -41,20 +40,8 @@ pub struct ByteLookupTable {
     pub digests: Vec<ElementRegister>,
 }
 
-impl ByteLookupTable {
-    pub fn reset(&self) {
-        for v in self.multiplicity_data.multiplicities_values.0.iter() {
-            for q in v {
-                q.store(0, Ordering::SeqCst);
-            }
-        }
-    }
-}
-
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn new_byte_lookup_table(
-        &mut self,
-    ) -> ByteLookupTable
+    pub fn new_byte_lookup_table(&mut self) -> ByteLookupTable
     where
         L::Instruction: From<ByteInstructionSet>
             + From<SelectInstruction<BitRegister>>
@@ -70,7 +57,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let b_bits = self.alloc_array::<BitRegister>(8);
         let results_bits = from_fn::<_, NUM_BIT_OPPS, _>(|_| self.alloc_array::<BitRegister>(8));
 
-        let multiplicity_data = MultiplicityData::new(1 << 16, multiplicities);
+        let multiplicity_data = MultiplicityData::new(multiplicities);
 
         // Constrain the bit instructions
         for (k, &opcode) in OPCODE_INDICES.iter().enumerate() {
@@ -193,10 +180,5 @@ impl ByteLookupTable {
                     }
                 }
             });
-    }
-
-    pub fn write_multiplicities<F: Field>(&self, writer: &TraceWriter<F>) {
-        // Assign multiplicities to the trace
-        self.multiplicity_data.write_multiplicities(writer);
     }
 }

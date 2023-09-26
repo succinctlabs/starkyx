@@ -610,7 +610,7 @@ mod tests {
     }
 
     // 551 + 927
-    // 745 + 345 
+    // 745 + 345
 
     #[test]
     fn test_sha_256_stark() {
@@ -693,7 +693,6 @@ mod tests {
                     assert_eq!(hash, digest.map(u32_to_le_field_bytes));
                 }
             }
-            table.write_multiplicities(&writer);
         });
 
         let public_inputs = writer.0.public.read().unwrap().clone();

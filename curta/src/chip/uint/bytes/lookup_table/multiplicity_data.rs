@@ -1,8 +1,6 @@
-use core::sync::atomic::{AtomicUsize, Ordering};
 use std::collections::HashMap;
 
 use itertools::Itertools;
-use plonky2_maybe_rayon::ParallelIterator;
 use serde::{Deserialize, Serialize};
 
 use crate::chip::register::array::ArrayRegister;
@@ -14,35 +12,18 @@ use crate::chip::uint::bytes::operations::{
     OPCODE_XOR,
 };
 use crate::math::prelude::*;
-use crate::maybe_rayon::*;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MultiplicityValues(pub Vec<[AtomicUsize; NUM_BIT_OPPS + 1]>);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MultiplicityData {
     multiplicities: ArrayRegister<ElementRegister>,
-    pub multiplicities_values: MultiplicityValues,
     operations_multipcitiy_dict: HashMap<ByteOperation<u8>, (usize, usize)>,
     pub operations_dict: HashMap<usize, Vec<ByteOperation<u8>>>,
 }
 
-impl MultiplicityValues {
-    pub fn new(num_rows: usize) -> Self {
-        Self(
-            (0..num_rows)
-                .map(|_| core::array::from_fn(|_| AtomicUsize::new(0)))
-                .collect(),
-        )
-    }
-
-    pub fn update(&self, row: usize, col: usize) {
-        self.0[row][col].fetch_add(1, Ordering::Relaxed);
-    }
-}
 
 impl MultiplicityData {
-    pub fn new(num_rows: usize, multiplicities: ArrayRegister<ElementRegister>) -> Self {
+    pub fn new(multiplicities: ArrayRegister<ElementRegister>) -> Self {
         let mut operations_multipcitiy_dict = HashMap::new();
         let mut operations_dict = HashMap::new();
         for (row_index, (a, b)) in (0..=u8::MAX).cartesian_product(0..=u8::MAX).enumerate() {
@@ -62,38 +43,19 @@ impl MultiplicityData {
             }
             operations_dict.insert(row_index, operations);
         }
-        let multiplicity_values = MultiplicityValues::new(num_rows);
-
         Self {
             multiplicities,
-            multiplicities_values: multiplicity_values,
             operations_dict,
             operations_multipcitiy_dict,
         }
     }
 
-    pub fn update(&self, operation: &ByteOperation<u8>) {
+    pub fn update<F: Field>(&self, operation: &ByteOperation<u8>, writer: &TraceWriter<F>) {
         let (row, col) = self.operations_multipcitiy_dict[operation];
-        self.multiplicities_values.update(row, col);
+        writer.fetch_and_modify(&self.multiplicities.get(col), |x| *x + F::ONE, row);
     }
 
     pub fn multiplicities(&self) -> &ArrayRegister<ElementRegister> {
         &self.multiplicities
-    }
-
-    pub fn write_multiplicities<F: Field>(&self, writer: &TraceWriter<F>) {
-        let multiplicities_array = self.multiplicities;
-        writer
-            .write_trace()
-            .unwrap()
-            .rows_par_mut()
-            .zip_eq(self.multiplicities_values.0.par_iter().map(|arr| {
-                core::array::from_fn::<_, { NUM_BIT_OPPS + 1 }, _>(|i| {
-                    F::from_canonical_usize(arr[i].load(Ordering::Relaxed))
-                })
-            }))
-            .for_each(|(row, multiplicities)| {
-                multiplicities_array.assign_to_raw_slice(row, &multiplicities);
-            });
     }
 }
