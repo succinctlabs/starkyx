@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::math::prelude::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct CubicElement<T>(pub [T; 3]);
 
 impl<T> CubicElement<T> {

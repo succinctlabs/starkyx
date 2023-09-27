@@ -86,6 +86,19 @@ pub trait CubicParser<E: CubicParameters<Self::Field>>: AirParser {
         CubicElement([z_0, z_1, z_2])
     }
 
+    fn scalar_mul_extension(
+        &mut self,
+        a: CubicElement<Self::Var>,
+        scalar: Self::Var,
+    ) -> CubicElement<Self::Var> {
+        let (x_0, x_1, x_2) = (a.0[0], a.0[1], a.0[2]);
+        CubicElement([
+            self.mul(x_0, scalar),
+            self.mul(x_1, scalar),
+            self.mul(x_2, scalar),
+        ])
+    }
+
     fn neg_extension(&mut self, a: CubicElement<Self::Var>) -> CubicElement<Self::Var> {
         let (x_0, x_1, x_2) = (a.0[0], a.0[1], a.0[2]);
         CubicElement([self.neg(x_0), self.neg(x_1), self.neg(x_2)])

@@ -575,9 +575,6 @@ impl SHA256Gadget {
         padded_msg.extend_from_slice(&len);
 
         padded_msg
-        // .chunks_exact(4)
-        // .map(|x| u32::from_be_bytes(x.try_into().unwrap()))
-        // .collect::<Vec<_>>()
     }
 }
 
