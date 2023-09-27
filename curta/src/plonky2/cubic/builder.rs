@@ -22,47 +22,47 @@ pub(crate) trait CubicCircuitBuilder<F: RichField + Extendable<D>, const D: usiz
         multiplicand_0: CubicElement<Target>,
         multiplicand_1: CubicElement<Target>,
         addend: CubicElement<Target>,
-        arithmetic_results: &mut HashMap<CubicOperation<F>, CubicElement<Target>>,
+        cubic_results: &mut HashMap<CubicOperation<F>, CubicElement<Target>>,
     ) -> CubicElement<Target>;
 
     fn add_cubic(
         &mut self,
         a: CubicElement<Target>,
         b: CubicElement<Target>,
-        arithmetic_results: &mut HashMap<CubicOperation<F>, CubicElement<Target>>,
+        cubic_results: &mut HashMap<CubicOperation<F>, CubicElement<Target>>,
     ) -> CubicElement<Target> {
         let one = self.one_cubic();
-        self.arithmetic_cubic(F::ONE, F::ONE, one, a, b, arithmetic_results)
+        self.arithmetic_cubic(F::ONE, F::ONE, one, a, b, cubic_results)
     }
 
     fn sub_cubic(
         &mut self,
         a: CubicElement<Target>,
         b: CubicElement<Target>,
-        arithmetic_results: &mut HashMap<CubicOperation<F>, CubicElement<Target>>,
+        cubic_results: &mut HashMap<CubicOperation<F>, CubicElement<Target>>,
     ) -> CubicElement<Target> {
         let one = self.one_cubic();
-        self.arithmetic_cubic(F::ONE, -F::ONE, one, a, b, arithmetic_results)
+        self.arithmetic_cubic(F::ONE, -F::ONE, one, a, b, cubic_results)
     }
 
     fn mul_cubic(
         &mut self,
         a: CubicElement<Target>,
         b: CubicElement<Target>,
-        arithmetic_results: &mut HashMap<CubicOperation<F>, CubicElement<Target>>,
+        cubic_results: &mut HashMap<CubicOperation<F>, CubicElement<Target>>,
     ) -> CubicElement<Target> {
         let zero = self.zero_cubic();
-        self.arithmetic_cubic(F::ONE, F::ZERO, a, b, zero, arithmetic_results)
+        self.arithmetic_cubic(F::ONE, F::ZERO, a, b, zero, cubic_results)
     }
 
     fn scalar_mul_cubic(
         &mut self,
         a: CubicElement<Target>,
         b: Target,
-        arithmetic_results: &mut HashMap<CubicOperation<F>, CubicElement<Target>>,
+        cubic_results: &mut HashMap<CubicOperation<F>, CubicElement<Target>>,
     ) -> CubicElement<Target> {
         let b_ext = self.cubic_from_base(b);
-        self.mul_cubic(a, b_ext, arithmetic_results)
+        self.mul_cubic(a, b_ext, cubic_results)
     }
 }
 
@@ -88,7 +88,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CubicCircuitBuilder<F, D>
         multiplicand_0: CubicElement<Target>,
         multiplicand_1: CubicElement<Target>,
         addend: CubicElement<Target>,
-        arithmetic_results: &mut HashMap<CubicOperation<F>, CubicElement<Target>>,
+        cubic_results: &mut HashMap<CubicOperation<F>, CubicElement<Target>>,
     ) -> CubicElement<Target> {
         CubicBuilderOperations::arithmetic_cubic(
             self,
@@ -97,7 +97,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CubicCircuitBuilder<F, D>
             multiplicand_0,
             multiplicand_1,
             addend,
-            arithmetic_results,
+            cubic_results,
         )
     }
 }

@@ -1,4 +1,5 @@
 use core::iter::once;
+use std::collections::HashMap;
 
 use anyhow::{ensure, Result};
 use itertools::Itertools;
@@ -230,11 +231,13 @@ where
         );
 
         // verify global constraints
+        let mut cubic_results = HashMap::new();
         let mut global_parser = GlobalRecursiveStarkParser {
             builder,
             global_vars: &proof.global_values,
             public_vars: public_inputs,
             challenges: &challenges.stark_betas,
+            cubic_results: &mut cubic_results,
         };
         stark.air().eval_global(&mut global_parser);
 

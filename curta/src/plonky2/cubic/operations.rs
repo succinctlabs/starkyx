@@ -74,7 +74,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CubicBuilderOperations<F, D> 
         multiplicand_0: CubicElement<Target>,
         multiplicand_1: CubicElement<Target>,
         addend: CubicElement<Target>,
-        arithmetic_results: &mut HashMap<CubicOperation<F>, CubicElement<Target>>,
+        cubic_results: &mut HashMap<CubicOperation<F>, CubicElement<Target>>,
     ) -> CubicElement<Target> {
         // See if we can determine the result without adding an `ArithmeticGate`.
         if let Some(result) = Self::cubic_extension_special_cases(
@@ -96,7 +96,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CubicBuilderOperations<F, D> 
             multiplicand_1,
             addend,
         };
-        if let Some(&result) = arithmetic_results.get(&operation) {
+        if let Some(&result) = cubic_results.get(&operation) {
             return result;
         }
 
@@ -108,7 +108,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CubicBuilderOperations<F, D> 
             // Otherwise, we use an arithmetic gate.
             Self::compute_cubic_operation(builder, operation)
         };
-        arithmetic_results.insert(operation, result);
+        cubic_results.insert(operation, result);
         result
     }
 

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;
@@ -7,6 +9,9 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::AirParser;
 use crate::math::extension::cubic::parameters::CubicParameters;
+use crate::math::prelude::cubic::element::CubicElement;
+use crate::plonky2::cubic::builder::CubicCircuitBuilder;
+use crate::plonky2::cubic::operations::CubicOperation;
 use crate::polynomial::parser::PolynomialParser;
 
 #[derive(Debug, Clone)]
@@ -26,6 +31,7 @@ pub struct GlobalRecursiveStarkParser<'a, F: RichField + Extendable<D>, const D:
     pub(crate) global_vars: &'a [Target],
     pub(crate) public_vars: &'a [Target],
     pub(crate) challenges: &'a [Target],
+    pub(crate) cubic_results: &'a mut HashMap<CubicOperation<F>, CubicElement<Target>>,
 }
 
 impl<'a, F, FE, P, const D: usize, const D2: usize> AirParser
@@ -212,4 +218,36 @@ impl<'a, F: RichField + Extendable<D>, const D: usize> PolynomialParser
 impl<'a, F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> CubicParser<E>
     for GlobalRecursiveStarkParser<'a, F, D>
 {
+    fn add_extension(
+        &mut self,
+        a: CubicElement<Self::Var>,
+        b: CubicElement<Self::Var>,
+    ) -> CubicElement<Self::Var> {
+        self.builder.add_cubic(a, b, &mut self.cubic_results)
+    }
+
+    fn sub_extension(
+        &mut self,
+        a: CubicElement<Self::Var>,
+        b: CubicElement<Self::Var>,
+    ) -> CubicElement<Self::Var> {
+        self.builder.sub_cubic(a, b, &mut self.cubic_results)
+    }
+
+    fn mul_extension(
+        &mut self,
+        a: CubicElement<Self::Var>,
+        b: CubicElement<Self::Var>,
+    ) -> CubicElement<Self::Var> {
+        self.builder.mul_cubic(a, b, &mut self.cubic_results)
+    }
+
+    fn scalar_mul_extension(
+        &mut self,
+        a: CubicElement<Self::Var>,
+        scalar: Self::Var,
+    ) -> CubicElement<Self::Var> {
+        self.builder
+            .scalar_mul_cubic(a, scalar, &mut self.cubic_results)
+    }
 }
