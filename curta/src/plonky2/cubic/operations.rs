@@ -30,7 +30,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CubicBuilderOperations<F, D> 
     }
 
     pub(crate) fn cubic_target_as_constant(
-        builder: &mut CircuitBuilder<F, D>,
+        builder: &CircuitBuilder<F, D>,
         target: CubicElement<Target>,
     ) -> Option<CubicElement<F>> {
         let const_coefficients = target

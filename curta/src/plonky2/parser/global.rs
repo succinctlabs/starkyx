@@ -223,7 +223,7 @@ impl<'a, F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Cu
         a: CubicElement<Self::Var>,
         b: CubicElement<Self::Var>,
     ) -> CubicElement<Self::Var> {
-        self.builder.add_cubic(a, b, &mut self.cubic_results)
+        self.builder.add_cubic(a, b, self.cubic_results)
     }
 
     fn sub_extension(
@@ -231,7 +231,7 @@ impl<'a, F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Cu
         a: CubicElement<Self::Var>,
         b: CubicElement<Self::Var>,
     ) -> CubicElement<Self::Var> {
-        self.builder.sub_cubic(a, b, &mut self.cubic_results)
+        self.builder.sub_cubic(a, b, self.cubic_results)
     }
 
     fn mul_extension(
@@ -239,7 +239,7 @@ impl<'a, F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Cu
         a: CubicElement<Self::Var>,
         b: CubicElement<Self::Var>,
     ) -> CubicElement<Self::Var> {
-        self.builder.mul_cubic(a, b, &mut self.cubic_results)
+        self.builder.mul_cubic(a, b, self.cubic_results)
     }
 
     fn scalar_mul_extension(
@@ -247,7 +247,6 @@ impl<'a, F: RichField + Extendable<D>, E: CubicParameters<F>, const D: usize> Cu
         a: CubicElement<Self::Var>,
         scalar: Self::Var,
     ) -> CubicElement<Self::Var> {
-        self.builder
-            .scalar_mul_cubic(a, scalar, &mut self.cubic_results)
+        self.builder.scalar_mul_cubic(a, scalar, self.cubic_results)
     }
 }
