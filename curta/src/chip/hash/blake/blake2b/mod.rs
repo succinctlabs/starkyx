@@ -142,8 +142,8 @@ impl<L: AirParameters> AirBuilder<L> {
         let msg_chunks = self.alloc_array_public::<U64Register>(num_chunks * MSG_ARRAY_SIZE);
         let t_public = self.alloc_array_public::<U64Register>(num_chunks);
         let msg_last_chunk_public = self.alloc_array_public::<BitRegister>(num_chunks);
-        let max_chunk_public = self.alloc_array_public::<BitRegister>(num_chunks);
         let msg_pad_chunk_public = self.alloc_array_public::<BitRegister>(num_chunks);
+        let max_chunk_public = self.alloc_array_public::<BitRegister>(num_chunks);
         let hash_state = self.alloc_array_public::<U64Register>(num_chunks * HASH_ARRAY_SIZE);
 
         let loop_iterations = self.loop_instr(CYCLE_12);

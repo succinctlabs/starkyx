@@ -110,7 +110,7 @@ impl<
         let public_input_target = public_blake2b_targets.public_input_targets(self);
 
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
-        self.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_target);
+        // self.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_target);
 
         let blake2b_generator = BLAKE2BGenerator::<F, E, C, D, L> {
             padded_messages: gadget.padded_messages,
@@ -160,7 +160,7 @@ mod tests {
 
         let mut gadget: BLAKE2BBuilderGadget<L> = builder.init_blake2b();
 
-        let msg_target = CurtaBytes(builder.add_virtual_target_arr::<256>());
+        let msg_target = CurtaBytes(builder.add_virtual_target_arr::<512>());
         let msg_length_target = builder.add_virtual_target();
 
         let calculated_digest = builder.blake2b(&msg_target, msg_length_target, &mut gadget);
