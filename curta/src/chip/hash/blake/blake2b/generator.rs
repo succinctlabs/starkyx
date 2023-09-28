@@ -56,6 +56,7 @@ pub struct BLAKE2BGenerator<
 > {
     pub padded_messages: Vec<Target>,
     pub msg_lens: Vec<Target>,
+    pub chunk_sizes: Vec<u64>,
     pub pub_values_target: BLAKE2BPublicData<Target>,
     pub config: StarkyConfig<C, D>,
     pub proof_target: StarkProofTarget<D>,
@@ -200,15 +201,21 @@ impl<
         // Write trace values
         let writer = trace_generator.new_writer();
         table.write_table_entries(&writer);
-        //let blake_public_values = gadget.write(message_chunks, &msg_sizes, &writer, num_rows);
+        let blake_public_values = gadget.write(
+            message_chunks,
+            &msg_sizes,
+            &self.chunk_sizes,
+            &writer,
+            num_rows,
+        );
 
         for i in 0..num_rows {
             writer.write_row_instructions(&trace_generator.air_data, i);
         }
 
         // Fill blake2b public values into the output buffer
-        //self.pub_values_target
-        //    .set_targets(blake_public_values, out_buffer);
+        self.pub_values_target
+            .set_targets(blake_public_values, out_buffer);
 
         let public_inputs: Vec<_> = writer.public.read().unwrap().clone();
 
@@ -225,7 +232,8 @@ pub struct BLAKE2BPublicData<T> {
     pub msg_chunks: Vec<U64Value<T>>,
     pub t: Vec<U64Value<T>>,
     pub msg_last_chunk: Vec<T>,
-    //pub max_chunk: Vec<T>,
+    pub msg_pad_chunk: Vec<T>,
+    pub max_chunk: Vec<T>,
     pub hash_state: Vec<U64Value<T>>,
 }
 
@@ -237,7 +245,7 @@ impl BLAKE2BPublicData<Target> {
     >(
         builder: &mut CircuitBuilder<F, D>,
         digests: &[Target],
-        chunk_sizes: &[usize],
+        chunk_sizes: &[u64],
     ) -> Self {
         let num_rows = 1 << 16;
         let num_chunks = num_rows / NUM_MIX_ROUNDS;
@@ -250,9 +258,13 @@ impl BLAKE2BPublicData<Target> {
             .map(|_| builder.add_virtual_target())
             .collect::<Vec<_>>();
 
-        // let max_chunk_targets = (0..num_chunks)
-        //     .map(|_| builder.add_virtual_target())
-        //     .collect::<Vec<_>>();
+        let msg_pad_chunk_targets = (0..num_chunks)
+            .map(|_| builder.add_virtual_target())
+            .collect::<Vec<_>>();
+
+        let max_chunk_targets = (0..num_chunks)
+            .map(|_| builder.add_virtual_target())
+            .collect::<Vec<_>>();
 
         let t_targets = (0..num_chunks)
             .map(|_| builder.add_virtual_target_arr::<8>())
@@ -282,7 +294,8 @@ impl BLAKE2BPublicData<Target> {
             msg_chunks: msg_chunks_targets,
             t: t_targets,
             msg_last_chunk: msg_last_chunk_targets,
-            //max_chunk: max_chunk_targets,
+            msg_pad_chunk: msg_pad_chunk_targets,
+            max_chunk: max_chunk_targets,
             hash_state: hash_state_targets,
         }
     }
