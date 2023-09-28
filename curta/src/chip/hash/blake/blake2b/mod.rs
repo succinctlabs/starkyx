@@ -40,6 +40,7 @@ pub struct BLAKE2BGadget {
     pub m: ArrayRegister<U64Register>,
     pub t: U64Register,
     pub msg_last_chunk: BitRegister,
+    pub msg_pad_row: BitRegister,
     pub max_last_row: BitRegister,
     pub h_input: ArrayRegister<U64Register>,
     pub h_output: ArrayRegister<U64Register>,
@@ -52,6 +53,7 @@ pub struct BLAKE2BGadget {
     pub msg_chunks: ArrayRegister<U64Register>,
     pub t_public: ArrayRegister<U64Register>,
     pub msg_last_chunk_public: ArrayRegister<BitRegister>,
+    pub msg_pad_chunk_public: ArrayRegister<BitRegister>,
     pub max_chunk_public: ArrayRegister<BitRegister>,
     pub hash_state: ArrayRegister<U64Register>,
 }
@@ -116,6 +118,11 @@ impl<L: AirParameters> AirBuilder<L> {
         let m = self.alloc_array::<U64Register>(MSG_ARRAY_SIZE);
         let t = self.alloc::<U64Register>();
         let msg_last_chunk = self.alloc::<BitRegister>();
+        // This is used to mark which rows are past a message's last chunk. E.g. if the max chunk
+        // size is set to 10, and the input message is only 1 chunk, then the remaining 9 chunks's rows
+        // will be marked with msg_pad_row.  For those rows, h_output should just be copied from the
+        // previous row.  Note that the h_output values in the row WILL be part of the bus contraint.
+        let msg_pad_row = self.alloc::<BitRegister>();
         let max_last_row = self.alloc::<BitRegister>();
         let h_input = self.alloc_array::<U64Register>(HASH_ARRAY_SIZE);
         let h_output = self.alloc_array::<U64Register>(HASH_ARRAY_SIZE);
@@ -123,11 +130,6 @@ impl<L: AirParameters> AirBuilder<L> {
         // message is submitted to curta, then the remaining rows' h_output columns will be set to 0.
         // Note that the h_output values in this row WILL be part of the bus contraint.
         let unused_row = self.alloc::<BitRegister>();
-        // This is used to mark which chunks are past a message's last chunk. E.g. if the max chunk
-        // size is set to 10, and the input message is only 1 chunk, then the remaining 9 chunks
-        // will be marked with noop_row.  For those rows, h_output should just be copied from the
-        // previous row.  Note that the h_output values in the row WILL be part of the bus contraint.
-        let noop_row = self.alloc::<BitRegister>();
         // This is used to rows to pad the stark's trace to be a power of 2.  Since the chunk sizes
         // for blake have 12 rows, there will be 4 rows of padding.  Note that the h_output values
         // in this row WILL NOT be part of the bus contraint.
@@ -141,6 +143,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let t_public = self.alloc_array_public::<U64Register>(num_chunks);
         let msg_last_chunk_public = self.alloc_array_public::<BitRegister>(num_chunks);
         let max_chunk_public = self.alloc_array_public::<BitRegister>(num_chunks);
+        let msg_pad_chunk_public = self.alloc_array_public::<BitRegister>(num_chunks);
         let hash_state = self.alloc_array_public::<U64Register>(num_chunks * HASH_ARRAY_SIZE);
 
         let loop_iterations = self.loop_instr(CYCLE_12);
@@ -164,18 +167,14 @@ impl<L: AirParameters> AirBuilder<L> {
             &cycle_12_start_bit,
             &cycle_12_end_bit,
             &unused_row,
+            &msg_pad_row,
             operations,
         );
 
         for ((h_in, init), h_out) in h_input.iter().zip(initial_hash.iter()).zip(h_output.iter()) {
-            // msg_last_chunk == true AND cyle_12_end_bit == true:   msg_last_chunk.expr() * cycle_12_end_bit.expr()
-            // msg_last_chunk == false OR cyle_12_end_bit == false:  (msg_last_chunk.not_expr() + cycle_12_end_bit.not_expr() - msg_last_chunk.not_expr() * cycle_12_end_bit.not_expr())
             self.set_to_expression_transition(
                 &h_in.next(),
-                (msg_last_chunk.expr() * cycle_12_end_bit.expr()) * init.expr()
-                    + ((msg_last_chunk.not_expr() + cycle_12_end_bit.not_expr()
-                        - msg_last_chunk.not_expr() * cycle_12_end_bit.not_expr())
-                        * h_out.expr()),
+                max_last_row.expr() * init.expr() + max_last_row.not_expr() * h_out.expr(),
             );
         }
 
@@ -189,11 +188,15 @@ impl<L: AirParameters> AirBuilder<L> {
             &m,
             &t,
             &msg_last_chunk,
+            &msg_pad_row,
+            &max_last_row,
             &h_output,
             &padding_bit,
             &msg_chunks,
             &t_public,
             &msg_last_chunk_public,
+            &msg_pad_chunk_public,
+            &max_chunk_public,
             &hash_state,
         );
 
@@ -205,6 +208,7 @@ impl<L: AirParameters> AirBuilder<L> {
             m,
             t,
             msg_last_chunk,
+            msg_pad_row,
             max_last_row,
             h_input,
             h_output,
@@ -217,6 +221,7 @@ impl<L: AirParameters> AirBuilder<L> {
             t_public,
             msg_last_chunk_public,
             max_chunk_public,
+            msg_pad_chunk_public,
             hash_state,
         }
     }
@@ -240,6 +245,7 @@ impl<L: AirParameters> AirBuilder<L> {
         cycle_12_start_bit: &BitRegister,
         cycle_12_end_bit: &BitRegister,
         unused_row: &BitRegister,
+        msg_pad_row: &BitRegister,
         operations: &mut ByteLookupOperations,
     ) where
         L::Instruction: U32Instructions,
@@ -369,62 +375,70 @@ impl<L: AirParameters> AirBuilder<L> {
 
         let u64_register_zero = ArithmeticExpression::from_constant_vec(vec![L::Field::ZERO; 8]);
 
+        // This is set to true if not in last bit of cycle_12 || within the msg pad rows
+        let h_no_op_row = self.alloc::<BitRegister>();
+        self.set_to_expression(
+            &h_no_op_row,
+            (cycle_12_end_bit.not_expr() + msg_pad_row.expr())
+                - (cycle_12_end_bit.not_expr() * msg_pad_row.expr()),
+        );
+
         // set h_output to zero if it's an unused row
         self.set_to_expression(
             &h_output.get(0),
             unused_row.expr() * u64_register_zero.clone()
                 + (unused_row.not_expr()
-                    * (cycle_12_end_bit.expr() * h_0_tmp.expr()
-                        + cycle_12_end_bit.not_expr() * h_input.get(0).expr())),
+                    * (h_no_op_row.not_expr() * h_0_tmp.expr()
+                        + h_no_op_row.expr() * h_input.get(0).expr())),
         );
         self.set_to_expression(
             &h_output.get(1),
             unused_row.expr() * u64_register_zero.clone()
                 + (unused_row.not_expr()
-                    * (cycle_12_end_bit.expr() * h_1_tmp.expr()
-                        + cycle_12_end_bit.not_expr() * h_input.get(1).expr())),
+                    * (h_no_op_row.not_expr() * h_1_tmp.expr()
+                        + h_no_op_row.expr() * h_input.get(1).expr())),
         );
         self.set_to_expression(
             &h_output.get(2),
             unused_row.expr() * u64_register_zero.clone()
                 + (unused_row.not_expr()
-                    * (cycle_12_end_bit.expr() * h_2_tmp.expr()
-                        + cycle_12_end_bit.not_expr() * h_input.get(2).expr())),
+                    * (h_no_op_row.not_expr() * h_2_tmp.expr()
+                        + h_no_op_row.expr() * h_input.get(2).expr())),
         );
         self.set_to_expression(
             &h_output.get(3),
             unused_row.expr() * u64_register_zero.clone()
                 + (unused_row.not_expr()
-                    * (cycle_12_end_bit.expr() * h_3_tmp.expr()
-                        + cycle_12_end_bit.not_expr() * h_input.get(3).expr())),
+                    * (h_no_op_row.not_expr() * h_3_tmp.expr()
+                        + h_no_op_row.expr() * h_input.get(3).expr())),
         );
         self.set_to_expression(
             &h_output.get(4),
             unused_row.expr() * u64_register_zero.clone()
                 + (unused_row.not_expr()
-                    * (cycle_12_end_bit.expr() * h_4_tmp.expr()
-                        + cycle_12_end_bit.not_expr() * h_input.get(4).expr())),
+                    * (h_no_op_row.not_expr() * h_4_tmp.expr()
+                        + h_no_op_row.expr() * h_input.get(4).expr())),
         );
         self.set_to_expression(
             &h_output.get(5),
             unused_row.expr() * u64_register_zero.clone()
                 + (unused_row.not_expr()
-                    * (cycle_12_end_bit.expr() * h_5_tmp.expr()
-                        + cycle_12_end_bit.not_expr() * h_input.get(5).expr())),
+                    * (h_no_op_row.not_expr() * h_5_tmp.expr()
+                        + h_no_op_row.expr() * h_input.get(5).expr())),
         );
         self.set_to_expression(
             &h_output.get(6),
             unused_row.expr() * u64_register_zero.clone()
                 + (unused_row.not_expr()
-                    * (cycle_12_end_bit.expr() * h_6_tmp.expr()
-                        + cycle_12_end_bit.not_expr() * h_input.get(6).expr())),
+                    * (h_no_op_row.not_expr() * h_6_tmp.expr()
+                        + h_no_op_row.expr() * h_input.get(6).expr())),
         );
         self.set_to_expression(
             &h_output.get(7),
             unused_row.expr() * u64_register_zero
                 + (unused_row.not_expr()
-                    * (cycle_12_end_bit.expr() * h_7_tmp.expr()
-                        + cycle_12_end_bit.not_expr() * h_input.get(7).expr())),
+                    * (h_no_op_row.not_expr() * h_7_tmp.expr()
+                        + h_no_op_row.expr() * h_input.get(7).expr())),
         );
     }
 
@@ -609,13 +623,17 @@ impl<L: AirParameters> AirBuilder<L> {
 
         m: &ArrayRegister<U64Register>,
         t: &U64Register,
-        msg_last_row: &BitRegister,
+        msg_last_chunk: &BitRegister,
+        msg_pad_row: &BitRegister,
+        max_last_row: &BitRegister,
         h_output: &ArrayRegister<U64Register>,
         padding_bit: &BitRegister,
 
         msg_chunks: &ArrayRegister<U64Register>,
         t_public: &ArrayRegister<U64Register>,
         msg_last_chunk_public: &ArrayRegister<BitRegister>,
+        msg_pad_chunk_public: &ArrayRegister<BitRegister>,
+        max_chunk_public: &ArrayRegister<BitRegister>,
         hash_state: &ArrayRegister<U64Register>,
     ) where
         L::Instruction: U32Instructions,
@@ -630,6 +648,9 @@ impl<L: AirParameters> AirBuilder<L> {
 
         // Get the msg last chunk callenges
         let msg_last_chunk_challenges = self.alloc_challenge_array::<CubicRegister>(2);
+
+        // Get the msg pad chunk challenges
+        let msg_pad_chunk_challenges = self.alloc_challenge_array::<CubicRegister>(2);
 
         // Get the t challenges
         let t_challenges = self.alloc_challenge_array::<CubicRegister>(U64Register::size_of() + 1);
@@ -667,13 +688,20 @@ impl<L: AirParameters> AirBuilder<L> {
                     bus.output_global_value(&state_digest);
                 }
 
-                // For every row of the cycle, send the last chunk bit to the bus
-                let last_chunk_digest = self.accumulate_public_expressions(
+                // For every row of the cycle, send the msg last chunk bit to the bus
+                let msg_last_chunk_digest = self.accumulate_public_expressions(
                     &msg_last_chunk_challenges,
                     &[row_expr.clone(), msg_last_chunk_public.get(i).expr()],
                 );
 
-                bus.output_global_value(&last_chunk_digest);
+                bus.output_global_value(&msg_last_chunk_digest);
+
+                // For every row of the cycle, send the msg pad chunk bit to the bus
+                let msg_pad_chunk_digest = self.accumulate_public_expressions(
+                    &msg_pad_chunk_challenges,
+                    &[row_expr.clone(), msg_pad_chunk_public.get(i).expr()],
+                );
+                bus.output_global_value(&msg_pad_chunk_digest);
 
                 // For every row of the cycle, send the message chunk permutation to the bus
                 let sigma = SIGMA[j % SIGMA_LEN];
@@ -712,13 +740,21 @@ impl<L: AirParameters> AirBuilder<L> {
             cycle_12_end_bit.expr() * padding_bit.not_expr(),
         );
 
-        let clk_last_chunk_digest = self.accumulate_expressions(
+        let clk_msg_last_chunk_digest = self.accumulate_expressions(
             &msg_last_chunk_challenges,
-            &[clk.expr(), msg_last_row.expr()],
+            &[clk.expr(), msg_last_chunk.expr()],
         );
         self.input_to_bus_filtered(
             bus_channel_idx,
-            clk_last_chunk_digest,
+            clk_msg_last_chunk_digest,
+            padding_bit.not_expr(),
+        );
+
+        let clk_msg_pad_chunk_digest = self
+            .accumulate_expressions(&msg_pad_chunk_challenges, &[clk.expr(), msg_pad_row.expr()]);
+        self.input_to_bus_filtered(
+            bus_channel_idx,
+            clk_msg_pad_chunk_digest,
             padding_bit.not_expr(),
         );
 
@@ -751,6 +787,7 @@ impl BLAKE2BGadget {
         let mut hash_values_public = Vec::new();
         let mut msg_chunks_public = Vec::<[F; 8]>::new();
         let mut msg_last_chunk_public = Vec::new();
+        let mut msg_pad_chunk_public = Vec::new();
         let mut max_chunk_public = Vec::new();
         let mut t_values_public = Vec::new();
 
@@ -780,6 +817,7 @@ impl BLAKE2BGadget {
                 let max_chunk = chunk_num == *max_chunk_size - 1;
                 let max_chunk_value = if max_chunk { F::ONE } else { F::ZERO };
                 let past_last_chunk = chunk_num >= msg_num_chunks;
+                let pad_chunk_value = if past_last_chunk { F::ONE } else { F::ZERO };
 
                 let mut chunk = [0u8; 128];
                 if !past_last_chunk {
@@ -795,6 +833,7 @@ impl BLAKE2BGadget {
                 }
 
                 msg_last_chunk_public.push(msg_last_chunk_value);
+                msg_pad_chunk_public.push(pad_chunk_value);
                 max_chunk_public.push(max_chunk_value);
 
                 writer.write(
@@ -809,7 +848,7 @@ impl BLAKE2BGadget {
                         &chunk,
                         &mut state,
                         bytes_compressed,
-                        chunk_num == msg_num_chunks - 1,
+                        msg_last_chunk,
                     );
                 }
 
@@ -834,12 +873,16 @@ impl BLAKE2BGadget {
 
                 msg_chunks_public.extend_from_slice(&chunk_array);
 
-                // Write the last_chunk_value, max_chunk_value, and m columns
+                // Write the last_chunk_value, msg_pad_row_value, max_chunk_value, and m columns
                 for i in 0..NUM_MIX_ROUNDS {
-                    writer.write(&self.msg_last_chunk, &msg_last_chunk_value, row_num);
-
                     let permuted_chunk_array = self.permute_msgs(&chunk_array, i);
                     writer.write_array(&self.m, &permuted_chunk_array, row_num);
+
+                    writer.write(&self.msg_last_chunk, &msg_last_chunk_value, row_num);
+
+                    if past_last_chunk {
+                        writer.write(&self.msg_pad_row, &F::ONE, row_num);
+                    }
 
                     if i == NUM_MIX_ROUNDS - 1 && max_chunk {
                         writer.write(&self.max_last_row, &F::ONE, row_num);
@@ -897,6 +940,10 @@ impl BLAKE2BGadget {
         // pad msg_last_chunk_public to max_total_num_chunks
         msg_last_chunk_public.extend(vec![F::ZERO; max_total_num_chunks - num_written_chunks]);
         writer.write_array(&self.msg_last_chunk_public, &msg_last_chunk_public, 0);
+
+        // pad msg_pad_chunk_public to max_total_num_chunks
+        msg_pad_chunk_public.extend(vec![F::ZERO; max_total_num_chunks - num_written_chunks]);
+        writer.write_array(&self.msg_pad_chunk_public, &msg_pad_chunk_public, 0);
 
         // pad max_chunk_public to max_total_num_chunks
         max_chunk_public.extend(vec![F::ZERO; max_total_num_chunks - num_written_chunks]);
@@ -1151,7 +1198,7 @@ mod tests {
             // 8 blocks
             hex::decode("092005a6f7a58a98df5f9b8d186b9877f12b603aa06c7debf0f610d5a49f9ed7262b5e095b309af2b0eae1c554e03b6cc4a5a0df207b662b329623f27fdce8d088554d82b1e63bedeb3fe9bd7754c7deccdfe277bcbfad4bbaff6302d3488bd2a8565f4f6e753fc7942fa29051e258da2e06d13b352220b9eadb31d8ead7f88b244f13c0835db4a3909cee6106b276684aba0f8d8b1b0ba02dff4d659b081adfeab6f3a26d7fd65eff7c72a539dbeee68a9497476b69082958eae7d6a7f0f1d5a1b99a0a349691e80429667831f9b818431514bb2763e26e94a65428d22f3827d491c474c7a1885fe1d2d557e27bbcd81bffa9f3a507649e623b47681d6c9893301d8f635ec49e983cc537c4b81399bb24027ac4be709ce1a4eeb448e98a9aecfe249696419a67cb9e0f29d0297d840048bddf6612a383f37d7b96348a1bc5f1f9ac6eed6eb911dc43e120c8480e0258a6b33e0b91734cc64f144827053b17ae91c62e6866d8b68c1b0e53df0d0f0f4f187278db30c7b95d2741f4d0c8c59507984482b48d356ce8e299268b100c61a9ba5f96a757cf98150683a3e8aa85484a4590b293b6ec62c77f022542a73651a42b50f05a8d10bbb546746ca82221ca3b18105a05e4a7ea9c9d5096a37c8b3ce1a9c62ebd7badd7ee6f1c6e5961a08d066d5e025e08e3ec72531c476098287b13295fa606fab8275418e0c4c54f236c9e73fbfdaa00a5205310cb0d1bd54175647482fae300cc66b36e7846e82288e9f0290d9479d0c1998373900dfb72900d1c9f55c018dd7eeed4ce0e988bb3da03a22910ddec7c51b2eab4d96831a8b9e84a42cebdadae62bdea26ca7b0c640e8a21f86c72277ed20efe15bab1abcf34656e7d2336e42133fa99331e874b5458b28fabe6cb62c4606ee7046d07bc9e5eec2246068396590b59194c10bbe82f7c8b5ddea0d85a4cf74a91c85d7f90873bfbdc40c8c939377bec9a26d66b895a1bbeaa94028d6eafa1c0d6218077d174cc59cea6f2ea17ef1c002160e549f43b03112b0a978fd659c69448273e35554e21bac35458fe2b199f8b8fb81a6488ee99c734e2eefb4dd06c686ca29cdb2173a53ec8322a6cb9128e3b7cdf4bf5a5c2e8906b840bd86fa97ef694a34fd47740c2d44ff7378d773ee090903796a719697e67d8df4bc26d8aeb83ed380c04fe8aa4f23678989ebffd29c647eb96d4999b4a6736dd66c7a479fe0352fda60876f173519b4e567f0a0f0798d25e198603c1c5569b95fefa2edb64720ba97bd4d5f82614236b3a1f5deb344df02d095fccfe1db9b000f38ebe212f804ea0fbbeb645b8375e21d27f5381de0e0c0156f2fa3a0a0a055b8afe90b542f6e0fffb744f1dba74e34bb4d3ea6c84e49796f5e549781a2f5c2dc01d7b8e814661b5e2d2a51a258b2f7032a83082e6e36a5e51").unwrap(),
         ];
-        let msg_max_chunk_sizes = [4u64, 4, 35, 35];
+        let msg_max_chunk_sizes = [2u64, 2, 8, 8];
 
         let digests = [
             "0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8",
