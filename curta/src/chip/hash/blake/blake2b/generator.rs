@@ -41,7 +41,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for BLAKE2BAirParamet
 
     type Instruction = U32Instruction;
 
-    const NUM_FREE_COLUMNS: usize = 3540;
+    const NUM_FREE_COLUMNS: usize = 3541;
     const EXTENDED_COLUMNS: usize = 1617;
     const NUM_ARITHMETIC_COLUMNS: usize = 0;
 }
@@ -224,7 +224,8 @@ impl<
 pub struct BLAKE2BPublicData<T> {
     pub msg_chunks: Vec<U64Value<T>>,
     pub t: Vec<U64Value<T>>,
-    pub last_chunk_bit: Vec<T>,
+    pub msg_last_chunk: Vec<T>,
+    //pub max_chunk: Vec<T>,
     pub hash_state: Vec<U64Value<T>>,
 }
 
@@ -245,9 +246,13 @@ impl BLAKE2BPublicData<Target> {
             .map(|_| builder.add_virtual_target_arr::<8>())
             .collect::<Vec<_>>();
 
-        let last_chunk_bit_targets = (0..num_chunks)
+        let msg_last_chunk_targets = (0..num_chunks)
             .map(|_| builder.add_virtual_target())
             .collect::<Vec<_>>();
+
+        // let max_chunk_targets = (0..num_chunks)
+        //     .map(|_| builder.add_virtual_target())
+        //     .collect::<Vec<_>>();
 
         let t_targets = (0..num_chunks)
             .map(|_| builder.add_virtual_target_arr::<8>())
@@ -276,7 +281,8 @@ impl BLAKE2BPublicData<Target> {
         BLAKE2BPublicData {
             msg_chunks: msg_chunks_targets,
             t: t_targets,
-            last_chunk_bit: last_chunk_bit_targets,
+            msg_last_chunk: msg_last_chunk_targets,
+            //max_chunk: max_chunk_targets,
             hash_state: hash_state_targets,
         }
     }
@@ -302,13 +308,13 @@ impl BLAKE2BPublicData<Target> {
         }
 
         assert!(
-            self.last_chunk_bit.len() == values.last_chunk_bit.len(),
-            "last_chunk_bit length mismatch"
+            self.msg_last_chunk.len() == values.msg_last_chunk.len(),
+            "last_msg_last_chunkchunk_bit length mismatch"
         );
         for (pub_last_chunk_bit_target, pub_last_chunk_bit_value) in self
-            .last_chunk_bit
+            .msg_last_chunk
             .iter()
-            .zip_eq(values.last_chunk_bit.iter())
+            .zip_eq(values.msg_last_chunk.iter())
         {
             out_buffer.set_target(*pub_last_chunk_bit_target, *pub_last_chunk_bit_value);
         }
@@ -339,7 +345,7 @@ impl BLAKE2BPublicData<Target> {
             .chain(u64_to_le_field_bytes(INVERSION_CONST).map(|x| builder.constant(x)))
             .chain(self.msg_chunks.iter().flatten().copied())
             .chain(self.t.iter().flatten().copied())
-            .chain(self.last_chunk_bit.clone())
+            .chain(self.msg_last_chunk.clone())
             .chain(self.hash_state.iter().flatten().copied())
             .collect()
     }

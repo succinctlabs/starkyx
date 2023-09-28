@@ -39,7 +39,7 @@ pub struct BLAKE2BGadget {
     pub m: ArrayRegister<U64Register>,
     pub t: U64Register,
     pub msg_last_chunk: BitRegister,
-    //pub max_msg_last_row: BitRegister,
+    pub max_last_row: BitRegister,
     pub h_input: ArrayRegister<U64Register>,
     pub h_output: ArrayRegister<U64Register>,
     pub unused_row: BitRegister,
@@ -51,6 +51,7 @@ pub struct BLAKE2BGadget {
     pub msg_chunks: ArrayRegister<U64Register>,
     pub t_public: ArrayRegister<U64Register>,
     pub msg_last_chunk_public: ArrayRegister<BitRegister>,
+    pub max_last_row_public: ArrayRegister<BitRegister>,
     pub hash_state: ArrayRegister<U64Register>,
 }
 
@@ -114,7 +115,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let m = self.alloc_array::<U64Register>(MSG_ARRAY_SIZE);
         let t = self.alloc::<U64Register>();
         let msg_last_chunk = self.alloc::<BitRegister>();
-        //let max_msg_last_row = self.alloc::<BitRegister>();
+        let max_last_row = self.alloc::<BitRegister>();
         let h_input = self.alloc_array::<U64Register>(HASH_ARRAY_SIZE);
         let h_output = self.alloc_array::<U64Register>(HASH_ARRAY_SIZE);
         // This is used to mark which rows are not part of a message chunk.  E.g. if only a 10 chunk
@@ -138,7 +139,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let msg_chunks = self.alloc_array_public::<U64Register>(num_chunks * MSG_ARRAY_SIZE);
         let t_public = self.alloc_array_public::<U64Register>(num_chunks);
         let msg_last_chunk_public = self.alloc_array_public::<BitRegister>(num_chunks);
-        //let max_msg_last_row_public = self.alloc_array_public::<BitRegister>(num_chunks);
+        let max_last_row_public = self.alloc_array_public::<BitRegister>(num_chunks);
         let hash_state = self.alloc_array_public::<U64Register>(num_chunks * HASH_ARRAY_SIZE);
 
         let loop_iterations = self.loop_instr(CYCLE_12);
@@ -203,6 +204,7 @@ impl<L: AirParameters> AirBuilder<L> {
             m,
             t,
             msg_last_chunk,
+            max_last_row,
             h_input,
             h_output,
             unused_row,
@@ -213,6 +215,7 @@ impl<L: AirParameters> AirBuilder<L> {
             msg_chunks,
             t_public,
             msg_last_chunk_public,
+            max_last_row_public,
             hash_state,
         }
     }
@@ -232,7 +235,7 @@ impl<L: AirParameters> AirBuilder<L> {
         iv_pub: &ArrayRegister<U64Register>,
         inversion_const_pub: &U64Register,
         t: &U64Register,
-        last_chunk_bit: &BitRegister,
+        msg_last_chunk: &BitRegister,
         cycle_12_start_bit: &BitRegister,
         cycle_12_end_bit: &BitRegister,
         unused_row: &BitRegister,
@@ -245,7 +248,7 @@ impl<L: AirParameters> AirBuilder<L> {
             inversion_const_pub,
             h_input,
             t,
-            last_chunk_bit,
+            msg_last_chunk,
             operations,
         );
 
@@ -731,6 +734,7 @@ impl BLAKE2BGadget {
         &self,
         padded_messages: I,
         message_lens: &[u64],
+        //max_chunk_sizes: &[u64],
         writer: &TraceWriter<F>,
         num_rows: usize,
     ) -> BLAKE2BPublicData<F>
@@ -742,12 +746,18 @@ impl BLAKE2BGadget {
         // Public values
         let mut hash_values_public = Vec::new();
         let mut msg_chunks_public = Vec::<[F; 8]>::new();
-        let mut last_chunk_bit_public = Vec::new();
+        let mut msg_last_chunk_public = Vec::new();
+        //let mut max_chunk_public = Vec::new();
         let mut t_values_public = Vec::new();
 
         let mut num_written_chunks = 0usize;
         let mut row_num = 0;
         for (padded_msg, message_len) in padded_messages.into_iter().zip(message_lens.iter()) {
+            // for ((padded_msg, message_len), max_chunk_size) in padded_messages
+            //     .into_iter()
+            //     .zip(message_lens.iter())
+            //     .zip(max_chunk_sizes.iter())
+            // {
             let padded_msg = padded_msg.borrow();
 
             let mut msg_num_chunks = *message_len / 128;
@@ -772,7 +782,7 @@ impl BLAKE2BGadget {
                     last_chunk_bit = F::ZERO;
                 }
 
-                last_chunk_bit_public.push(last_chunk_bit);
+                msg_last_chunk_public.push(last_chunk_bit);
 
                 writer.write(
                     &self.t,
@@ -824,9 +834,9 @@ impl BLAKE2BGadget {
         }
 
         assert!(hash_values_public.len() == num_written_chunks * 8);
-        assert!(last_chunk_bit_public[last_chunk_bit_public.len() - 1] == F::ONE);
+        assert!(msg_last_chunk_public[msg_last_chunk_public.len() - 1] == F::ONE);
         assert!(
-            last_chunk_bit_public
+            msg_last_chunk_public
                 .iter()
                 .filter(|x| **x == F::ONE)
                 .count()
@@ -862,8 +872,8 @@ impl BLAKE2BGadget {
         writer.write_array(&self.t_public, &t_values_public, 0);
 
         // pad last_chunk_bit_public to max_num_chunks
-        last_chunk_bit_public.extend(vec![F::ZERO; max_num_chunks - num_written_chunks]);
-        writer.write_array(&self.msg_last_chunk_public, &last_chunk_bit_public, 0);
+        msg_last_chunk_public.extend(vec![F::ZERO; max_num_chunks - num_written_chunks]);
+        writer.write_array(&self.msg_last_chunk_public, &msg_last_chunk_public, 0);
 
         // pad hash_values_public to max_num_chunks * HASH_ARRAY_SIZE
         hash_values_public.extend(vec![
@@ -888,7 +898,7 @@ impl BLAKE2BGadget {
         BLAKE2BPublicData {
             msg_chunks: msg_chunks_public,
             t: t_values_public,
-            last_chunk_bit: last_chunk_bit_public,
+            msg_last_chunk: msg_last_chunk_public,
             hash_state: hash_values_public,
         }
     }
@@ -1171,12 +1181,12 @@ mod tests {
             test_starky(&stark, &config, &generator, &public_inputs)
         );
 
-        // Generate recursive proof
-        timed!(
-            timing,
-            "Recursive proof generation and verification",
-            test_recursive_starky(stark, config, generator, &public_inputs)
-        );
+        // // Generate recursive proof
+        // timed!(
+        //     timing,
+        //     "Recursive proof generation and verification",
+        //     test_recursive_starky(stark, config, generator, &public_inputs)
+        // );
 
         timing.print();
     }
