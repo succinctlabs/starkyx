@@ -333,6 +333,28 @@ impl BLAKE2BPublicData<Target> {
         }
 
         assert!(
+            self.msg_pad_chunk.len() == values.msg_pad_chunk.len(),
+            "msg_pad_chunk length mismatch"
+        );
+        for (pub_pad_chunk_target, pub_pad_chunk_value) in self
+            .msg_pad_chunk
+            .iter()
+            .zip_eq(values.msg_pad_chunk.iter())
+        {
+            out_buffer.set_target(*pub_pad_chunk_target, *pub_pad_chunk_value);
+        }
+
+        assert!(
+            self.max_chunk.len() == values.max_chunk.len(),
+            "max_chunk length mismatch"
+        );
+        for (pub_max_chunk_target, pub_max_chunk_value) in
+            self.max_chunk.iter().zip_eq(values.max_chunk.iter())
+        {
+            out_buffer.set_target(*pub_max_chunk_target, *pub_max_chunk_value);
+        }
+
+        assert!(
             self.hash_state.len() == values.hash_state.len(),
             "hash_state length mismatch"
         );
@@ -359,6 +381,8 @@ impl BLAKE2BPublicData<Target> {
             .chain(self.msg_chunks.iter().flatten().copied())
             .chain(self.t.iter().flatten().copied())
             .chain(self.msg_last_chunk.clone())
+            .chain(self.msg_pad_chunk.clone())
+            .chain(self.max_chunk.clone())
             .chain(self.hash_state.iter().flatten().copied())
             .collect()
     }
