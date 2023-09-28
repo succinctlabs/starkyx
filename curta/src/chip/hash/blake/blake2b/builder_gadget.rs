@@ -86,6 +86,7 @@ impl<
         self.add_simple_generator(hint);
         gadget.digests.extend_from_slice(&digest_bytes);
         gadget.msg_lengths.push(message_len);
+        gadget.chunk_sizes.push(N / 128);
         CurtaBytes(digest_bytes)
     }
 
