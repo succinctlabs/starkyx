@@ -3,6 +3,7 @@ pub mod generator;
 
 use core::borrow::Borrow;
 
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use self::generator::BLAKE2BPublicData;
@@ -51,7 +52,7 @@ pub struct BLAKE2BGadget {
     pub msg_chunks: ArrayRegister<U64Register>,
     pub t_public: ArrayRegister<U64Register>,
     pub msg_last_chunk_public: ArrayRegister<BitRegister>,
-    pub max_last_row_public: ArrayRegister<BitRegister>,
+    pub max_chunk_public: ArrayRegister<BitRegister>,
     pub hash_state: ArrayRegister<U64Register>,
 }
 
@@ -139,7 +140,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let msg_chunks = self.alloc_array_public::<U64Register>(num_chunks * MSG_ARRAY_SIZE);
         let t_public = self.alloc_array_public::<U64Register>(num_chunks);
         let msg_last_chunk_public = self.alloc_array_public::<BitRegister>(num_chunks);
-        let max_last_row_public = self.alloc_array_public::<BitRegister>(num_chunks);
+        let max_chunk_public = self.alloc_array_public::<BitRegister>(num_chunks);
         let hash_state = self.alloc_array_public::<U64Register>(num_chunks * HASH_ARRAY_SIZE);
 
         let loop_iterations = self.loop_instr(CYCLE_12);
@@ -215,7 +216,7 @@ impl<L: AirParameters> AirBuilder<L> {
             msg_chunks,
             t_public,
             msg_last_chunk_public,
-            max_last_row_public,
+            max_chunk_public,
             hash_state,
         }
     }
@@ -734,30 +735,32 @@ impl BLAKE2BGadget {
         &self,
         padded_messages: I,
         message_lens: &[u64],
-        //max_chunk_sizes: &[u64],
+        max_chunk_sizes: &[u64],
         writer: &TraceWriter<F>,
         num_rows: usize,
     ) -> BLAKE2BPublicData<F>
     where
         I::Item: Borrow<[u8]>,
     {
-        let max_num_chunks = num_rows / NUM_MIX_ROUNDS;
+        let max_total_num_chunks = num_rows / NUM_MIX_ROUNDS;
+
+        // First check that sum max_chunk_sizes <= max_total_num_chunks
+        assert!(max_chunk_sizes.iter().sum::<u64>() <= max_total_num_chunks as u64);
 
         // Public values
         let mut hash_values_public = Vec::new();
         let mut msg_chunks_public = Vec::<[F; 8]>::new();
         let mut msg_last_chunk_public = Vec::new();
-        //let mut max_chunk_public = Vec::new();
+        let mut max_chunk_public = Vec::new();
         let mut t_values_public = Vec::new();
 
         let mut num_written_chunks = 0usize;
         let mut row_num = 0;
-        for (padded_msg, message_len) in padded_messages.into_iter().zip(message_lens.iter()) {
-            // for ((padded_msg, message_len), max_chunk_size) in padded_messages
-            //     .into_iter()
-            //     .zip(message_lens.iter())
-            //     .zip(max_chunk_sizes.iter())
-            // {
+        for ((padded_msg, message_len), max_chunk_size) in padded_messages
+            .into_iter()
+            .zip_eq(message_lens.iter())
+            .zip_eq(max_chunk_sizes.iter())
+        {
             let padded_msg = padded_msg.borrow();
 
             let mut msg_num_chunks = *message_len / 128;
@@ -766,23 +769,33 @@ impl BLAKE2BGadget {
             }
 
             assert!(padded_msg.len() % 128 == 0, "Message not padded correctly");
+            assert!(msg_num_chunks <= *max_chunk_size);
 
             let mut state = INITIAL_HASH;
             let mut bytes_compressed = 0;
 
-            for (chunk_num, chunk) in padded_msg.chunks_exact(128).enumerate() {
-                let last_chunk = chunk_num == msg_num_chunks as usize - 1;
-                let last_chunk_bit;
+            for chunk_num in 0..*max_chunk_size {
+                let msg_last_chunk = chunk_num == msg_num_chunks - 1;
+                let msg_last_chunk_value = if msg_last_chunk { F::ONE } else { F::ZERO };
+                let max_chunk = chunk_num == *max_chunk_size - 1;
+                let max_chunk_value = if max_chunk { F::ONE } else { F::ZERO };
+                let past_last_chunk = chunk_num >= msg_num_chunks;
 
-                if last_chunk {
-                    bytes_compressed = *message_len;
-                    last_chunk_bit = F::ONE;
-                } else {
-                    bytes_compressed += 128;
-                    last_chunk_bit = F::ZERO;
+                let mut chunk = [0u8; 128];
+                if !past_last_chunk {
+                    chunk.copy_from_slice(
+                        &padded_msg[chunk_num as usize * 128..(chunk_num as usize + 1) * 128],
+                    );
                 }
 
-                msg_last_chunk_public.push(last_chunk_bit);
+                if msg_last_chunk || past_last_chunk {
+                    bytes_compressed = *message_len;
+                } else {
+                    bytes_compressed += 128;
+                }
+
+                msg_last_chunk_public.push(msg_last_chunk_value);
+                max_chunk_public.push(max_chunk_value);
 
                 writer.write(
                     &self.t,
@@ -791,12 +804,15 @@ impl BLAKE2BGadget {
                 );
                 t_values_public.push(u64_to_le_field_bytes::<F>(bytes_compressed));
 
-                state = BLAKE2BGadget::compress(
-                    chunk,
-                    &mut state,
-                    bytes_compressed,
-                    chunk_num == msg_num_chunks as usize - 1,
-                );
+                if !past_last_chunk {
+                    state = BLAKE2BGadget::compress(
+                        &chunk,
+                        &mut state,
+                        bytes_compressed,
+                        chunk_num == msg_num_chunks - 1,
+                    );
+                }
+
                 hash_values_public.extend_from_slice(&state.map(u64_to_le_field_bytes::<F>));
 
                 // Get the message chunk array
@@ -818,23 +834,25 @@ impl BLAKE2BGadget {
 
                 msg_chunks_public.extend_from_slice(&chunk_array);
 
-                // Write the last_chunk_bit and m columns
+                // Write the last_chunk_value, max_chunk_value, and m columns
                 for i in 0..NUM_MIX_ROUNDS {
-                    writer.write(&self.msg_last_chunk, &last_chunk_bit, row_num);
+                    writer.write(&self.msg_last_chunk, &msg_last_chunk_value, row_num);
 
                     let permuted_chunk_array = self.permute_msgs(&chunk_array, i);
                     writer.write_array(&self.m, &permuted_chunk_array, row_num);
+
+                    if i == NUM_MIX_ROUNDS - 1 && max_chunk {
+                        writer.write(&self.max_last_row, &F::ONE, row_num);
+                    }
 
                     row_num += 1;
                 }
 
                 num_written_chunks += 1;
-                assert!(num_written_chunks <= max_num_chunks, "Too many chunks");
             }
         }
 
         assert!(hash_values_public.len() == num_written_chunks * 8);
-        assert!(msg_last_chunk_public[msg_last_chunk_public.len() - 1] == F::ONE);
         assert!(
             msg_last_chunk_public
                 .iter()
@@ -842,6 +860,7 @@ impl BLAKE2BGadget {
                 .count()
                 == message_lens.len()
         );
+        assert!(max_chunk_public.iter().filter(|x| **x == F::ONE).count() == max_chunk_sizes.len());
 
         // Write to the public registers
         writer.write_array(
@@ -860,25 +879,34 @@ impl BLAKE2BGadget {
             0,
         );
 
-        // pad msg_chunks_public to max_num_chunks * MSG_ARRAY_SIZE
+        // pad msg_chunks_public to max_total_num_chunks * MSG_ARRAY_SIZE
         msg_chunks_public.extend(vec![
             [F::ZERO; 8];
-            (max_num_chunks - num_written_chunks) * MSG_ARRAY_SIZE
+            (max_total_num_chunks - num_written_chunks)
+                * MSG_ARRAY_SIZE
         ]);
         writer.write_array(&self.msg_chunks, &msg_chunks_public, 0);
 
-        // pad t_values_public to max_num_chunks
-        t_values_public.extend(vec![[F::ZERO; 8]; max_num_chunks - num_written_chunks]);
+        // pad t_values_public to max_total_num_chunks
+        t_values_public.extend(vec![
+            [F::ZERO; 8];
+            max_total_num_chunks - num_written_chunks
+        ]);
         writer.write_array(&self.t_public, &t_values_public, 0);
 
-        // pad last_chunk_bit_public to max_num_chunks
-        msg_last_chunk_public.extend(vec![F::ZERO; max_num_chunks - num_written_chunks]);
+        // pad msg_last_chunk_public to max_total_num_chunks
+        msg_last_chunk_public.extend(vec![F::ZERO; max_total_num_chunks - num_written_chunks]);
         writer.write_array(&self.msg_last_chunk_public, &msg_last_chunk_public, 0);
 
-        // pad hash_values_public to max_num_chunks * HASH_ARRAY_SIZE
+        // pad max_chunk_public to max_total_num_chunks
+        max_chunk_public.extend(vec![F::ZERO; max_total_num_chunks - num_written_chunks]);
+        writer.write_array(&self.max_chunk_public, &max_chunk_public, 0);
+
+        // pad hash_values_public to max_total_num_chunks * HASH_ARRAY_SIZE
         hash_values_public.extend(vec![
             [F::ZERO; 8];
-            (max_num_chunks - num_written_chunks) * HASH_ARRAY_SIZE
+            (max_total_num_chunks - num_written_chunks)
+                * HASH_ARRAY_SIZE
         ]);
         writer.write_array(&self.hash_state, &hash_values_public, 0);
 
@@ -1046,16 +1074,23 @@ impl BLAKE2BGadget {
         v[b] = (v[b] ^ v[c]).rotate_right(63);
     }
 
-    pub fn pad(msg: &[u8]) -> Vec<u8> {
-        if (msg.len() % 128 == 0) && (!msg.is_empty()) {
-            msg.to_vec()
-        } else {
-            let padlen = 128 - (msg.len() % 128);
+    pub fn pad(msg: &[u8], max_chunk_size: u64) -> Vec<u8> {
+        let mut msg_chunk_size = msg.len() as u64 / 128;
 
+        if (msg.len() % 128 != 0) || msg.is_empty() {
+            msg_chunk_size += 1;
+        }
+
+        assert!(msg_chunk_size <= max_chunk_size, "Message too big");
+
+        let padlen = max_chunk_size * 128 - msg.len() as u64;
+        if padlen > 0 {
             let mut padded_msg = Vec::new();
             padded_msg.extend_from_slice(msg);
-            padded_msg.extend_from_slice(&vec![0u8; padlen]);
+            padded_msg.extend_from_slice(&vec![0u8; padlen as usize]);
             padded_msg
+        } else {
+            msg.to_vec()
         }
     }
 }
@@ -1116,6 +1151,7 @@ mod tests {
             // 8 blocks
             hex::decode("092005a6f7a58a98df5f9b8d186b9877f12b603aa06c7debf0f610d5a49f9ed7262b5e095b309af2b0eae1c554e03b6cc4a5a0df207b662b329623f27fdce8d088554d82b1e63bedeb3fe9bd7754c7deccdfe277bcbfad4bbaff6302d3488bd2a8565f4f6e753fc7942fa29051e258da2e06d13b352220b9eadb31d8ead7f88b244f13c0835db4a3909cee6106b276684aba0f8d8b1b0ba02dff4d659b081adfeab6f3a26d7fd65eff7c72a539dbeee68a9497476b69082958eae7d6a7f0f1d5a1b99a0a349691e80429667831f9b818431514bb2763e26e94a65428d22f3827d491c474c7a1885fe1d2d557e27bbcd81bffa9f3a507649e623b47681d6c9893301d8f635ec49e983cc537c4b81399bb24027ac4be709ce1a4eeb448e98a9aecfe249696419a67cb9e0f29d0297d840048bddf6612a383f37d7b96348a1bc5f1f9ac6eed6eb911dc43e120c8480e0258a6b33e0b91734cc64f144827053b17ae91c62e6866d8b68c1b0e53df0d0f0f4f187278db30c7b95d2741f4d0c8c59507984482b48d356ce8e299268b100c61a9ba5f96a757cf98150683a3e8aa85484a4590b293b6ec62c77f022542a73651a42b50f05a8d10bbb546746ca82221ca3b18105a05e4a7ea9c9d5096a37c8b3ce1a9c62ebd7badd7ee6f1c6e5961a08d066d5e025e08e3ec72531c476098287b13295fa606fab8275418e0c4c54f236c9e73fbfdaa00a5205310cb0d1bd54175647482fae300cc66b36e7846e82288e9f0290d9479d0c1998373900dfb72900d1c9f55c018dd7eeed4ce0e988bb3da03a22910ddec7c51b2eab4d96831a8b9e84a42cebdadae62bdea26ca7b0c640e8a21f86c72277ed20efe15bab1abcf34656e7d2336e42133fa99331e874b5458b28fabe6cb62c4606ee7046d07bc9e5eec2246068396590b59194c10bbe82f7c8b5ddea0d85a4cf74a91c85d7f90873bfbdc40c8c939377bec9a26d66b895a1bbeaa94028d6eafa1c0d6218077d174cc59cea6f2ea17ef1c002160e549f43b03112b0a978fd659c69448273e35554e21bac35458fe2b199f8b8fb81a6488ee99c734e2eefb4dd06c686ca29cdb2173a53ec8322a6cb9128e3b7cdf4bf5a5c2e8906b840bd86fa97ef694a34fd47740c2d44ff7378d773ee090903796a719697e67d8df4bc26d8aeb83ed380c04fe8aa4f23678989ebffd29c647eb96d4999b4a6736dd66c7a479fe0352fda60876f173519b4e567f0a0f0798d25e198603c1c5569b95fefa2edb64720ba97bd4d5f82614236b3a1f5deb344df02d095fccfe1db9b000f38ebe212f804ea0fbbeb645b8375e21d27f5381de0e0c0156f2fa3a0a0a055b8afe90b542f6e0fffb744f1dba74e34bb4d3ea6c84e49796f5e549781a2f5c2dc01d7b8e814661b5e2d2a51a258b2f7032a83082e6e36a5e51").unwrap(),
         ];
+        let msg_max_chunk_sizes = [4u64, 4, 35, 35];
 
         let digests = [
             "0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8",
@@ -1126,17 +1162,29 @@ mod tests {
 
         let mut padded_messages = Vec::new();
         let mut msg_lens = Vec::new();
+        let mut max_chunk_sizes = Vec::new();
 
-        for _i in 0..300 {
-            for msg in msgs.iter() {
-                padded_messages.push(BLAKE2BGadget::pad(msg).into_iter().collect::<Vec<_>>());
+        for _i in 0..1 {
+            for (msg, msg_max_chunk_size) in msgs.iter().zip(msg_max_chunk_sizes.iter()) {
+                padded_messages.push(
+                    BLAKE2BGadget::pad(msg, *msg_max_chunk_size)
+                        .into_iter()
+                        .collect::<Vec<_>>(),
+                );
                 msg_lens.push(msg.len() as u64);
+                max_chunk_sizes.push(*msg_max_chunk_size);
             }
         }
 
         timed!(timing, "Write the execusion trace", {
             table.write_table_entries(&writer);
-            blake_gadget.write(padded_messages, msg_lens.as_slice(), &writer, num_rows);
+            blake_gadget.write(
+                padded_messages,
+                msg_lens.as_slice(),
+                max_chunk_sizes.as_slice(),
+                &writer,
+                num_rows,
+            );
             let mut msg_to_check = 0;
             for i in 0..num_rows {
                 writer.write_row_instructions(&generator.air_data, i);

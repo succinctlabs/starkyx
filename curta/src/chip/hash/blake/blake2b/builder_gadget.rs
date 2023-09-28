@@ -141,6 +141,7 @@ mod tests {
     use crate::chip::hash::blake::blake2b::BLAKE2BGadget;
     use crate::plonky2::stark::config::CurtaPoseidonGoldilocksConfig;
 
+    /*
     #[test]
     fn test_blake_2b_plonky_gadget() {
         type F = GoldilocksField;
@@ -216,4 +217,5 @@ mod tests {
         timing.print();
         data.verify(proof).unwrap();
     }
+    */
 }

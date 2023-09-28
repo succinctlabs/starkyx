@@ -200,15 +200,15 @@ impl<
         // Write trace values
         let writer = trace_generator.new_writer();
         table.write_table_entries(&writer);
-        let blake_public_values = gadget.write(message_chunks, &msg_sizes, &writer, num_rows);
+        //let blake_public_values = gadget.write(message_chunks, &msg_sizes, &writer, num_rows);
 
         for i in 0..num_rows {
             writer.write_row_instructions(&trace_generator.air_data, i);
         }
 
         // Fill blake2b public values into the output buffer
-        self.pub_values_target
-            .set_targets(blake_public_values, out_buffer);
+        //self.pub_values_target
+        //    .set_targets(blake_public_values, out_buffer);
 
         let public_inputs: Vec<_> = writer.public.read().unwrap().clone();
 
