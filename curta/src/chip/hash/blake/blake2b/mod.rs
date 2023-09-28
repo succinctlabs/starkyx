@@ -652,6 +652,9 @@ impl<L: AirParameters> AirBuilder<L> {
         // Get the msg pad chunk challenges
         let msg_pad_chunk_challenges = self.alloc_challenge_array::<CubicRegister>(2);
 
+        // Get the max chunk challenges
+        let max_chunk_challenges = self.alloc_challenge_array::<CubicRegister>(2);
+
         // Get the t challenges
         let t_challenges = self.alloc_challenge_array::<CubicRegister>(U64Register::size_of() + 1);
 
@@ -671,7 +674,8 @@ impl<L: AirParameters> AirBuilder<L> {
                     bus.output_global_value(&t_digest);
                 }
 
-                // For the last row of every cycle, send the public hash state to the bus
+                // For the last row of every cycle, send the public hash state to the bus and the
+                // max_chunk bit
                 if j == 11 {
                     let state_digest = self.accumulate_public_expressions(
                         &state_challenges,
@@ -686,6 +690,12 @@ impl<L: AirParameters> AirBuilder<L> {
                     );
 
                     bus.output_global_value(&state_digest);
+
+                    let max_chunk_digest = self.accumulate_public_expressions(
+                        &max_chunk_challenges,
+                        &[row_expr.clone(), max_chunk_public.get(i).expr()],
+                    );
+                    bus.output_global_value(&max_chunk_digest);
                 }
 
                 // For every row of the cycle, send the msg last chunk bit to the bus
@@ -756,6 +766,14 @@ impl<L: AirParameters> AirBuilder<L> {
             bus_channel_idx,
             clk_msg_pad_chunk_digest,
             padding_bit.not_expr(),
+        );
+
+        let clk_max_row_digest =
+            self.accumulate_expressions(&max_chunk_challenges, &[clk.expr(), max_last_row.expr()]);
+        self.input_to_bus_filtered(
+            bus_channel_idx,
+            clk_max_row_digest,
+            cycle_12_end_bit.expr() * padding_bit.not_expr(),
         );
 
         let clk_msg_digest = self.accumulate_expressions(
