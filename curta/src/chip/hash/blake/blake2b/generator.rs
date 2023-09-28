@@ -309,6 +309,7 @@ impl BLAKE2BPublicData<Target> {
             self.msg_chunks.len() == values.msg_chunks.len(),
             "msg_chunks length mismatch"
         );
+
         for (pub_msg_chunk_target, pub_msg_chunk_value) in
             self.msg_chunks.iter().zip_eq(values.msg_chunks.iter())
         {
@@ -461,10 +462,24 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for BLA
         state[..8].copy_from_slice(&INITIAL_HASH[..8]);
 
         let num_chunks = padded_message.len() / 128;
+        let mut msg_num_chunks = message_len / 128;
+        if message_len % 128 != 0 || message_len == 0 {
+            msg_num_chunks += 1;
+        }
         let mut bytes_compressed = 0u64;
         assert!(padded_message.len() % 128 == 0);
-        for (chunk_num, chunk) in padded_message.chunks_exact(128).enumerate() {
-            let last_chunk = chunk_num == num_chunks - 1;
+
+        for chunk_num in 0..num_chunks {
+            let last_chunk = chunk_num == msg_num_chunks - 1;
+            let past_last_chunk = chunk_num >= msg_num_chunks;
+
+            let chunk = if past_last_chunk {
+                [0u8; 128]
+            } else {
+                padded_message[chunk_num * 128..(chunk_num + 1) * 128]
+                    .try_into()
+                    .unwrap()
+            };
 
             if last_chunk {
                 bytes_compressed = message_len as u64;
@@ -472,7 +487,9 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for BLA
                 bytes_compressed += 128;
             }
 
-            state = BLAKE2BGadget::compress(chunk, &mut state, bytes_compressed, last_chunk);
+            if !past_last_chunk {
+                state = BLAKE2BGadget::compress(&chunk, &mut state, bytes_compressed, last_chunk);
+            }
         }
 
         // We only support a digest of 32 bytes.  Retrieve the first four elements of the state
