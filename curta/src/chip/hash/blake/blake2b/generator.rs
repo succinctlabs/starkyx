@@ -258,6 +258,8 @@ impl BLAKE2BPublicData<Target> {
             .map(|_| builder.add_virtual_target())
             .collect::<Vec<_>>();
 
+        // TODO:  Need to make sure that msg_pad_chunk_targets values are consistent with
+        //        msg_last_chunk_targets and max_chunk_targets
         let msg_pad_chunk_targets = (0..num_chunks)
             .map(|_| builder.add_virtual_target())
             .collect::<Vec<_>>();
