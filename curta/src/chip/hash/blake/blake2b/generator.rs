@@ -186,15 +186,11 @@ impl<
             .map(|x| witness.get_target(*x).as_canonical_u64())
             .collect::<Vec<_>>();
 
-        let message_chunks = msg_sizes.iter().scan(0, |idx, size| {
-            let mut num_chunks = *size as usize / 128;
+        let message_chunks = self.chunk_sizes.iter().scan(0, |idx, size| {
+            let msg_size = *size * 128;
 
-            if (*size % 128 != 0) || (*size == 0) {
-                num_chunks += 1;
-            }
-
-            let chunk = padded_messages[*idx as usize..*idx as usize + 128 * num_chunks].to_vec();
-            *idx += 128 * size;
+            let chunk = padded_messages[*idx as usize..(*idx + msg_size) as usize].to_vec();
+            *idx += msg_size;
             Some(chunk)
         });
 
