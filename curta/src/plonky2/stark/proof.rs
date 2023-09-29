@@ -111,7 +111,7 @@ impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> Sta
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StarkProofTarget<const D: usize> {
     #[serde(serialize_with = "serialize_merkle_cap_targets")]
     #[serde(deserialize_with = "deserialize_merkle_cap_targets")]
@@ -285,7 +285,7 @@ impl<F: RichField + Extendable<D>, const D: usize> StarkOpeningSet<F, D> {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StarkOpeningSetTarget<const D: usize> {
     #[serde(serialize_with = "serialize_extension_targets")]
     #[serde(deserialize_with = "deserialize_extension_targets")]
