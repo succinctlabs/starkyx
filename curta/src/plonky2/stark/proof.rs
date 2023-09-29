@@ -26,7 +26,7 @@ use crate::utils::serde::{
 };
 
 /// A proof of a STARK computation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub struct StarkProof<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> {
     /// Merkle cap of LDEs of trace values for each round.
@@ -228,7 +228,7 @@ pub struct StarkProofChallengesTarget<const D: usize> {
 }
 
 /// Purported values of each polynomial at the challenge point.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub struct StarkOpeningSet<F: RichField + Extendable<D>, const D: usize> {
     pub local_values: Vec<F::Extension>,
