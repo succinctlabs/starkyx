@@ -20,7 +20,7 @@ pub struct BLAKE2BBuilderGadget<L: AirParameters + 'static + Clone + Debug + Sen
     pub padded_messages: Vec<Target>,
     pub msg_lengths: Vec<Target>,
     pub digests: Vec<Target>,
-    pub chunk_sizes: Vec<usize>,
+    pub chunk_sizes: Vec<u64>,
     _phantom: PhantomData<L>,
 }
 
@@ -86,7 +86,7 @@ impl<
         self.add_simple_generator(hint);
         gadget.digests.extend_from_slice(&digest_bytes);
         gadget.msg_lengths.push(message_len);
-        gadget.chunk_sizes.push(N / 128);
+        gadget.chunk_sizes.push(N as u64 / 128);
         CurtaBytes(digest_bytes)
     }
 
@@ -115,6 +115,7 @@ impl<
         let blake2b_generator = BLAKE2BGenerator::<F, E, C, D, L> {
             padded_messages: gadget.padded_messages,
             msg_lens: gadget.msg_lengths,
+            chunk_sizes: gadget.chunk_sizes,
             pub_values_target: public_blake2b_targets,
             config,
             proof_target: virtual_proof,
@@ -159,7 +160,7 @@ mod tests {
 
         let mut gadget: BLAKE2BBuilderGadget<L> = builder.init_blake2b();
 
-        let msg_target = CurtaBytes(builder.add_virtual_target_arr::<256>());
+        let msg_target = CurtaBytes(builder.add_virtual_target_arr::<512>());
         let msg_length_target = builder.add_virtual_target();
 
         let calculated_digest = builder.blake2b(&msg_target, msg_length_target, &mut gadget);
@@ -192,7 +193,7 @@ mod tests {
         let msg = b"243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89452821e638d01377be5466cf34e90c6cc0ac29b7c97c50dd3f84d5b5b5470917243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89452821e638d01377be5466cf34e90c6cc0ac29b7c97c50dd3f84d5b5b5470917".to_vec();
         let digest = "369ffcc61c51d8ed04bf30a9e8cf79f8994784d1e3f90f32c3182e67873a3238";
 
-        let padded_msg = BLAKE2BGadget::pad(&msg)
+        let padded_msg = BLAKE2BGadget::pad(&msg, 4)
             .into_iter()
             .map(F::from_canonical_u8)
             .collect::<Vec<_>>();

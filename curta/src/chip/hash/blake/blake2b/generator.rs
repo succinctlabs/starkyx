@@ -41,8 +41,8 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for BLAKE2BAirParamet
 
     type Instruction = U32Instruction;
 
-    const NUM_FREE_COLUMNS: usize = 3539;
-    const EXTENDED_COLUMNS: usize = 1617;
+    const NUM_FREE_COLUMNS: usize = 3542;
+    const EXTENDED_COLUMNS: usize = 1632;
     const NUM_ARITHMETIC_COLUMNS: usize = 0;
 }
 
@@ -56,6 +56,7 @@ pub struct BLAKE2BGenerator<
 > {
     pub padded_messages: Vec<Target>,
     pub msg_lens: Vec<Target>,
+    pub chunk_sizes: Vec<u64>,
     pub pub_values_target: BLAKE2BPublicData<Target>,
     pub config: StarkyConfig<C, D>,
     pub proof_target: StarkProofTarget<D>,
@@ -185,22 +186,24 @@ impl<
             .map(|x| witness.get_target(*x).as_canonical_u64())
             .collect::<Vec<_>>();
 
-        let message_chunks = msg_sizes.iter().scan(0, |idx, size| {
-            let mut num_chunks = *size as usize / 128;
+        let message_chunks = self.chunk_sizes.iter().scan(0, |idx, size| {
+            let msg_size = *size * 128;
 
-            if (*size % 128 != 0) || (*size == 0) {
-                num_chunks += 1;
-            }
-
-            let chunk = padded_messages[*idx as usize..*idx as usize + 128 * num_chunks].to_vec();
-            *idx += 128 * size;
+            let chunk = padded_messages[*idx as usize..(*idx + msg_size) as usize].to_vec();
+            *idx += msg_size;
             Some(chunk)
         });
 
         // Write trace values
         let writer = trace_generator.new_writer();
         table.write_table_entries(&writer);
-        let blake_public_values = gadget.write(message_chunks, &msg_sizes, &writer, num_rows);
+        let blake_public_values = gadget.write(
+            message_chunks,
+            &msg_sizes,
+            &self.chunk_sizes,
+            &writer,
+            num_rows,
+        );
 
         for i in 0..num_rows {
             writer.write_row_instructions(&trace_generator.air_data, i);
@@ -224,7 +227,9 @@ impl<
 pub struct BLAKE2BPublicData<T> {
     pub msg_chunks: Vec<U64Value<T>>,
     pub t: Vec<U64Value<T>>,
-    pub last_chunk_bit: Vec<T>,
+    pub msg_last_chunk: Vec<T>,
+    pub msg_pad_chunk: Vec<T>,
+    pub max_chunk: Vec<T>,
     pub hash_state: Vec<U64Value<T>>,
 }
 
@@ -236,7 +241,7 @@ impl BLAKE2BPublicData<Target> {
     >(
         builder: &mut CircuitBuilder<F, D>,
         digests: &[Target],
-        chunk_sizes: &[usize],
+        chunk_sizes: &[u64],
     ) -> Self {
         let num_rows = 1 << 16;
         let num_chunks = num_rows / NUM_MIX_ROUNDS;
@@ -245,7 +250,17 @@ impl BLAKE2BPublicData<Target> {
             .map(|_| builder.add_virtual_target_arr::<8>())
             .collect::<Vec<_>>();
 
-        let last_chunk_bit_targets = (0..num_chunks)
+        let msg_last_chunk_targets = (0..num_chunks)
+            .map(|_| builder.add_virtual_target())
+            .collect::<Vec<_>>();
+
+        // TODO:  Need to make sure that msg_pad_chunk_targets values are consistent with
+        //        msg_last_chunk_targets and max_chunk_targets
+        let msg_pad_chunk_targets = (0..num_chunks)
+            .map(|_| builder.add_virtual_target())
+            .collect::<Vec<_>>();
+
+        let max_chunk_targets = (0..num_chunks)
             .map(|_| builder.add_virtual_target())
             .collect::<Vec<_>>();
 
@@ -276,7 +291,9 @@ impl BLAKE2BPublicData<Target> {
         BLAKE2BPublicData {
             msg_chunks: msg_chunks_targets,
             t: t_targets,
-            last_chunk_bit: last_chunk_bit_targets,
+            msg_last_chunk: msg_last_chunk_targets,
+            msg_pad_chunk: msg_pad_chunk_targets,
+            max_chunk: max_chunk_targets,
             hash_state: hash_state_targets,
         }
     }
@@ -290,6 +307,7 @@ impl BLAKE2BPublicData<Target> {
             self.msg_chunks.len() == values.msg_chunks.len(),
             "msg_chunks length mismatch"
         );
+
         for (pub_msg_chunk_target, pub_msg_chunk_value) in
             self.msg_chunks.iter().zip_eq(values.msg_chunks.iter())
         {
@@ -302,15 +320,37 @@ impl BLAKE2BPublicData<Target> {
         }
 
         assert!(
-            self.last_chunk_bit.len() == values.last_chunk_bit.len(),
-            "last_chunk_bit length mismatch"
+            self.msg_last_chunk.len() == values.msg_last_chunk.len(),
+            "last_msg_last_chunkchunk_bit length mismatch"
         );
         for (pub_last_chunk_bit_target, pub_last_chunk_bit_value) in self
-            .last_chunk_bit
+            .msg_last_chunk
             .iter()
-            .zip_eq(values.last_chunk_bit.iter())
+            .zip_eq(values.msg_last_chunk.iter())
         {
             out_buffer.set_target(*pub_last_chunk_bit_target, *pub_last_chunk_bit_value);
+        }
+
+        assert!(
+            self.msg_pad_chunk.len() == values.msg_pad_chunk.len(),
+            "msg_pad_chunk length mismatch"
+        );
+        for (pub_pad_chunk_target, pub_pad_chunk_value) in self
+            .msg_pad_chunk
+            .iter()
+            .zip_eq(values.msg_pad_chunk.iter())
+        {
+            out_buffer.set_target(*pub_pad_chunk_target, *pub_pad_chunk_value);
+        }
+
+        assert!(
+            self.max_chunk.len() == values.max_chunk.len(),
+            "max_chunk length mismatch"
+        );
+        for (pub_max_chunk_target, pub_max_chunk_value) in
+            self.max_chunk.iter().zip_eq(values.max_chunk.iter())
+        {
+            out_buffer.set_target(*pub_max_chunk_target, *pub_max_chunk_value);
         }
 
         assert!(
@@ -339,7 +379,9 @@ impl BLAKE2BPublicData<Target> {
             .chain(u64_to_le_field_bytes(INVERSION_CONST).map(|x| builder.constant(x)))
             .chain(self.msg_chunks.iter().flatten().copied())
             .chain(self.t.iter().flatten().copied())
-            .chain(self.last_chunk_bit.clone())
+            .chain(self.msg_last_chunk.clone())
+            .chain(self.msg_pad_chunk.clone())
+            .chain(self.max_chunk.clone())
             .chain(self.hash_state.iter().flatten().copied())
             .collect()
     }
@@ -418,10 +460,24 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for BLA
         state[..8].copy_from_slice(&INITIAL_HASH[..8]);
 
         let num_chunks = padded_message.len() / 128;
+        let mut msg_num_chunks = message_len / 128;
+        if message_len % 128 != 0 || message_len == 0 {
+            msg_num_chunks += 1;
+        }
         let mut bytes_compressed = 0u64;
         assert!(padded_message.len() % 128 == 0);
-        for (chunk_num, chunk) in padded_message.chunks_exact(128).enumerate() {
-            let last_chunk = chunk_num == num_chunks - 1;
+
+        for chunk_num in 0..num_chunks {
+            let last_chunk = chunk_num == msg_num_chunks - 1;
+            let past_last_chunk = chunk_num >= msg_num_chunks;
+
+            let chunk = if past_last_chunk {
+                [0u8; 128]
+            } else {
+                padded_message[chunk_num * 128..(chunk_num + 1) * 128]
+                    .try_into()
+                    .unwrap()
+            };
 
             if last_chunk {
                 bytes_compressed = message_len as u64;
@@ -429,7 +485,9 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D> for BLA
                 bytes_compressed += 128;
             }
 
-            state = BLAKE2BGadget::compress(chunk, &mut state, bytes_compressed, last_chunk);
+            if !past_last_chunk {
+                state = BLAKE2BGadget::compress(&chunk, &mut state, bytes_compressed, last_chunk);
+            }
         }
 
         // We only support a digest of 32 bytes.  Retrieve the first four elements of the state
