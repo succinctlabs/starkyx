@@ -324,7 +324,7 @@ where
 
 pub fn add_virtual_stark_proof<
     F: RichField + Extendable<D>,
-    A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
+    A: Plonky2Air<F, D>,
     C: CurtaConfig<D, F = F>,
     const D: usize,
 >(

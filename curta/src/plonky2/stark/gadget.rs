@@ -7,8 +7,6 @@ use super::config::{CurtaConfig, StarkyConfig};
 use super::proof::StarkProofTarget;
 use super::verifier::{add_virtual_stark_proof, StarkyVerifier};
 use super::Starky;
-use crate::air::RAir;
-use crate::plonky2::parser::RecursiveStarkParser;
 use crate::plonky2::Plonky2Air;
 
 pub trait StarkGadget<
@@ -44,7 +42,7 @@ impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F, FE = F::Extension>, 
         config: &StarkyConfig<C, D>,
     ) -> StarkProofTarget<D>
     where
-        A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
+        A: Plonky2Air<F, D>,
     {
         add_virtual_stark_proof(self, stark, config)
     }
