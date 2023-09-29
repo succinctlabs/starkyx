@@ -1,3 +1,5 @@
+use core::fmt::Debug;
+
 use self::point::AffinePointRegister;
 use super::builder::AirBuilder;
 use super::field::parameters::FieldParameters;
@@ -8,7 +10,7 @@ pub mod gadget;
 pub mod point;
 pub mod weierstrass;
 
-pub trait EllipticCurveParameters: Send + Sync + Copy + 'static {
+pub trait EllipticCurveParameters: Debug + Send + Sync + Copy + 'static {
     type BaseField: FieldParameters;
 }
 
