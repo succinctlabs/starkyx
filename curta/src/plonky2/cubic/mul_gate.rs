@@ -178,11 +178,17 @@ pub struct MulCubicGenerator<F: RichField + Extendable<D>, const D: usize> {
     i: usize,
 }
 
+impl<F: RichField + Extendable<D>, const D: usize> MulCubicGenerator<F, D> {
+    fn id() -> String {
+        "MulCubicGenerator".to_string()
+    }
+}
+
 impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
     for MulCubicGenerator<F, D>
 {
     fn id(&self) -> String {
-        "MulExtensionGenerator".to_string()
+        Self::id()
     }
 
     fn dependencies(&self) -> Vec<Target> {
