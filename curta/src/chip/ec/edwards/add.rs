@@ -1,39 +1,15 @@
-use serde::{Deserialize, Serialize};
-
 use super::EdwardsParameters;
 use crate::chip::builder::AirBuilder;
 use crate::chip::ec::point::AffinePointRegister;
-use crate::chip::field::den::FpDenInstruction;
-use crate::chip::field::inner_product::FpInnerProductInstruction;
 use crate::chip::field::instruction::FromFieldInstruction;
-use crate::chip::field::mul::FpMulInstruction;
-use crate::chip::field::mul_const::FpMulConstInstruction;
-use crate::chip::trace::writer::TraceWriter;
 use crate::chip::AirParameters;
-use crate::math::prelude::*;
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EdAddGadget<E: EdwardsParameters> {
-    p: AffinePointRegister<E>,
-    q: AffinePointRegister<E>,
-    pub result: AffinePointRegister<E>,
-    x3_numerator_ins: FpInnerProductInstruction<E::BaseField>,
-    y3_numerator_ins: FpInnerProductInstruction<E::BaseField>,
-    x1_mul_y1_ins: FpMulInstruction<E::BaseField>,
-    x2_mul_y2_ins: FpMulInstruction<E::BaseField>,
-    f_ins: FpMulInstruction<E::BaseField>,
-    d_mul_f_ins: FpMulConstInstruction<E::BaseField>,
-    x3_ins: FpDenInstruction<E::BaseField>,
-    y3_ins: FpDenInstruction<E::BaseField>,
-}
 
 impl<L: AirParameters> AirBuilder<L> {
     pub fn ed_add<E: EdwardsParameters>(
         &mut self,
         p: &AffinePointRegister<E>,
         q: &AffinePointRegister<E>,
-    ) -> EdAddGadget<E>
+    ) -> AffinePointRegister<E>
     where
         L::Instruction: FromFieldInstruction<E::BaseField>,
     {
@@ -54,63 +30,39 @@ impl<L: AirParameters> AirBuilder<L> {
         let y2 = q.y;
 
         // x3_numerator = x1 * y2 + x2 * y1.
-        let x3_numerator_ins = self.fp_inner_product(&vec![x1, x2], &vec![y2, y1]);
+        let x3_numerator = self.fp_inner_product(&vec![x1, x2], &vec![y2, y1]);
 
         // y3_numerator = y1 * y2 + x1 * x2.
-        let y3_numerator_ins = self.fp_inner_product(&vec![y1, x1], &vec![y2, x2]);
+        let y3_numerator = self.fp_inner_product(&vec![y1, x1], &vec![y2, x2]);
 
         // f = x1 * x2 * y1 * y2.
-        let x1_mul_y1_ins = self.fp_mul(&x1, &y1);
-        let x2_mul_y2_ins = self.fp_mul(&x2, &y2);
-        let f_ins = self.fp_mul(&x1_mul_y1_ins.result, &x2_mul_y2_ins.result);
+        let x1_mul_y1 = self.fp_mul(&x1, &y1);
+        let x2_mul_y2 = self.fp_mul(&x2, &y2);
+        let f = self.fp_mul(&x1_mul_y1, &x2_mul_y2);
 
         // d * f.
-        let d_mul_f_ins = self.fp_mul_const(&f_ins.result, E::D);
+        let d_mul_f = self.fp_mul_const(&f, E::D);
 
         // x3 = x3_numerator / (1 + d * f).
-        let x3_ins = self.fp_den(&x3_numerator_ins.result, &d_mul_f_ins.result, true);
+        let x3_ins = self.fp_den(&x3_numerator, &d_mul_f, true);
 
         // y3 = y3_numerator / (1 - d * f).
-        let y3_ins = self.fp_den(&y3_numerator_ins.result, &d_mul_f_ins.result, false);
+        let y3_ins = self.fp_den(&y3_numerator, &d_mul_f, false);
 
         // R = (x3, y3).
-        let result = AffinePointRegister::new(x3_ins.result, y3_ins.result);
-
-        EdAddGadget {
-            p: *p,
-            q: *q,
-            result,
-            x3_numerator_ins,
-            y3_numerator_ins,
-            x1_mul_y1_ins,
-            x2_mul_y2_ins,
-            f_ins,
-            d_mul_f_ins,
-            x3_ins,
-            y3_ins,
-        }
+        AffinePointRegister::new(x3_ins.result, y3_ins.result)
     }
 
     /// Doubles an elliptic curve point `P` on the Ed25519 elliptic curve. Under the hood, the
     /// addition formula is used.
-    pub fn ed_double<E: EdwardsParameters>(&mut self, p: &AffinePointRegister<E>) -> EdAddGadget<E>
+    pub fn ed_double<E: EdwardsParameters>(
+        &mut self,
+        p: &AffinePointRegister<E>,
+    ) -> AffinePointRegister<E>
     where
         L::Instruction: FromFieldInstruction<E::BaseField>,
     {
         self.ed_add(p, p)
-    }
-}
-
-impl<F: PrimeField64> TraceWriter<F> {
-    pub fn write_ed_add<E: EdwardsParameters>(&self, gadget: &EdAddGadget<E>, row_index: usize) {
-        self.write_instruction(&gadget.x3_numerator_ins, row_index);
-        self.write_instruction(&gadget.y3_numerator_ins, row_index);
-        self.write_instruction(&gadget.x1_mul_y1_ins, row_index);
-        self.write_instruction(&gadget.x2_mul_y2_ins, row_index);
-        self.write_instruction(&gadget.f_ins, row_index);
-        self.write_instruction(&gadget.d_mul_f_ins, row_index);
-        self.write_instruction(&gadget.x3_ins, row_index);
-        self.write_instruction(&gadget.y3_ins, row_index);
     }
 }
 

@@ -35,7 +35,7 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         a: &FieldRegister<P>,
         c: [u16; MAX_NB_LIMBS],
-    ) -> FpMulConstInstruction<P>
+    ) -> FieldRegister<P>
     where
         L::Instruction: From<FpMulConstInstruction<P>>,
     {
@@ -52,7 +52,7 @@ impl<L: AirParameters> AirBuilder<L> {
             witness_high,
         };
         self.register_instruction(instr);
-        instr
+        result
     }
 }
 
@@ -202,30 +202,17 @@ mod tests {
         c[1] = 2;
         c[2] = 30000;
 
-        let mul_const_insr = builder.fp_mul_const(&a, c);
-
         let (air, trace_data) = builder.build();
         let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
-        let (tx, rx) = channel();
-
         let mut rng = thread_rng();
         for i in 0..num_rows {
             let writer = generator.new_writer();
-            let handle = tx.clone();
             let a_int: BigUint = rng.gen_biguint(256) % &p;
-            rayon::spawn(move || {
-                let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
-                writer.write(&a, &p_a, i);
-                writer.write_instruction(&mul_const_insr, i);
-
-                handle.send(1).unwrap();
-            });
-        }
-        drop(tx);
-        for msg in rx.iter() {
-            assert!(msg == 1);
+            let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
+            writer.write(&a, &p_a, i);
+            writer.write_row_instructions(&generator.air_data, i);
         }
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);

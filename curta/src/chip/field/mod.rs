@@ -28,6 +28,7 @@
 //! overflow.
 
 pub mod add;
+pub mod constants;
 pub mod den;
 pub mod div;
 pub mod inner_product;

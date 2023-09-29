@@ -34,7 +34,7 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         a: &FieldRegister<P>,
         b: &FieldRegister<P>,
-    ) -> FpMulInstruction<P>
+    ) -> FieldRegister<P>
     where
         L::Instruction: From<FpMulInstruction<P>>,
     {
@@ -51,7 +51,7 @@ impl<L: AirParameters> AirBuilder<L> {
             witness_high,
         };
         self.register_instruction(instr);
-        instr
+        result
     }
 }
 
@@ -193,7 +193,6 @@ mod tests {
 
         let a = builder.alloc::<FieldRegister<P>>();
         let b = builder.alloc::<FieldRegister<P>>();
-        let mul_insr = builder.fp_mul(&a, &b);
 
         let (air, trace_data) = builder.build();
         let num_rows = 1 << 16;
@@ -207,13 +206,15 @@ mod tests {
             let handle = tx.clone();
             let a_int: BigUint = rng.gen_biguint(256) % &p;
             let b_int = rng.gen_biguint(256) % &p;
+            let air_data = generator.air_data.clone();
             rayon::spawn(move || {
                 let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
                 let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
 
                 writer.write(&a, &p_a, i);
                 writer.write(&b, &p_b, i);
-                writer.write_instruction(&mul_insr, i);
+
+                writer.write_row_instructions(&air_data, i);
 
                 handle.send(1).unwrap();
             });

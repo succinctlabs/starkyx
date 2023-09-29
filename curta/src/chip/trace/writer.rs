@@ -190,7 +190,12 @@ impl<F: Field> TraceWriter<F> {
     }
 
     #[inline]
-    pub fn write_slice<T: RegisterSerializable>(&self, data: &T, value: &[F], row_index: usize) {
+    pub fn write_trace_slice<T: RegisterSerializable>(
+        &self,
+        data: &T,
+        value: &[F],
+        row_index: usize,
+    ) {
         let mut trace = self.0.trace.write().unwrap();
         data.register()
             .assign(&mut trace.view_mut(), 0, value, row_index);
@@ -208,36 +213,26 @@ impl<F: Field> TraceWriter<F> {
     }
 
     #[inline]
-    pub fn write<T: Register>(&self, data: &T, value: &T::Value<F>, row_index: usize) {
-        match data.register() {
-            MemorySlice::Local(..) => self.write_slice(data, T::align(value), row_index),
-            MemorySlice::Next(..) => self.write_slice(data, T::align(value), row_index),
-            MemorySlice::Global(..) => self.write_global(data, value),
-            MemorySlice::Public(..) => self.write_public(data, value),
+    pub fn write_slice<T: RegisterSerializable>(&self, data: &T, value: &[F], row_index: usize) {
+        let register = data.register();
+        match register {
+            MemorySlice::Local(..) => self.write_trace_slice(data, value, row_index),
+            MemorySlice::Next(..) => self.write_trace_slice(data, value, row_index),
+            MemorySlice::Global(..) => {
+                let mut global = self.0.global.write().unwrap();
+                register.assign_to_raw_slice(&mut global, value);
+            }
+            MemorySlice::Public(..) => {
+                let mut public = self.0.public.write().unwrap();
+                register.assign_to_raw_slice(&mut public, value);
+            }
             MemorySlice::Challenge(..) => unreachable!("Challenge registers are read-only"),
         }
     }
 
     #[inline]
-    fn write_global<T: Register>(&self, data: &T, value: &T::Value<F>) {
-        match data.register() {
-            MemorySlice::Global(_, _) => {
-                let mut global = self.0.global.write().unwrap();
-                data.assign_to_raw_slice(&mut global, value);
-            }
-            _ => panic!("Expected global register"),
-        }
-    }
-
-    #[inline]
-    fn write_public<T: Register>(&self, data: &T, value: &T::Value<F>) {
-        match data.register() {
-            MemorySlice::Public(_, _) => {
-                let mut global = self.0.public.write().unwrap();
-                data.assign_to_raw_slice(&mut global, value);
-            }
-            _ => panic!("Expected public register"),
-        }
+    pub fn write<T: Register>(&self, data: &T, value: &T::Value<F>, row_index: usize) {
+        self.write_slice(data, T::align(value), row_index)
     }
 
     #[inline]

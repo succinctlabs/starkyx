@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
-use crate::chip::ec::edwards::add::EdAddGadget;
 use crate::chip::ec::edwards::EdwardsParameters;
 use crate::chip::ec::point::AffinePointRegister;
 use crate::chip::field::instruction::FromFieldInstruction;
@@ -19,8 +18,6 @@ pub struct EdDoubleAndAddGadget<E: EdwardsParameters> {
     pub temp: AffinePointRegister<E>,
     result_next: AffinePointRegister<E>,
     temp_next: AffinePointRegister<E>,
-    add_gadget: EdAddGadget<E>,
-    double_gadget: EdAddGadget<E>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,14 +56,14 @@ impl<L: AirParameters> AirBuilder<L> {
         L::Instruction: FromFieldInstruction<E::BaseField>,
     {
         // result = result + temp.
-        let add_gadget = self.ed_add(result, temp);
+        let result_plus_temp = self.ed_add(result, temp);
 
         // temp = temo + temp.
-        let double_gadget = self.ed_double(temp);
+        let temp_double = self.ed_double(temp);
 
         // result = if bit == 1 then result + temp else result.
-        let select_x = self.select(bit, &add_gadget.result.x, &result.x);
-        let select_y = self.select(bit, &add_gadget.result.y, &result.y);
+        let select_x = self.select(bit, &result_plus_temp.x, &result.x);
+        let select_y = self.select(bit, &result_plus_temp.y, &result.y);
         let result_next = AffinePointRegister::new(select_x, select_y);
 
         EdDoubleAndAddGadget {
@@ -74,9 +71,7 @@ impl<L: AirParameters> AirBuilder<L> {
             result: *result,
             temp: *temp,
             result_next,
-            temp_next: double_gadget.result,
-            add_gadget,
-            double_gadget,
+            temp_next: temp_double,
         }
     }
 
