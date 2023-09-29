@@ -179,7 +179,7 @@ pub struct MulCubicGenerator<F: RichField + Extendable<D>, const D: usize> {
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> MulCubicGenerator<F, D> {
-    fn id() -> String {
+    pub fn id() -> String {
         "MulCubicGenerator".to_string()
     }
 }
