@@ -1,14 +1,17 @@
 use num::{BigUint, Num, Zero};
 use serde::{Deserialize, Serialize};
 
-use super::WeierstrassParameters;
+use super::{SWCurve, WeierstrassParameters};
 use crate::chip::ec::point::AffinePoint;
 use crate::chip::ec::EllipticCurveParameters;
 use crate::chip::field::parameters::FieldParameters;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 /// Bn254 curve parameter
-pub struct Bn254;
+pub struct Bn254Parameters;
+
+pub type Bn254 = SWCurve<Bn254Parameters>;
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 /// Bn254 base field parameter
 pub struct Bn254BaseField;
@@ -30,13 +33,11 @@ impl FieldParameters for Bn254BaseField {
     const WITNESS_OFFSET: usize = 1usize << 20;
 }
 
-impl EllipticCurveParameters for Bn254 {
+impl EllipticCurveParameters for Bn254Parameters {
     type BaseField = Bn254BaseField;
 }
-// 11407338395426579044608580838708842747966047208017223746744477907140961838435
-// 18654710443877814140214463678416965232275983792343078716005018688591883467523
 
-impl WeierstrassParameters for Bn254 {
+impl WeierstrassParameters for Bn254Parameters {
     const A: [u16; crate::chip::field::parameters::MAX_NB_LIMBS] = [
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0,

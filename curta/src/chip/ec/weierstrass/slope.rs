@@ -1,4 +1,4 @@
-use super::WeierstrassParameters;
+use super::{SWCurve, WeierstrassParameters};
 use crate::chip::builder::AirBuilder;
 use crate::chip::ec::point::AffinePointRegister;
 use crate::chip::field::instruction::FromFieldInstruction;
@@ -12,8 +12,8 @@ impl<L: AirParameters> AirBuilder<L> {
     /// `p` and `q` are different points
     pub(crate) fn sw_slope_different<E: WeierstrassParameters>(
         &mut self,
-        p: &AffinePointRegister<E>,
-        q: &AffinePointRegister<E>,
+        p: &AffinePointRegister<SWCurve<E>>,
+        q: &AffinePointRegister<SWCurve<E>>,
     ) -> FieldRegister<E::BaseField>
     where
         L::Instruction: FromFieldInstruction<E::BaseField>,
@@ -32,7 +32,7 @@ impl<L: AirParameters> AirBuilder<L> {
     /// The slope is given by the formula `(3 * p.x^2 + a) / (2 * p.y)`.
     pub(crate) fn sw_tangent<E: WeierstrassParameters>(
         &mut self,
-        p: &AffinePointRegister<E>,
+        p: &AffinePointRegister<SWCurve<E>>,
         a: &FieldRegister<E::BaseField>,
         three: &FieldRegister<E::BaseField>,
     ) -> FieldRegister<E::BaseField>

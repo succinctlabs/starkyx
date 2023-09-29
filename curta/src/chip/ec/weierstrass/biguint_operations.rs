@@ -1,13 +1,13 @@
 use num::BigUint;
 
-use super::WeierstrassParameters;
+use super::{SWCurve, WeierstrassParameters};
 use crate::chip::ec::point::AffinePoint;
 use crate::chip::field::parameters::FieldParameters;
 use crate::chip::utils::biguint_to_bits_le;
 
-impl<E: WeierstrassParameters> AffinePoint<E> {
+impl<E: WeierstrassParameters> AffinePoint<SWCurve<E>> {
     pub fn sw_scalar_mul(&self, scalar: &BigUint) -> Self {
-        let mut result: Option<AffinePoint<E>> = None;
+        let mut result: Option<AffinePoint<SWCurve<E>>> = None;
         let mut temp = self.clone();
         let bits = biguint_to_bits_le(scalar, E::nb_scalar_bits());
         for bit in bits {
@@ -20,8 +20,8 @@ impl<E: WeierstrassParameters> AffinePoint<E> {
     }
 }
 
-impl<E: WeierstrassParameters> AffinePoint<E> {
-    pub fn sw_add(&self, other: &AffinePoint<E>) -> AffinePoint<E> {
+impl<E: WeierstrassParameters> AffinePoint<SWCurve<E>> {
+    pub fn sw_add(&self, other: &AffinePoint<SWCurve<E>>) -> AffinePoint<SWCurve<E>> {
         let p = E::BaseField::modulus();
         let slope_numerator = (&p + &other.y - &self.y) % &p;
         let slope_denominator = (&p + &other.x - &self.x) % &p;
@@ -34,7 +34,7 @@ impl<E: WeierstrassParameters> AffinePoint<E> {
         AffinePoint::new(x_3n, y_3n)
     }
 
-    pub fn sw_double(&self) -> AffinePoint<E> {
+    pub fn sw_double(&self) -> AffinePoint<SWCurve<E>> {
         let p = E::BaseField::modulus();
         let a = E::a_int();
         let slope_numerator = (&a + &(&self.x * &self.x) * 3u32) % &p;
@@ -57,7 +57,6 @@ mod tests {
     use num::bigint::RandBigInt;
     use rand::thread_rng;
 
-    use super::WeierstrassParameters;
     use crate::chip::ec::weierstrass::bn254::Bn254;
 
     #[test]

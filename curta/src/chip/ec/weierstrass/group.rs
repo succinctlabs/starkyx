@@ -1,4 +1,4 @@
-use super::WeierstrassParameters;
+use super::{SWCurve, WeierstrassParameters};
 use crate::chip::builder::AirBuilder;
 use crate::chip::ec::point::AffinePointRegister;
 use crate::chip::field::instruction::FromFieldInstruction;
@@ -9,10 +9,10 @@ impl<L: AirParameters> AirBuilder<L> {
     /// Given two points `p` and `q` and the slope of the intersection line, compute the addition.
     pub(crate) fn sw_add_with_slope<E: WeierstrassParameters>(
         &mut self,
-        p: &AffinePointRegister<E>,
-        q: &AffinePointRegister<E>,
+        p: &AffinePointRegister<SWCurve<E>>,
+        q: &AffinePointRegister<SWCurve<E>>,
         slope: &FieldRegister<E::BaseField>,
-    ) -> AffinePointRegister<E>
+    ) -> AffinePointRegister<SWCurve<E>>
     where
         L::Instruction: FromFieldInstruction<E::BaseField>,
     {
@@ -28,15 +28,15 @@ impl<L: AirParameters> AirBuilder<L> {
         y_3 = self.fp_mul(slope, &y_3);
         y_3 = self.fp_sub(&y_3, &y_1);
 
-        AffinePointRegister::<E> { x: x_3, y: y_3 }
+        AffinePointRegister::<SWCurve<E>> { x: x_3, y: y_3 }
     }
 
     /// Add two different points `p` and `q` on a short Weierstrass curve.
     pub fn sw_add<E: WeierstrassParameters>(
         &mut self,
-        p: &AffinePointRegister<E>,
-        q: &AffinePointRegister<E>,
-    ) -> AffinePointRegister<E>
+        p: &AffinePointRegister<SWCurve<E>>,
+        q: &AffinePointRegister<SWCurve<E>>,
+    ) -> AffinePointRegister<SWCurve<E>>
     where
         L::Instruction: FromFieldInstruction<E::BaseField>,
     {
@@ -47,10 +47,10 @@ impl<L: AirParameters> AirBuilder<L> {
     /// Doubles a point `p` on a short Weierstrass curve.
     pub fn sw_double<E: WeierstrassParameters>(
         &mut self,
-        p: &AffinePointRegister<E>,
+        p: &AffinePointRegister<SWCurve<E>>,
         a: &FieldRegister<E::BaseField>,
         three: &FieldRegister<E::BaseField>,
-    ) -> AffinePointRegister<E>
+    ) -> AffinePointRegister<SWCurve<E>>
     where
         L::Instruction: FromFieldInstruction<E::BaseField>,
     {
@@ -62,7 +62,6 @@ impl<L: AirParameters> AirBuilder<L> {
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
-    use num::BigUint;
     use rand::thread_rng;
     use serde::{Deserialize, Serialize};
 
@@ -96,7 +95,7 @@ mod tests {
         let p = builder.alloc_ec_point();
         let q = builder.alloc_ec_point();
 
-        let _res = builder.sw_add::<E>(&p, &q);
+        let _res = builder.ec_add(&p, &q);
 
         let num_rows = 1 << 16;
         let (air, trace_data) = builder.build();
@@ -134,10 +133,8 @@ mod tests {
         let mut builder = AirBuilder::<L>::new();
 
         let p = builder.alloc_ec_point();
-        let a = builder.fp_constant(&E::a_int());
-        let three = builder.fp_constant(&BigUint::from(3u32));
 
-        let _res = builder.sw_double::<E>(&p, &a, &three);
+        let _res = builder.ec_double(&p);
 
         let num_rows = 1 << 16;
         let (air, trace_data) = builder.build();
