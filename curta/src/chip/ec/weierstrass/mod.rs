@@ -88,4 +88,13 @@ where
 
         builder.sw_double::<E>(p, &a, &three)
     }
+
+    fn ec_generator(builder: &mut AirBuilder<L>) -> AffinePointRegister<Self> {
+        let generator = E::generator();
+
+        let x = builder.fp_constant(&generator.x);
+        let y = builder.fp_constant(&generator.y);
+
+        AffinePointRegister::new(x, y)
+    }
 }

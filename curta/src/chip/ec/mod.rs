@@ -25,6 +25,8 @@ pub trait EllipticCurve<L: AirParameters>: EllipticCurveParameters {
         builder: &mut AirBuilder<L>,
         p: &AffinePointRegister<Self>,
     ) -> AffinePointRegister<Self>;
+
+    fn ec_generator(builder: &mut AirBuilder<L>) -> AffinePointRegister<Self>;
 }
 
 impl<L: AirParameters> AirBuilder<L> {
@@ -41,5 +43,9 @@ impl<L: AirParameters> AirBuilder<L> {
         p: &AffinePointRegister<E>,
     ) -> AffinePointRegister<E> {
         E::ec_double(self, p)
+    }
+
+    pub fn ec_generator<E: EllipticCurve<L>>(&mut self) -> AffinePointRegister<E> {
+        E::ec_generator(self)
     }
 }
