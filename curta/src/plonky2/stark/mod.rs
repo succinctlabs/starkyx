@@ -38,7 +38,11 @@ impl<A> Starky<A> {
         &self.air
     }
 
-    pub fn num_quotient_polys<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize>(
+    pub fn num_quotient_polys<
+        F: RichField + Extendable<D>,
+        C: CurtaConfig<D, F = F>,
+        const D: usize,
+    >(
         &self,
         config: &StarkyConfig<C, D>,
     ) -> usize
@@ -92,7 +96,11 @@ impl<A> Starky<A> {
     }
 
     /// Computes the FRI instance used to prove this Stark.
-    pub fn fri_instance_target<C: CurtaConfig<D, F = F>, F: RichField + Extendable<D>, const D: usize>(
+    pub fn fri_instance_target<
+        C: CurtaConfig<D, F = F>,
+        F: RichField + Extendable<D>,
+        const D: usize,
+    >(
         &self,
         builder: &mut CircuitBuilder<F, D>,
         zeta: ExtensionTarget<D>,
