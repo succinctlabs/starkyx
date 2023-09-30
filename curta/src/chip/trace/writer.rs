@@ -83,8 +83,16 @@ impl<T> TraceWriter<T> {
         self.0.global.write()
     }
 
+    pub fn global(&self) -> LockResult<RwLockReadGuard<'_, Vec<T>>> {
+        self.0.global.read()
+    }
+
     pub fn public_mut(&self) -> LockResult<RwLockWriteGuard<'_, Vec<T>>> {
         self.0.public.write()
+    }
+
+    pub fn public(&self) -> LockResult<RwLockReadGuard<'_, Vec<T>>> {
+        self.0.public.read()
     }
 }
 
