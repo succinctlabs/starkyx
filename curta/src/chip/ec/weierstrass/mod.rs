@@ -1,4 +1,5 @@
 use num::{BigUint, Zero};
+use serde::{Deserialize, Serialize};
 
 use super::point::{AffinePoint, AffinePointRegister};
 use super::{EllipticCurve, EllipticCurveParameters};
@@ -42,7 +43,7 @@ pub trait WeierstrassParameters: EllipticCurveParameters {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SWCurve<E>(pub E);
 
 impl<E: WeierstrassParameters> EllipticCurveParameters for SWCurve<E> {
