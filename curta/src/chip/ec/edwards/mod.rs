@@ -1,10 +1,10 @@
 use num::{BigUint, Zero};
 
 use super::point::{AffinePoint, AffinePointRegister};
-use super::{EllipticCurve, EllipticCurveParameters};
+use super::{EllipticCurve, EllipticCurveAir, EllipticCurveParameters};
 use crate::chip::builder::AirBuilder;
 use crate::chip::field::instruction::FromFieldInstruction;
-use crate::chip::field::parameters::{FieldParameters, MAX_NB_LIMBS};
+use crate::chip::field::parameters::MAX_NB_LIMBS;
 use crate::chip::AirParameters;
 
 pub mod add;
@@ -15,7 +15,7 @@ pub mod scalar_mul;
 pub trait EdwardsParameters: EllipticCurveParameters {
     const D: [u16; MAX_NB_LIMBS];
 
-    fn generator() -> AffinePoint<Self>;
+    fn generator() -> (BigUint, BigUint);
 
     fn prime_group_order() -> BigUint;
 
@@ -27,27 +27,49 @@ pub trait EdwardsParameters: EllipticCurveParameters {
         modulus
     }
 
-    fn nb_scalar_bits() -> usize {
-        Self::BaseField::NB_LIMBS * 16
-    }
-
-    fn neutral() -> AffinePoint<Self> {
-        AffinePoint::new(BigUint::from(0u32), BigUint::from(1u32))
+    fn neutral() -> (BigUint, BigUint) {
+        (BigUint::from(0u32), BigUint::from(1u32))
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct EdwardsCurve<E: EdwardsParameters>(pub E);
 
 impl<E: EdwardsParameters> EllipticCurveParameters for EdwardsCurve<E> {
     type BaseField = E::BaseField;
 }
 
-impl<L: AirParameters, E: EdwardsParameters> EllipticCurve<L> for EdwardsCurve<E>
+impl<E: EdwardsParameters> EdwardsCurve<E> {
+    pub fn prime_group_order() -> BigUint {
+        E::prime_group_order()
+    }
+
+    pub fn neutral() -> AffinePoint<Self> {
+        let (x, y) = E::neutral();
+        AffinePoint::new(x, y)
+    }
+}
+
+impl<E: EdwardsParameters> EllipticCurve for EdwardsCurve<E> {
+    fn ec_add(p: &AffinePoint<Self>, q: &AffinePoint<Self>) -> AffinePoint<Self> {
+        p.ed_add(q)
+    }
+
+    fn ec_double(p: &AffinePoint<Self>) -> AffinePoint<Self> {
+        p.ed_double()
+    }
+
+    fn ec_generator() -> AffinePoint<Self> {
+        let (x, y) = E::generator();
+        AffinePoint::new(x, y)
+    }
+}
+
+impl<L: AirParameters, E: EdwardsParameters> EllipticCurveAir<L> for EdwardsCurve<E>
 where
     L::Instruction: FromFieldInstruction<E::BaseField>,
 {
-    fn ec_add(
+    fn ec_add_air(
         builder: &mut AirBuilder<L>,
         p: &AffinePointRegister<Self>,
         q: &super::point::AffinePointRegister<Self>,
@@ -92,18 +114,18 @@ where
         AffinePointRegister::new(x3_ins.result, y3_ins.result)
     }
 
-    fn ec_double(
+    fn ec_double_air(
         builder: &mut AirBuilder<L>,
         p: &AffinePointRegister<Self>,
     ) -> AffinePointRegister<Self> {
-        Self::ec_add(builder, p, p)
+        Self::ec_add_air(builder, p, p)
     }
 
-    fn ec_generator(builder: &mut AirBuilder<L>) -> AffinePointRegister<Self> {
-        let generator = E::generator();
+    fn ec_generator_air(builder: &mut AirBuilder<L>) -> AffinePointRegister<Self> {
+        let (x_int, y_int) = E::generator();
 
-        let x = builder.fp_constant(&generator.x);
-        let y = builder.fp_constant(&generator.y);
+        let x = builder.fp_constant(&x_int);
+        let y = builder.fp_constant(&y_int);
 
         AffinePointRegister::new(x, y)
     }

@@ -2,7 +2,6 @@ use num::{BigUint, Num, Zero};
 use serde::{Deserialize, Serialize};
 
 use super::{SWCurve, WeierstrassParameters};
-use crate::chip::ec::point::AffinePoint;
 use crate::chip::ec::EllipticCurveParameters;
 use crate::chip::field::parameters::FieldParameters;
 
@@ -47,10 +46,10 @@ impl WeierstrassParameters for Bn254Parameters {
         3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0,
     ];
-    fn generator() -> AffinePoint<Self> {
+    fn generator() -> (BigUint, BigUint) {
         let x = BigUint::from(1u32);
         let y = BigUint::from(2u32);
-        AffinePoint::new(x, y)
+        (x, y)
     }
 
     fn prime_group_order() -> num::BigUint {

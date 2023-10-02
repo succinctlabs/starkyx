@@ -1,31 +1,28 @@
-use core::ops::{Add, Mul};
-
-use num::BigUint;
-
-use super::EdwardsParameters;
+use super::{EdwardsCurve, EdwardsParameters};
 use crate::chip::ec::point::AffinePoint;
 use crate::chip::field::parameters::FieldParameters;
-use crate::chip::utils::biguint_to_bits_le;
 
-impl<E: EdwardsParameters> AffinePoint<E> {
-    fn scalar_mul(&self, scalar: &BigUint) -> Self {
-        let mut result = E::neutral();
-        let mut temp = self.clone();
-        let bits = biguint_to_bits_le(scalar, E::nb_scalar_bits());
-        for bit in bits {
-            if bit {
-                result = &result + &temp;
-            }
-            temp = &temp + &temp;
-        }
-        result
-    }
-}
+// impl<E: EdwardsParameters> AffinePoint<EdwardsCurve<E>> {
+//     fn ed_scalar_mul(&self, scalar: &BigUint) -> Self {
+//         let mut result = E::neutral();
+//         let mut result = AffinePoint::new(result.x, result.y);
+//         let mut temp = self.clone();
+//         let bits = biguint_to_bits_le(scalar, E::nb_scalar_bits());
+//         for bit in bits {
+//             if bit {
+//                 result = &result + &temp;
+//             }
+//             temp = &temp + &temp;
+//         }
+//         result
+//     }
+// }
 
-impl<E: EdwardsParameters> Add<&AffinePoint<E>> for &AffinePoint<E> {
-    type Output = AffinePoint<E>;
-
-    fn add(self, other: &AffinePoint<E>) -> AffinePoint<E> {
+impl<E: EdwardsParameters> AffinePoint<EdwardsCurve<E>> {
+    pub(crate) fn ed_add(
+        &self,
+        other: &AffinePoint<EdwardsCurve<E>>,
+    ) -> AffinePoint<EdwardsCurve<E>> {
         let p = E::BaseField::modulus();
         let x_3n = (&self.x * &other.y + &self.y * &other.x) % &p;
         let y_3n = (&self.y * &other.y + &self.x * &other.x) % &p;
@@ -41,45 +38,9 @@ impl<E: EdwardsParameters> Add<&AffinePoint<E>> for &AffinePoint<E> {
 
         AffinePoint::new(x_3, y_3)
     }
-}
 
-impl<E: EdwardsParameters> Add<AffinePoint<E>> for AffinePoint<E> {
-    type Output = AffinePoint<E>;
-
-    fn add(self, other: AffinePoint<E>) -> AffinePoint<E> {
-        &self + &other
-    }
-}
-
-impl<E: EdwardsParameters> Add<&AffinePoint<E>> for AffinePoint<E> {
-    type Output = AffinePoint<E>;
-
-    fn add(self, other: &AffinePoint<E>) -> AffinePoint<E> {
-        &self + other
-    }
-}
-
-impl<E: EdwardsParameters> Mul<&BigUint> for &AffinePoint<E> {
-    type Output = AffinePoint<E>;
-
-    fn mul(self, scalar: &BigUint) -> AffinePoint<E> {
-        self.scalar_mul(scalar)
-    }
-}
-
-impl<E: EdwardsParameters> Mul<BigUint> for &AffinePoint<E> {
-    type Output = AffinePoint<E>;
-
-    fn mul(self, scalar: BigUint) -> AffinePoint<E> {
-        self.scalar_mul(&scalar)
-    }
-}
-
-impl<E: EdwardsParameters> Mul<BigUint> for AffinePoint<E> {
-    type Output = AffinePoint<E>;
-
-    fn mul(self, scalar: BigUint) -> AffinePoint<E> {
-        self.scalar_mul(&scalar)
+    pub(crate) fn ed_double(&self) -> AffinePoint<EdwardsCurve<E>> {
+        self.ed_add(self)
     }
 }
 
@@ -91,14 +52,14 @@ mod tests {
     use rand::thread_rng;
 
     use super::{EdwardsParameters, *};
-    use crate::chip::ec::edwards::ed25519::Ed25519;
-    use crate::chip::ec::EllipticCurveParameters;
+    use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519Parameters};
+    use crate::chip::ec::{EllipticCurve, EllipticCurveParameters};
 
     #[test]
     fn test_bigint_ed_add() {
         type E = Ed25519;
         let netural = E::neutral();
-        let base = E::generator();
+        let base = E::ec_generator();
 
         assert_eq!(&base + &netural, base);
         assert_eq!(&netural + &base, base);
@@ -108,9 +69,9 @@ mod tests {
     #[test]
     fn test_biguint_scalar_mul() {
         type E = Ed25519;
-        let base = E::generator();
+        let base = E::ec_generator();
 
-        let d = E::d_biguint();
+        let d = Ed25519Parameters::d_biguint();
         let p = <E as EllipticCurveParameters>::BaseField::modulus();
         assert_eq!((d * 121666u32) % &p, (&p - 121665u32) % &p);
 

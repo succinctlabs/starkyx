@@ -1,4 +1,4 @@
-use super::EdwardsParameters;
+use super::{EdwardsCurve, EdwardsParameters};
 use crate::chip::builder::AirBuilder;
 use crate::chip::ec::point::AffinePointRegister;
 use crate::chip::field::instruction::FromFieldInstruction;
@@ -7,9 +7,9 @@ use crate::chip::AirParameters;
 impl<L: AirParameters> AirBuilder<L> {
     pub fn ed_add<E: EdwardsParameters>(
         &mut self,
-        p: &AffinePointRegister<E>,
-        q: &AffinePointRegister<E>,
-    ) -> AffinePointRegister<E>
+        p: &AffinePointRegister<EdwardsCurve<E>>,
+        q: &AffinePointRegister<EdwardsCurve<E>>,
+    ) -> AffinePointRegister<EdwardsCurve<E>>
     where
         L::Instruction: FromFieldInstruction<E::BaseField>,
     {
@@ -57,8 +57,8 @@ impl<L: AirParameters> AirBuilder<L> {
     /// addition formula is used.
     pub fn ed_double<E: EdwardsParameters>(
         &mut self,
-        p: &AffinePointRegister<E>,
-    ) -> AffinePointRegister<E>
+        p: &AffinePointRegister<EdwardsCurve<E>>,
+    ) -> AffinePointRegister<EdwardsCurve<E>>
     where
         L::Instruction: FromFieldInstruction<E::BaseField>,
     {
@@ -76,6 +76,7 @@ mod tests {
     use crate::chip::builder::tests::*;
     use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
     use crate::chip::ec::gadget::{EllipticCurveGadget, EllipticCurveWriter};
+    use crate::chip::ec::EllipticCurve;
     use crate::chip::field::instruction::FpInstruction;
 
     #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
@@ -102,13 +103,13 @@ mod tests {
         let p = builder.alloc_ec_point();
         let q = builder.alloc_ec_point();
 
-        let _gadget = builder.ed_add::<E>(&p, &q);
+        let _gadget = builder.ec_add::<E>(&p, &q);
 
         let num_rows = 1 << 16;
         let (air, trace_data) = builder.build();
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
-        let base = E::generator();
+        let base = E::ec_generator();
         let mut rng = thread_rng();
         let a = rng.gen_biguint(256);
         let b = rng.gen_biguint(256);

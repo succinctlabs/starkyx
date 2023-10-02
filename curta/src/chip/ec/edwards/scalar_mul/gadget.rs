@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
-use crate::chip::ec::edwards::EdwardsParameters;
+use crate::chip::ec::edwards::{EdwardsCurve, EdwardsParameters};
 use crate::chip::ec::point::AffinePointRegister;
 use crate::chip::field::instruction::FromFieldInstruction;
 use crate::chip::instruction::cycle::Cycle;
@@ -14,10 +14,10 @@ use crate::chip::AirParameters;
 #[allow(dead_code)]
 pub struct EdDoubleAndAddGadget<E: EdwardsParameters> {
     pub bit: BitRegister,
-    pub result: AffinePointRegister<E>,
-    pub temp: AffinePointRegister<E>,
-    result_next: AffinePointRegister<E>,
-    temp_next: AffinePointRegister<E>,
+    pub result: AffinePointRegister<EdwardsCurve<E>>,
+    pub temp: AffinePointRegister<EdwardsCurve<E>>,
+    result_next: AffinePointRegister<EdwardsCurve<E>>,
+    temp_next: AffinePointRegister<EdwardsCurve<E>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,11 +29,11 @@ pub struct EdScalarMulGadget<F, E: EdwardsParameters> {
 
 #[allow(clippy::misnamed_getters)]
 impl<F, E: EdwardsParameters> EdScalarMulGadget<F, E> {
-    pub fn result(&self) -> AffinePointRegister<E> {
+    pub fn result(&self) -> AffinePointRegister<EdwardsCurve<E>> {
         self.double_and_add_gadget.result_next
     }
 
-    pub fn temp(&self) -> AffinePointRegister<E> {
+    pub fn temp(&self) -> AffinePointRegister<EdwardsCurve<E>> {
         self.double_and_add_gadget.temp
     }
 }
@@ -49,8 +49,8 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn ed_double_and_add<E: EdwardsParameters>(
         &mut self,
         bit: &BitRegister,
-        result: &AffinePointRegister<E>,
-        temp: &AffinePointRegister<E>,
+        result: &AffinePointRegister<EdwardsCurve<E>>,
+        temp: &AffinePointRegister<EdwardsCurve<E>>,
     ) -> EdDoubleAndAddGadget<E>
     where
         L::Instruction: FromFieldInstruction<E::BaseField>,
@@ -78,8 +78,8 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn ed_scalar_mul<E: EdwardsParameters>(
         &mut self,
         bit: &BitRegister,
-        result: &AffinePointRegister<E>,
-        temp: &AffinePointRegister<E>,
+        result: &AffinePointRegister<EdwardsCurve<E>>,
+        temp: &AffinePointRegister<EdwardsCurve<E>>,
     ) -> EdScalarMulGadget<L::Field, E>
     where
         L::Instruction: FromFieldInstruction<E::BaseField>,
@@ -136,6 +136,7 @@ mod tests {
     use crate::chip::builder::tests::*;
     use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
     use crate::chip::ec::gadget::{EllipticCurveGadget, EllipticCurveWriter};
+    use crate::chip::ec::EllipticCurve;
     use crate::chip::field::instruction::FpInstruction;
     use crate::chip::utils::biguint_to_bits_le;
     use crate::math::prelude::*;
@@ -169,7 +170,7 @@ mod tests {
         let res = builder.alloc_unchecked_ec_point();
         let temp = builder.alloc_unchecked_ec_point();
         let scalar_bit = builder.alloc::<BitRegister>();
-        let _scalar_mul_gadget = builder.ed_scalar_mul::<E>(&scalar_bit, &res, &temp);
+        let _scalar_mul_gadget = builder.ed_scalar_mul(&scalar_bit, &res, &temp);
 
         let (air, trace_data) = builder.build();
         let num_rows = 1 << 16;
@@ -184,8 +185,8 @@ mod tests {
                 let mut rng = thread_rng();
                 // let handle = tx.clone();
                 let a = rng.gen_biguint(256);
-                let point = E::generator() * a;
-                writer.write_ec_point(&res, &E::neutral(), starting_row);
+                let point = E::ec_generator() * a;
+                writer.write_ec_point(&res, &Ed25519::neutral(), starting_row);
                 writer.write_ec_point(&temp, &point, starting_row);
                 let scalar = rng.gen_biguint(256);
                 let scalar_bits = biguint_to_bits_le(&scalar, nb_bits);

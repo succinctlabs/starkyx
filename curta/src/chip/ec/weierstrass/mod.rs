@@ -2,7 +2,7 @@ use num::{BigUint, Zero};
 use serde::{Deserialize, Serialize};
 
 use super::point::{AffinePoint, AffinePointRegister};
-use super::{EllipticCurve, EllipticCurveParameters};
+use super::{EllipticCurve, EllipticCurveAir, EllipticCurveParameters};
 use crate::chip::builder::AirBuilder;
 use crate::chip::field::instruction::FromFieldInstruction;
 use crate::chip::field::parameters::{FieldParameters, MAX_NB_LIMBS};
@@ -18,7 +18,7 @@ pub trait WeierstrassParameters: EllipticCurveParameters {
     const A: [u16; MAX_NB_LIMBS];
     const B: [u16; MAX_NB_LIMBS];
 
-    fn generator() -> AffinePoint<Self>;
+    fn generator() -> (BigUint, BigUint);
 
     fn prime_group_order() -> BigUint;
 
@@ -50,11 +50,26 @@ impl<E: WeierstrassParameters> EllipticCurveParameters for SWCurve<E> {
     type BaseField = E::BaseField;
 }
 
+impl<E: WeierstrassParameters> EllipticCurve for SWCurve<E> {
+    fn ec_add(p: &AffinePoint<Self>, q: &AffinePoint<Self>) -> AffinePoint<Self> {
+        p.sw_add(&q)
+    }
+
+    fn ec_double(p: &AffinePoint<Self>) -> AffinePoint<Self> {
+        p.sw_double()
+    }
+
+    fn ec_generator() -> AffinePoint<Self> {
+        let (x, y) = E::generator();
+        AffinePoint::new(x, y)
+    }
+}
+
 impl<E: WeierstrassParameters> SWCurve<E> {
     pub fn generator() -> AffinePoint<SWCurve<E>> {
-        let point = E::generator();
+        let (x, y) = E::generator();
 
-        AffinePoint::new(point.x, point.y)
+        AffinePoint::new(x, y)
     }
 
     pub fn a_int() -> BigUint {
@@ -66,11 +81,11 @@ impl<E: WeierstrassParameters> SWCurve<E> {
     }
 }
 
-impl<L: AirParameters, E: WeierstrassParameters> EllipticCurve<L> for SWCurve<E>
+impl<L: AirParameters, E: WeierstrassParameters> EllipticCurveAir<L> for SWCurve<E>
 where
     L::Instruction: FromFieldInstruction<E::BaseField>,
 {
-    fn ec_add(
+    fn ec_add_air(
         builder: &mut AirBuilder<L>,
         p: &AffinePointRegister<Self>,
         q: &AffinePointRegister<Self>,
@@ -78,7 +93,7 @@ where
         builder.sw_add::<E>(p, q)
     }
 
-    fn ec_double(
+    fn ec_double_air(
         builder: &mut AirBuilder<L>,
         p: &AffinePointRegister<Self>,
     ) -> AffinePointRegister<Self> {
@@ -90,11 +105,11 @@ where
         builder.sw_double::<E>(p, &a, &three)
     }
 
-    fn ec_generator(builder: &mut AirBuilder<L>) -> AffinePointRegister<Self> {
-        let generator = E::generator();
+    fn ec_generator_air(builder: &mut AirBuilder<L>) -> AffinePointRegister<Self> {
+        let (x, y) = E::generator();
 
-        let x = builder.fp_constant(&generator.x);
-        let y = builder.fp_constant(&generator.y);
+        let x = builder.fp_constant(&x);
+        let y = builder.fp_constant(&y);
 
         AffinePointRegister::new(x, y)
     }
