@@ -38,7 +38,7 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         a: &Vec<FieldRegister<P>>,
         b: &Vec<FieldRegister<P>>,
-    ) -> FpInnerProductInstruction<P>
+    ) -> FieldRegister<P>
     where
         L::Instruction: From<FpInnerProductInstruction<P>>,
     {
@@ -57,7 +57,7 @@ impl<L: AirParameters> AirBuilder<L> {
             witness_high,
         };
         self.register_instruction(instr.clone());
-        instr
+        result
     }
 }
 
@@ -218,42 +218,29 @@ mod tests {
         let b = builder.alloc::<Fp>();
         let c = builder.alloc::<Fp>();
         let d = builder.alloc::<Fp>();
-        let quad = builder.fp_inner_product(&vec![a, b], &vec![c, d]);
 
         let (air, trace_data) = builder.build();
         let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
-        let (tx, rx) = channel();
-
         let mut rng = thread_rng();
         for i in 0..num_rows {
             let writer = generator.new_writer();
-            let handle = tx.clone();
             let a_int = rng.gen_biguint(256) % &p;
             let b_int = rng.gen_biguint(256) % &p;
             let c_int = rng.gen_biguint(256) % &p;
             let d_int = rng.gen_biguint(256) % &p;
-            let quad = quad.clone();
-            rayon::spawn(move || {
-                let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
-                let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
-                let p_c = Polynomial::<F>::from_biguint_field(&c_int, 16, 16);
-                let p_d = Polynomial::<F>::from_biguint_field(&d_int, 16, 16);
+            let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
+            let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
+            let p_c = Polynomial::<F>::from_biguint_field(&c_int, 16, 16);
+            let p_d = Polynomial::<F>::from_biguint_field(&d_int, 16, 16);
 
-                writer.write(&a, &p_a, i);
-                writer.write(&b, &p_b, i);
-                writer.write(&c, &p_c, i);
-                writer.write(&d, &p_d, i);
+            writer.write(&a, &p_a, i);
+            writer.write(&b, &p_b, i);
+            writer.write(&c, &p_c, i);
+            writer.write(&d, &p_d, i);
 
-                writer.write_instruction(&quad, i);
-
-                handle.send(1).unwrap();
-            });
-        }
-        drop(tx);
-        for msg in rx.iter() {
-            assert!(msg == 1);
+            writer.write_row_instructions(&generator.air_data, i);
         }
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);

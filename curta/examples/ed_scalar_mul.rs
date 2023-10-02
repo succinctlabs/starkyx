@@ -19,7 +19,7 @@
 
 use curta::chip::ec::edwards::ed25519::Ed25519;
 use curta::chip::ec::edwards::scalar_mul::generator::{AffinePointTarget, ScalarMulEd25519Gadget};
-use curta::chip::ec::edwards::EdwardsParameters;
+use curta::chip::ec::EllipticCurve;
 use curta::chip::utils::biguint_to_16_digits_field;
 use curta::math::goldilocks::cubic::GoldilocksCubicParameters;
 use curta::plonky2::stark::config::CurtaPoseidonGoldilocksConfig;
@@ -116,7 +116,7 @@ fn main() {
 
     // Assigning the public inputs: points, scalars, and expected results
     let mut rng = thread_rng();
-    let generator = Ed25519::generator();
+    let generator = Ed25519::ec_generator();
     timed!(
         timing,
         "assigning inputs",

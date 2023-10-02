@@ -575,9 +575,6 @@ impl SHA256Gadget {
         padded_msg.extend_from_slice(&len);
 
         padded_msg
-        // .chunks_exact(4)
-        // .map(|x| u32::from_be_bytes(x.try_into().unwrap()))
-        // .collect::<Vec<_>>()
     }
 }
 
@@ -608,9 +605,6 @@ mod tests {
         const EXTENDED_COLUMNS: usize = 345;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
     }
-
-    // 551 + 927
-    // 745 + 345
 
     #[test]
     fn test_sha_256_stark() {

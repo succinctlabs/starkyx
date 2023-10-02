@@ -60,7 +60,7 @@ impl<C: CurtaConfig<D>, const D: usize> StarkyConfig<C, D> {
         }
     }
 
-    pub(crate) fn fri_params(&self) -> FriParams {
+    pub fn fri_params(&self) -> FriParams {
         self.fri_config.fri_params(self.degree_bits, false)
     }
 }

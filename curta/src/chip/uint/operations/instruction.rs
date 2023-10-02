@@ -132,8 +132,8 @@ mod tests {
 
         type Instruction = U32Instruction;
 
-        const NUM_FREE_COLUMNS: usize = 1467;
-        const EXTENDED_COLUMNS: usize = 450;
+        const NUM_FREE_COLUMNS: usize = 1600;
+        const EXTENDED_COLUMNS: usize = 500;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
     }
 
@@ -146,8 +146,8 @@ mod tests {
 
         type Instruction = U32Instruction;
 
-        const NUM_FREE_COLUMNS: usize = 1437;
-        const EXTENDED_COLUMNS: usize = 450;
+        const NUM_FREE_COLUMNS: usize = 2800;
+        const EXTENDED_COLUMNS: usize = 900;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
     }
 
