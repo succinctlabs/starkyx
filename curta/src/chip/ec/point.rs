@@ -67,3 +67,11 @@ impl<E: EllipticCurve> Neg for &AffinePoint<E> {
         E::ec_neg(self)
     }
 }
+
+impl<E: EllipticCurve> Neg for AffinePoint<E> {
+    type Output = AffinePoint<E>;
+
+    fn neg(self) -> AffinePoint<E> {
+        -&self
+    }
+}
