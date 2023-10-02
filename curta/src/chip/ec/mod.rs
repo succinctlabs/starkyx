@@ -22,6 +22,8 @@ pub trait EllipticCurve: EllipticCurveParameters {
 
     fn ec_generator() -> AffinePoint<Self>;
 
+    fn ec_neg(p: &AffinePoint<Self>) -> AffinePoint<Self>;
+
     fn nb_scalar_bits() -> usize {
         Self::BaseField::NB_LIMBS * Self::BaseField::NB_BITS_PER_LIMB
     }

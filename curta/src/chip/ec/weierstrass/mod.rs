@@ -63,6 +63,11 @@ impl<E: WeierstrassParameters> EllipticCurve for SWCurve<E> {
         let (x, y) = E::generator();
         AffinePoint::new(x, y)
     }
+
+    fn ec_neg(p: &AffinePoint<Self>) -> AffinePoint<Self> {
+        let modulus = E::BaseField::modulus();
+        AffinePoint::new(p.x.clone(), modulus - &p.y)
+    }
 }
 
 impl<E: WeierstrassParameters> SWCurve<E> {

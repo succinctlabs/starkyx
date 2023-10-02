@@ -4,9 +4,8 @@ use super::point::{AffinePoint, AffinePointRegister};
 use super::{EllipticCurve, EllipticCurveAir, EllipticCurveParameters};
 use crate::chip::builder::AirBuilder;
 use crate::chip::field::instruction::FromFieldInstruction;
-use crate::chip::field::parameters::MAX_NB_LIMBS;
+use crate::chip::field::parameters::{FieldParameters, MAX_NB_LIMBS};
 use crate::chip::AirParameters;
-
 pub mod add;
 pub mod bigint_operations;
 pub mod ed25519;
@@ -62,6 +61,11 @@ impl<E: EdwardsParameters> EllipticCurve for EdwardsCurve<E> {
     fn ec_generator() -> AffinePoint<Self> {
         let (x, y) = E::generator();
         AffinePoint::new(x, y)
+    }
+
+    fn ec_neg(p: &AffinePoint<Self>) -> AffinePoint<Self> {
+        let modulus = E::BaseField::modulus();
+        AffinePoint::new(&modulus - &p.x, p.y.clone())
     }
 }
 
