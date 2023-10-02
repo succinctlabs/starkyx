@@ -2,22 +2,6 @@ use super::{EdwardsCurve, EdwardsParameters};
 use crate::chip::ec::point::AffinePoint;
 use crate::chip::field::parameters::FieldParameters;
 
-// impl<E: EdwardsParameters> AffinePoint<EdwardsCurve<E>> {
-//     fn ed_scalar_mul(&self, scalar: &BigUint) -> Self {
-//         let mut result = E::neutral();
-//         let mut result = AffinePoint::new(result.x, result.y);
-//         let mut temp = self.clone();
-//         let bits = biguint_to_bits_le(scalar, E::nb_scalar_bits());
-//         for bit in bits {
-//             if bit {
-//                 result = &result + &temp;
-//             }
-//             temp = &temp + &temp;
-//         }
-//         result
-//     }
-// }
-
 impl<E: EdwardsParameters> AffinePoint<EdwardsCurve<E>> {
     pub(crate) fn ed_add(
         &self,
@@ -48,7 +32,7 @@ impl<E: EdwardsParameters> AffinePoint<EdwardsCurve<E>> {
 mod tests {
 
     use num::bigint::RandBigInt;
-    use num::{BigUint, Zero};
+    use num::BigUint;
     use rand::thread_rng;
 
     use super::{EdwardsParameters, *};
@@ -81,8 +65,6 @@ mod tests {
             let y = rng.gen_biguint(25);
 
             let x_base = &base * &x;
-            let zero = BigUint::zero();
-            assert_eq!(&x_base * zero, E::neutral());
             let y_x_base = &x_base * &y;
             let xy = &x * &y;
             let xy_base = &base * &xy;
