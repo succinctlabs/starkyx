@@ -177,8 +177,8 @@ impl<
             .collect::<Vec<_>>();
 
         let num_rows = 1 << 16;
-        let max_num_chunks = num_rows / 128;
-        assert!(padded_messages.len() <= max_num_chunks * 128);
+        let max_num_chunks = num_rows / 4 / NUM_MIX_ROUNDS;
+        assert!(padded_messages.len() <= (max_num_chunks * 128));
 
         let msg_sizes = self
             .msg_lens
@@ -202,7 +202,7 @@ impl<
             &msg_sizes,
             &self.chunk_sizes,
             &writer,
-            num_rows,
+            num_rows / 4,
         );
 
         for i in 0..num_rows {
@@ -243,7 +243,7 @@ impl BLAKE2BPublicData<Target> {
         digests: &[Target],
         chunk_sizes: &[u64],
     ) -> Self {
-        let num_rows = 1 << 16;
+        let num_rows = (1 << 16) / 4;
         let num_chunks = num_rows / NUM_MIX_ROUNDS;
 
         let msg_chunks_targets = (0..num_chunks * MSG_ARRAY_SIZE)
