@@ -1,4 +1,4 @@
-use core::ops::Add;
+use core::ops::{Add, Neg};
 
 use num::BigUint;
 use serde::{Deserialize, Serialize};
@@ -57,5 +57,13 @@ impl<E: EllipticCurve> Add<&AffinePoint<E>> for AffinePoint<E> {
 
     fn add(self, other: &AffinePoint<E>) -> AffinePoint<E> {
         &self + other
+    }
+}
+
+impl<E: EllipticCurve> Neg for &AffinePoint<E> {
+    type Output = AffinePoint<E>;
+
+    fn neg(self) -> AffinePoint<E> {
+        E::ec_neg(self)
     }
 }
