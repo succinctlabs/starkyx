@@ -108,7 +108,7 @@ mod tests {
         let p_int = base.sw_scalar_mul(&a);
         let q_int = base.sw_scalar_mul(&b);
         let writer = generator.new_writer();
-        (0..num_rows).into_iter().for_each(|i| {
+        (0..num_rows).for_each(|i| {
             writer.write_ec_point(&p, &p_int, i);
             writer.write_ec_point(&q, &q_int, i);
             writer.write_row_instructions(&generator.air_data, i);
@@ -144,8 +144,8 @@ mod tests {
         let p_int = &base;
         let writer = generator.new_writer();
         writer.write_global_instructions(&generator.air_data);
-        (0..num_rows).into_iter().for_each(|i| {
-            writer.write_ec_point(&p, &p_int, i);
+        (0..num_rows).for_each(|i| {
+            writer.write_ec_point(&p, p_int, i);
             writer.write_row_instructions(&generator.air_data, i);
         });
 
