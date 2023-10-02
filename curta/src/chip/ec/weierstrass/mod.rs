@@ -52,7 +52,7 @@ impl<E: WeierstrassParameters> EllipticCurveParameters for SWCurve<E> {
 
 impl<E: WeierstrassParameters> EllipticCurve for SWCurve<E> {
     fn ec_add(p: &AffinePoint<Self>, q: &AffinePoint<Self>) -> AffinePoint<Self> {
-        p.sw_add(&q)
+        p.sw_add(q)
     }
 
     fn ec_double(p: &AffinePoint<Self>) -> AffinePoint<Self> {
