@@ -10,7 +10,7 @@ impl<E: EllipticCurve> AffinePoint<E> {
     fn scalar_mul(&self, scalar: &BigUint) -> Self {
         let power_two_modulus = BigUint::one() << E::nb_scalar_bits();
         let scalar = scalar % &power_two_modulus;
-        let mut result = None;
+        let mut result = E::ec_neutral();
         let mut temp = self.clone();
         let bits = biguint_to_bits_le(&scalar, E::nb_scalar_bits());
         for bit in bits {
@@ -19,7 +19,7 @@ impl<E: EllipticCurve> AffinePoint<E> {
             }
             temp = &temp + &temp;
         }
-        result.expect("Scalar cannot be zero")
+        result.expect("Scalar multiplication failed")
     }
 }
 
