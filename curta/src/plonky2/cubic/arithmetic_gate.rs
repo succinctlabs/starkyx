@@ -190,7 +190,7 @@ pub struct ArithmeticCubicGenerator<F: RichField + Extendable<D>, const D: usize
     i: usize,
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> ArithmeticCubicGenerator<F, D>  {
+impl<F: RichField + Extendable<D>, const D: usize> ArithmeticCubicGenerator<F, D> {
     fn id() -> String {
         "ArithmeticCubicGenerator".to_string()
     }
@@ -200,7 +200,7 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
     for ArithmeticCubicGenerator<F, D>
 {
     fn id(&self) -> String {
-        Self::id() 
+        Self::id()
     }
 
     fn dependencies(&self) -> Vec<Target> {
