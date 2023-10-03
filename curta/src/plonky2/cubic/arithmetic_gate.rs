@@ -191,7 +191,7 @@ pub struct ArithmeticCubicGenerator<F: RichField + Extendable<D>, const D: usize
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> ArithmeticCubicGenerator<F, D> {
-    fn id() -> String {
+    pub fn id() -> String {
         "ArithmeticCubicGenerator".to_string()
     }
 }
