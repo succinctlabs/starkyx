@@ -43,6 +43,17 @@ pub trait CubicParser<E: CubicParameters<Self::Field>>: AirParser {
         CubicElement([self.add(x_0, y_0), self.add(x_1, y_1), self.add(x_2, y_2)])
     }
 
+    fn add_many_extension(
+        &mut self,
+        elements: &[CubicElement<Self::Var>],
+    ) -> CubicElement<Self::Var> {
+        let mut sum = self.zero_extension();
+        for element in elements {
+            sum = self.add_extension(sum, *element);
+        }
+        sum
+    }
+
     fn sub_extension(
         &mut self,
         a: CubicElement<Self::Var>,
