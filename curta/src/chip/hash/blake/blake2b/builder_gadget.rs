@@ -27,15 +27,6 @@ pub struct BLAKE2BBuilderGadget<
     _phantom: PhantomData<L>,
 }
 
-impl<L: AirParameters + 'static + Clone + Debug + Send + Sync, const MAX_NUM_CHUNKS: usize>
-    BLAKE2BBuilderGadget<L, MAX_NUM_CHUNKS>
-{
-    pub fn max_num_chunks(&mut self) -> usize {
-        assert!(MAX_NUM_CHUNKS <= (1 << 16) / NUM_MIX_ROUNDS);
-        MAX_NUM_CHUNKS
-    }
-}
-
 pub trait BLAKE2BBuilder<
     F: RichField + Extendable<D>,
     const D: usize,
