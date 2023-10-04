@@ -101,7 +101,7 @@ const SIGMA: [[usize; MSG_ARRAY_SIZE]; SIGMA_LEN] = [
 ];
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn process_blake2b(
+    pub fn process_blake2b<const MAX_NUM_CHUNKS: usize>(
         &mut self,
         clk: &ElementRegister,
         bus: &mut Bus<L::CubicParams>,
@@ -111,8 +111,9 @@ impl<L: AirParameters> AirBuilder<L> {
     where
         L::Instruction: U32Instructions,
     {
-        let num_rows = (1 << 16) / 4;
-        let num_chunks = num_rows / NUM_MIX_ROUNDS;
+        let num_rows = MAX_NUM_CHUNKS * NUM_MIX_ROUNDS;
+        assert!(num_rows <= (1 << 16));
+        let num_chunks = MAX_NUM_CHUNKS;
 
         // Registers to be written to
         let m = self.alloc_array::<U64Register>(MSG_ARRAY_SIZE);
@@ -1187,6 +1188,8 @@ mod tests {
         type L = BLAKE2BAirParameters<F, E>;
         type SC = PoseidonGoldilocksStarkConfig;
 
+        const MAX_NUM_CHUNKS: usize = 1365;
+
         let _ = env_logger::builder().is_test(true).try_init();
 
         let mut timing = TimingTree::new("Blake2b test", log::Level::Debug);
@@ -1199,7 +1202,8 @@ mod tests {
         let mut bus = builder.new_bus();
         let channel_idx = bus.new_channel(&mut builder);
 
-        let blake_gadget = builder.process_blake2b(&clk, &mut bus, channel_idx, &mut operations);
+        let blake_gadget =
+            builder.process_blake2b::<MAX_NUM_CHUNKS>(&clk, &mut bus, channel_idx, &mut operations);
 
         builder.register_byte_lookup(operations, &table);
         builder.constrain_bus(bus);
