@@ -1,6 +1,7 @@
 pub mod extension;
 pub mod opening;
 pub mod parser;
+pub mod curta_air;
 
 #[cfg(test)]
 pub mod fibonacci;
