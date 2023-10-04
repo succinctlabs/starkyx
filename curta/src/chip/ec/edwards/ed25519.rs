@@ -1,13 +1,14 @@
 use num::{BigUint, Num, One};
 use serde::{Deserialize, Serialize};
 
-use super::EdwardsParameters;
-use crate::chip::ec::point::AffinePoint;
+use super::{EdwardsCurve, EdwardsParameters};
 use crate::chip::ec::EllipticCurveParameters;
 use crate::chip::field::parameters::{FieldParameters, MAX_NB_LIMBS};
 
+pub type Ed25519 = EdwardsCurve<Ed25519Parameters>;
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct Ed25519;
+pub struct Ed25519Parameters;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Ed25519BaseField;
@@ -27,11 +28,11 @@ impl FieldParameters for Ed25519BaseField {
     }
 }
 
-impl EllipticCurveParameters for Ed25519 {
+impl EllipticCurveParameters for Ed25519Parameters {
     type BaseField = Ed25519BaseField;
 }
 
-impl EdwardsParameters for Ed25519 {
+impl EdwardsParameters for Ed25519Parameters {
     const D: [u16; MAX_NB_LIMBS] = [
         30883, 4953, 19914, 30187, 55467, 16705, 2637, 112, 59544, 30585, 16505, 36039, 65139,
         11119, 27886, 20995, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -41,7 +42,7 @@ impl EdwardsParameters for Ed25519 {
         BigUint::from(2u32).pow(252) + BigUint::from(27742317777372353535851937790883648493u128)
     }
 
-    fn generator() -> AffinePoint<Self> {
+    fn generator() -> (BigUint, BigUint) {
         let x = BigUint::from_str_radix(
             "15112221349535400772501151409588531511454012693041857206046113283949847762202",
             10,
@@ -52,6 +53,6 @@ impl EdwardsParameters for Ed25519 {
             10,
         )
         .unwrap();
-        AffinePoint::new(x, y)
+        (x, y)
     }
 }

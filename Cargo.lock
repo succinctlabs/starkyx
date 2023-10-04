@@ -810,6 +810,7 @@ dependencies = [
  "plonky2_maybe_rayon 0.1.1 (git+https://github.com/mir-protocol/plonky2.git)",
  "plonky2_util",
  "rand",
+ "rand_chacha",
  "serde",
  "serde_json",
  "static_assertions",

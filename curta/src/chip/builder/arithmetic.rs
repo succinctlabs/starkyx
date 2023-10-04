@@ -106,6 +106,17 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 
     #[inline]
+    pub fn set_to_expression_public<T: Register>(
+        &mut self,
+        data: &T,
+        expression: ArithmeticExpression<L::Field>,
+    ) {
+        let instr = AssignInstruction::new(expression, *data.register(), AssignType::All);
+        self.register_global_air_instruction_internal(AirInstruction::Assign(instr))
+            .unwrap();
+    }
+
+    #[inline]
     pub fn set_to_expression_first_row<T: Register>(
         &mut self,
         data: &T,

@@ -1,5 +1,5 @@
 use super::point::{AffinePoint, AffinePointRegister};
-use super::EllipticCurveParameters;
+use super::EllipticCurve;
 use crate::chip::builder::AirBuilder;
 use crate::chip::field::parameters::FieldParameters;
 use crate::chip::field::register::FieldRegister;
@@ -10,7 +10,7 @@ use crate::chip::AirParameters;
 use crate::math::prelude::*;
 use crate::polynomial::to_u16_le_limbs_polynomial;
 
-pub trait EllipticCurveGadget<E: EllipticCurveParameters> {
+pub trait EllipticCurveGadget<E: EllipticCurve> {
     fn alloc_unchecked_ec_point(&mut self) -> AffinePointRegister<E>;
 
     fn alloc_local_ec_point(&mut self) -> AffinePointRegister<E>;
@@ -26,7 +26,7 @@ pub trait EllipticCurveGadget<E: EllipticCurveParameters> {
     fn alloc_public_ec_point(&mut self) -> AffinePointRegister<E>;
 }
 
-pub trait EllipticCurveWriter<E: EllipticCurveParameters> {
+pub trait EllipticCurveWriter<E: EllipticCurve> {
     fn read_ec_point(&self, data: &AffinePointRegister<E>, row_index: usize) -> AffinePoint<E>;
 
     fn write_ec_point(
@@ -37,7 +37,7 @@ pub trait EllipticCurveWriter<E: EllipticCurveParameters> {
     );
 }
 
-impl<L: AirParameters, E: EllipticCurveParameters> EllipticCurveGadget<E> for AirBuilder<L> {
+impl<L: AirParameters, E: EllipticCurve> EllipticCurveGadget<E> for AirBuilder<L> {
     /// Allocates registers for a next affine elliptic curve point without range-checking.
     fn alloc_unchecked_ec_point(&mut self) -> AffinePointRegister<E> {
         let x = FieldRegister::<E::BaseField>::from_register(
@@ -74,7 +74,7 @@ impl<L: AirParameters, E: EllipticCurveParameters> EllipticCurveGadget<E> for Ai
     }
 }
 
-impl<F: PrimeField64, E: EllipticCurveParameters> EllipticCurveWriter<E> for TraceWriter<F> {
+impl<F: PrimeField64, E: EllipticCurve> EllipticCurveWriter<E> for TraceWriter<F> {
     fn read_ec_point(&self, data: &AffinePointRegister<E>, row_index: usize) -> AffinePoint<E> {
         let p_x = self.read(&data.x, row_index);
         let p_y = self.read(&data.y, row_index);

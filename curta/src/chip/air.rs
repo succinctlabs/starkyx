@@ -33,7 +33,7 @@ impl<L: AirParameters> RAirData for Chip<L> {
     }
 
     fn width(&self) -> usize {
-        L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS
+        L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS + L::EXTENDED_COLUMNS
     }
 }
 

@@ -15,11 +15,10 @@ use serde::{Deserialize, Serialize};
 use super::air::ScalarMulEd25519;
 use super::gadget::EdScalarMulGadget;
 use crate::chip::builder::AirTraceData;
-use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
-use crate::chip::ec::edwards::EdwardsParameters;
+use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField, Ed25519Parameters};
 use crate::chip::ec::gadget::EllipticCurveWriter;
 use crate::chip::ec::point::{AffinePoint, AffinePointRegister};
-use crate::chip::ec::EllipticCurveParameters;
+use crate::chip::ec::{EllipticCurve, EllipticCurveParameters};
 use crate::chip::field::instruction::FpInstruction;
 use crate::chip::instruction::set::AirInstruction;
 use crate::chip::register::array::ArrayRegister;
@@ -227,7 +226,7 @@ pub struct SimpleScalarMulEd25519Generator<
     C: CurtaConfig<D, F = F>,
     const D: usize,
 > {
-    gadget: EdScalarMulGadget<F, Ed25519>,
+    gadget: EdScalarMulGadget<F, Ed25519Parameters>,
     points: Vec<AffinePointTarget>,
     scalars: Vec<Vec<Target>>, // 32-byte limbs
     results: Vec<AffinePointTarget>,
@@ -251,7 +250,7 @@ impl<
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        gadget: EdScalarMulGadget<F, Ed25519>,
+        gadget: EdScalarMulGadget<F, Ed25519Parameters>,
         points: Vec<AffinePointTarget>,
         scalars: Vec<Vec<Target>>,
         results: Vec<AffinePointTarget>,
@@ -541,7 +540,7 @@ mod tests {
     use crate::chip::ec::edwards::scalar_mul::generator::{
         AffinePointTarget, ScalarMulEd25519Gadget,
     };
-    use crate::chip::ec::edwards::EdwardsParameters;
+    use crate::chip::ec::EllipticCurve;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
     use crate::plonky2::stark::config::CurtaPoseidonGoldilocksConfig;
 
@@ -598,7 +597,7 @@ mod tests {
         let mut pw = PartialWitness::new();
 
         let mut rng = thread_rng();
-        let generator = Ed25519::generator();
+        let generator = Ed25519::ec_generator();
         for i in 0..256 {
             let a = rng.gen_biguint(256);
             let point = &generator * a;
@@ -689,7 +688,7 @@ mod tests {
         let mut pw = PartialWitness::new();
 
         let mut rng = thread_rng();
-        let generator = Ed25519::generator();
+        let generator = Ed25519::ec_generator();
         for i in 0..256 {
             let a = rng.gen_biguint(256);
             let point = &generator * a;

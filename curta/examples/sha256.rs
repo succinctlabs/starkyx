@@ -192,8 +192,8 @@ fn main() {
         prove(&data.prover_only, &data.common, pw, &mut timing)
     )
     .unwrap();
-    timing.print();
 
     // Verify the proof
-    data.verify(proof).unwrap();
+    timed!(timing, "verify proof", data.verify(proof).unwrap());
+    timing.print();
 }

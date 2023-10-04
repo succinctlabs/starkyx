@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::gadget::EdScalarMulGadget;
 use crate::chip::builder::{AirBuilder, AirTraceData};
-use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
+use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField, Ed25519Parameters};
 use crate::chip::ec::gadget::EllipticCurveGadget;
 use crate::chip::ec::point::AffinePointRegister;
 use crate::chip::field::instruction::FpInstruction;
@@ -45,7 +45,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
     pub fn air() -> (
         Chip<Self>,
         AirTraceData<Self>,
-        EdScalarMulGadget<F, Ed25519>,
+        EdScalarMulGadget<F, Ed25519Parameters>,
         Vec<ArrayRegister<ElementRegister>>,
         Vec<AffinePointRegister<Ed25519>>,
         Vec<AffinePointRegister<Ed25519>>,
@@ -59,7 +59,8 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
         let res = builder.alloc_unchecked_ec_point();
         let temp = builder.alloc_unchecked_ec_point();
         let scalar_bit = builder.alloc::<BitRegister>();
-        let scalar_mul_gadget = builder.ed_scalar_mul::<Ed25519>(&scalar_bit, &res, &temp);
+        let scalar_mul_gadget =
+            builder.ed_scalar_mul::<Ed25519Parameters>(&scalar_bit, &res, &temp);
 
         let scalars_limbs = (0..256)
             .map(|_| builder.alloc_array_public::<ElementRegister>(8))

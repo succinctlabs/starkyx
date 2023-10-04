@@ -31,9 +31,15 @@ impl<F: Field, P: CubicParameters<F>> CubicExtension<F, P> {
         Self::new(a, F::ZERO, F::ZERO)
     }
 
+    #[inline]
     pub fn from_slice(slice: &[F]) -> Self {
         assert_eq!(slice.len(), 3);
         Self::new(slice[0], slice[1], slice[2])
+    }
+
+    #[inline]
+    pub const fn from_base_field_array(array: [F; 3]) -> Self {
+        Self::new(array[0], array[1], array[2])
     }
 
     #[inline]
