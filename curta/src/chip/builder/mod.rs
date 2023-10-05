@@ -12,12 +12,14 @@ use self::shared_memory::SharedMemory;
 use super::arithmetic::expression::ArithmeticExpression;
 use super::constraint::Constraint;
 use super::instruction::set::AirInstruction;
+use super::register::cubic::CubicRegister;
 use super::register::element::ElementRegister;
 use super::register::{Register, RegisterSerializable};
 use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
 use super::table::evaluation::Evaluation;
 use super::table::lookup::Lookup;
+use super::table::lookup::log_der::values::LogLookupValues;
 use super::{AirParameters, Chip};
 use crate::math::prelude::*;
 
@@ -36,7 +38,9 @@ pub struct AirBuilder<L: AirParameters> {
     pub(crate) global_constraints: Vec<Constraint<L>>,
     pub(crate) accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
     pub(crate) bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
+    /// The old lookup data format to be deprecated.
     pub(crate) lookup_data: Vec<Lookup<L::Field, L::CubicParams>>,
+    /// Lookup values.
     pub(crate) evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
     range_data: Option<Lookup<L::Field, L::CubicParams>>,
 }

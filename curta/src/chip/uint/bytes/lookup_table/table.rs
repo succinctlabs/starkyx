@@ -29,7 +29,7 @@ use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ByteLookupTable {
+pub struct ByteLogLookupTable {
     pub a: ByteRegister,
     pub b: ByteRegister,
     pub results: [ByteRegister; NUM_BIT_OPPS],
@@ -41,7 +41,7 @@ pub struct ByteLookupTable {
 }
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn new_byte_lookup_table(&mut self) -> ByteLookupTable
+    pub fn new_byte_lookup_table(&mut self) -> ByteLogLookupTable
     where
         L::Instruction: From<ByteInstructionSet>
             + From<SelectInstruction<BitRegister>>
@@ -115,7 +115,7 @@ impl<L: AirParameters> AirBuilder<L> {
             self.register_instruction::<ByteInstructionSet>(digest_constraint.into());
         }
 
-        ByteLookupTable {
+        ByteLogLookupTable {
             a,
             b,
             results,
@@ -128,7 +128,7 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 }
 
-impl ByteLookupTable {
+impl ByteLogLookupTable {
     pub fn write_table_entries<F: Field>(&self, writer: &TraceWriter<F>) {
         let operations_dict = self.multiplicity_data.operations_dict.clone();
         // Write the lookup table entries

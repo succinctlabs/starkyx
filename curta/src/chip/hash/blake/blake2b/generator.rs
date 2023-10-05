@@ -19,7 +19,7 @@ use super::{
 use crate::chip::builder::AirBuilder;
 use crate::chip::hash::blake::blake2b::BLAKE2BGadget;
 use crate::chip::trace::generator::ArithmeticGenerator;
-use crate::chip::uint::bytes::lookup_table::table::ByteLookupTable;
+use crate::chip::uint::bytes::lookup_table::table::ByteLogLookupTable;
 use crate::chip::uint::operations::instruction::U32Instruction;
 use crate::chip::uint::util::u64_to_le_field_bytes;
 use crate::chip::{AirParameters, Chip};
@@ -66,7 +66,7 @@ pub struct BLAKE2BGenerator<
 
 pub struct BLAKE2BStarkData<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> {
     pub stark: Starky<Chip<BLAKE2BAirParameters<F, E>>>,
-    pub table: ByteLookupTable,
+    pub table: ByteLogLookupTable,
     pub trace_generator: ArithmeticGenerator<BLAKE2BAirParameters<F, E>>,
     pub config: StarkyConfig<C, D>,
     pub gadget: BLAKE2BGadget,

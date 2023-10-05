@@ -1,7 +1,5 @@
 use super::parser::AirParser;
 
-
-
 pub trait Curta<AP: AirParser> {
     type Input;
     type Output;

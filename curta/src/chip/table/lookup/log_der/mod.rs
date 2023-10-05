@@ -6,54 +6,29 @@ use core::marker::PhantomData;
 
 use serde::{Deserialize, Serialize};
 
+use self::table::LogLookupTable;
+use self::values::LogLookupValues;
 use crate::chip::builder::AirBuilder;
 use crate::chip::constraint::Constraint;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::{CubicRegister, EvalCubic};
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
-use crate::chip::register::Register;
 use crate::chip::table::lookup::log_der::constraint::LookupConstraint;
 use crate::chip::table::lookup::Lookup;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
 pub mod constraint;
+pub mod table;
 pub mod trace;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub struct LookupTable<T: Register, F: Field, E: CubicParameters<F>> {
-    pub(crate) challenge: CubicRegister,
-    pub(crate) table: Vec<T>,
-    pub(crate) multiplicities: ArrayRegister<ElementRegister>,
-    pub(crate) multiplicities_table_log: ArrayRegister<CubicRegister>,
-    pub(crate) table_accumulator: CubicRegister,
-    pub(crate) digest: CubicRegister,
-    _marker: core::marker::PhantomData<(F, E)>,
-}
-
-/// Currently, only supports an even number of values
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub struct LogLookupValues<T: EvalCubic, F: Field, E: CubicParameters<F>> {
-    pub(crate) challenge: CubicRegister,
-    pub(crate) trace_values: Vec<T>,
-    pub(crate) public_values: Vec<T>,
-    pub(crate) row_accumulators: ArrayRegister<CubicRegister>,
-    pub(crate) global_accumulators: ArrayRegister<CubicRegister>,
-    pub(crate) log_lookup_accumulator: CubicRegister,
-    pub local_digest: CubicRegister,
-    pub global_digest: Option<CubicRegister>,
-    pub digest: CubicRegister,
-    _marker: core::marker::PhantomData<(F, E)>,
-}
+pub mod values;
 
 /// Currently, only supports an even number of values
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub struct LogLookup<T: EvalCubic, F: Field, E: CubicParameters<F>> {
-    pub(crate) table_data: LookupTable<T, F, E>,
+    pub(crate) table_data: LogLookupTable<T, F, E>,
     pub(crate) values_data: LogLookupValues<T, F, E>,
     _marker: core::marker::PhantomData<(F, E)>,
 }
@@ -64,17 +39,18 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         challenge: &CubicRegister,
         table: &[T],
-    ) -> LookupTable<T, L::Field, L::CubicParams> {
+    ) -> LogLookupTable<T, L::Field, L::CubicParams> {
         let multiplicities = self.alloc_array::<ElementRegister>(table.len());
         let multiplicities_table_log = self.alloc_array_extended::<CubicRegister>(table.len());
         let table_accumulator = self.alloc_extended::<CubicRegister>();
-        LookupTable {
+        LogLookupTable {
             challenge: *challenge,
             table: table.to_vec(),
             multiplicities,
             multiplicities_table_log,
             table_accumulator,
             digest: table_accumulator,
+            values_digests: Vec::new(),
             _marker: PhantomData,
         }
     }
@@ -84,16 +60,17 @@ impl<L: AirParameters> AirBuilder<L> {
         challenge: &CubicRegister,
         table: &[T],
         multiplicities: &ArrayRegister<ElementRegister>,
-    ) -> LookupTable<T, L::Field, L::CubicParams> {
+    ) -> LogLookupTable<T, L::Field, L::CubicParams> {
         let multiplicities_table_log = self.alloc_array_extended::<CubicRegister>(table.len());
         let table_accumulator = self.alloc_extended::<CubicRegister>();
-        LookupTable {
+        LogLookupTable {
             challenge: *challenge,
             table: table.to_vec(),
             multiplicities: *multiplicities,
             multiplicities_table_log,
             table_accumulator,
             digest: table_accumulator,
+            values_digests: Vec::new(),
             _marker: PhantomData,
         }
     }
@@ -154,7 +131,7 @@ impl<L: AirParameters> AirBuilder<L> {
 
     pub fn element_lookup_from_table_and_values(
         &mut self,
-        table_data: LookupTable<ElementRegister, L::Field, L::CubicParams>,
+        table_data: LogLookupTable<ElementRegister, L::Field, L::CubicParams>,
         values_data: LogLookupValues<ElementRegister, L::Field, L::CubicParams>,
     ) {
         let table_challenge = table_data.challenge;
@@ -200,7 +177,7 @@ impl<L: AirParameters> AirBuilder<L> {
 
     pub fn cubic_lookup_from_table_and_values(
         &mut self,
-        table_data: LookupTable<CubicRegister, L::Field, L::CubicParams>,
+        table_data: LogLookupTable<CubicRegister, L::Field, L::CubicParams>,
         values_data: LogLookupValues<CubicRegister, L::Field, L::CubicParams>,
     ) {
         let table_challenge = table_data.challenge;
@@ -285,6 +262,7 @@ mod tests {
 
     use super::*;
     use crate::chip::builder::tests::*;
+    use crate::chip::register::Register;
     use crate::chip::AirParameters;
     use crate::math::extension::cubic::element::CubicElement;
 

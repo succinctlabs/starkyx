@@ -1,6 +1,6 @@
 use itertools::Itertools;
 
-use super::{LogLookup, LogLookupValues, LookupTable};
+use super::{LogLookup, LogLookupValues, LogLookupTable};
 use crate::chip::register::cubic::EvalCubic;
 use crate::chip::register::Register;
 use crate::chip::trace::writer::TraceWriter;
@@ -12,7 +12,7 @@ impl<F: PrimeField> TraceWriter<F> {
     pub fn write_multiplicities_from_fn<E: CubicParameters<F>, T: Register>(
         &self,
         num_rows: usize,
-        table_data: &LookupTable<T, F, E>,
+        table_data: &LogLookupTable<T, F, E>,
         table_index: impl Fn(T::Value<F>) -> usize,
         trace_values: &[T],
         public_values: &[T],
@@ -53,7 +53,7 @@ impl<F: PrimeField> TraceWriter<F> {
     pub(crate) fn write_log_lookup_table<T: EvalCubic, E: CubicParameters<F>>(
         &self,
         num_rows: usize,
-        table_data: &LookupTable<T, F, E>,
+        table_data: &LogLookupTable<T, F, E>,
     ) -> Vec<CubicExtension<F, E>> {
         let beta = CubicExtension::<F, E>::from(self.read(&table_data.challenge, 0));
         assert_eq!(

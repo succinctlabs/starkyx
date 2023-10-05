@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use self::builder_operations::ByteLookupOperations;
-use self::table::ByteLookupTable;
+use self::table::ByteLogLookupTable;
 use super::bit_operations::and::And;
 use super::bit_operations::not::Not;
 use super::bit_operations::xor::Xor;
@@ -48,7 +48,7 @@ pub trait ByteInstructions:
 impl ByteInstructions for ByteInstructionSet {}
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn byte_operations(&mut self) -> (ByteLookupOperations, ByteLookupTable)
+    pub fn byte_operations(&mut self) -> (ByteLookupOperations, ByteLogLookupTable)
     where
         L::Instruction: From<ByteInstructionSet>
             + From<SelectInstruction<BitRegister>>
@@ -63,7 +63,7 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn register_byte_lookup(
         &mut self,
         operation_values: ByteLookupOperations,
-        table: &ByteLookupTable,
+        table: &ByteLogLookupTable,
     ) {
         let multiplicities = table.multiplicity_data.multiplicities();
         let lookup_challenge = self.alloc_challenge::<CubicRegister>();
