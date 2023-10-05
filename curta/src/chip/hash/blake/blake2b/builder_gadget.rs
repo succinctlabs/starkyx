@@ -16,7 +16,10 @@ use crate::plonky2::stark::config::CurtaConfig;
 use crate::plonky2::stark::gadget::StarkGadget;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BLAKE2BBuilderGadget<L: AirParameters + 'static + Clone + Debug + Send + Sync> {
+pub struct BLAKE2BBuilderGadget<
+    L: AirParameters + 'static + Clone + Debug + Send + Sync,
+    const MAX_NUM_CHUNKS: usize,
+> {
     pub padded_messages: Vec<Target>,
     pub msg_lengths: Vec<Target>,
     pub digests: Vec<Target>,
@@ -24,16 +27,11 @@ pub struct BLAKE2BBuilderGadget<L: AirParameters + 'static + Clone + Debug + Sen
     _phantom: PhantomData<L>,
 }
 
-impl<L: AirParameters + 'static + Clone + Debug + Send + Sync> BLAKE2BBuilderGadget<L> {
-    pub fn max_num_chunks(&mut self) -> usize {
-        (1 << 16) / NUM_MIX_ROUNDS
-    }
-}
-
 pub trait BLAKE2BBuilder<
     F: RichField + Extendable<D>,
     const D: usize,
     L: AirParameters + 'static + Clone + Debug + Send + Sync,
+    const MAX_NUM_CHUNKS: usize,
 >
 {
     type Gadget;
@@ -60,11 +58,13 @@ impl<
         F: RichField + Extendable<D>,
         const D: usize,
         L: AirParameters + 'static + Clone + Debug + Send + Sync,
-    > BLAKE2BBuilder<F, D, L> for CircuitBuilder<F, D>
+        const MAX_NUM_CHUNKS: usize,
+    > BLAKE2BBuilder<F, D, L, MAX_NUM_CHUNKS> for CircuitBuilder<F, D>
 {
-    type Gadget = BLAKE2BBuilderGadget<L>;
+    type Gadget = BLAKE2BBuilderGadget<L, MAX_NUM_CHUNKS>;
 
     fn init_blake2b(&mut self) -> Self::Gadget {
+        assert!(MAX_NUM_CHUNKS <= (1 << 16) / NUM_MIX_ROUNDS);
         BLAKE2BBuilderGadget {
             padded_messages: Vec::new(),
             msg_lengths: Vec::new(),
@@ -98,13 +98,13 @@ impl<
         gadget: Self::Gadget,
     ) {
         // Allocate public input targets
-        let public_blake2b_targets = BLAKE2BPublicData::add_virtual::<F, D, L>(
+        let public_blake2b_targets = BLAKE2BPublicData::add_virtual::<F, D, L, MAX_NUM_CHUNKS>(
             self,
             gadget.digests.as_slice(),
             gadget.chunk_sizes.as_slice(),
         );
 
-        let stark_data = BLAKE2BGenerator::<F, E, C, D, L>::stark_data();
+        let stark_data = BLAKE2BGenerator::<F, E, C, D, L, MAX_NUM_CHUNKS>::stark_data();
         let BLAKE2BStarkData { stark, config, .. } = stark_data;
 
         let public_input_target = public_blake2b_targets.public_input_targets(self);
@@ -112,7 +112,7 @@ impl<
         let virtual_proof = self.add_virtual_stark_proof(&stark, &config);
         self.verify_stark_proof(&config, &stark, &virtual_proof, &public_input_target);
 
-        let blake2b_generator = BLAKE2BGenerator::<F, E, C, D, L> {
+        let blake2b_generator = BLAKE2BGenerator::<F, E, C, D, L, MAX_NUM_CHUNKS> {
             padded_messages: gadget.padded_messages,
             msg_lens: gadget.msg_lengths,
             chunk_sizes: gadget.chunk_sizes,
@@ -150,6 +150,7 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type L = BLAKE2BAirParameters<F, E>;
         const D: usize = 2;
+        const MAX_NUM_CHUNKS: usize = 1365;
 
         let _ = env_logger::builder().is_test(true).try_init();
 
@@ -158,7 +159,7 @@ mod tests {
         let config = CircuitConfig::standard_recursion_config();
         let mut builder = CircuitBuilder::<F, D>::new(config);
 
-        let mut gadget: BLAKE2BBuilderGadget<L> = builder.init_blake2b();
+        let mut gadget: BLAKE2BBuilderGadget<L, MAX_NUM_CHUNKS> = builder.init_blake2b();
 
         let msg_target = CurtaBytes(builder.add_virtual_target_arr::<512>());
         let msg_length_target = builder.add_virtual_target();
