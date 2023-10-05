@@ -7,22 +7,24 @@ use serde::{Deserialize, Serialize};
 
 use super::values::LogLookupValues;
 use crate::chip::builder::AirBuilder;
-use crate::chip::constraint::Constraint;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::{CubicRegister, EvalCubic};
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::Register;
-use crate::chip::table::lookup::log_der::constraint::LookupConstraint;
-use crate::chip::table::lookup::Lookup;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
-
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
+pub enum LookupTable<F, E> {
+    Element(LogLookupTable<ElementRegister, F, E>),
+    Cubic(LogLookupTable<CubicRegister, F, E>),
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
-pub struct LogLookupTable<T: Register, F: Field, E: CubicParameters<F>> {
+pub struct LogLookupTable<T: Register, F, E> {
     pub(crate) challenge: CubicRegister,
     pub(crate) table: Vec<T>,
     pub(crate) multiplicities: ArrayRegister<ElementRegister>,

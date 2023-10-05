@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{LogLookupValues, LogLookupTable};
+use super::{LogLookupTable, LogLookupValues};
 use crate::air::extension::cubic::CubicParser;
 use crate::air::AirConstraint;
 use crate::chip::register::cubic::{CubicRegister, EvalCubic};

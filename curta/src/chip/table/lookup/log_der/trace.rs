@@ -1,6 +1,6 @@
 use itertools::Itertools;
 
-use super::{LogLookup, LogLookupValues, LogLookupTable};
+use super::{LogLookup, LogLookupTable, LogLookupValues};
 use crate::chip::register::cubic::EvalCubic;
 use crate::chip::register::Register;
 use crate::chip::trace::writer::TraceWriter;

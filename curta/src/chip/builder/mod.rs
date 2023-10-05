@@ -12,14 +12,14 @@ use self::shared_memory::SharedMemory;
 use super::arithmetic::expression::ArithmeticExpression;
 use super::constraint::Constraint;
 use super::instruction::set::AirInstruction;
-use super::register::cubic::CubicRegister;
 use super::register::element::ElementRegister;
 use super::register::{Register, RegisterSerializable};
 use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
 use super::table::evaluation::Evaluation;
+use super::table::lookup::log_der::table::LookupTable;
+use super::table::lookup::log_der::values::LookupValues;
 use super::table::lookup::Lookup;
-use super::table::lookup::log_der::values::LogLookupValues;
 use super::{AirParameters, Chip};
 use crate::math::prelude::*;
 
@@ -41,6 +41,8 @@ pub struct AirBuilder<L: AirParameters> {
     /// The old lookup data format to be deprecated.
     pub(crate) lookup_data: Vec<Lookup<L::Field, L::CubicParams>>,
     /// Lookup values.
+    pub(crate) lookup_values: Vec<LookupValues<L::Field, L::CubicParams>>,
+    pub(crate) lookup_tables: Vec<LookupTable<L::Field, L::CubicParams>>,
     pub(crate) evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
     range_data: Option<Lookup<L::Field, L::CubicParams>>,
 }
@@ -55,6 +57,8 @@ pub struct AirTraceData<L: AirParameters> {
     pub accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
     pub bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
     pub lookup_data: Vec<Lookup<L::Field, L::CubicParams>>,
+    pub lookup_values: Vec<LookupValues<L::Field, L::CubicParams>>,
+    pub lookup_tables: Vec<LookupTable<L::Field, L::CubicParams>>,
     pub evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
     pub range_data: Option<Lookup<L::Field, L::CubicParams>>,
 }
@@ -80,6 +84,8 @@ impl<L: AirParameters> AirBuilder<L> {
             accumulators: Vec::new(),
             bus_channels: Vec::new(),
             lookup_data: Vec::new(),
+            lookup_values: Vec::new(),
+            lookup_tables: Vec::new(),
             evaluation_data: Vec::new(),
             range_data: None,
         }
@@ -248,6 +254,8 @@ impl<L: AirParameters> AirBuilder<L> {
                 accumulators: self.accumulators,
                 bus_channels: self.bus_channels,
                 lookup_data: self.lookup_data,
+                lookup_values: self.lookup_values,
+                lookup_tables: self.lookup_tables,
                 evaluation_data: self.evaluation_data,
                 range_data: self.range_data,
             },
