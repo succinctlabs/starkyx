@@ -53,6 +53,7 @@ pub struct BLAKE2BGenerator<
     C,
     const D: usize,
     L: AirParameters + 'static + Clone + Debug + Send + Sync,
+    const MAX_NUM_CHUNKS: usize,
 > {
     pub padded_messages: Vec<Target>,
     pub msg_lens: Vec<Target>,
@@ -77,7 +78,8 @@ impl<
         C,
         const D: usize,
         L: AirParameters + 'static + Clone + Debug + Send + Sync,
-    > BLAKE2BGenerator<F, E, C, D, L>
+        const MAX_NUM_CHUNKS: usize,
+    > BLAKE2BGenerator<F, E, C, D, L, MAX_NUM_CHUNKS>
 {
     pub fn id() -> String {
         "BLAKE2BGenerator".to_string()
@@ -97,7 +99,12 @@ impl<
         let mut bus = air_builder.new_bus();
         let channel_idx = bus.new_channel(&mut air_builder);
 
-        let gadget = air_builder.process_blake2b(&clk, &mut bus, channel_idx, &mut operations);
+        let gadget = air_builder.process_blake2b::<MAX_NUM_CHUNKS>(
+            &clk,
+            &mut bus,
+            channel_idx,
+            &mut operations,
+        );
 
         air_builder.register_byte_lookup(operations, &table);
         air_builder.constrain_bus(bus);
@@ -127,7 +134,8 @@ impl<
         C: CurtaConfig<D, F = F>,
         const D: usize,
         L: AirParameters + 'static + Clone + Debug + Send + Sync,
-    > SimpleGenerator<F, D> for BLAKE2BGenerator<F, E, C, D, L>
+        const MAX_NUM_CHUNKS: usize,
+    > SimpleGenerator<F, D> for BLAKE2BGenerator<F, E, C, D, L, MAX_NUM_CHUNKS>
 {
     fn id(&self) -> String {
         Self::id()
@@ -177,8 +185,9 @@ impl<
             .collect::<Vec<_>>();
 
         let num_rows = 1 << 16;
-        let max_num_chunks = num_rows / 128;
-        assert!(padded_messages.len() <= max_num_chunks * 128);
+        assert!(MAX_NUM_CHUNKS <= num_rows / NUM_MIX_ROUNDS);
+        let max_num_chunks = MAX_NUM_CHUNKS;
+        assert!(padded_messages.len() <= (max_num_chunks * 128));
 
         let msg_sizes = self
             .msg_lens
@@ -202,7 +211,7 @@ impl<
             &msg_sizes,
             &self.chunk_sizes,
             &writer,
-            num_rows,
+            max_num_chunks * NUM_MIX_ROUNDS,
         );
 
         for i in 0..num_rows {
@@ -238,13 +247,15 @@ impl BLAKE2BPublicData<Target> {
         F: RichField + Extendable<D>,
         const D: usize,
         L: AirParameters + 'static + Clone + Debug + Send + Sync,
+        const MAX_NUM_CHUNKS: usize,
     >(
         builder: &mut CircuitBuilder<F, D>,
         digests: &[Target],
         chunk_sizes: &[u64],
     ) -> Self {
-        let num_rows = 1 << 16;
-        let num_chunks = num_rows / NUM_MIX_ROUNDS;
+        let num_rows = MAX_NUM_CHUNKS * NUM_MIX_ROUNDS;
+        assert!(num_rows <= (1 << 16));
+        let num_chunks = MAX_NUM_CHUNKS;
 
         let msg_chunks_targets = (0..num_chunks * MSG_ARRAY_SIZE)
             .map(|_| builder.add_virtual_target_arr::<8>())

@@ -101,7 +101,7 @@ const SIGMA: [[usize; MSG_ARRAY_SIZE]; SIGMA_LEN] = [
 ];
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn process_blake2b(
+    pub fn process_blake2b<const MAX_NUM_CHUNKS: usize>(
         &mut self,
         clk: &ElementRegister,
         bus: &mut Bus<L::CubicParams>,
@@ -111,8 +111,9 @@ impl<L: AirParameters> AirBuilder<L> {
     where
         L::Instruction: U32Instructions,
     {
-        let num_rows = 1 << 16;
-        let num_chunks = num_rows / NUM_MIX_ROUNDS;
+        let num_rows = MAX_NUM_CHUNKS * NUM_MIX_ROUNDS;
+        assert!(num_rows <= (1 << 16));
+        let num_chunks = MAX_NUM_CHUNKS;
 
         // Registers to be written to
         let m = self.alloc_array::<U64Register>(MSG_ARRAY_SIZE);
@@ -988,6 +989,11 @@ impl BLAKE2BGadget {
             }
         }
 
+        for i in num_rows..1 << 16 {
+            writer.write(&self.unused_row, &F::ONE, i);
+            writer.write(&self.padding_bit, &F::ONE, i);
+        }
+
         BLAKE2BPublicData {
             msg_chunks: msg_chunks_public,
             t: t_values_public,
@@ -1182,6 +1188,8 @@ mod tests {
         type L = BLAKE2BAirParameters<F, E>;
         type SC = PoseidonGoldilocksStarkConfig;
 
+        const MAX_NUM_CHUNKS: usize = 1365;
+
         let _ = env_logger::builder().is_test(true).try_init();
 
         let mut timing = TimingTree::new("Blake2b test", log::Level::Debug);
@@ -1194,7 +1202,8 @@ mod tests {
         let mut bus = builder.new_bus();
         let channel_idx = bus.new_channel(&mut builder);
 
-        let blake_gadget = builder.process_blake2b(&clk, &mut bus, channel_idx, &mut operations);
+        let blake_gadget =
+            builder.process_blake2b::<MAX_NUM_CHUNKS>(&clk, &mut bus, channel_idx, &mut operations);
 
         builder.register_byte_lookup(operations, &table);
         builder.constrain_bus(bus);
@@ -1231,7 +1240,7 @@ mod tests {
         let mut msg_lens = Vec::new();
         let mut max_chunk_sizes = Vec::new();
 
-        for _i in 0..70 {
+        for _i in 0..17 {
             for (msg, msg_max_chunk_size) in msgs.iter().zip(msg_max_chunk_sizes.iter()) {
                 padded_messages.push(
                     BLAKE2BGadget::pad(msg, *msg_max_chunk_size)
@@ -1250,7 +1259,7 @@ mod tests {
                 msg_lens.as_slice(),
                 max_chunk_sizes.as_slice(),
                 &writer,
-                num_rows,
+                num_rows / 4,
             );
             let mut msg_to_check = 0;
             for i in 0..num_rows {
