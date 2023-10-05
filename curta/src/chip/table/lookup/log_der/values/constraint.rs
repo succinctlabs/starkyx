@@ -1,9 +1,13 @@
 use super::LogLookupValues;
 use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::AirParser;
-use crate::chip::register::cubic::EvalCubic;
+use crate::chip::builder::AirBuilder;
+use crate::chip::constraint::Constraint;
+use crate::chip::register::cubic::{CubicRegister, EvalCubic};
+use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::table::lookup::log_der::constraint::LookupConstraint;
+use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
 impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupValues<T, F, E> {
@@ -93,5 +97,37 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupValues<T, F, E> {
 
     pub(crate) fn digest_constraint(&self) -> LookupConstraint<T, F, E> {
         LookupConstraint::ValuesDigest(self.digest, self.local_digest, self.global_digest)
+    }
+}
+
+impl<F: Field, E: CubicParameters<F>> LogLookupValues<ElementRegister, F, E> {
+    pub(crate) fn register_constraints<L: AirParameters<Field = F, CubicParams = E>>(
+        &self,
+        builder: &mut AirBuilder<L>,
+    ) {
+        builder.constraints.push(Constraint::lookup(
+            LookupConstraint::<ElementRegister, _, _>::ValuesLocal(self.clone()).into(),
+        ));
+        if self.global_digest.is_some() {
+            builder.global_constraints.push(Constraint::lookup(
+                LookupConstraint::<ElementRegister, _, _>::ValuesGlobal(self.clone()).into(),
+            ));
+        }
+    }
+}
+
+impl<F: Field, E: CubicParameters<F>> LogLookupValues<CubicRegister, F, E> {
+    pub(crate) fn register_constraints<L: AirParameters<Field = F, CubicParams = E>>(
+        &self,
+        builder: &mut AirBuilder<L>,
+    ) {
+        builder.constraints.push(Constraint::lookup(
+            LookupConstraint::<CubicRegister, _, _>::ValuesLocal(self.clone()).into(),
+        ));
+        if self.global_digest.is_some() {
+            builder.global_constraints.push(Constraint::lookup(
+                LookupConstraint::<CubicRegister, _, _>::ValuesGlobal(self.clone()).into(),
+            ));
+        }
     }
 }

@@ -151,7 +151,7 @@ impl<L: AirParameters> AirBuilder<L> {
         self.constraints.push(Constraint::lookup(
             LookupConstraint::<ElementRegister, _, _>::Digest(
                 table_data.digest,
-                values_data.digest,
+                vec![values_data.digest],
             )
             .into(),
         ));
@@ -196,8 +196,11 @@ impl<L: AirParameters> AirBuilder<L> {
 
         // Digest constraints
         self.constraints.push(Constraint::lookup(
-            LookupConstraint::<CubicRegister, _, _>::Digest(table_data.digest, values_data.digest)
-                .into(),
+            LookupConstraint::<CubicRegister, _, _>::Digest(
+                table_data.digest,
+                vec![values_data.digest],
+            )
+            .into(),
         ));
 
         // table constraints

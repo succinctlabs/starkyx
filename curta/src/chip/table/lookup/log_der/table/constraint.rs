@@ -1,11 +1,22 @@
 use itertools::Itertools;
 
-use super::LogLookupTable;
+use super::{LogLookupTable, LookupTable};
 use crate::air::extension::cubic::CubicParser;
 use crate::air::AirConstraint;
 use crate::chip::register::cubic::EvalCubic;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::*;
+
+impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
+    for LookupTable<AP::Field, E>
+{
+    fn eval(&self, parser: &mut AP) {
+        match self {
+            LookupTable::Element(t) => t.eval(parser),
+            LookupTable::Cubic(t) => t.eval(parser),
+        }
+    }
+}
 
 impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
     for LogLookupTable<T, AP::Field, E>

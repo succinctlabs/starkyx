@@ -5,8 +5,10 @@ use core::marker::PhantomData;
 
 use serde::{Deserialize, Serialize};
 
+use super::constraint::LookupConstraint;
 use super::values::LogLookupValues;
 use crate::chip::builder::AirBuilder;
+use crate::chip::constraint::Constraint;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::{CubicRegister, EvalCubic};
 use crate::chip::register::element::ElementRegister;
@@ -57,10 +59,33 @@ impl<L: AirParameters> AirBuilder<L> {
             _marker: PhantomData,
         }
     }
+
+    pub fn constrain_element_lookup_table(
+        &mut self,
+        table: LogLookupTable<ElementRegister, L::Field, L::CubicParams>,
+    ) {
+        self.constraints
+            .push(Constraint::lookup(LookupConstraint::Table(table).into()));
+    }
+
+    pub fn constrain_cubic_lookup_table(
+        &mut self,
+        table: LogLookupTable<CubicRegister, L::Field, L::CubicParams>,
+    ) {
+        self.global_constraints.push(Constraint::lookup(
+            LookupConstraint::<CubicRegister, _, _>::Digest(
+                table.digest,
+                table.values_digests.clone(),
+            )
+            .into(),
+        ));
+        self.constraints
+            .push(Constraint::lookup(LookupConstraint::Table(table).into()));
+    }
 }
 
 impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupTable<T, F, E> {
-    pub fn new_lookup_values<L: AirParameters<Field = F, CubicParams = E>>(
+    pub(crate) fn new_lookup_values<L: AirParameters<Field = F, CubicParams = E>>(
         &mut self,
         builder: &mut AirBuilder<L>,
         values: &[T],
@@ -87,6 +112,8 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupTable<T, F, E> {
         let digest = builder.alloc_global::<CubicRegister>();
         let global_digest = Some(builder.alloc_global::<CubicRegister>());
 
+        self.values_digests.push(digest);
+
         LogLookupValues {
             challenge: self.challenge,
             trace_values,
@@ -99,5 +126,27 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupTable<T, F, E> {
             digest,
             _marker: PhantomData,
         }
+    }
+}
+
+impl<F: Field, E: CubicParameters<F>> LogLookupTable<ElementRegister, F, E> {
+    pub fn register_lookup_values<L: AirParameters<Field = F, CubicParams = E>>(
+        &mut self,
+        builder: &mut AirBuilder<L>,
+        values: &[ElementRegister],
+    ) {
+        let lookup_values = self.new_lookup_values(builder, values);
+        lookup_values.register_constraints(builder);
+    }
+}
+
+impl<F: Field, E: CubicParameters<F>> LogLookupTable<CubicRegister, F, E> {
+    pub fn register_lookup_values<L: AirParameters<Field = F, CubicParams = E>>(
+        &mut self,
+        builder: &mut AirBuilder<L>,
+        values: &[CubicRegister],
+    ) {
+        let lookup_values = self.new_lookup_values(builder, values);
+        lookup_values.register_constraints(builder);
     }
 }

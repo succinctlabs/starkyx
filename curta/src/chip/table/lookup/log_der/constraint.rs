@@ -14,7 +14,7 @@ pub enum LookupConstraint<T: EvalCubic, F: Field, E: CubicParameters<F>> {
     ValuesLocal(LogLookupValues<T, F, E>),
     ValuesGlobal(LogLookupValues<T, F, E>),
     ValuesDigest(CubicRegister, CubicRegister, Option<CubicRegister>),
-    Digest(CubicRegister, CubicRegister),
+    Digest(CubicRegister, Vec<CubicRegister>),
 }
 
 impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
@@ -36,10 +36,17 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
                 digest_constraint = parser.sub_extension(digest_constraint, digest);
                 parser.constraint_extension_last_row(digest_constraint);
             }
-            LookupConstraint::Digest(a, b) => {
-                let a = a.eval_cubic(parser);
-                let b = b.eval_cubic(parser);
-                let difference = parser.sub_extension(a, b);
+            LookupConstraint::Digest(table_digest, element_digests) => {
+                let table = table_digest.eval_cubic(parser);
+                let elements = element_digests
+                    .iter()
+                    .map(|b| b.eval_cubic(parser))
+                    .collect::<Vec<_>>();
+                let mut elem_sum = parser.zero_extension();
+                for e in elements {
+                    elem_sum = parser.add_extension(elem_sum, e);
+                }
+                let difference = parser.sub_extension(table, elem_sum);
                 parser.constraint_extension_last_row(difference);
             }
         }
