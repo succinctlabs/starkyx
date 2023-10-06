@@ -64,6 +64,19 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         table: LogLookupTable<ElementRegister, L::Field, L::CubicParams>,
     ) {
+        // insert the table to the builder
+        self.lookup_tables.push(LookupTable::Element(table.clone()));
+
+        // Register digest constraints between the table and the lookup values.
+        self.global_constraints.push(Constraint::lookup(
+            LookupConstraint::<ElementRegister, _, _>::Digest(
+                table.digest,
+                table.values_digests.clone(),
+            )
+            .into(),
+        ));
+
+        // Register the table constraints.
         self.constraints
             .push(Constraint::lookup(LookupConstraint::Table(table).into()));
     }
@@ -72,6 +85,10 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         table: LogLookupTable<CubicRegister, L::Field, L::CubicParams>,
     ) {
+        // insert the table to the builder
+        self.lookup_tables.push(LookupTable::Cubic(table.clone()));
+
+        // Register digest constraints between the table and the lookup values.
         self.global_constraints.push(Constraint::lookup(
             LookupConstraint::<CubicRegister, _, _>::Digest(
                 table.digest,
@@ -79,6 +96,8 @@ impl<L: AirParameters> AirBuilder<L> {
             )
             .into(),
         ));
+
+        // Register the table constraints.
         self.constraints
             .push(Constraint::lookup(LookupConstraint::Table(table).into()));
     }
