@@ -19,7 +19,6 @@ use super::table::bus::channel::BusChannel;
 use super::table::evaluation::Evaluation;
 use super::table::lookup::log_der::table::LookupTable;
 use super::table::lookup::log_der::values::LookupValues;
-use super::table::lookup::Lookup;
 use super::{AirParameters, Chip};
 use crate::math::prelude::*;
 
@@ -39,9 +38,6 @@ pub struct AirBuilder<L: AirParameters> {
     pub(crate) global_constraints: Vec<Constraint<L>>,
     pub(crate) accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
     pub(crate) bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
-    /// The old lookup data format to be deprecated.
-    pub(crate) lookup_data: Vec<Lookup<L::Field, L::CubicParams>>,
-    /// Lookup values.
     pub(crate) lookup_values: Vec<LookupValues<L::Field, L::CubicParams>>,
     pub(crate) lookup_tables: Vec<LookupTable<L::Field, L::CubicParams>>,
     pub(crate) evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
@@ -61,7 +57,6 @@ pub struct AirTraceData<L: AirParameters> {
     pub global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
     pub bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
-    pub lookup_data: Vec<Lookup<L::Field, L::CubicParams>>,
     pub lookup_values: Vec<LookupValues<L::Field, L::CubicParams>>,
     pub lookup_tables: Vec<LookupTable<L::Field, L::CubicParams>>,
     pub evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
@@ -91,7 +86,6 @@ impl<L: AirParameters> AirBuilder<L> {
             global_constraints: Vec::new(),
             accumulators: Vec::new(),
             bus_channels: Vec::new(),
-            lookup_data: Vec::new(),
             lookup_values: Vec::new(),
             lookup_tables: Vec::new(),
             evaluation_data: Vec::new(),
@@ -261,7 +255,6 @@ impl<L: AirParameters> AirBuilder<L> {
                 global_instructions: self.global_instructions,
                 accumulators: self.accumulators,
                 bus_channels: self.bus_channels,
-                lookup_data: self.lookup_data,
                 lookup_values: self.lookup_values,
                 lookup_tables: self.lookup_tables,
                 evaluation_data: self.evaluation_data,

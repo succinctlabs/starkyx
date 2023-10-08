@@ -153,11 +153,6 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                     self.writer.write_lookup_values(num_rows, value_data);
                 }
 
-                // Write lookup proofs
-                for data in self.air_data.lookup_data.iter() {
-                    self.writer.write_lookup(num_rows, data);
-                }
-
                 // Write evaluation proofs
                 for eval in self.air_data.evaluation_data.iter() {
                     self.writer.write_evaluation(num_rows, eval);

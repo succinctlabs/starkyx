@@ -1,5 +1,4 @@
-use super::{LogLookup, LogLookupTable};
-use crate::chip::register::cubic::EvalCubic;
+use super::LogLookupTable;
 use crate::chip::register::Register;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
@@ -42,17 +41,5 @@ impl<F: PrimeField> TraceWriter<F> {
         for (i, mult) in multiplicities.iter().enumerate() {
             self.write(&multiplicity, mult, i);
         }
-    }
-
-    pub(crate) fn write_log_lookup<T: EvalCubic, E: CubicParameters<F>>(
-        &self,
-        num_rows: usize,
-        lookup_data: &LogLookup<T, F, E>,
-    ) {
-        // Write multiplicity inverse constraints
-        self.write_log_lookup_table(num_rows, &lookup_data.table_data);
-
-        // Write the value data accumulating 1/(beta-value)
-        self.write_log_lookup_values(num_rows, &lookup_data.values_data);
     }
 }

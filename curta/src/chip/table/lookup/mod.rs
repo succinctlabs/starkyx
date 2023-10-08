@@ -3,7 +3,6 @@
 
 pub mod log_der;
 
-use log_der::LogLookup;
 use serde::{Deserialize, Serialize};
 
 use self::log_der::constraint::LookupConstraint;
@@ -11,16 +10,8 @@ use crate::air::extension::cubic::CubicParser;
 use crate::air::AirConstraint;
 use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::element::ElementRegister;
-use crate::chip::trace::writer::TraceWriter;
 use crate::math::extension::cubic::parameters::CubicParameters;
 use crate::math::prelude::*;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum Lookup<F: Field, E: CubicParameters<F>> {
-    Element(LogLookup<ElementRegister, F, E>),
-    CubicElement(LogLookup<CubicRegister, F, E>),
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
@@ -36,15 +27,6 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
         match self {
             LookupChipConstraint::Element(log) => log.eval(parser),
             LookupChipConstraint::CubicElement(log) => log.eval(parser),
-        }
-    }
-}
-
-impl<F: PrimeField> TraceWriter<F> {
-    pub(crate) fn write_lookup<E: CubicParameters<F>>(&self, num_rows: usize, data: &Lookup<F, E>) {
-        match data {
-            Lookup::Element(log) => self.write_log_lookup(num_rows, log),
-            Lookup::CubicElement(log) => self.write_log_lookup(num_rows, log),
         }
     }
 }

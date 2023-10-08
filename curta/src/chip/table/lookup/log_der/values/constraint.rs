@@ -140,10 +140,6 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupValues<T, F, E> {
             parser.constraint_extension_last_row(lookup_digest_constraint);
         }
     }
-
-    pub(crate) fn digest_constraint(&self) -> LookupConstraint<T, F, E> {
-        LookupConstraint::ValuesDigest(self.digest, self.local_digest, self.global_digest)
-    }
 }
 
 impl<F: Field, E: CubicParameters<F>> LogLookupValues<ElementRegister, F, E> {

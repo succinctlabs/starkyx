@@ -14,7 +14,6 @@ use crate::chip::bool::SelectInstruction;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::bit::BitRegister;
-use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::AirParameters;
@@ -66,16 +65,21 @@ impl<L: AirParameters> AirBuilder<L> {
         table: &ByteLogLookupTable,
     ) {
         let multiplicities = table.multiplicity_data.multiplicities();
-        let lookup_challenge = self.alloc_challenge::<CubicRegister>();
+        let mut byte_lookup = self.new_lookup(&table.digests, multiplicities);
 
-        let lookup_table = self.lookup_table_with_multiplicities(
-            &lookup_challenge,
-            &table.digests,
-            multiplicities,
-        );
-        let lookup_values = self.lookup_values(&lookup_challenge, &operation_values.values);
+        byte_lookup.register_lookup_values(self, &operation_values.values);
 
-        self.element_lookup_from_table_and_values(lookup_table, lookup_values);
+        self.constrain_element_lookup_table(byte_lookup);
+        // let lookup_challenge = self.alloc_challenge::<CubicRegister>();
+
+        // let lookup_table = self.lookup_table_with_multiplicities(
+        //     &lookup_challenge,
+        //     &table.digests,
+        //     multiplicities,
+        // );
+        // let lookup_values = self.lookup_values(&lookup_challenge, &operation_values.values);
+
+        // self.element_lookup_from_table_and_values(lookup_table, lookup_values);
     }
 }
 
