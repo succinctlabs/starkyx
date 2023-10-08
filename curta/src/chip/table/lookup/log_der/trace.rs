@@ -44,8 +44,6 @@ impl<F: PrimeField> TraceWriter<F> {
         }
     }
 
-
-
     pub(crate) fn write_log_lookup<T: EvalCubic, E: CubicParameters<F>>(
         &self,
         num_rows: usize,

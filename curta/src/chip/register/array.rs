@@ -63,6 +63,24 @@ impl<T: Register> ArrayRegister<T> {
     }
 
     #[inline]
+    pub fn first(&self) -> Option<T> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.get(0))
+        }
+    }
+
+    #[inline]
+    pub fn last(&self) -> Option<T> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.get(self.len() - 1))
+        }
+    }
+
+    #[inline]
     pub fn get_subarray(&self, range: Range<usize>) -> Self {
         if range.end > self.len() {
             panic!(

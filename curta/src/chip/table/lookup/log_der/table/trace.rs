@@ -1,17 +1,14 @@
 use itertools::Itertools;
 
-use crate::chip::register::Register;
+use super::{LogLookupTable, LookupTable};
 use crate::chip::register::cubic::EvalCubic;
+use crate::chip::register::Register;
 use crate::chip::trace::writer::TraceWriter;
-use crate::math::prelude::*;
-
-use crate::maybe_rayon::*;
 use crate::math::prelude::cubic::extension::CubicExtension;
-
-use super::LogLookupTable;
+use crate::math::prelude::*;
+use crate::maybe_rayon::*;
 
 impl<F: PrimeField> TraceWriter<F> {
-
     /// Writes the table lookups and accumulate assumes multiplicities have been written
     pub(crate) fn write_log_lookup_table<T: EvalCubic, E: CubicParameters<F>>(
         &self,
@@ -61,4 +58,18 @@ impl<F: PrimeField> TraceWriter<F> {
         mult_table_log_entries
     }
 
+    pub(crate) fn write_lookup_table<E: CubicParameters<F>>(
+        &self,
+        num_rows: usize,
+        table_data: &LookupTable<F, E>,
+    ) {
+        match table_data {
+            LookupTable::Element(table) => {
+                self.write_log_lookup_table(num_rows, table);
+            }
+            LookupTable::Cubic(table) => {
+                self.write_log_lookup_table(num_rows, table);
+            }
+        }
+    }
 }

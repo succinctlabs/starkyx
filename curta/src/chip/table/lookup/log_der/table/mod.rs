@@ -6,7 +6,7 @@ use core::marker::PhantomData;
 use serde::{Deserialize, Serialize};
 
 use super::constraint::LookupConstraint;
-use super::values::LogLookupValues;
+use super::values::{LogLookupValues, LookupValues};
 use crate::chip::builder::AirBuilder;
 use crate::chip::constraint::Constraint;
 use crate::chip::register::array::ArrayRegister;
@@ -118,7 +118,7 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupTable<T, F, E> {
                 MemorySlice::Local(..) => trace_values.push(*value),
                 MemorySlice::Next(..) => unreachable!("Next register not supported for lookup"),
                 MemorySlice::Global(..) => public_values.push(*value),
-                MemorySlice::Challenge(..) => unreachable!("Cannot send challenge register"),
+                MemorySlice::Challenge(..) => unreachable!("Cannot lookup challenge register"),
             }
         }
 
@@ -153,9 +153,13 @@ impl<F: Field, E: CubicParameters<F>> LogLookupTable<ElementRegister, F, E> {
         &mut self,
         builder: &mut AirBuilder<L>,
         values: &[ElementRegister],
-    ) {
+    ) -> LogLookupValues<ElementRegister, F, E> {
         let lookup_values = self.new_lookup_values(builder, values);
         lookup_values.register_constraints(builder);
+        builder
+            .lookup_values
+            .push(LookupValues::Element(lookup_values.clone()));
+        lookup_values
     }
 }
 

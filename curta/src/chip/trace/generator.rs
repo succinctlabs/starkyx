@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 use super::writer::TraceWriter;
 use crate::chip::builder::AirTraceData;
 use crate::chip::register::element::ElementRegister;
-use crate::chip::table::lookup::Lookup;
+use crate::chip::table::lookup::log_der::table::LookupTable;
+use crate::chip::table::lookup::log_der::values::LookupValues;
 use crate::chip::{AirParameters, Chip};
 use crate::math::prelude::*;
 use crate::maybe_rayon::*;
@@ -96,23 +97,23 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                 let num_rows = self.num_rows;
 
                 // Write the range check table and multiplicitiies
-                if let Some(Lookup::Element(lookup_data)) = &self.air_data.range_data {
-                    let (table_data, values_data) =
-                        (&lookup_data.table_data, &lookup_data.values_data);
-                    assert_eq!(table_data.table.len(), 1);
-                    let table = table_data.table[0];
+                if let Some((LookupTable::Element(table), LookupValues::Element(values))) =
+                    &self.air_data.range_data
+                {
+                    assert_eq!(table.table.len(), 1);
+                    let table_column = table.table[0];
                     for i in 0..num_rows {
                         self.writer
-                            .write(&table, &L::Field::from_canonical_usize(i), i);
+                            .write(&table_column, &L::Field::from_canonical_usize(i), i);
                     }
 
                     self.writer
                         .write_multiplicities_from_fn::<L::CubicParams, ElementRegister>(
                             num_rows,
-                            table_data,
+                            table,
                             Self::range_fn,
-                            &values_data.trace_values,
-                            &values_data.public_values,
+                            &values.trace_values,
+                            &values.public_values,
                         );
                 }
 
@@ -142,6 +143,14 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
 
                 for channel in self.air_data.bus_channels.iter() {
                     self.writer.write_bus_channel(num_rows, channel);
+                }
+
+                for table in self.air_data.lookup_tables.iter() {
+                    self.writer.write_lookup_table(num_rows, table);
+                }
+
+                for value_data in self.air_data.lookup_values.iter() {
+                    self.writer.write_lookup_values(num_rows, value_data);
                 }
 
                 // Write lookup proofs
