@@ -8,7 +8,7 @@ use crate::chip::constraint::Constraint;
 use crate::chip::register::cubic::{CubicRegister, EvalCubic};
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
-use crate::chip::table::lookup::log_der::constraint::LookupConstraint;
+use crate::chip::table::lookup::constraint::LookupConstraint;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 

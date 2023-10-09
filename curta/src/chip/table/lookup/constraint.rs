@@ -4,6 +4,7 @@ use super::{LogLookupTable, LogLookupValues};
 use crate::air::extension::cubic::CubicParser;
 use crate::air::AirConstraint;
 use crate::chip::register::cubic::{CubicRegister, EvalCubic};
+use crate::chip::register::element::ElementRegister;
 use crate::chip::register::Register;
 use crate::math::prelude::*;
 
@@ -15,6 +16,13 @@ pub enum LookupConstraint<T: EvalCubic, F: Field, E: CubicParameters<F>> {
     ValuesGlobal(LogLookupValues<T, F, E>),
     ValuesDigest(CubicRegister, CubicRegister, Option<CubicRegister>),
     Digest(CubicRegister, Vec<CubicRegister>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
+pub enum LookupChipConstraint<F: Field, E: CubicParameters<F>> {
+    Element(LookupConstraint<ElementRegister, F, E>),
+    CubicElement(LookupConstraint<CubicRegister, F, E>),
 }
 
 impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
@@ -50,5 +58,32 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
                 parser.constraint_extension_last_row(difference);
             }
         }
+    }
+}
+
+impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
+    for LookupChipConstraint<AP::Field, E>
+{
+    fn eval(&self, parser: &mut AP) {
+        match self {
+            LookupChipConstraint::Element(log) => log.eval(parser),
+            LookupChipConstraint::CubicElement(log) => log.eval(parser),
+        }
+    }
+}
+
+impl<F: Field, E: CubicParameters<F>> From<LookupConstraint<ElementRegister, F, E>>
+    for LookupChipConstraint<F, E>
+{
+    fn from(constraint: LookupConstraint<ElementRegister, F, E>) -> Self {
+        Self::Element(constraint)
+    }
+}
+
+impl<F: Field, E: CubicParameters<F>> From<LookupConstraint<CubicRegister, F, E>>
+    for LookupChipConstraint<F, E>
+{
+    fn from(constraint: LookupConstraint<CubicRegister, F, E>) -> Self {
+        Self::CubicElement(constraint)
     }
 }

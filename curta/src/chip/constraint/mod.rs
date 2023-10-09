@@ -6,7 +6,7 @@ use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
 use super::table::bus::global::Bus;
 use super::table::evaluation::Evaluation;
-use super::table::lookup::LookupChipConstraint;
+use super::table::lookup::constraint::LookupChipConstraint;
 use super::AirParameters;
 use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::{AirParser, MulParser};

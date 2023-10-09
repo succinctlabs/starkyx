@@ -17,8 +17,8 @@ use super::register::{Register, RegisterSerializable};
 use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
 use super::table::evaluation::Evaluation;
-use super::table::lookup::log_der::table::LookupTable;
-use super::table::lookup::log_der::values::LookupValues;
+use super::table::lookup::table::LookupTable;
+use super::table::lookup::values::LookupValues;
 use super::{AirParameters, Chip};
 use crate::math::prelude::*;
 
