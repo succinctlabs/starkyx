@@ -8,13 +8,22 @@ use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::cubic::element::CubicElement;
 use crate::math::prelude::{CubicParameters, *};
 
+/// A log derivative table entry.
+///
+/// The entry is used to represent a log derivative of the form `multiplier/(beta - value)`. The
+/// value for `beta` is implicit and will be provided by the constraints. The `LogEntry` type keeps
+/// track of the value of `value` and `multiplier` for a given entry.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum LogEntry<T> {
+    /// Represents `1 / (beta - value)`.
     Input(T),
+    /// Represents `-1 / (beta - value)`.
     Output(T),
+    /// Represents `multiplier / (beta - value)`.
     Multiplicity(T, ElementRegister),
 }
 
+/// An evaluation of a `LogEntry` instance to be used in constraints.
 pub struct LogEntryValue<AP: AirParser> {
     pub value: CubicElement<AP::Var>,
     pub multiplier: AP::Var,
