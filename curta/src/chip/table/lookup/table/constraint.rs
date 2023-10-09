@@ -5,6 +5,8 @@ use crate::air::extension::cubic::CubicParser;
 use crate::air::AirConstraint;
 use crate::chip::register::cubic::EvalCubic;
 use crate::chip::register::{Register, RegisterSerializable};
+use crate::chip::table::log_derivative::constraints::LogConstraints;
+use crate::chip::table::log_derivative::entry::LogEntry;
 use crate::math::prelude::*;
 
 impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
@@ -24,42 +26,27 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
     fn eval(&self, parser: &mut AP) {
         let beta = self.challenge.eval(parser);
 
-        let multiplicities = self
-            .multiplicities
-            .eval_vec(parser)
-            .into_iter()
-            .map(|e| parser.element_from_base_field(e))
-            .collect::<Vec<_>>();
-
-        let table = self
-            .table
-            .iter()
-            .map(|x| x.eval_cubic(parser))
-            .collect::<Vec<_>>();
-
-        let multiplicities_table_log = self.multiplicities_table_log.eval_vec(parser);
-        let beta_minus_tables = table
-            .iter()
-            .map(|t| parser.sub_extension(beta, *t))
-            .collect::<Vec<_>>();
-
         // Constrain multiplicities_table_log = sum(mult_i * log(beta - table_i))
-        for ((mult_table_log, beta_minus_table), mult) in multiplicities_table_log
+        for ((mult_table_log, table), mult) in self
+            .multiplicities_table_log
             .iter()
-            .zip_eq(beta_minus_tables.iter())
-            .zip_eq(multiplicities.iter())
+            .zip_eq(self.table.iter())
+            .zip_eq(self.multiplicities)
         {
-            let mult_log_inv_times_table = parser.mul_extension(*mult_table_log, *beta_minus_table);
-            let mult_table_constraint = parser.sub_extension(*mult, mult_log_inv_times_table);
+            let mult_table_log = mult_table_log.eval(parser);
+            let table = LogEntry::multiplicity(*table, mult).eval(parser);
+            let mult_table_constraint = LogConstraints::log(parser, beta, table, mult_table_log);
             parser.constraint_extension(mult_table_constraint);
         }
 
         // Constrain the accumulation
-        let mult_table_log_sum = multiplicities_table_log
-            .iter()
-            .fold(parser.zero_extension(), |acc, mult_table_log| {
-                parser.add_extension(acc, *mult_table_log)
-            });
+        let mult_table_log_sum = self.multiplicities_table_log.iter().fold(
+            parser.zero_extension(),
+            |acc, mult_table_log| {
+                let mult_table_log = mult_table_log.eval(parser);
+                parser.add_extension(acc, mult_table_log)
+            },
+        );
 
         let accumulator = self.table_accumulator.eval(parser);
 

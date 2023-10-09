@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::writer::TraceWriter;
 use crate::chip::builder::AirTraceData;
-use crate::chip::register::element::ElementRegister;
+use crate::chip::table::log_derivative::entry::LogEntry;
 use crate::chip::table::lookup::table::LookupTable;
 use crate::chip::table::lookup::values::LookupValues;
 use crate::chip::{AirParameters, Chip};
@@ -107,14 +107,23 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                             .write(&table_column, &L::Field::from_canonical_usize(i), i);
                     }
 
-                    self.writer
-                        .write_multiplicities_from_fn::<L::CubicParams, ElementRegister>(
-                            num_rows,
-                            table,
-                            Self::range_fn,
-                            &values.trace_values,
-                            &values.public_values,
-                        );
+                    self.writer.write_multiplicities_from_fn(
+                        num_rows,
+                        table,
+                        Self::range_fn,
+                        &values
+                            .trace_values
+                            .iter()
+                            .map(LogEntry::value)
+                            .copied()
+                            .collect::<Vec<_>>(),
+                        &values
+                            .public_values
+                            .iter()
+                            .map(LogEntry::value)
+                            .copied()
+                            .collect::<Vec<_>>(),
+                    );
                 }
 
                 let trace = self.trace_clone();

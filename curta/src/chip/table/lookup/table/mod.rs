@@ -14,6 +14,7 @@ use crate::chip::register::cubic::{CubicRegister, EvalCubic};
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::Register;
+use crate::chip::table::log_derivative::entry::LogEntry;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
@@ -114,10 +115,10 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupTable<T, F, E> {
 
         for value in values.iter() {
             match value.register() {
-                MemorySlice::Public(..) => public_values.push(*value),
-                MemorySlice::Local(..) => trace_values.push(*value),
+                MemorySlice::Public(..) => public_values.push(LogEntry::input(*value)),
+                MemorySlice::Local(..) => trace_values.push(LogEntry::input(*value)),
                 MemorySlice::Next(..) => unreachable!("Next register not supported for lookup"),
-                MemorySlice::Global(..) => public_values.push(*value),
+                MemorySlice::Global(..) => public_values.push(LogEntry::input(*value)),
                 MemorySlice::Challenge(..) => unreachable!("Cannot lookup challenge register"),
             }
         }

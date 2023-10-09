@@ -399,7 +399,7 @@ pub(crate) mod tests {
         type Instruction = EmptyInstruction<GoldilocksField>;
         const NUM_ARITHMETIC_COLUMNS: usize = 3;
         const NUM_FREE_COLUMNS: usize = 4;
-        const EXTENDED_COLUMNS: usize = 13;
+        const EXTENDED_COLUMNS: usize = 12;
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -25,7 +25,7 @@ impl<F: PrimeField> TraceWriter<F> {
                     .remainder()
                     .first()
                     .map(|reg| {
-                        let r = T::trace_value_as_cubic(reg.read_from_slice(row));
+                        let r = T::trace_value_as_cubic(reg.value().read_from_slice(row));
                         let beta_minus_a = beta - CubicExtension::from(r);
                         beta_minus_a.inverse()
                     })
@@ -33,8 +33,8 @@ impl<F: PrimeField> TraceWriter<F> {
                 let mut accumumulator = CubicExtension::ZERO;
                 let accumulators = values_data.row_accumulators;
                 for (k, pair) in values_data.trace_values.chunks_exact(2).enumerate() {
-                    let a = T::trace_value_as_cubic(pair[0].read_from_slice(row));
-                    let b = T::trace_value_as_cubic(pair[1].read_from_slice(row));
+                    let a = T::trace_value_as_cubic(pair[0].value().read_from_slice(row));
+                    let b = T::trace_value_as_cubic(pair[1].value().read_from_slice(row));
                     let beta_minus_a = beta - CubicExtension::from(a);
                     let beta_minus_b = beta - CubicExtension::from(b);
                     accumumulator += beta_minus_a.inverse() + beta_minus_b.inverse();
@@ -61,7 +61,7 @@ impl<F: PrimeField> TraceWriter<F> {
             .remainder()
             .last()
             .map(|reg| {
-                let r = T::trace_value_as_cubic(self.read(reg, 0));
+                let r = T::trace_value_as_cubic(self.read(reg.value(), 0));
                 let beta_minus_a = beta - CubicExtension::from(r);
                 beta_minus_a.inverse()
             })
@@ -69,8 +69,8 @@ impl<F: PrimeField> TraceWriter<F> {
         let mut global_accumumulator = CubicExtension::ZERO;
         let global_accumulators = values_data.global_accumulators;
         for (k, pair) in values_data.public_values.chunks_exact(2).enumerate() {
-            let a = T::trace_value_as_cubic(self.read(&pair[0], 0));
-            let b = T::trace_value_as_cubic(self.read(&pair[1], 0));
+            let a = T::trace_value_as_cubic(self.read(pair[0].value(), 0));
+            let b = T::trace_value_as_cubic(self.read(pair[1].value(), 0));
             let beta_minus_a = beta - CubicExtension::from(a);
             let beta_minus_b = beta - CubicExtension::from(b);
             global_accumumulator += beta_minus_a.inverse() + beta_minus_b.inverse();

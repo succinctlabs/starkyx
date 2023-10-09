@@ -8,6 +8,7 @@ use crate::chip::constraint::Constraint;
 use crate::chip::register::cubic::{CubicRegister, EvalCubic};
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
+use crate::chip::table::log_derivative::constraints::LogConstraints;
 use crate::chip::table::lookup::constraint::LookupConstraint;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
@@ -26,37 +27,14 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupValues<T, F, E> {
 
         let mut prev = zero;
         for (chunk, row_acc) in value_chunks.zip_eq(self.row_accumulators) {
-            let a = chunk[0].eval_cubic(parser);
-            let b = chunk[1].eval_cubic(parser);
+            let a = chunk[0].eval(parser);
+            let b = chunk[1].eval(parser);
             let acc = row_acc.eval(parser);
-            let beta_minus_a = parser.sub_extension(beta, a);
-            let beta_minus_b = parser.sub_extension(beta, b);
             let acc_minus_prev = parser.sub_extension(acc, prev);
-            let mut product = parser.mul_extension(beta_minus_a, beta_minus_b);
-            product = parser.mul_extension(product, acc_minus_prev);
-            let mut constraint = parser.add_extension(beta_minus_a, beta_minus_b);
-            constraint = parser.sub_extension(constraint, product);
+            let constraint = LogConstraints::log_arithmetic(parser, beta, a, b, acc_minus_prev);
             parser.constraint_extension(constraint);
             prev = acc;
         }
-
-        let (acc_trans_rem, acc_trans_mult) = match last_element {
-            Some(a_reg) => {
-                let a = a_reg.next().eval_cubic(parser);
-                let beta_minus_a = parser.sub_extension(beta, a);
-                (parser.one_extension(), beta_minus_a)
-            }
-            None => (zero, parser.one_extension()),
-        };
-
-        let (acc_first_rem, acc_first_mult) = match last_element {
-            Some(a_reg) => {
-                let a = a_reg.eval_cubic(parser);
-                let beta_minus_a = parser.sub_extension(beta, a);
-                (parser.one_extension(), beta_minus_a)
-            }
-            None => (zero, parser.one_extension()),
-        };
 
         let log_lookup_accumulator = self.log_lookup_accumulator.eval(parser);
         let log_lookup_accumulator_next = self.log_lookup_accumulator.next().eval(parser);
@@ -65,6 +43,7 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupValues<T, F, E> {
             .row_accumulators
             .last()
             .map_or(zero, |r| r.eval(parser));
+
         let accumulated_value_next = self
             .row_accumulators
             .last()
@@ -73,14 +52,20 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupValues<T, F, E> {
             parser.sub_extension(log_lookup_accumulator_next, log_lookup_accumulator);
         acc_transition_constraint =
             parser.sub_extension(acc_transition_constraint, accumulated_value_next);
-        acc_transition_constraint = parser.mul_extension(acc_transition_constraint, acc_trans_mult);
-        acc_transition_constraint = parser.sub_extension(acc_transition_constraint, acc_trans_rem);
+        if let Some(last) = last_element {
+            let a = last.next().eval(parser);
+            acc_transition_constraint =
+                LogConstraints::log(parser, beta, a, acc_transition_constraint);
+        }
         parser.constraint_extension_transition(acc_transition_constraint);
 
         let mut acc_first_row_constraint =
             parser.sub_extension(log_lookup_accumulator, accumulated_value);
-        acc_first_row_constraint = parser.mul_extension(acc_first_row_constraint, acc_first_mult);
-        acc_first_row_constraint = parser.sub_extension(acc_first_row_constraint, acc_first_rem);
+        if let Some(last) = last_element {
+            let a = last.eval(parser);
+            acc_first_row_constraint =
+                LogConstraints::log(parser, beta, a, acc_first_row_constraint);
+        }
         parser.constraint_extension_first_row(acc_first_row_constraint);
 
         // Add digest constraint
@@ -105,38 +90,27 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupValues<T, F, E> {
             .chunks_exact(2)
             .zip(self.global_accumulators)
         {
-            let a = chunk[0].eval_cubic(parser);
-            let b = chunk[1].eval_cubic(parser);
+            let a = chunk[0].eval(parser);
+            let b = chunk[1].eval(parser);
             let acc = row_acc.eval(parser);
-            let beta_minus_a = parser.sub_extension(beta, a);
-            let beta_minus_b = parser.sub_extension(beta, b);
             let acc_minus_prev = parser.sub_extension(acc, prev);
-            let mut product = parser.mul_extension(beta_minus_a, beta_minus_b);
-            product = parser.mul_extension(product, acc_minus_prev);
-            let mut constraint = parser.add_extension(beta_minus_a, beta_minus_b);
-            constraint = parser.sub_extension(constraint, product);
+            let constraint = LogConstraints::log_arithmetic(parser, beta, a, b, acc_minus_prev);
             parser.constraint_extension(constraint);
             prev = acc;
         }
 
         let lookup_total_value = prev;
 
-        let (acc_rem, acc_mult) = match last_element {
-            Some(a_reg) => {
-                let a = a_reg.eval_cubic(parser);
-                let beta_minus_a = parser.sub_extension(beta, a);
-                (parser.one_extension(), beta_minus_a)
-            }
-            None => (parser.zero_extension(), parser.one_extension()),
-        };
-
         // Add digest constraint
         if let Some(digest) = self.global_digest {
             let lookup_digest = digest.eval(parser);
             let mut lookup_digest_constraint =
                 parser.sub_extension(lookup_digest, lookup_total_value);
-            lookup_digest_constraint = parser.mul_extension(lookup_digest_constraint, acc_mult);
-            lookup_digest_constraint = parser.sub_extension(lookup_digest_constraint, acc_rem);
+            if let Some(last) = last_element {
+                let a = last.eval(parser);
+                lookup_digest_constraint =
+                    LogConstraints::log(parser, beta, a, lookup_digest_constraint);
+            }
             parser.constraint_extension_last_row(lookup_digest_constraint);
         }
     }
