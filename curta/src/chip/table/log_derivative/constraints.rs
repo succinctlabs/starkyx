@@ -69,14 +69,13 @@ impl<AP: CubicParser<E>, E: CubicParameters<AP::Field>> LogConstraints<AP, E> {
     }
 
     #[inline]
-    pub fn log_row_accumulation<T: EvalCubic>(
+    pub fn log_row_accumulation<'a, T: EvalCubic>(
         parser: &mut AP,
         beta: CubicElement<AP::Var>,
-        entries: &[LogEntry<T>],
+        entries: &'a [LogEntry<T>],
         intermediate_values: ArrayRegister<CubicRegister>,
         result: CubicElement<AP::Var>,
-        kind: ConstraintKind,
-    ) -> CubicElement<AP::Var> {
+    ) -> Option<&'a LogEntry<T>> {
         let entry_chunks = entries.chunks_exact(2);
         let last_element = entry_chunks.remainder().first();
 
@@ -92,27 +91,52 @@ impl<AP: CubicParser<E>, E: CubicParameters<AP::Field>> LogConstraints<AP, E> {
             prev = acc;
         }
 
-        let eval_last = |r: CubicRegister, parser: &mut AP| match kind {
-            ConstraintKind::Transition => r.next().eval(parser),
-            _ => r.eval(parser),
-        };
+        last_element
 
-        let accumulated_value_pair_chunks = intermediate_values
-            .last()
-            .map_or(zero, |r| eval_last(r, parser));
+        // match kind {
+        //     ConstraintKind::Trace => {
+        //         let accumulated_value_pair_chunks_next = intermediate_values
+        //         .last()
+        //         .map_or(zero, |r| r.next().eval(parser));
+        //         let mut acc_transition_constraint = parser.sub_extension(result, accumulated_value_pair_chunks_next);
+        //     }
+        //     ConstraintKind::Global => {}
+        // }
 
-        let eval_last_entry = |r: &LogEntry<T>, parser: &mut AP| match kind {
-            ConstraintKind::Transition => r.next().eval(parser),
-            _ => r.eval(parser),
-        };
+        // let accumulated_value_pair_chunks = intermediate_values
+        //     .last()
+        //     .map_or(zero, |r| eval_last(r, parser));
 
-        let mut acc_constraint = parser.sub_extension(result, accumulated_value_pair_chunks);
+        // let eval_last_entry = |r: &LogEntry<T>, parser: &mut AP| match kind {
+        //     ConstraintKind::Transition => r.next().eval(parser),
+        //     _ => r.eval(parser),
+        // };
 
-        if let Some(last) = last_element {
-            let a = eval_last_entry(last, parser);
-            acc_constraint = LogConstraints::log(parser, beta, a, acc_constraint);
-        }
+        // let mut acc_constraint = parser.sub_extension(result, accumulated_value_pair_chunks);
 
-        acc_constraint
+        // if let Some(last) = last_element {
+        //     let a = eval_last_entry(last, parser);
+        //     acc_constraint = LogConstraints::log(parser, beta, a, acc_constraint);
+        // }
+
+        // acc_constraint
     }
+
+    #[inline]
+    pub fn log_trace_accumulation<T: EvalCubic>(
+        parser: &mut AP,
+        beta: CubicElement<AP::Var>,
+        entries: &[LogEntry<T>],
+        intermediate_values: ArrayRegister<CubicRegister>,
+        trace_accumulator: CubicElement<AP::Var>,
+    ) {}
+
+    #[inline]
+    pub fn log_global_accumulation<T: EvalCubic>(
+        parser: &mut AP,
+        beta: CubicElement<AP::Var>,
+        entries: &[LogEntry<T>],
+        intermediate_values: ArrayRegister<CubicRegister>,
+        global_accumulator: CubicElement<AP::Var>,
+    ) {}
 }
