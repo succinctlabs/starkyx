@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use super::LogLookupValues;
 use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::AirParser;
@@ -19,6 +21,22 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupValues<T, F, E> {
     {
         let beta = self.challenge.eval(parser);
 
+        // let value_chunks = self.trace_values.chunks_exact(2);
+        // let last_element = value_chunks.remainder().first();
+
+        // let zero = parser.zero_extension();
+
+        // let mut prev = zero;
+        // for (chunk, row_acc) in value_chunks.zip_eq(self.row_accumulators) {
+        //     let a = chunk[0].eval(parser);
+        //     let b = chunk[1].eval(parser);
+        //     let acc = row_acc.eval(parser);
+        //     let acc_minus_prev = parser.sub_extension(acc, prev);
+        //     let constraint = LogConstraints::log_arithmetic(parser, beta, a, b, acc_minus_prev);
+        //     parser.constraint_extension(constraint);
+        //     prev = acc;
+        // }
+
         let log_lookup_accumulator = self.log_lookup_accumulator.eval(parser);
         let log_lookup_accumulator_next = self.log_lookup_accumulator.next().eval(parser);
 
@@ -34,15 +52,51 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupValues<T, F, E> {
         );
         parser.constraint_extension_transition(acc_result_constraint);
 
-        let acc_first_row_constraint = LogConstraints::log_row_accumulation(
-            parser,
-            beta,
-            &self.trace_values,
-            self.row_accumulators,
-            acc_result,
-            ConstraintKind::First,
-        );
-        parser.constraint_extension_first_row(acc_first_row_constraint);
+        // let accumulated_value = self
+        //     .row_accumulators
+        //     .last()
+        //     .map_or(zero, |r| r.eval(parser));
+
+        // let accumulated_value_next = self
+        //     .row_accumulators
+        //     .last()
+        //     .map_or(zero, |r| r.next().eval(parser));
+        // let mut acc_transition_constraint =
+        //     parser.sub_extension(log_lookup_accumulator_next, log_lookup_accumulator);
+        // acc_transition_constraint =
+        //     parser.sub_extension(acc_transition_constraint, accumulated_value_next);
+        // if let Some(last) = last_element {
+        //     let a = last.next().eval(parser);
+        //     acc_transition_constraint =
+        //         LogConstraints::log(parser, beta, a, acc_transition_constraint);
+        // }
+        // parser.constraint_extension_transition(acc_transition_constraint);
+
+        // let mut acc_first_row_constraint =
+        //     parser.sub_extension(log_lookup_accumulator, accumulated_value);
+        // if let Some(last) = last_element {
+        //     let a = last.eval(parser);
+        //     acc_first_row_constraint =
+        //         LogConstraints::log(parser, beta, a, acc_first_row_constraint);
+        // }
+        // parser.constraint_extension_first_row(acc_first_row_constraint);
+
+    //     let mut acc_first_row_constraint =
+    //     parser.sub_extension(log_lookup_accumulator, accumulated_value);
+    // if let Some(last) = last_element {
+    //     let a = last.eval(parser);
+    //     acc_first_row_constraint =
+    //         LogConstraints::log(parser, beta, a, acc_first_row_constraint);
+    // }
+    let acc_first_row_constraint = LogConstraints::log_row_accumulation(
+        parser,
+        beta,
+        &self.trace_values,
+        self.row_accumulators,
+        acc_result,
+        ConstraintKind::First,
+    );
+    parser.constraint_extension_first_row(acc_result_constraint);
 
         // Add digest constraint
         let lookup_digest = self.local_digest.eval(parser);
@@ -56,16 +110,38 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupValues<T, F, E> {
     {
         let beta = self.challenge.eval(parser);
 
+        let value_chunks = self.public_values.chunks_exact(2);
+        let last_element = value_chunks.remainder().first();
+
+        // Constrain the public accumulation
+        let mut prev = parser.zero_extension();
+        for (chunk, row_acc) in self
+            .public_values
+            .chunks_exact(2)
+            .zip(self.global_accumulators)
+        {
+            let a = chunk[0].eval(parser);
+            let b = chunk[1].eval(parser);
+            let acc = row_acc.eval(parser);
+            let acc_minus_prev = parser.sub_extension(acc, prev);
+            let constraint = LogConstraints::log_arithmetic(parser, beta, a, b, acc_minus_prev);
+            parser.constraint_extension(constraint);
+            prev = acc;
+        }
+
+        let lookup_total_value = prev;
+
+        // Add digest constraint
         if let Some(digest) = self.global_digest {
-            let global_digest_constraint = LogConstraints::log_row_accumulation(
-                parser,
-                beta,
-                &self.public_values,
-                self.global_accumulators,
-                digest.eval(parser),
-                ConstraintKind::Global,
-            );
-            parser.constraint_extension_last_row(global_digest_constraint);
+            let lookup_digest = digest.eval(parser);
+            let mut lookup_digest_constraint =
+                parser.sub_extension(lookup_digest, lookup_total_value);
+            if let Some(last) = last_element {
+                let a = last.eval(parser);
+                lookup_digest_constraint =
+                    LogConstraints::log(parser, beta, a, lookup_digest_constraint);
+            }
+            parser.constraint_extension_last_row(lookup_digest_constraint);
         }
     }
 }
