@@ -12,9 +12,8 @@ use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::EvalCubic;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
-use crate::chip::table::log_derivative::entry::LogEntry;
+use crate::chip::table::log_derivative::entry::{LogEntry, LogEntryValue};
 use crate::chip::AirParameters;
-use crate::math::prelude::cubic::extension::CubicExtension;
 use crate::math::prelude::*;
 use crate::trace::window::TraceWindow;
 use crate::trace::window_parser::TraceWindowParser;
@@ -183,20 +182,34 @@ impl<F: Field> TraceWriter<F> {
 
     /// Evaluates the log derivative entry `LogEntry` at the given row index.
     #[inline]
-    pub fn read_log_entry<E: CubicParameters<F>, T: EvalCubic>(
+    pub fn read_log_entry<T: EvalCubic>(
         &self,
-        beta: CubicExtension<F, E>,
         entry: &LogEntry<T>,
         row_index: usize,
-    ) -> CubicExtension<F, E> {
-        let eval =
-            |value: &T| CubicExtension::from(T::trace_value_as_cubic(self.read(value, row_index)));
+    ) -> LogEntryValue<F> {
+        let eval = |value: &T| T::trace_value_as_cubic(self.read(value, row_index));
         match entry {
-            LogEntry::Input(value) => CubicExtension::ONE / (beta - eval(value)),
-            LogEntry::Output(value) => -CubicExtension::ONE / (eval(value) - beta),
-            LogEntry::Multiplicity(value, multiplier) => {
-                CubicExtension::from_base_field(self.read(multiplier, row_index))
-                    / (beta - eval(value))
+            LogEntry::Input(value) => LogEntryValue {
+                value: eval(value),
+                multiplier: F::ONE,
+            },
+            LogEntry::Output(value) => LogEntryValue {
+                value: eval(value),
+                multiplier: -F::ONE,
+            },
+            LogEntry::InputMultiplicity(value, multiplier) => {
+                let multiplier = self.read(multiplier, row_index);
+                LogEntryValue {
+                    value: eval(value),
+                    multiplier,
+                }
+            }
+            LogEntry::OutputMultiplicity(value, multiplier) => {
+                let multiplier = self.read(multiplier, row_index);
+                LogEntryValue {
+                    value: eval(value),
+                    multiplier: -multiplier,
+                }
             }
         }
     }

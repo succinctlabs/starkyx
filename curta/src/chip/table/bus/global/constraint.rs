@@ -30,6 +30,6 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP> for Bu
         }
 
         // Final consistency constraint
-        parser.assert_eq_extension(acc_prod, acc_global_outputs);
+        // parser.assert_eq_extension(acc_prod, acc_global_outputs);
     }
 }

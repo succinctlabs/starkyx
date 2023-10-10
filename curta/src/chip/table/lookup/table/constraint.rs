@@ -34,7 +34,7 @@ impl<T: EvalCubic, E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstra
             .zip_eq(self.multiplicities)
         {
             let mult_table_log = mult_table_log.eval(parser);
-            let table = LogEntry::multiplicity(*table, mult).eval(parser);
+            let table = LogEntry::input_with_multiplicity(*table, mult).eval(parser);
             let mult_table_constraint = LogConstraints::log(parser, beta, table, mult_table_log);
             parser.constraint_extension(mult_table_constraint);
         }

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::arithmetic::ArithmeticConstraint;
 use super::instruction::set::AirInstruction;
+use super::register::cubic::CubicRegister;
 use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
 use super::table::bus::global::Bus;
@@ -17,7 +18,7 @@ pub enum Constraint<L: AirParameters> {
     Instruction(AirInstruction<L::Field, L::Instruction>),
     Arithmetic(ArithmeticConstraint<L::Field>),
     Accumulator(Accumulator<L::Field, L::CubicParams>),
-    BusChannel(BusChannel<L::Field, L::CubicParams>),
+    BusChannel(BusChannel<CubicRegister, L::CubicParams>),
     Bus(Bus<L::CubicParams>),
     Lookup(LookupChipConstraint<L::Field, L::CubicParams>),
     Evaluation(Evaluation<L::Field, L::CubicParams>),
@@ -85,8 +86,8 @@ impl<L: AirParameters> From<Accumulator<L::Field, L::CubicParams>> for Constrain
     }
 }
 
-impl<L: AirParameters> From<BusChannel<L::Field, L::CubicParams>> for Constraint<L> {
-    fn from(bus_channel: BusChannel<L::Field, L::CubicParams>) -> Self {
+impl<L: AirParameters> From<BusChannel<CubicRegister, L::CubicParams>> for Constraint<L> {
+    fn from(bus_channel: BusChannel<CubicRegister, L::CubicParams>) -> Self {
         Self::BusChannel(bus_channel)
     }
 }

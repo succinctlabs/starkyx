@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::cell::CellType;
+use super::element::ElementRegister;
 use super::memory::MemorySlice;
 use super::{Register, RegisterSerializable, RegisterSized};
 use crate::chip::arithmetic::expression::ArithmeticExpression;
@@ -14,6 +15,11 @@ pub struct BitRegister(MemorySlice);
 impl BitRegister {
     pub fn not_expr<F: Field>(&self) -> ArithmeticExpression<F> {
         ArithmeticExpression::one() - self.expr()
+    }
+
+    #[inline]
+    pub fn as_element(&self) -> ElementRegister {
+        ElementRegister::from_register_unsafe(self.0)
     }
 }
 

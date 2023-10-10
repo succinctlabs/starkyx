@@ -12,6 +12,7 @@ use self::shared_memory::SharedMemory;
 use super::arithmetic::expression::ArithmeticExpression;
 use super::constraint::Constraint;
 use super::instruction::set::AirInstruction;
+use super::register::cubic::CubicRegister;
 use super::register::element::ElementRegister;
 use super::register::{Register, RegisterSerializable};
 use super::table::accumulator::Accumulator;
@@ -37,7 +38,7 @@ pub struct AirBuilder<L: AirParameters> {
     pub(crate) constraints: Vec<Constraint<L>>,
     pub(crate) global_constraints: Vec<Constraint<L>>,
     pub(crate) accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
-    pub(crate) bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
+    pub(crate) bus_channels: Vec<BusChannel<CubicRegister, L::CubicParams>>,
     pub(crate) lookup_values: Vec<LookupValues<L::Field, L::CubicParams>>,
     pub(crate) lookup_tables: Vec<LookupTable<L::Field, L::CubicParams>>,
     pub(crate) evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
@@ -56,7 +57,7 @@ pub struct AirTraceData<L: AirParameters> {
     pub instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
-    pub bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
+    pub bus_channels: Vec<BusChannel<CubicRegister, L::CubicParams>>,
     pub lookup_values: Vec<LookupValues<L::Field, L::CubicParams>>,
     pub lookup_tables: Vec<LookupTable<L::Field, L::CubicParams>>,
     pub evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,

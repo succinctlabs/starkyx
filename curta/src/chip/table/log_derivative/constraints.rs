@@ -28,8 +28,8 @@ impl<AP: CubicParser<E>, E: CubicParameters<AP::Field>> LogConstraints<AP, E> {
     pub fn log_arithmetic(
         parser: &mut AP,
         beta: CubicElement<AP::Var>,
-        a: LogEntryValue<AP>,
-        b: LogEntryValue<AP>,
+        a: LogEntryValue<AP::Var>,
+        b: LogEntryValue<AP::Var>,
         result: CubicElement<AP::Var>,
     ) -> CubicElement<AP::Var> {
         let a_value = a.value;
@@ -59,7 +59,7 @@ impl<AP: CubicParser<E>, E: CubicParameters<AP::Field>> LogConstraints<AP, E> {
     pub fn log(
         parser: &mut AP,
         beta: CubicElement<AP::Var>,
-        a: LogEntryValue<AP>,
+        a: LogEntryValue<AP::Var>,
         result: CubicElement<AP::Var>,
     ) -> CubicElement<AP::Var> {
         let beta_minus_a = parser.sub_extension(beta, a.value);
@@ -113,7 +113,9 @@ impl<AP: CubicParser<E>, E: CubicParameters<AP::Field>> LogConstraints<AP, E> {
         let accumulator_next = trace_accumulator.next().eval(parser);
 
         let zero = parser.zero_extension();
-        let accumulated_value = intermediate_values.last_value().map_or(zero, |r| r.eval(parser));
+        let accumulated_value = intermediate_values
+            .last_value()
+            .map_or(zero, |r| r.eval(parser));
         let accumulated_value_next = intermediate_values
             .last_value()
             .map_or(zero, |r| r.next().eval(parser));

@@ -32,6 +32,7 @@ pub struct Bus<E> {
     global_outputs: Vec<CubicRegister>,
     // The challenge used
     challenge: CubicRegister,
+
     _marker: PhantomData<E>,
 }
 
@@ -66,25 +67,25 @@ impl<E: Clone> Bus<E> {
         index
     }
 
-    pub fn insert_global_value(&mut self, register: &CubicRegister) {
-        match register.register() {
+    pub fn insert_global_value(&mut self, value: &CubicRegister) {
+        match value.register() {
             MemorySlice::Global(..) => {
-                self.global_inputs.push(*register);
+                self.global_inputs.push(*value);
             }
             MemorySlice::Public(..) => {
-                self.global_inputs.push(*register);
+                self.global_inputs.push(*value);
             }
             _ => panic!("Expected public or global register"),
         }
     }
 
-    pub fn output_global_value(&mut self, register: &CubicRegister) {
-        match register.register() {
+    pub fn output_global_value(&mut self, value: &CubicRegister) {
+        match value.register() {
             MemorySlice::Global(..) => {
-                self.global_outputs.push(*register);
+                self.global_outputs.push(*value);
             }
             MemorySlice::Public(..) => {
-                self.global_outputs.push(*register);
+                self.global_outputs.push(*value);
             }
             _ => panic!("Expected public or global register"),
         }
@@ -99,7 +100,6 @@ mod tests {
     use super::*;
     use crate::chip::builder::tests::*;
     use crate::chip::register::bit::BitRegister;
-    use crate::chip::register::Register;
     use crate::chip::AirParameters;
     use crate::math::extension::cubic::element::CubicElement;
     use crate::math::prelude::*;
@@ -136,7 +136,7 @@ mod tests {
         let mut bus = builder.new_bus();
         let channel_idx = bus.new_channel(&mut builder);
 
-        builder.input_to_bus_filtered(channel_idx, x_1, bit.expr());
+        builder.input_to_bus_filtered(channel_idx, x_1, bit);
         builder.output_from_bus(channel_idx, x_2);
 
         let x_in_pub = builder.alloc_array_public::<CubicRegister>(num_public_in);

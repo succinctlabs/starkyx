@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::air::extension::cubic::CubicParser;
-use crate::air::parser::AirParser;
 use crate::chip::register::cubic::EvalCubic;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::cubic::element::CubicElement;
+use crate::math::prelude::cubic::extension::CubicExtension;
 use crate::math::prelude::{CubicParameters, *};
 
 /// A log derivative table entry.
@@ -20,13 +20,25 @@ pub enum LogEntry<T> {
     /// Represents `-1 / (beta - value)`.
     Output(T),
     /// Represents `multiplier / (beta - value)`.
-    Multiplicity(T, ElementRegister),
+    InputMultiplicity(T, ElementRegister),
+    // Represents `-multiplier / (beta - value)`
+    OutputMultiplicity(T, ElementRegister),
 }
 
 /// An evaluation of a `LogEntry` instance to be used in constraints.
-pub struct LogEntryValue<AP: AirParser> {
-    pub value: CubicElement<AP::Var>,
-    pub multiplier: AP::Var,
+pub struct LogEntryValue<V> {
+    pub value: CubicElement<V>,
+    pub multiplier: V,
+}
+
+impl<F: Field> LogEntryValue<F> {
+    #[inline]
+    pub fn evaluate<E: CubicParameters<F>>(
+        &self,
+        beta: CubicExtension<F, E>,
+    ) -> CubicExtension<F, E> {
+        CubicExtension::from_base_field(self.multiplier) / (beta - CubicExtension::from(self.value))
+    }
 }
 
 impl<T: EvalCubic> LogEntry<T> {
@@ -38,8 +50,12 @@ impl<T: EvalCubic> LogEntry<T> {
         LogEntry::Output(value)
     }
 
-    pub const fn multiplicity(value: T, multiplier: ElementRegister) -> Self {
-        LogEntry::Multiplicity(value, multiplier)
+    pub const fn input_with_multiplicity(value: T, multiplier: ElementRegister) -> Self {
+        LogEntry::InputMultiplicity(value, multiplier)
+    }
+
+    pub const fn output_with_multiplicity(value: T, multiplier: ElementRegister) -> Self {
+        LogEntry::OutputMultiplicity(value, multiplier)
     }
 
     #[inline]
@@ -47,8 +63,11 @@ impl<T: EvalCubic> LogEntry<T> {
         match self {
             LogEntry::Input(value) => LogEntry::Input(value.next()),
             LogEntry::Output(value) => LogEntry::Output(value.next()),
-            LogEntry::Multiplicity(value, multiplier) => {
-                LogEntry::Multiplicity(value.next(), multiplier.next())
+            LogEntry::InputMultiplicity(value, multiplier) => {
+                LogEntry::InputMultiplicity(value.next(), multiplier.next())
+            }
+            LogEntry::OutputMultiplicity(value, multiplier) => {
+                LogEntry::OutputMultiplicity(value.next(), multiplier.next())
             }
         }
     }
@@ -57,7 +76,8 @@ impl<T: EvalCubic> LogEntry<T> {
         match self {
             LogEntry::Input(value) => value,
             LogEntry::Output(value) => value,
-            LogEntry::Multiplicity(value, _) => value,
+            LogEntry::InputMultiplicity(value, _) => value,
+            LogEntry::OutputMultiplicity(value, _) => value,
         }
     }
 
@@ -65,7 +85,7 @@ impl<T: EvalCubic> LogEntry<T> {
     pub fn eval<AP: CubicParser<E>, E: CubicParameters<AP::Field>>(
         &self,
         parser: &mut AP,
-    ) -> LogEntryValue<AP> {
+    ) -> LogEntryValue<AP::Var> {
         match self {
             LogEntry::Input(value) => {
                 let value = value.eval_cubic(parser);
@@ -77,9 +97,44 @@ impl<T: EvalCubic> LogEntry<T> {
                 let multiplier = parser.constant(-AP::Field::ONE);
                 LogEntryValue { value, multiplier }
             }
-            LogEntry::Multiplicity(value, multiplier) => {
+            LogEntry::InputMultiplicity(value, multiplier) => {
                 let value = value.eval_cubic(parser);
                 let multiplier = multiplier.eval(parser);
+                LogEntryValue { value, multiplier }
+            }
+            LogEntry::OutputMultiplicity(value, multiplier) => {
+                let value = value.eval_cubic(parser);
+                let mut multiplier = multiplier.eval(parser);
+                multiplier = parser.neg(multiplier);
+                LogEntryValue { value, multiplier }
+            }
+        }
+    }
+
+    #[inline]
+    pub fn read_from_slice<F: Field>(&self, slice: &[F]) -> LogEntryValue<F> {
+        match self {
+            LogEntry::Input(value) => {
+                let value = T::trace_value_as_cubic(value.read_from_slice(slice));
+                LogEntryValue {
+                    value,
+                    multiplier: F::ONE,
+                }
+            }
+            LogEntry::Output(value) => {
+                let value = T::trace_value_as_cubic(value.read_from_slice(slice));
+                let multiplier = -F::ONE;
+                LogEntryValue { value, multiplier }
+            }
+            LogEntry::InputMultiplicity(value, multiplier) => {
+                let value = T::trace_value_as_cubic(value.read_from_slice(slice));
+                let multiplier = multiplier.read_from_slice(slice);
+                LogEntryValue { value, multiplier }
+            }
+            LogEntry::OutputMultiplicity(value, multiplier) => {
+                let value = T::trace_value_as_cubic(value.read_from_slice(slice));
+                let mut multiplier = multiplier.read_from_slice(slice);
+                multiplier = -multiplier;
                 LogEntryValue { value, multiplier }
             }
         }

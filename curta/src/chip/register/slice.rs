@@ -6,7 +6,7 @@ use super::Register;
 
 /// A trait that enables the interface of a slice uniform on both `ArrayRegister<T>` such as a
 /// vector `Vec<T>`, array, or slice `&[T]`.
-pub trait RegisterSlice<T: Register>: Debug + Clone {
+pub trait RegisterSlice<T: Register>: Debug + Clone + Send + Sync {
     type Item<'a>: Borrow<T>
     where
         Self: 'a;

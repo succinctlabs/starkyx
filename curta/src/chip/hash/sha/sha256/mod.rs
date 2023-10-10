@@ -107,7 +107,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let w_challenges = self.alloc_challenge_array::<CubicRegister>(U32Register::size_of() + 1);
         let clk_w =
             self.accumulate_expressions(&w_challenges, &[clk.expr(), w_window.get(0).expr()]);
-        self.output_from_bus_filtered(bus_channel_idx, clk_w, w_bit.expr());
+        self.output_from_bus_filtered(bus_channel_idx, clk_w, w_bit);
 
         // Get hash state challenges
         let state_challenges =
@@ -121,7 +121,7 @@ impl<L: AirParameters> AirBuilder<L> {
             self.accumulate_expressions(&end_bit_challenge, &[clk.expr(), end_bit.expr()]);
 
         // Put the end_bit in the bus at the end of each round
-        self.input_to_bus_filtered(bus_channel_idx, clk_end_bit, cycle_64.end_bit.expr());
+        self.input_to_bus_filtered(bus_channel_idx, clk_end_bit, cycle_64.end_bit);
         // Constrain all other values of end_bit to zero
         self.assert_expression_zero(end_bit.expr() * cycle_64.end_bit.not_expr());
 
@@ -238,7 +238,7 @@ impl<L: AirParameters> AirBuilder<L> {
 
         let clk_hash_next =
             self.accumulate_expressions(&state_challenges, &[clk.expr(), hash_next.expr()]);
-        self.input_to_bus_filtered(bus_channel_idx, clk_hash_next, cycle_64.end_bit.expr());
+        self.input_to_bus_filtered(bus_channel_idx, clk_hash_next, cycle_64.end_bit);
 
         // Dummy operation because of an odd number of operations
         let dummy = self.alloc::<ByteRegister>();
