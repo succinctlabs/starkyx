@@ -9,9 +9,12 @@ use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirTraceData;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
+use crate::chip::register::cubic::EvalCubic;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
+use crate::chip::table::log_derivative::entry::LogEntry;
 use crate::chip::AirParameters;
+use crate::math::prelude::cubic::extension::CubicExtension;
 use crate::math::prelude::*;
 use crate::trace::window::TraceWindow;
 use crate::trace::window_parser::TraceWindowParser;
@@ -176,6 +179,26 @@ impl<F: Field> TraceWriter<F> {
         let mut parser =
             TraceWindowParser::new(window, &challenges, &global_inputs, &public_inputs);
         expression.eval(&mut parser)
+    }
+
+    /// Evaluates the log derivative entry `LogEntry` at the given row index.
+    #[inline]
+    pub fn read_log_entry<E: CubicParameters<F>, T: EvalCubic>(
+        &self,
+        beta: CubicExtension<F, E>,
+        entry: &LogEntry<T>,
+        row_index: usize,
+    ) -> CubicExtension<F, E> {
+        let eval =
+            |value: &T| CubicExtension::from(T::trace_value_as_cubic(self.read(value, row_index)));
+        match entry {
+            LogEntry::Input(value) => CubicExtension::ONE / (beta - eval(value)),
+            LogEntry::Output(value) => -CubicExtension::ONE / (eval(value) - beta),
+            LogEntry::Multiplicity(value, multiplier) => {
+                CubicExtension::from_base_field(self.read(multiplier, row_index))
+                    / (beta - eval(value))
+            }
+        }
     }
 
     #[inline]

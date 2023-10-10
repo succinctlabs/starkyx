@@ -17,11 +17,13 @@ use super::register::{Register, RegisterSerializable};
 use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
 use super::table::evaluation::Evaluation;
-use super::table::lookup::Lookup;
+use super::table::lookup::table::LookupTable;
+use super::table::lookup::values::LookupValues;
 use super::{AirParameters, Chip};
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone)]
+#[allow(clippy::type_complexity)]
 pub struct AirBuilder<L: AirParameters> {
     local_index: usize,
     local_arithmetic_index: usize,
@@ -36,12 +38,17 @@ pub struct AirBuilder<L: AirParameters> {
     pub(crate) global_constraints: Vec<Constraint<L>>,
     pub(crate) accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
     pub(crate) bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
-    pub(crate) lookup_data: Vec<Lookup<L::Field, L::CubicParams>>,
+    pub(crate) lookup_values: Vec<LookupValues<L::Field, L::CubicParams>>,
+    pub(crate) lookup_tables: Vec<LookupTable<L::Field, L::CubicParams>>,
     pub(crate) evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
-    range_data: Option<Lookup<L::Field, L::CubicParams>>,
+    range_data: Option<(
+        LookupTable<L::Field, L::CubicParams>,
+        LookupValues<L::Field, L::CubicParams>,
+    )>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::type_complexity)]
 pub struct AirTraceData<L: AirParameters> {
     pub num_challenges: usize,
     pub num_public_inputs: usize,
@@ -50,9 +57,13 @@ pub struct AirTraceData<L: AirParameters> {
     pub global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
     pub bus_channels: Vec<BusChannel<L::Field, L::CubicParams>>,
-    pub lookup_data: Vec<Lookup<L::Field, L::CubicParams>>,
+    pub lookup_values: Vec<LookupValues<L::Field, L::CubicParams>>,
+    pub lookup_tables: Vec<LookupTable<L::Field, L::CubicParams>>,
     pub evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
-    pub range_data: Option<Lookup<L::Field, L::CubicParams>>,
+    pub range_data: Option<(
+        LookupTable<L::Field, L::CubicParams>,
+        LookupValues<L::Field, L::CubicParams>,
+    )>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
@@ -75,7 +86,8 @@ impl<L: AirParameters> AirBuilder<L> {
             global_constraints: Vec::new(),
             accumulators: Vec::new(),
             bus_channels: Vec::new(),
-            lookup_data: Vec::new(),
+            lookup_values: Vec::new(),
+            lookup_tables: Vec::new(),
             evaluation_data: Vec::new(),
             range_data: None,
         }
@@ -243,7 +255,8 @@ impl<L: AirParameters> AirBuilder<L> {
                 global_instructions: self.global_instructions,
                 accumulators: self.accumulators,
                 bus_channels: self.bus_channels,
-                lookup_data: self.lookup_data,
+                lookup_values: self.lookup_values,
+                lookup_tables: self.lookup_tables,
                 evaluation_data: self.evaluation_data,
                 range_data: self.range_data,
             },
@@ -384,7 +397,19 @@ pub(crate) mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = EmptyInstruction<GoldilocksField>;
-        const NUM_ARITHMETIC_COLUMNS: usize = 2;
+        const NUM_ARITHMETIC_COLUMNS: usize = 3;
+        const NUM_FREE_COLUMNS: usize = 4;
+        const EXTENDED_COLUMNS: usize = 12;
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct SimpleTestPublicParameters;
+
+    impl AirParameters for SimpleTestPublicParameters {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
+        type Instruction = EmptyInstruction<GoldilocksField>;
+        const NUM_ARITHMETIC_COLUMNS: usize = 0;
         const NUM_FREE_COLUMNS: usize = 4;
         const EXTENDED_COLUMNS: usize = 13;
     }
@@ -398,6 +423,7 @@ pub(crate) mod tests {
         let mut builder = AirBuilder::<L>::new();
         let x_0 = builder.alloc::<U16Register>();
         let x_1 = builder.alloc::<U16Register>();
+        let x_3 = builder.alloc::<U16Register>();
 
         let clk = builder.clock();
         let clk_expected = builder.alloc::<ElementRegister>();
@@ -405,46 +431,38 @@ pub(crate) mod tests {
         builder.assert_equal(&clk, &clk_expected);
 
         let (air, trace_data) = builder.build();
-        let num_rows = 1 << 14;
+        let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
-        let (tx, rx) = channel();
+        let writer = generator.new_writer();
         for i in 0..num_rows {
-            let writer = generator.new_writer();
-            let handle = tx.clone();
-            // rayon::spawn(move || {
             writer.write(&x_0, &F::ZERO, i);
             writer.write(&x_1, &F::from_canonical_usize(0), i);
+            writer.write(&x_3, &F::from_canonical_usize(23), i);
             writer.write(&clk_expected, &F::from_canonical_usize(i), i);
             writer.write_row_instructions(&generator.air_data, i);
-            handle.send(1).unwrap();
-            // });
         }
-        drop(tx);
-        for msg in rx.iter() {
-            assert!(msg == 1);
-        }
+        writer.write_global_instructions(&generator.air_data);
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
 
+        let public_inputs = writer.public().unwrap().clone();
+
         // Generate proof and verify as a stark
-        test_starky(&stark, &config, &generator, &[]);
+        test_starky(&stark, &config, &generator, &public_inputs);
 
         // Test the recursive proof.
-        test_recursive_starky(stark, config, generator, &[]);
+        test_recursive_starky(stark, config, generator, &public_inputs);
     }
 
     #[test]
     fn test_builder_public_range_check() {
         type F = GoldilocksField;
-        type L = SimpleTestParameters;
+        type L = SimpleTestPublicParameters;
         type SC = PoseidonGoldilocksStarkConfig;
 
         let mut builder = AirBuilder::<L>::new();
-        let x_0 = builder.alloc::<U16Register>();
-        let x_1 = builder.alloc::<U16Register>();
         let y_1 = builder.alloc_public::<U16Register>();
-        let y_2 = builder.alloc_public::<U16Register>();
 
         let clk = builder.clock();
         let clk_expected = builder.alloc::<ElementRegister>();
@@ -458,10 +476,7 @@ pub(crate) mod tests {
 
         let writer = generator.new_writer();
         writer.write(&y_1, &F::from_canonical_u32(45), 0);
-        writer.write(&y_2, &F::from_canonical_u32(45), 0);
         for i in 0..num_rows {
-            writer.write(&x_0, &F::ZERO, i);
-            writer.write(&x_1, &F::from_canonical_usize(0), i);
             writer.write(&clk_expected, &F::from_canonical_usize(i), i);
             writer.write_row_instructions(&generator.air_data, i);
         }

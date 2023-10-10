@@ -15,7 +15,7 @@ use super::{SHA256Gadget, SHA256PublicData, INITIAL_HASH, ROUND_CONSTANTS};
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::Register;
 use crate::chip::trace::generator::ArithmeticGenerator;
-use crate::chip::uint::bytes::lookup_table::table::ByteLookupTable;
+use crate::chip::uint::bytes::lookup_table::table::ByteLogLookupTable;
 use crate::chip::uint::operations::instruction::U32Instruction;
 use crate::chip::uint::register::U32Register;
 use crate::chip::uint::util::u32_to_le_field_bytes;
@@ -58,7 +58,7 @@ pub struct SHA256Generator<F: PrimeField64, E: CubicParameters<F>, C, const D: u
 
 pub struct SHA256StarkData<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> {
     pub stark: Starky<Chip<SHA256AirParameters<F, E>>>,
-    pub table: ByteLookupTable,
+    pub table: ByteLogLookupTable,
     pub trace_generator: ArithmeticGenerator<SHA256AirParameters<F, E>>,
     pub config: StarkyConfig<C, D>,
     pub gadget: SHA256Gadget,
