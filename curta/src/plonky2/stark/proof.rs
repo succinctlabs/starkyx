@@ -207,7 +207,7 @@ impl<const D: usize> StarkProofTarget<D> {
     }
 }
 
-pub(crate) struct StarkProofChallenges<F: RichField + Extendable<D>, const D: usize> {
+pub struct StarkProofChallenges<F: RichField + Extendable<D>, const D: usize> {
     /// Random values used to combine STARK constraints.
     pub stark_alphas: Vec<F>,
 

@@ -17,7 +17,10 @@ use plonky2::plonk::plonk_common::reduce_with_powers;
 use plonky2::util::reducing::ReducingFactorTarget;
 
 use super::config::{CurtaConfig, StarkyConfig};
-use super::proof::{StarkOpeningSet, StarkOpeningSetTarget, StarkProof, StarkProofTarget};
+use super::proof::{
+    StarkOpeningSet, StarkOpeningSetTarget, StarkProof, StarkProofChallenges,
+    StarkProofChallengesTarget, StarkProofTarget,
+};
 use super::Starky;
 use crate::air::{RAir, RAirData};
 use crate::plonky2::parser::consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
@@ -33,17 +36,17 @@ where
     F: RichField + Extendable<D>,
     C: CurtaConfig<D, F = F, FE = F::Extension>,
 {
-    pub fn verify<A>(
+    pub fn verify_with_challenges<A>(
         config: &StarkyConfig<C, D>,
         stark: &Starky<A>,
         proof: StarkProof<F, C, D>,
         public_inputs: &[F],
+        challenges: StarkProofChallenges<F, D>,
     ) -> Result<()>
     where
         A: StarkyAir<F, D>,
     {
         let degree_bits = proof.recover_degree_bits(config);
-        let challenges = proof.get_challenges(config, stark, public_inputs, degree_bits);
 
         Self::validate_proof_shape(config, stark, &proof)?;
 
@@ -141,6 +144,20 @@ where
         Ok(())
     }
 
+    pub fn verify<A>(
+        config: &StarkyConfig<C, D>,
+        stark: &Starky<A>,
+        proof: StarkProof<F, C, D>,
+        public_inputs: &[F],
+    ) -> Result<()>
+    where
+        A: StarkyAir<F, D>,
+    {
+        let degree_bits = proof.recover_degree_bits(config);
+        let challenges = proof.get_challenges(config, stark, public_inputs, degree_bits);
+        Self::verify_with_challenges(config, stark, proof, public_inputs, challenges)
+    }
+
     pub fn validate_proof_shape<A: RAirData>(
         config: &StarkyConfig<C, D>,
         stark: &Starky<A>,
@@ -189,12 +206,13 @@ where
         (z_x * invs[0], z_x * invs[1])
     }
 
-    pub fn verify_circuit<A>(
+    pub fn verify_with_challenges_circuit<A>(
         builder: &mut CircuitBuilder<F, D>,
         config: &StarkyConfig<C, D>,
         stark: &Starky<A>,
         proof: &StarkProofTarget<D>,
         public_inputs: &[Target],
+        challenges: StarkProofChallengesTarget<D>,
     ) where
         A: Plonky2Air<F, D>,
     {
@@ -203,8 +221,6 @@ where
             next_values,
             quotient_polys,
         } = &proof.openings;
-
-        let challenges = proof.get_challenges_target(builder, config, public_inputs, stark);
 
         let degree_bits = proof.recover_degree_bits(config);
 
@@ -300,6 +316,26 @@ where
             &proof.opening_proof,
             &config.fri_params(),
         );
+    }
+
+    pub fn verify_circuit<A>(
+        builder: &mut CircuitBuilder<F, D>,
+        config: &StarkyConfig<C, D>,
+        stark: &Starky<A>,
+        proof: &StarkProofTarget<D>,
+        public_inputs: &[Target],
+    ) where
+        A: Plonky2Air<F, D>,
+    {
+        let challenges = proof.get_challenges_target(builder, config, public_inputs, stark);
+        Self::verify_with_challenges_circuit(
+            builder,
+            config,
+            stark,
+            proof,
+            public_inputs,
+            challenges,
+        )
     }
 
     fn eval_l_0_and_l_last_circuit(
