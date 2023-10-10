@@ -1,12 +1,5 @@
-//! Bus constraint
-//!
-//! The globa bus constraint enforeces consistency between the channels of the bus.
-//! Namely, the constraint:
-//!
-//! \prod_{i=1}^n channel_i = 1
-//!
-
 pub mod constraint;
+pub mod trace;
 
 use core::marker::PhantomData;
 
@@ -14,46 +7,57 @@ use serde::{Deserialize, Serialize};
 
 use super::channel::BusChannel;
 use crate::chip::builder::AirBuilder;
-use crate::chip::register::cubic::CubicRegister;
+use crate::chip::register::array::ArrayRegister;
+use crate::chip::register::cubic::{CubicRegister, EvalCubic};
 use crate::chip::register::memory::MemorySlice;
-use crate::chip::register::RegisterSerializable;
+use crate::chip::table::log_derivative::entry::LogEntry;
 use crate::chip::AirParameters;
 
-/// The main bus enforcing the constraint
+/// A general communication bus enforcing the constraint that very element inserted as input to the
+/// bus was also taken as output from the bus.
 ///
-/// Prod(Channels) = 1
+/// The constraints reflecting the bus logic use a random challenge `beta` to assert that the sum
+/// `sum_i 1/(beta - input_i) - sum_j 1/(beta -output_j) = 0` where `input_i` are the inputs to the
+/// bus and `output_j` are the outputs from the bus. 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Bus<E> {
+pub struct Bus<T, E> {
     /// The channels of the bus
     channels: Vec<CubicRegister>,
     // Public inputs to the bus
-    global_inputs: Vec<CubicRegister>,
-    // Public outputs from the pus
-    global_outputs: Vec<CubicRegister>,
+    global_entries: Vec<LogEntry<T>>,
+    // Accumulators for the partial sums of global entry values.
+    global_accumulators: ArrayRegister<CubicRegister>,
+    /// The total accumulated value of the global entries.
+    global_value: CubicRegister,
     // The challenge used
     challenge: CubicRegister,
-
     _marker: PhantomData<E>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn new_bus(&mut self) -> Bus<L::CubicParams> {
+    pub fn new_bus(&mut self) -> Bus<CubicRegister, L::CubicParams> {
         let challenge = self.alloc_challenge::<CubicRegister>();
+        let global_value = self.alloc_global::<CubicRegister>();
         Bus {
             channels: Vec::new(),
-            global_inputs: Vec::new(),
-            global_outputs: Vec::new(),
+            global_entries: Vec::new(),
+            global_accumulators: ArrayRegister::uninitialized(),
+            global_value,
             challenge,
             _marker: PhantomData,
         }
     }
 
-    pub fn constrain_bus(&mut self, bus: Bus<L::CubicParams>) {
+    pub fn constrain_bus(&mut self, mut bus: Bus<CubicRegister, L::CubicParams>) {
+        let global_accumulators =
+            self.alloc_array_global::<CubicRegister>(bus.global_entries.len() / 2);
+        bus.global_accumulators = global_accumulators;
+        self.buses.push(bus.clone());
         self.global_constraints.push(bus.into());
     }
 }
 
-impl<E: Clone> Bus<E> {
+impl<T: EvalCubic, E: Clone> Bus<T, E> {
     pub fn new_channel<L: AirParameters<CubicParams = E>>(
         &mut self,
         builder: &mut AirBuilder<L>,
@@ -67,25 +71,25 @@ impl<E: Clone> Bus<E> {
         index
     }
 
-    pub fn insert_global_value(&mut self, value: &CubicRegister) {
+    pub fn insert_global_value(&mut self, value: &T) {
         match value.register() {
             MemorySlice::Global(..) => {
-                self.global_inputs.push(*value);
+                self.global_entries.push(LogEntry::Input(*value));
             }
             MemorySlice::Public(..) => {
-                self.global_inputs.push(*value);
+                self.global_entries.push(LogEntry::Input(*value));
             }
             _ => panic!("Expected public or global register"),
         }
     }
 
-    pub fn output_global_value(&mut self, value: &CubicRegister) {
+    pub fn output_global_value(&mut self, value: &T) {
         match value.register() {
             MemorySlice::Global(..) => {
-                self.global_outputs.push(*value);
+                self.global_entries.push(LogEntry::Output(*value));
             }
             MemorySlice::Public(..) => {
-                self.global_outputs.push(*value);
+                self.global_entries.push(LogEntry::Output(*value));
             }
             _ => panic!("Expected public or global register"),
         }

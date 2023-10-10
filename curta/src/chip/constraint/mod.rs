@@ -19,7 +19,7 @@ pub enum Constraint<L: AirParameters> {
     Arithmetic(ArithmeticConstraint<L::Field>),
     Accumulator(Accumulator<L::Field, L::CubicParams>),
     BusChannel(BusChannel<CubicRegister, L::CubicParams>),
-    Bus(Bus<L::CubicParams>),
+    Bus(Bus<CubicRegister, L::CubicParams>),
     Lookup(LookupChipConstraint<L::Field, L::CubicParams>),
     Evaluation(Evaluation<L::Field, L::CubicParams>),
 }
@@ -92,8 +92,8 @@ impl<L: AirParameters> From<BusChannel<CubicRegister, L::CubicParams>> for Const
     }
 }
 
-impl<L: AirParameters> From<Bus<L::CubicParams>> for Constraint<L> {
-    fn from(bus: Bus<L::CubicParams>) -> Self {
+impl<L: AirParameters> From<Bus<CubicRegister, L::CubicParams>> for Constraint<L> {
+    fn from(bus: Bus<CubicRegister, L::CubicParams>) -> Self {
         Self::Bus(bus)
     }
 }

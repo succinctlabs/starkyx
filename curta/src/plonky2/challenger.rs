@@ -10,6 +10,7 @@ use plonky2::plonk::config::{AlgebraicHasher, Hasher};
 use super::parser::{RecursiveStarkParser, StarkParser};
 use crate::challenger::Challenger;
 
+#[derive(Clone)]
 pub struct Plonky2Challenger<F: RichField, H: Hasher<F>>(pub challenger::Challenger<F, H>);
 
 impl<F: RichField, H: Hasher<F>> Plonky2Challenger<F, H> {

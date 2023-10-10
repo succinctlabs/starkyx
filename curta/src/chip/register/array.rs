@@ -37,6 +37,13 @@ impl<T: Register> RegisterSerializable for ArrayRegister<T> {
 }
 
 impl<T: Register> ArrayRegister<T> {
+    pub const fn uninitialized() -> Self {
+        Self {
+            register: MemorySlice::Global(0, 0),
+            length: 0,
+            _marker: PhantomData,
+        }
+    }
     pub fn len(&self) -> usize {
         self.length
     }

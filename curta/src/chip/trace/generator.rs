@@ -154,6 +154,10 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                     self.writer.write_bus_channel(num_rows, channel);
                 }
 
+                for bus in self.air_data.buses.iter() {
+                    self.writer.write_global_bus(bus);
+                }
+
                 for table in self.air_data.lookup_tables.iter() {
                     self.writer.write_lookup_table(num_rows, table);
                 }

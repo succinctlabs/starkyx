@@ -81,7 +81,7 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn process_sha_256_batch(
         &mut self,
         clk: &ElementRegister,
-        bus: &mut Bus<L::CubicParams>,
+        bus: &mut Bus<CubicRegister, L::CubicParams>,
         bus_channel_idx: usize,
         operations: &mut ByteLookupOperations,
     ) -> SHA256Gadget

@@ -17,6 +17,7 @@ use super::register::element::ElementRegister;
 use super::register::{Register, RegisterSerializable};
 use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
+use super::table::bus::global::Bus;
 use super::table::evaluation::Evaluation;
 use super::table::lookup::table::LookupTable;
 use super::table::lookup::values::LookupValues;
@@ -39,6 +40,7 @@ pub struct AirBuilder<L: AirParameters> {
     pub(crate) global_constraints: Vec<Constraint<L>>,
     pub(crate) accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
     pub(crate) bus_channels: Vec<BusChannel<CubicRegister, L::CubicParams>>,
+    pub(crate) buses: Vec<Bus<CubicRegister, L::CubicParams>>,
     pub(crate) lookup_values: Vec<LookupValues<L::Field, L::CubicParams>>,
     pub(crate) lookup_tables: Vec<LookupTable<L::Field, L::CubicParams>>,
     pub(crate) evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
@@ -58,6 +60,7 @@ pub struct AirTraceData<L: AirParameters> {
     pub global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
     pub bus_channels: Vec<BusChannel<CubicRegister, L::CubicParams>>,
+    pub buses: Vec<Bus<CubicRegister, L::CubicParams>>,
     pub lookup_values: Vec<LookupValues<L::Field, L::CubicParams>>,
     pub lookup_tables: Vec<LookupTable<L::Field, L::CubicParams>>,
     pub evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
@@ -87,6 +90,7 @@ impl<L: AirParameters> AirBuilder<L> {
             global_constraints: Vec::new(),
             accumulators: Vec::new(),
             bus_channels: Vec::new(),
+            buses: Vec::new(),
             lookup_values: Vec::new(),
             lookup_tables: Vec::new(),
             evaluation_data: Vec::new(),
@@ -256,6 +260,7 @@ impl<L: AirParameters> AirBuilder<L> {
                 global_instructions: self.global_instructions,
                 accumulators: self.accumulators,
                 bus_channels: self.bus_channels,
+                buses: self.buses,
                 lookup_values: self.lookup_values,
                 lookup_tables: self.lookup_tables,
                 evaluation_data: self.evaluation_data,
