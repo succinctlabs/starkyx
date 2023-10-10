@@ -12,8 +12,6 @@ use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::{AirParser, MulParser};
 use crate::air::AirConstraint;
 
-pub mod kind;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Constraint<L: AirParameters> {
     Instruction(AirInstruction<L::Field, L::Instruction>),

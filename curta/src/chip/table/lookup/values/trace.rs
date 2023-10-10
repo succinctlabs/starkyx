@@ -46,7 +46,7 @@ impl<F: PrimeField> TraceWriter<F> {
             })
             .collect::<Vec<_>>();
 
-        let log_lookup = values_data.log_lookup_accumulator;
+        let log_lookup = values_data.local_digest;
         let mut value = CubicExtension::ZERO;
         for (i, acc) in accumulators.into_iter().enumerate() {
             value += acc;

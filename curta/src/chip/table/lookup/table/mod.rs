@@ -140,7 +140,7 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupTable<T, F, E> {
             public_values,
             row_accumulators,
             global_accumulators,
-            log_lookup_accumulator,
+            // log_lookup_accumulator,
             local_digest: log_lookup_accumulator,
             global_digest,
             digest,
