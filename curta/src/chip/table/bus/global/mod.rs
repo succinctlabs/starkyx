@@ -18,7 +18,7 @@ use crate::chip::AirParameters;
 ///
 /// The constraints reflecting the bus logic use a random challenge `beta` to assert that the sum
 /// `sum_i 1/(beta - input_i) - sum_j 1/(beta -output_j) = 0` where `input_i` are the inputs to the
-/// bus and `output_j` are the outputs from the bus. 
+/// bus and `output_j` are the outputs from the bus.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Bus<T, E> {
     /// The channels of the bus

@@ -747,11 +747,7 @@ impl<L: AirParameters> AirBuilder<L> {
         );
 
         let t_digest = self.accumulate_expressions(&t_challenges, &[clk.expr(), t.expr()]);
-        self.input_to_bus_filtered(
-            bus_channel_idx,
-            t_digest,
-            cycle_12_start_no_padding,
-        );
+        self.input_to_bus_filtered(bus_channel_idx, t_digest, cycle_12_start_no_padding);
         self.assert_expression_zero(
             t.expr() * cycle_12_start_bit.not_expr() * padding_bit.not_expr(),
         );
@@ -760,37 +756,21 @@ impl<L: AirParameters> AirBuilder<L> {
             &state_challenges,
             &[clk.expr(), h_output.get_subarray(0..HASH_ARRAY_SIZE).expr()],
         );
-        self.input_to_bus_filtered(
-            bus_channel_idx,
-            clk_hash_next,
-            cycle_12_end_no_padding,
-        );
+        self.input_to_bus_filtered(bus_channel_idx, clk_hash_next, cycle_12_end_no_padding);
 
         let clk_msg_last_chunk_digest = self.accumulate_expressions(
             &msg_last_chunk_challenges,
             &[clk.expr(), msg_last_chunk.expr()],
         );
-        self.input_to_bus_filtered(
-            bus_channel_idx,
-            clk_msg_last_chunk_digest,
-            not_padding,
-        );
+        self.input_to_bus_filtered(bus_channel_idx, clk_msg_last_chunk_digest, not_padding);
 
         let clk_msg_pad_chunk_digest = self
             .accumulate_expressions(&msg_pad_chunk_challenges, &[clk.expr(), msg_pad_row.expr()]);
-        self.input_to_bus_filtered(
-            bus_channel_idx,
-            clk_msg_pad_chunk_digest,
-            not_padding,
-        );
+        self.input_to_bus_filtered(bus_channel_idx, clk_msg_pad_chunk_digest, not_padding);
 
         let clk_max_row_digest =
             self.accumulate_expressions(&max_chunk_challenges, &[clk.expr(), max_last_row.expr()]);
-        self.input_to_bus_filtered(
-            bus_channel_idx,
-            clk_max_row_digest,
-            cycle_12_end_no_padding,
-        );
+        self.input_to_bus_filtered(bus_channel_idx, clk_max_row_digest, cycle_12_end_no_padding);
 
         let clk_msg_digest = self.accumulate_expressions(
             &message_chunk_challenges,
