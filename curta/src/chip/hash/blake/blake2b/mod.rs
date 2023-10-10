@@ -776,7 +776,7 @@ impl<L: AirParameters> AirBuilder<L> {
             &message_chunk_challenges,
             &[clk.expr(), m.get_subarray(0..MSG_ARRAY_SIZE).expr()],
         );
-        self.input_to_bus_filtered(bus_channel_idx, clk_msg_digest, cycle_12_end_no_padding);
+        self.input_to_bus_filtered(bus_channel_idx, clk_msg_digest, not_padding);
     }
 }
 
