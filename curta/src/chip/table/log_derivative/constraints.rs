@@ -1,3 +1,4 @@
+use core::borrow::Borrow;
 use core::marker::PhantomData;
 
 use itertools::Itertools;
@@ -5,8 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use super::entry::{LogEntry, LogEntryValue};
 use crate::air::extension::cubic::CubicParser;
-use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::{CubicRegister, EvalCubic};
+use crate::chip::register::slice::RegisterSlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::cubic::element::CubicElement;
 use crate::math::prelude::CubicParameters;
@@ -72,17 +73,17 @@ impl<AP: CubicParser<E>, E: CubicParameters<AP::Field>> LogConstraints<AP, E> {
         parser: &mut AP,
         beta: CubicElement<AP::Var>,
         entries: &'a [LogEntry<T>],
-        intermediate_values: ArrayRegister<CubicRegister>,
+        intermediate_values: &impl RegisterSlice<CubicRegister>,
     ) -> Option<&'a LogEntry<T>> {
         let entry_chunks = entries.chunks_exact(2);
         let last_element = entry_chunks.remainder().first();
 
         let zero = parser.zero_extension();
         let mut prev = zero;
-        for (chunk, row_acc) in entry_chunks.zip_eq(intermediate_values) {
+        for (chunk, row_acc) in entry_chunks.zip_eq(intermediate_values.value_iter()) {
             let a = chunk[0].eval(parser);
             let b = chunk[1].eval(parser);
-            let acc = row_acc.eval(parser);
+            let acc = row_acc.borrow().eval(parser);
             let acc_minus_prev = parser.sub_extension(acc, prev);
             let constraint = LogConstraints::log_arithmetic(parser, beta, a, b, acc_minus_prev);
             parser.constraint_extension(constraint);
@@ -103,7 +104,7 @@ impl<AP: CubicParser<E>, E: CubicParameters<AP::Field>> LogConstraints<AP, E> {
         parser: &mut AP,
         beta: CubicElement<AP::Var>,
         entries: &[LogEntry<T>],
-        intermediate_values: ArrayRegister<CubicRegister>,
+        intermediate_values: &impl RegisterSlice<CubicRegister>,
         trace_accumulator: CubicRegister,
     ) {
         let last_element = Self::log_row_accumulation(parser, beta, entries, intermediate_values);
@@ -112,9 +113,9 @@ impl<AP: CubicParser<E>, E: CubicParameters<AP::Field>> LogConstraints<AP, E> {
         let accumulator_next = trace_accumulator.next().eval(parser);
 
         let zero = parser.zero_extension();
-        let accumulated_value = intermediate_values.last().map_or(zero, |r| r.eval(parser));
+        let accumulated_value = intermediate_values.last_value().map_or(zero, |r| r.eval(parser));
         let accumulated_value_next = intermediate_values
-            .last()
+            .last_value()
             .map_or(zero, |r| r.next().eval(parser));
 
         let mut acc_transition_constraint = parser.sub_extension(accumulator_next, accumulator);
@@ -141,12 +142,12 @@ impl<AP: CubicParser<E>, E: CubicParameters<AP::Field>> LogConstraints<AP, E> {
         parser: &mut AP,
         beta: CubicElement<AP::Var>,
         entries: &[LogEntry<T>],
-        intermediate_values: ArrayRegister<CubicRegister>,
+        intermediate_values: &impl RegisterSlice<CubicRegister>,
         global_accumulator: CubicRegister,
     ) {
         let last_element = Self::log_row_accumulation(parser, beta, entries, intermediate_values);
         let accumulated_value = intermediate_values
-            .last()
+            .last_value()
             .map_or(parser.zero_extension(), |r| r.eval(parser));
         // Add digest constraint
         let accumulator = global_accumulator.eval(parser);

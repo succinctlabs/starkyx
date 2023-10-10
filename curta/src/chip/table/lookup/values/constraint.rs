@@ -22,7 +22,7 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupValues<T, F, E> {
             parser,
             beta,
             &self.trace_values,
-            self.row_accumulators,
+            &self.row_accumulators,
             self.local_digest,
         );
     }
@@ -38,7 +38,7 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupValues<T, F, E> {
                 parser,
                 beta,
                 &self.public_values,
-                self.global_accumulators,
+                &self.global_accumulators,
                 digest,
             );
         }
