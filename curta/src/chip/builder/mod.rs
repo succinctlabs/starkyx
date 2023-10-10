@@ -462,8 +462,6 @@ pub(crate) mod tests {
         type SC = PoseidonGoldilocksStarkConfig;
 
         let mut builder = AirBuilder::<L>::new();
-        // let x_0 = builder.alloc::<U16Register>();
-        // let x_1 = builder.alloc::<U16Register>();
         let y_1 = builder.alloc_public::<U16Register>();
 
         let clk = builder.clock();
@@ -479,8 +477,6 @@ pub(crate) mod tests {
         let writer = generator.new_writer();
         writer.write(&y_1, &F::from_canonical_u32(45), 0);
         for i in 0..num_rows {
-            // writer.write(&x_0, &F::ZERO, i);
-            // writer.write(&x_1, &F::from_canonical_usize(0), i);
             writer.write(&clk_expected, &F::from_canonical_usize(i), i);
             writer.write_row_instructions(&generator.air_data, i);
         }

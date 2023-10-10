@@ -90,36 +90,14 @@ impl<AP: CubicParser<E>, E: CubicParameters<AP::Field>> LogConstraints<AP, E> {
         }
 
         last_element
-
-        // match kind {
-        //     ConstraintKind::Trace => {
-        //         let accumulated_value_pair_chunks_next = intermediate_values
-        //         .last()
-        //         .map_or(zero, |r| r.next().eval(parser));
-        //         let mut acc_transition_constraint = parser.sub_extension(result, accumulated_value_pair_chunks_next);
-        //     }
-        //     ConstraintKind::Global => {}
-        // }
-
-        // let accumulated_value_pair_chunks = intermediate_values
-        //     .last()
-        //     .map_or(zero, |r| eval_last(r, parser));
-
-        // let eval_last_entry = |r: &LogEntry<T>, parser: &mut AP| match kind {
-        //     ConstraintKind::Transition => r.next().eval(parser),
-        //     _ => r.eval(parser),
-        // };
-
-        // let mut acc_constraint = parser.sub_extension(result, accumulated_value_pair_chunks);
-
-        // if let Some(last) = last_element {
-        //     let a = eval_last_entry(last, parser);
-        //     acc_constraint = LogConstraints::log(parser, beta, a, acc_constraint);
-        // }
-
-        // acc_constraint
     }
 
+    /// Constrains an extension column `trace_accumulator` to be sum of logarithmic derivatives of
+    /// the `entries`.
+    ///
+    /// Given the i-th entry value to be `LogEntryValue(value_i, mult_i)` the function
+    /// `log_trace_accumulation` constrains the extension column `trace_accumulator` to be equal to
+    /// the cumuluative sum `sum_{i=0}^{n-1} mult_i * 1/(beta - value_i)`.
     #[inline]
     pub fn log_trace_accumulation<T: EvalCubic>(
         parser: &mut AP,
