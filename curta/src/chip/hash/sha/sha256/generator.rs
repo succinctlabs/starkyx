@@ -71,7 +71,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for SHA256AirParamete
     type Instruction = U32Instruction;
 
     const NUM_FREE_COLUMNS: usize = 745;
-    const EXTENDED_COLUMNS: usize = 345;
+    const EXTENDED_COLUMNS: usize = 330;
     const NUM_ARITHMETIC_COLUMNS: usize = 0;
 }
 
