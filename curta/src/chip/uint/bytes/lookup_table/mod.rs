@@ -76,11 +76,7 @@ impl<L: AirParameters> AirBuilder<L> {
             ..
         } = lookup_values;
 
-        ByteMultiplicityData::new(
-            table,
-            trace_values,
-            public_values,
-        )
+        ByteMultiplicityData::new(table, trace_values, public_values)
     }
 }
 

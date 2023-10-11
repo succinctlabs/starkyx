@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
+use super::table::ByteLogLookupTable;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::table::log_derivative::entry::LogEntry;
@@ -14,8 +15,6 @@ use crate::chip::uint::bytes::operations::{
 };
 use crate::math::prelude::*;
 use crate::trace::AirTrace;
-
-use super::table::ByteLogLookupTable;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MultiplicityData {
@@ -78,7 +77,11 @@ impl MultiplicityData {
 }
 
 impl ByteMultiplicityData {
-    pub fn new(table: ByteLogLookupTable, trace_values: Vec<LogEntry<ElementRegister>>, public_values: Vec<LogEntry<ElementRegister>>) -> Self {
+    pub fn new(
+        table: ByteLogLookupTable,
+        trace_values: Vec<LogEntry<ElementRegister>>,
+        public_values: Vec<LogEntry<ElementRegister>>,
+    ) -> Self {
         Self {
             table,
             trace_values,

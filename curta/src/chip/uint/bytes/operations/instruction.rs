@@ -18,11 +18,7 @@ pub struct ByteOperationInstruction {
 }
 
 impl ByteOperationInstruction {
-    pub fn new(
-        inner: ByteOperation<ByteRegister>,
-        digest: ElementRegister,
-        global: bool,
-    ) -> Self {
+    pub fn new(inner: ByteOperation<ByteRegister>, digest: ElementRegister, global: bool) -> Self {
         ByteOperationInstruction {
             inner,
             digest,

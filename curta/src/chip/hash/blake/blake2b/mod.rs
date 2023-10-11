@@ -1288,7 +1288,7 @@ mod tests {
                 }
             }
             let multiplicities = byte_data.get_multiplicities(&writer);
-            writer.write_lookup_multiplicities(byte_data.multiplicities(), &[multiplicities]);  
+            writer.write_lookup_multiplicities(byte_data.multiplicities(), &[multiplicities]);
         });
 
         let public_inputs = writer.0.public.read().unwrap().clone();

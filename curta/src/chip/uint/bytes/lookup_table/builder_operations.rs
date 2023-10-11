@@ -1,4 +1,3 @@
-
 use super::table::ByteLogLookupTable;
 use crate::chip::register::element::ElementRegister;
 
