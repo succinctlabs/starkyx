@@ -25,7 +25,7 @@ pub struct WriterData<T> {
     pub(crate) global: RwLock<Vec<T>>,
     pub(crate) public: RwLock<Vec<T>>,
     pub(crate) challenges: RwLock<Vec<T>>,
-    height: usize,
+    pub height: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

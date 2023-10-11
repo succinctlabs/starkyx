@@ -14,7 +14,6 @@ impl<F: PrimeField> TraceWriter<F> {
         entries: &[LogEntry<T>],
         intermediate_values: &impl RegisterSlice<CubicRegister>,
         trace_accumulator: CubicRegister,
-        num_rows: usize,
     ) -> CubicExtension<F, E> {
         // Accumulate lookup values in the trace
         let accumulators = self
@@ -48,7 +47,7 @@ impl<F: PrimeField> TraceWriter<F> {
             self.write(&trace_accumulator, &value.0, i);
         }
         // Write the local digest
-        self.write(&trace_accumulator, &value.0, num_rows - 1);
+        self.write(&trace_accumulator, &value.0, self.height - 1);
 
         value
     }

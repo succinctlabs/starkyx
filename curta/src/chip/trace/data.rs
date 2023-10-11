@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use super::writer::TraceWriter;
 use crate::chip::instruction::set::AirInstruction;
 use crate::chip::register::cubic::CubicRegister;
 use crate::chip::table::accumulator::Accumulator;
@@ -28,4 +29,8 @@ pub struct AirTraceData<L: AirParameters> {
         LookupTable<L::Field, L::CubicParams>,
         LookupValues<L::Field, L::CubicParams>,
     )>,
+}
+
+impl<L: AirParameters> AirTraceData<L> {
+    pub fn write_extended_trace(&self, writer: &TraceWriter<L::Field>) {}
 }
