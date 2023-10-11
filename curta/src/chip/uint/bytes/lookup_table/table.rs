@@ -130,7 +130,7 @@ impl<L: AirParameters> AirBuilder<L> {
 
 impl ByteLogLookupTable {
     pub fn write_table_entries<F: Field>(&self, writer: &TraceWriter<F>) {
-        let operations_dict = self.multiplicity_data.operations_dict.clone();
+        let operations_dict = &self.multiplicity_data.operations_dict;
         // Write the lookup table entries
         writer
             .write_trace()

@@ -15,6 +15,8 @@ use crate::chip::uint::bytes::operations::{
 use crate::math::prelude::*;
 use crate::trace::AirTrace;
 
+use super::table::ByteLogLookupTable;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MultiplicityData {
     multiplicities: ArrayRegister<ElementRegister>,
@@ -24,7 +26,7 @@ pub struct MultiplicityData {
 }
 
 pub struct ByteMultiplicityData {
-    multiplicity_data: MultiplicityData,
+    table: ByteLogLookupTable,
     trace_values: Vec<LogEntry<ElementRegister>>,
     public_values: Vec<LogEntry<ElementRegister>>,
 }
@@ -76,12 +78,16 @@ impl MultiplicityData {
 }
 
 impl ByteMultiplicityData {
-    pub fn new(data: MultiplicityData, trace_values: Vec<LogEntry<ElementRegister>>, public_values: Vec<LogEntry<ElementRegister>>) -> Self {
+    pub fn new(table: ByteLogLookupTable, trace_values: Vec<LogEntry<ElementRegister>>, public_values: Vec<LogEntry<ElementRegister>>) -> Self {
         Self {
-            multiplicity_data: data,
+            table,
             trace_values,
             public_values,
         }
+    }
+
+    pub fn write_table_entries<F: PrimeField64>(&self, writer: &TraceWriter<F>) {
+        self.table.write_table_entries(writer);
     }
 
     pub fn get_multiplicities<F: PrimeField64>(&self, writer: &TraceWriter<F>) -> AirTrace<F> {
@@ -90,11 +96,11 @@ impl ByteMultiplicityData {
             1 << 16,
             &self.trace_values,
             &self.public_values,
-            |x| self.multiplicity_data.table_index(x),
+            |x| self.table.multiplicity_data.table_index(x),
         )
     }
 
     pub fn multiplicities(&self) -> ArrayRegister<ElementRegister> {
-        self.multiplicity_data.multiplicities
+        self.table.multiplicity_data.multiplicities
     }
 }

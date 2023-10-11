@@ -160,7 +160,7 @@ mod tests {
 
         let mut builder = AirBuilder::<L>::new();
 
-        let (mut operations, table) = builder.byte_operations();
+        let mut operations = builder.byte_operations();
 
         let a = builder.alloc::<ByteArrayRegister<N>>();
         let b = builder.alloc::<ByteArrayRegister<N>>();
@@ -213,7 +213,7 @@ mod tests {
             builder.set_bit_rotate_right(&a, shift, &a_rot_second, &mut operations);
         }
 
-        builder.register_byte_lookup(operations, &table);
+        let byte_data = builder.register_byte_lookup(operations);
 
         let (air, trace_data) = builder.build();
 
@@ -222,10 +222,9 @@ mod tests {
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 
-        table.write_table_entries(&writer);
-
         let to_field = |a: u32| a.to_le_bytes().map(F::from_canonical_u8);
 
+        byte_data.write_table_entries(&writer);
         let mut rng = thread_rng();
         for i in 0..num_rows {
             let a_val = rng.gen::<u32>();
@@ -258,6 +257,8 @@ mod tests {
 
             writer.write_row_instructions(&generator.air_data, i);
         }
+        let multiplicities = byte_data.get_multiplicities(&writer);
+        writer.write_lookup_multiplicities(byte_data.multiplicities(), &[multiplicities]);
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
@@ -278,7 +279,7 @@ mod tests {
 
         let mut builder = AirBuilder::<L>::new();
 
-        let (mut operations, table) = builder.byte_operations();
+        let mut operations = builder.byte_operations();
 
         let a = builder.alloc::<ByteArrayRegister<N>>();
         let b = builder.alloc::<ByteArrayRegister<N>>();
@@ -335,7 +336,7 @@ mod tests {
             builder.set_bit_rotate_right(&a, shift, &a_rot_second, &mut operations);
         }
 
-        builder.register_byte_lookup(operations, &table);
+        let byte_data = builder.register_byte_lookup(operations);
 
         let (air, trace_data) = builder.build();
 
@@ -344,10 +345,9 @@ mod tests {
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 
-        table.write_table_entries(&writer);
-
         let to_field = |a: u64| a.to_le_bytes().map(F::from_canonical_u8);
 
+        byte_data.write_table_entries(&writer);
         let mut rng = thread_rng();
         for i in 0..num_rows {
             let a_val = rng.gen::<u64>();
@@ -380,6 +380,8 @@ mod tests {
 
             writer.write_row_instructions(&generator.air_data, i);
         }
+        let multiplicities = byte_data.get_multiplicities(&writer);
+        writer.write_lookup_multiplicities(byte_data.multiplicities(), &[multiplicities]);
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);

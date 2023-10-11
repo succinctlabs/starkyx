@@ -619,7 +619,7 @@ mod tests {
         let mut builder = AirBuilder::<L>::new();
         let clk = builder.clock();
 
-        let (mut operations, table) = builder.byte_operations();
+        let mut operations = builder.byte_operations();
 
         let mut bus = builder.new_bus();
         let channel_idx = bus.new_channel(&mut builder);
@@ -627,7 +627,7 @@ mod tests {
         let sha_gadget =
             builder.process_sha_256_batch(&clk, &mut bus, channel_idx, &mut operations);
 
-        builder.register_byte_lookup(operations, &table);
+        let byte_data = builder.register_byte_lookup(operations);
         builder.constrain_bus(bus);
 
         let (air, trace_data) = builder.build();
@@ -674,7 +674,7 @@ mod tests {
 
         let mut digest_iter = expected_digests.into_iter();
         timed!(timing, "Write the execusion trace", {
-            table.write_table_entries(&writer);
+            byte_data.write_table_entries(&writer);
             sha_gadget.write(padded_messages, &writer);
             for i in 0..num_rows {
                 writer.write_row_instructions(&generator.air_data, i);
@@ -687,6 +687,8 @@ mod tests {
                     assert_eq!(hash, digest.map(u32_to_le_field_bytes));
                 }
             }
+            let multiplicities = byte_data.get_multiplicities(&writer);
+            writer.write_lookup_multiplicities(byte_data.multiplicities(), &[multiplicities]);
         });
 
         let public_inputs = writer.0.public.read().unwrap().clone();

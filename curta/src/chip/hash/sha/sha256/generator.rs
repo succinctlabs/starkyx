@@ -15,7 +15,7 @@ use super::{SHA256Gadget, SHA256PublicData, INITIAL_HASH, ROUND_CONSTANTS};
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::Register;
 use crate::chip::trace::generator::ArithmeticGenerator;
-use crate::chip::uint::bytes::lookup_table::table::ByteLogLookupTable;
+use crate::chip::uint::bytes::lookup_table::multiplicity_data::ByteMultiplicityData;
 use crate::chip::uint::operations::instruction::U32Instruction;
 use crate::chip::uint::register::U32Register;
 use crate::chip::uint::util::u32_to_le_field_bytes;
@@ -58,7 +58,7 @@ pub struct SHA256Generator<F: PrimeField64, E: CubicParameters<F>, C, const D: u
 
 pub struct SHA256StarkData<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> {
     pub stark: Starky<Chip<SHA256AirParameters<F, E>>>,
-    pub table: ByteLogLookupTable,
+    pub byte_data: ByteMultiplicityData,
     pub trace_generator: ArithmeticGenerator<SHA256AirParameters<F, E>>,
     pub config: StarkyConfig<C, D>,
     pub gadget: SHA256Gadget,
@@ -89,7 +89,7 @@ impl<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> SHA256Generator<
         let mut air_builder = AirBuilder::<SHA256AirParameters<F, E>>::new();
         let clk = air_builder.clock();
 
-        let (mut operations, table) = air_builder.byte_operations();
+        let mut operations = air_builder.byte_operations();
 
         let mut bus = air_builder.new_bus();
         let channel_idx = bus.new_channel(&mut air_builder);
@@ -97,7 +97,8 @@ impl<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> SHA256Generator<
         let gadget =
             air_builder.process_sha_256_batch(&clk, &mut bus, channel_idx, &mut operations);
 
-        air_builder.register_byte_lookup(operations, &table);
+        let byte_data = air_builder.register_byte_lookup(operations);
+
         air_builder.constrain_bus(bus);
 
         let (air, trace_data) = air_builder.build();
@@ -111,7 +112,7 @@ impl<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> SHA256Generator<
 
         SHA256StarkData {
             stark,
-            table,
+            byte_data,
             trace_generator,
             config,
             gadget,
@@ -158,7 +159,7 @@ impl<
     fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
         let SHA256StarkData {
             stark,
-            table,
+            byte_data,
             trace_generator,
             config,
             gadget,
@@ -180,11 +181,13 @@ impl<
         // Write trace values
         let num_rows = 1 << 16;
         let writer = trace_generator.new_writer();
-        table.write_table_entries(&writer);
+        byte_data.write_table_entries(&writer);
         let sha_public_values = gadget.write(message_chunks, &writer);
         for i in 0..num_rows {
             writer.write_row_instructions(&trace_generator.air_data, i);
         }
+        let multiplicities = byte_data.get_multiplicities(&writer);
+        writer.write_lookup_multiplicities(byte_data.multiplicities(), &[multiplicities]);
 
         // Fill sha public values into the output buffer
         self.pub_values_target

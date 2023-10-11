@@ -1,20 +1,18 @@
-use alloc::sync::Arc;
 
-use super::multiplicity_data::MultiplicityData;
+use super::table::ByteLogLookupTable;
 use crate::chip::register::element::ElementRegister;
 
 #[derive(Debug, Clone)]
 pub struct ByteLookupOperations {
-    pub multiplicity_data: Arc<MultiplicityData>,
+    pub table: ByteLogLookupTable,
     pub values: Vec<ElementRegister>,
 }
 
 impl ByteLookupOperations {
-    pub fn new(multiplicity_data: Arc<MultiplicityData>) -> Self {
-        let values = Vec::new();
+    pub fn new(table: ByteLogLookupTable) -> Self {
         ByteLookupOperations {
-            multiplicity_data,
-            values,
+            table,
+            values: Vec::new(),
         }
     }
 }

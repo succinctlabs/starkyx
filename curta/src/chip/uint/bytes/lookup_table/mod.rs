@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use self::builder_operations::ByteLookupOperations;
-use self::multiplicity_data::{MultiplicityData, ByteMultiplicityData};
-use self::table::ByteLogLookupTable;
+use self::multiplicity_data::ByteMultiplicityData;
 use super::bit_operations::and::And;
 use super::bit_operations::not::Not;
 use super::bit_operations::xor::Xor;
@@ -49,27 +48,25 @@ pub trait ByteInstructions:
 impl ByteInstructions for ByteInstructionSet {}
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn byte_operations(&mut self) -> (ByteLookupOperations, ByteLogLookupTable)
+    pub fn byte_operations(&mut self) -> ByteLookupOperations
     where
         L::Instruction: From<ByteInstructionSet>
             + From<SelectInstruction<BitRegister>>
             + From<ByteDecodeInstruction>,
     {
         let lookup_table = self.new_byte_lookup_table();
-        let operations = ByteLookupOperations::new(lookup_table.multiplicity_data.clone());
-
-        (operations, lookup_table)
+        ByteLookupOperations::new(lookup_table)
     }
 
     pub fn register_byte_lookup(
         &mut self,
-        operation_values: ByteLookupOperations,
-        table: &ByteLogLookupTable,
+        operations: ByteLookupOperations,
     ) -> ByteMultiplicityData {
+        let ByteLookupOperations { table, values } = operations;
         let multiplicities = table.multiplicity_data.multiplicities();
         let mut byte_lookup = self.new_lookup(&table.digests, multiplicities);
 
-        let lookup_values = byte_lookup.register_lookup_values(self, &operation_values.values);
+        let lookup_values = byte_lookup.register_lookup_values(self, &values);
 
         self.constrain_element_lookup_table(byte_lookup);
 
@@ -80,7 +77,7 @@ impl<L: AirParameters> AirBuilder<L> {
         } = lookup_values;
 
         ByteMultiplicityData::new(
-            MultiplicityData::clone(&table.multiplicity_data),
+            table,
             trace_values,
             public_values,
         )
@@ -217,7 +214,7 @@ mod tests {
 
         let mut builder = AirBuilder::<L>::new();
 
-        let (mut operations, table) = builder.byte_operations();
+        let mut operations = builder.byte_operations();
 
         let mut a_vec = Vec::new();
         let mut b_vec = Vec::new();
@@ -315,7 +312,7 @@ mod tests {
         let not = ByteOperation::Not(b_pub, b_not);
         builder.set_public_inputs_byte_operation(&not, &mut operations);
 
-        let byte_mult_data = builder.register_byte_lookup(operations, &table);
+        let byte_mult_data = builder.register_byte_lookup(operations);
 
         let (air, trace_data) = builder.build();
 
@@ -323,8 +320,6 @@ mod tests {
 
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
-
-        table.write_table_entries(&writer);
 
         // Write public inputs
         let mut public_write = writer.public.write().unwrap();
@@ -346,6 +341,7 @@ mod tests {
         b_not.assign_to_raw_slice(&mut public_write, &F::from_canonical_u8(!b_pub_val));
         drop(public_write);
 
+        byte_mult_data.write_table_entries(&writer);
         for i in 0..num_rows {
             let mut rng = thread_rng();
             for k in 0..NUM_VALS {
