@@ -70,16 +70,6 @@ impl<L: AirParameters> AirBuilder<L> {
         byte_lookup.register_lookup_values(self, &operation_values.values);
 
         self.constrain_element_lookup_table(byte_lookup);
-        // let lookup_challenge = self.alloc_challenge::<CubicRegister>();
-
-        // let lookup_table = self.lookup_table_with_multiplicities(
-        //     &lookup_challenge,
-        //     &table.digests,
-        //     multiplicities,
-        // );
-        // let lookup_values = self.lookup_values(&lookup_challenge, &operation_values.values);
-
-        // self.element_lookup_from_table_and_values(lookup_table, lookup_values);
     }
 }
 
