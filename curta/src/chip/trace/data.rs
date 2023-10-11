@@ -32,7 +32,35 @@ pub struct AirTraceData<L: AirParameters> {
 }
 
 impl<L: AirParameters> AirTraceData<L> {
-    pub fn write_extended_trace(&self, _writer: &TraceWriter<L::Field>) {
-        todo!()
+    pub fn write_extended_trace(&self, writer: &TraceWriter<L::Field>) {
+        // Write accumulations.
+        for acc in self.accumulators.iter() {
+            writer.write_accumulation(acc);
+        }
+
+        // Write bus channels.
+        for channel in self.bus_channels.iter() {
+            writer.write_bus_channel(channel);
+        }
+
+        // Write bus values.
+        for bus in self.buses.iter() {
+            writer.write_global_bus(bus);
+        }
+
+        // Write lookup tables.
+        for table in self.lookup_tables.iter() {
+            writer.write_lookup_table(table);
+        }
+
+        // Write lookup values.
+        for value_data in self.lookup_values.iter() {
+            writer.write_lookup_values(value_data);
+        }
+
+        // Write evaluation values.
+        for eval in self.evaluation_data.iter() {
+            writer.write_evaluation(eval);
+        }
     }
 }
