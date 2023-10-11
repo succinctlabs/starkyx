@@ -52,6 +52,48 @@ impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> Sta
         lde_bits - config.fri_config.rate_bits
     }
 
+    pub fn get_iop_challenges(
+        &self,
+        config: &StarkyConfig<C, D>,
+        degree_bits: usize,
+        air_challenges: Vec<F>,
+        challenger: &mut Plonky2Challenger<F, C::Hasher>,
+    ) -> StarkProofChallenges<F, D> {
+        let StarkProof {
+            quotient_polys_cap,
+            openings,
+            opening_proof:
+                FriProof {
+                    commit_phase_merkle_caps,
+                    final_poly,
+                    pow_witness,
+                    ..
+                },
+            ..
+        } = &self;
+
+        let num_challenges = config.num_challenges;
+        let stark_alphas = challenger.0.get_n_challenges(num_challenges);
+
+        challenger.0.observe_cap(quotient_polys_cap);
+        let stark_zeta = challenger.0.get_extension_challenge::<D>();
+
+        challenger.0.observe_openings(&openings.to_fri_openings());
+
+        StarkProofChallenges {
+            stark_alphas,
+            stark_betas: air_challenges,
+            stark_zeta,
+            fri_challenges: challenger.0.fri_challenges::<C::GenericConfig, D>(
+                commit_phase_merkle_caps,
+                final_poly,
+                *pow_witness,
+                degree_bits,
+                &config.fri_config,
+            ),
+        }
+    }
+
     pub(crate) fn get_challenges<A: RAirData>(
         &self,
         config: &StarkyConfig<C, D>,
@@ -61,22 +103,11 @@ impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> Sta
     ) -> StarkProofChallenges<F, D> {
         let StarkProof {
             trace_caps,
-            quotient_polys_cap,
             global_values,
-            openings,
-            opening_proof:
-                FriProof {
-                    commit_phase_merkle_caps,
-                    final_poly,
-                    pow_witness,
-                    ..
-                },
+            ..
         } = &self;
 
-        let num_challenges = config.num_challenges;
-
         let mut challenger = Plonky2Challenger::<F, C::Hasher>::new();
-
         // Observe public inputs
         challenger.0.observe_elements(public_inputs);
 
@@ -89,25 +120,7 @@ impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> Sta
             challenges.extend(round_challenges);
         }
 
-        let stark_alphas = challenger.0.get_n_challenges(num_challenges);
-
-        challenger.0.observe_cap(quotient_polys_cap);
-        let stark_zeta = challenger.0.get_extension_challenge::<D>();
-
-        challenger.0.observe_openings(&openings.to_fri_openings());
-
-        StarkProofChallenges {
-            stark_alphas,
-            stark_betas: challenges,
-            stark_zeta,
-            fri_challenges: challenger.0.fri_challenges::<C::GenericConfig, D>(
-                commit_phase_merkle_caps,
-                final_poly,
-                *pow_witness,
-                degree_bits,
-                &config.fri_config,
-            ),
-        }
+        self.get_iop_challenges(config, degree_bits, challenges, &mut challenger)
     }
 }
 
