@@ -153,6 +153,53 @@ impl<const D: usize> StarkProofTarget<D> {
         lde_bits - config.fri_config.rate_bits
     }
 
+    pub fn get_iop_challenges_target<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>>(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        config: &StarkyConfig<C, D>,
+        air_challengs: Vec<Target>,
+        challenger: &mut Plonky2RecursiveChallenger<
+            F,
+            <C::GenericConfig as GenericConfig<D>>::InnerHasher,
+            D,
+        >,
+    ) -> StarkProofChallengesTarget<D> {
+        let StarkProofTarget {
+            quotient_polys_cap,
+            openings,
+            opening_proof:
+                FriProofTarget {
+                    commit_phase_merkle_caps,
+                    final_poly,
+                    pow_witness,
+                    ..
+                },
+            ..
+        } = &self;
+
+        let num_challenges = config.num_challenges;
+
+        let stark_alphas = challenger.0.get_n_challenges(builder, num_challenges);
+
+        challenger.0.observe_cap(quotient_polys_cap);
+        let stark_zeta = challenger.0.get_extension_challenge(builder);
+
+        challenger.0.observe_openings(&openings.to_fri_openings());
+
+        StarkProofChallengesTarget {
+            stark_alphas,
+            stark_betas: air_challengs,
+            stark_zeta,
+            fri_challenges: challenger.0.fri_challenges(
+                builder,
+                commit_phase_merkle_caps,
+                final_poly,
+                *pow_witness,
+                &config.fri_config,
+            ),
+        }
+    }
+
     pub fn get_challenges_target<
         F: RichField + Extendable<D>,
         A: for<'a> RAir<RecursiveStarkParser<'a, F, D>>,
@@ -166,19 +213,9 @@ impl<const D: usize> StarkProofTarget<D> {
     ) -> StarkProofChallengesTarget<D> {
         let StarkProofTarget {
             trace_caps,
-            quotient_polys_cap,
             global_values,
-            openings,
-            opening_proof:
-                FriProofTarget {
-                    commit_phase_merkle_caps,
-                    final_poly,
-                    pow_witness,
-                    ..
-                },
+            ..
         } = &self;
-
-        let num_challenges = config.num_challenges;
 
         let mut challenger = Plonky2RecursiveChallenger::<
             F,
@@ -198,25 +235,7 @@ impl<const D: usize> StarkProofTarget<D> {
             challenges.extend(round_challenges);
         }
 
-        let stark_alphas = challenger.0.get_n_challenges(builder, num_challenges);
-
-        challenger.0.observe_cap(quotient_polys_cap);
-        let stark_zeta = challenger.0.get_extension_challenge(builder);
-
-        challenger.0.observe_openings(&openings.to_fri_openings());
-
-        StarkProofChallengesTarget {
-            stark_alphas,
-            stark_betas: challenges,
-            stark_zeta,
-            fri_challenges: challenger.0.fri_challenges(
-                builder,
-                commit_phase_merkle_caps,
-                final_poly,
-                *pow_witness,
-                &config.fri_config,
-            ),
-        }
+        self.get_iop_challenges_target(builder, config, challenges, &mut challenger)
     }
 }
 
