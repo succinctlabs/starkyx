@@ -3,8 +3,8 @@ use alloc::sync::Arc;
 use anyhow::{Error, Result};
 use serde::{Deserialize, Serialize};
 
+use super::trae_data::AirTraceData;
 use super::writer::TraceWriter;
-use crate::chip::builder::AirTraceData;
 use crate::chip::table::log_derivative::entry::LogEntry;
 use crate::chip::table::lookup::table::LookupTable;
 use crate::chip::table::lookup::values::LookupValues;

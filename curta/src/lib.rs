@@ -7,6 +7,7 @@ extern crate alloc;
 pub mod air;
 pub mod challenger;
 pub mod chip;
+pub mod machine;
 pub mod math;
 pub mod maybe_rayon;
 pub mod polynomial;

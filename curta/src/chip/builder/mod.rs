@@ -6,7 +6,6 @@ pub mod shared_memory;
 use core::cmp::Ordering;
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 
 use self::shared_memory::SharedMemory;
 use super::arithmetic::expression::ArithmeticExpression;
@@ -21,6 +20,7 @@ use super::table::bus::global::Bus;
 use super::table::evaluation::Evaluation;
 use super::table::lookup::table::LookupTable;
 use super::table::lookup::values::LookupValues;
+use super::trace::trae_data::AirTraceData;
 use super::{AirParameters, Chip};
 use crate::math::prelude::*;
 
@@ -45,26 +45,6 @@ pub struct AirBuilder<L: AirParameters> {
     pub(crate) lookup_tables: Vec<LookupTable<L::Field, L::CubicParams>>,
     pub(crate) evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
     range_data: Option<(
-        LookupTable<L::Field, L::CubicParams>,
-        LookupValues<L::Field, L::CubicParams>,
-    )>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(clippy::type_complexity)]
-pub struct AirTraceData<L: AirParameters> {
-    pub num_challenges: usize,
-    pub num_public_inputs: usize,
-    pub num_global_values: usize,
-    pub instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
-    pub global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
-    pub accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
-    pub bus_channels: Vec<BusChannel<CubicRegister, L::CubicParams>>,
-    pub buses: Vec<Bus<CubicRegister, L::CubicParams>>,
-    pub lookup_values: Vec<LookupValues<L::Field, L::CubicParams>>,
-    pub lookup_tables: Vec<LookupTable<L::Field, L::CubicParams>>,
-    pub evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
-    pub range_data: Option<(
         LookupTable<L::Field, L::CubicParams>,
         LookupValues<L::Field, L::CubicParams>,
     )>,
@@ -275,6 +255,7 @@ pub(crate) mod tests {
     pub use std::sync::mpsc::channel;
 
     pub use plonky2::field::goldilocks_field::GoldilocksField;
+    use serde::{Deserialize, Serialize};
 
     use super::*;
     use crate::air::fibonacci::FibonacciAir;

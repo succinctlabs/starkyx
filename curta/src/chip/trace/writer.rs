@@ -5,8 +5,8 @@ use std::sync::{LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use serde::{Deserialize, Serialize};
 
+use super::trae_data::AirTraceData;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
-use crate::chip::builder::AirTraceData;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::EvalCubic;
