@@ -59,6 +59,6 @@ impl<F: PrimeField64> Instruction<F> for ByteOperationInstruction {
         let value = self.inner.write(writer, row_index);
         let digest = F::from_canonical_u32(value.lookup_digest_value());
         writer.write(&self.digest, &digest, row_index);
-        self.multiplicity_data.update(&value, writer);
+        // self.multiplicity_data.update(&value, writer);
     }
 }

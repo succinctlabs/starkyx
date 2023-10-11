@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use self::builder_operations::ByteLookupOperations;
+use self::multiplicity_data::{MultiplicityData, ByteMultiplicityData};
 use self::table::ByteLogLookupTable;
 use super::bit_operations::and::And;
 use super::bit_operations::not::Not;
@@ -15,6 +16,7 @@ use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::memory::MemorySlice;
+use crate::chip::table::lookup::values::LogLookupValues;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::AirParameters;
 
@@ -63,13 +65,25 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         operation_values: ByteLookupOperations,
         table: &ByteLogLookupTable,
-    ) {
+    ) -> ByteMultiplicityData {
         let multiplicities = table.multiplicity_data.multiplicities();
         let mut byte_lookup = self.new_lookup(&table.digests, multiplicities);
 
-        byte_lookup.register_lookup_values(self, &operation_values.values);
+        let lookup_values = byte_lookup.register_lookup_values(self, &operation_values.values);
 
         self.constrain_element_lookup_table(byte_lookup);
+
+        let LogLookupValues {
+            trace_values,
+            public_values,
+            ..
+        } = lookup_values;
+
+        ByteMultiplicityData::new(
+            MultiplicityData::clone(&table.multiplicity_data),
+            trace_values,
+            public_values,
+        )
     }
 }
 
@@ -301,7 +315,7 @@ mod tests {
         let not = ByteOperation::Not(b_pub, b_not);
         builder.set_public_inputs_byte_operation(&not, &mut operations);
 
-        builder.register_byte_lookup(operations, &table);
+        let byte_mult_data = builder.register_byte_lookup(operations, &table);
 
         let (air, trace_data) = builder.build();
 
@@ -367,6 +381,8 @@ mod tests {
             writer.write_row_instructions(&generator.air_data, i);
         }
         writer.write_global_instructions(&generator.air_data);
+        let multiplicities = byte_mult_data.get_multiplicities(&writer);
+        writer.write_lookup_multiplicities(byte_mult_data.multiplicities(), &[multiplicities]);
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
