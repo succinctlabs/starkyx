@@ -20,6 +20,7 @@ use crate::chip::builder::AirBuilder;
 use crate::chip::hash::blake::blake2b::BLAKE2BGadget;
 use crate::chip::trace::generator::ArithmeticGenerator;
 use crate::chip::uint::bytes::lookup_table::multiplicity_data::ByteMultiplicityData;
+use crate::chip::uint::bytes::lookup_table::table::ByteLogLookupTable;
 use crate::chip::uint::operations::instruction::U32Instruction;
 use crate::chip::uint::util::u64_to_le_field_bytes;
 use crate::chip::{AirParameters, Chip};
@@ -67,6 +68,7 @@ pub struct BLAKE2BGenerator<
 pub struct BLAKE2BStarkData<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> {
     pub stark: Starky<Chip<BLAKE2BAirParameters<F, E>>>,
     pub byte_data: ByteMultiplicityData,
+    pub byte_table: ByteLogLookupTable<F, E>,
     pub trace_generator: ArithmeticGenerator<BLAKE2BAirParameters<F, E>>,
     pub config: StarkyConfig<C, D>,
     pub gadget: BLAKE2BGadget,
@@ -106,7 +108,9 @@ impl<
             &mut operations,
         );
 
-        let byte_data = air_builder.register_byte_lookup(operations);
+        let mut byte_table = air_builder.new_byte_lookup_table();
+        let byte_data = air_builder.register_byte_lookup(&mut byte_table, operations);
+        air_builder.constraint_byte_lookup_table(&byte_table);
         air_builder.constrain_bus(bus);
 
         let (air, trace_data) = air_builder.build();
@@ -121,6 +125,7 @@ impl<
         BLAKE2BStarkData {
             stark,
             byte_data,
+            byte_table,
             trace_generator,
             config,
             gadget,
@@ -173,6 +178,7 @@ impl<
         let BLAKE2BStarkData {
             stark,
             byte_data,
+            byte_table,
             trace_generator,
             config,
             gadget,
@@ -205,7 +211,7 @@ impl<
 
         // Write trace values
         let writer = trace_generator.new_writer();
-        byte_data.write_table_entries(&writer);
+        byte_table.write_table_entries(&writer);
         let blake_public_values = gadget.write(
             message_chunks,
             &msg_sizes,
@@ -218,7 +224,7 @@ impl<
             writer.write_row_instructions(&trace_generator.air_data, i);
         }
         let multiplicities = byte_data.get_multiplicities(&writer);
-        writer.write_lookup_multiplicities(byte_data.multiplicities(), &[multiplicities]);
+        writer.write_lookup_multiplicities(byte_table.multiplicities(), &[multiplicities]);
 
         // Fill blake2b public values into the output buffer
         self.pub_values_target

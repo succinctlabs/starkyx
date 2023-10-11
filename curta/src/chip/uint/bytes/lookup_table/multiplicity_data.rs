@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use super::table::ByteLogLookupTable;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::table::log_derivative::entry::LogEntry;
@@ -18,14 +17,14 @@ use crate::trace::AirTrace;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MultiplicityData {
-    multiplicities: ArrayRegister<ElementRegister>,
+    pub multiplicities: ArrayRegister<ElementRegister>,
     operations_multipcitiy_dict: HashMap<ByteOperation<u8>, (usize, usize)>,
     values_multiplicity_dict: HashMap<u32, (usize, usize)>,
     pub operations_dict: HashMap<usize, Vec<ByteOperation<u8>>>,
 }
 
 pub struct ByteMultiplicityData {
-    table: ByteLogLookupTable,
+    data: MultiplicityData,
     trace_values: Vec<LogEntry<ElementRegister>>,
     public_values: Vec<LogEntry<ElementRegister>>,
 }
@@ -67,8 +66,8 @@ impl MultiplicityData {
         writer.fetch_and_modify(&self.multiplicities.get(col), |x| *x + F::ONE, row);
     }
 
-    pub fn multiplicities(&self) -> &ArrayRegister<ElementRegister> {
-        &self.multiplicities
+    pub fn multiplicities(&self) -> ArrayRegister<ElementRegister> {
+        self.multiplicities
     }
 
     pub fn table_index<F: PrimeField64>(&self, lookup_element: F) -> (usize, usize) {
@@ -78,19 +77,15 @@ impl MultiplicityData {
 
 impl ByteMultiplicityData {
     pub fn new(
-        table: ByteLogLookupTable,
+        data: MultiplicityData,
         trace_values: Vec<LogEntry<ElementRegister>>,
         public_values: Vec<LogEntry<ElementRegister>>,
     ) -> Self {
         Self {
-            table,
+            data,
             trace_values,
             public_values,
         }
-    }
-
-    pub fn write_table_entries<F: PrimeField64>(&self, writer: &TraceWriter<F>) {
-        self.table.write_table_entries(writer);
     }
 
     pub fn get_multiplicities<F: PrimeField64>(&self, writer: &TraceWriter<F>) -> AirTrace<F> {
@@ -99,11 +94,11 @@ impl ByteMultiplicityData {
             1 << 16,
             &self.trace_values,
             &self.public_values,
-            |x| self.table.multiplicity_data.table_index(x),
+            |x| self.data.table_index(x),
         )
     }
 
-    pub fn multiplicities(&self) -> ArrayRegister<ElementRegister> {
-        self.table.multiplicity_data.multiplicities
+    pub fn multiplicities<F: PrimeField64>(&self) -> ArrayRegister<ElementRegister> {
+        self.data.multiplicities
     }
 }

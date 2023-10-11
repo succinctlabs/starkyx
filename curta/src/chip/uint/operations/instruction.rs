@@ -213,7 +213,9 @@ mod tests {
             builder.set_bit_rotate_right(&a, shift, &a_rot_second, &mut operations);
         }
 
-        let byte_data = builder.register_byte_lookup(operations);
+        let mut byte_table = builder.new_byte_lookup_table();
+        let byte_data = builder.register_byte_lookup(&mut byte_table, operations);
+        builder.constraint_byte_lookup_table(&byte_table);
 
         let (air, trace_data) = builder.build();
 
@@ -224,7 +226,7 @@ mod tests {
 
         let to_field = |a: u32| a.to_le_bytes().map(F::from_canonical_u8);
 
-        byte_data.write_table_entries(&writer);
+        byte_table.write_table_entries(&writer);
         let mut rng = thread_rng();
         for i in 0..num_rows {
             let a_val = rng.gen::<u32>();
@@ -258,7 +260,7 @@ mod tests {
             writer.write_row_instructions(&generator.air_data, i);
         }
         let multiplicities = byte_data.get_multiplicities(&writer);
-        writer.write_lookup_multiplicities(byte_data.multiplicities(), &[multiplicities]);
+        writer.write_lookup_multiplicities(byte_table.multiplicities(), &[multiplicities]);
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
@@ -336,7 +338,9 @@ mod tests {
             builder.set_bit_rotate_right(&a, shift, &a_rot_second, &mut operations);
         }
 
-        let byte_data = builder.register_byte_lookup(operations);
+        let mut byte_table = builder.new_byte_lookup_table();
+        let byte_data = builder.register_byte_lookup(&mut byte_table, operations);
+        builder.constraint_byte_lookup_table(&byte_table);
 
         let (air, trace_data) = builder.build();
 
@@ -347,7 +351,7 @@ mod tests {
 
         let to_field = |a: u64| a.to_le_bytes().map(F::from_canonical_u8);
 
-        byte_data.write_table_entries(&writer);
+        byte_table.write_table_entries(&writer);
         let mut rng = thread_rng();
         for i in 0..num_rows {
             let a_val = rng.gen::<u64>();
@@ -381,7 +385,7 @@ mod tests {
             writer.write_row_instructions(&generator.air_data, i);
         }
         let multiplicities = byte_data.get_multiplicities(&writer);
-        writer.write_lookup_multiplicities(byte_data.multiplicities(), &[multiplicities]);
+        writer.write_lookup_multiplicities(byte_table.multiplicities(), &[multiplicities]);
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);

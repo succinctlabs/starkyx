@@ -16,6 +16,7 @@ use crate::chip::builder::AirBuilder;
 use crate::chip::register::Register;
 use crate::chip::trace::generator::ArithmeticGenerator;
 use crate::chip::uint::bytes::lookup_table::multiplicity_data::ByteMultiplicityData;
+use crate::chip::uint::bytes::lookup_table::table::ByteLogLookupTable;
 use crate::chip::uint::operations::instruction::U32Instruction;
 use crate::chip::uint::register::U32Register;
 use crate::chip::uint::util::u32_to_le_field_bytes;
@@ -59,6 +60,7 @@ pub struct SHA256Generator<F: PrimeField64, E: CubicParameters<F>, C, const D: u
 pub struct SHA256StarkData<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> {
     pub stark: Starky<Chip<SHA256AirParameters<F, E>>>,
     pub byte_data: ByteMultiplicityData,
+    pub byte_table: ByteLogLookupTable<F, E>,
     pub trace_generator: ArithmeticGenerator<SHA256AirParameters<F, E>>,
     pub config: StarkyConfig<C, D>,
     pub gadget: SHA256Gadget,
@@ -97,7 +99,9 @@ impl<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> SHA256Generator<
         let gadget =
             air_builder.process_sha_256_batch(&clk, &mut bus, channel_idx, &mut operations);
 
-        let byte_data = air_builder.register_byte_lookup(operations);
+        let mut byte_table = air_builder.new_byte_lookup_table();
+        let byte_data = air_builder.register_byte_lookup(&mut byte_table, operations);
+        air_builder.constraint_byte_lookup_table(&byte_table);
 
         air_builder.constrain_bus(bus);
 
@@ -113,6 +117,7 @@ impl<F: PrimeField64, E: CubicParameters<F>, C, const D: usize> SHA256Generator<
         SHA256StarkData {
             stark,
             byte_data,
+            byte_table,
             trace_generator,
             config,
             gadget,
@@ -160,6 +165,7 @@ impl<
         let SHA256StarkData {
             stark,
             byte_data,
+            byte_table,
             trace_generator,
             config,
             gadget,
@@ -181,13 +187,13 @@ impl<
         // Write trace values
         let num_rows = 1 << 16;
         let writer = trace_generator.new_writer();
-        byte_data.write_table_entries(&writer);
+        byte_table.write_table_entries(&writer);
         let sha_public_values = gadget.write(message_chunks, &writer);
         for i in 0..num_rows {
             writer.write_row_instructions(&trace_generator.air_data, i);
         }
         let multiplicities = byte_data.get_multiplicities(&writer);
-        writer.write_lookup_multiplicities(byte_data.multiplicities(), &[multiplicities]);
+        writer.write_lookup_multiplicities(byte_table.multiplicities(), &[multiplicities]);
 
         // Fill sha public values into the output buffer
         self.pub_values_target

@@ -1200,7 +1200,9 @@ mod tests {
         let blake_gadget =
             builder.process_blake2b::<MAX_NUM_CHUNKS>(&clk, &mut bus, channel_idx, &mut operations);
 
-        let byte_data = builder.register_byte_lookup(operations);
+        let mut byte_table = builder.new_byte_lookup_table();
+        let byte_data = builder.register_byte_lookup(&mut byte_table, operations);
+        builder.constraint_byte_lookup_table(&byte_table);
         builder.constrain_bus(bus);
 
         let (air, trace_data) = builder.build();
@@ -1248,7 +1250,7 @@ mod tests {
         }
 
         timed!(timing, "Write the execusion trace", {
-            byte_data.write_table_entries(&writer);
+            byte_table.write_table_entries(&writer);
             blake_gadget.write(
                 padded_messages,
                 msg_lens.as_slice(),
@@ -1288,7 +1290,7 @@ mod tests {
                 }
             }
             let multiplicities = byte_data.get_multiplicities(&writer);
-            writer.write_lookup_multiplicities(byte_data.multiplicities(), &[multiplicities]);
+            writer.write_lookup_multiplicities(byte_table.multiplicities(), &[multiplicities]);
         });
 
         let public_inputs = writer.0.public.read().unwrap().clone();

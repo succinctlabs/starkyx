@@ -1,5 +1,7 @@
-use crate::chip::AirParameters;
+use crate::chip::{AirParameters, Chip};
 
-pub trait Chip {
+pub trait AirChip {
     type Parameters: AirParameters;
+
+    fn air(&self) -> &Chip<Self::Parameters>;
 }

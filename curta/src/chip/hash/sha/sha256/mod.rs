@@ -627,7 +627,9 @@ mod tests {
         let sha_gadget =
             builder.process_sha_256_batch(&clk, &mut bus, channel_idx, &mut operations);
 
-        let byte_data = builder.register_byte_lookup(operations);
+        let mut byte_table = builder.new_byte_lookup_table();
+        let byte_data = builder.register_byte_lookup(&mut byte_table, operations);
+        builder.constraint_byte_lookup_table(&byte_table);
         builder.constrain_bus(bus);
 
         let (air, trace_data) = builder.build();
@@ -674,7 +676,7 @@ mod tests {
 
         let mut digest_iter = expected_digests.into_iter();
         timed!(timing, "Write the execusion trace", {
-            byte_data.write_table_entries(&writer);
+            byte_table.write_table_entries(&writer);
             sha_gadget.write(padded_messages, &writer);
             for i in 0..num_rows {
                 writer.write_row_instructions(&generator.air_data, i);
@@ -688,7 +690,7 @@ mod tests {
                 }
             }
             let multiplicities = byte_data.get_multiplicities(&writer);
-            writer.write_lookup_multiplicities(byte_data.multiplicities(), &[multiplicities]);
+            writer.write_lookup_multiplicities(byte_table.multiplicities(), &[multiplicities]);
         });
 
         let public_inputs = writer.0.public.read().unwrap().clone();

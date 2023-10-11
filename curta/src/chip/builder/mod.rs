@@ -55,6 +55,10 @@ impl<L: AirParameters> AirBuilder<L> {
         Self::new_with_shared_memory(SharedMemory::new())
     }
 
+    pub fn init(shared_memory: SharedMemory) -> Self {
+        Self::new_with_shared_memory(shared_memory)
+    }
+
     pub fn new_with_shared_memory(shared_memory: SharedMemory) -> Self {
         Self {
             local_index: L::NUM_ARITHMETIC_COLUMNS,

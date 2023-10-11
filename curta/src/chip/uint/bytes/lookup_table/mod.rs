@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use self::builder_operations::ByteLookupOperations;
 use self::multiplicity_data::ByteMultiplicityData;
+use self::table::ByteLogLookupTable;
 use super::bit_operations::and::And;
 use super::bit_operations::not::Not;
 use super::bit_operations::xor::Xor;
@@ -54,21 +55,17 @@ impl<L: AirParameters> AirBuilder<L> {
             + From<SelectInstruction<BitRegister>>
             + From<ByteDecodeInstruction>,
     {
-        let lookup_table = self.new_byte_lookup_table();
-        ByteLookupOperations::new(lookup_table)
+        ByteLookupOperations::new()
     }
 
     pub fn register_byte_lookup(
         &mut self,
+        table: &mut ByteLogLookupTable<L::Field, L::CubicParams>,
         operations: ByteLookupOperations,
     ) -> ByteMultiplicityData {
-        let ByteLookupOperations { table, values } = operations;
-        let multiplicities = table.multiplicity_data.multiplicities();
-        let mut byte_lookup = self.new_lookup(&table.digests, multiplicities);
-
-        let lookup_values = byte_lookup.register_lookup_values(self, &values);
-
-        self.constrain_element_lookup_table(byte_lookup);
+        let lookup_values = table
+            .lookup
+            .register_lookup_values(self, &operations.values);
 
         let LogLookupValues {
             trace_values,
@@ -76,7 +73,14 @@ impl<L: AirParameters> AirBuilder<L> {
             ..
         } = lookup_values;
 
-        ByteMultiplicityData::new(table, trace_values, public_values)
+        ByteMultiplicityData::new(table.multiplicity_data.clone(), trace_values, public_values)
+    }
+
+    pub fn constraint_byte_lookup_table(
+        &mut self,
+        table: &ByteLogLookupTable<L::Field, L::CubicParams>,
+    ) {
+        self.constrain_element_lookup_table(table.lookup.clone())
     }
 }
 
@@ -210,6 +214,7 @@ mod tests {
 
         let mut builder = AirBuilder::<L>::new();
 
+        let mut byte_table = builder.new_byte_lookup_table();
         let mut operations = builder.byte_operations();
 
         let mut a_vec = Vec::new();
@@ -308,7 +313,8 @@ mod tests {
         let not = ByteOperation::Not(b_pub, b_not);
         builder.set_public_inputs_byte_operation(&not, &mut operations);
 
-        let byte_mult_data = builder.register_byte_lookup(operations);
+        let byte_mult_data = builder.register_byte_lookup(&mut byte_table, operations);
+        builder.constraint_byte_lookup_table(&byte_table);
 
         let (air, trace_data) = builder.build();
 
@@ -337,7 +343,7 @@ mod tests {
         b_not.assign_to_raw_slice(&mut public_write, &F::from_canonical_u8(!b_pub_val));
         drop(public_write);
 
-        byte_mult_data.write_table_entries(&writer);
+        byte_table.write_table_entries(&writer);
         for i in 0..num_rows {
             let mut rng = thread_rng();
             for k in 0..NUM_VALS {
@@ -374,7 +380,7 @@ mod tests {
         }
         writer.write_global_instructions(&generator.air_data);
         let multiplicities = byte_mult_data.get_multiplicities(&writer);
-        writer.write_lookup_multiplicities(byte_mult_data.multiplicities(), &[multiplicities]);
+        writer.write_lookup_multiplicities(byte_table.multiplicities(), &[multiplicities]);
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);

@@ -1,4 +1,3 @@
-use alloc::sync::Arc;
 use core::array::from_fn;
 
 use itertools::Itertools;
@@ -13,6 +12,7 @@ use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::Register;
+use crate::chip::table::lookup::table::LogLookupTable;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::bit_operations::and::And;
 use crate::chip::uint::bytes::bit_operations::not::Not;
@@ -29,19 +29,20 @@ use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ByteLogLookupTable {
+pub struct ByteLogLookupTable<F, E> {
     pub a: ByteRegister,
     pub b: ByteRegister,
     pub results: [ByteRegister; NUM_BIT_OPPS],
     a_bits: ArrayRegister<BitRegister>,
     b_bits: ArrayRegister<BitRegister>,
     results_bits: [ArrayRegister<BitRegister>; NUM_BIT_OPPS],
-    pub multiplicity_data: Arc<MultiplicityData>,
+    pub multiplicity_data: MultiplicityData,
     pub digests: Vec<ElementRegister>,
+    pub lookup: LogLookupTable<ElementRegister, F, E>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn new_byte_lookup_table(&mut self) -> ByteLogLookupTable
+    pub fn new_byte_lookup_table(&mut self) -> ByteLogLookupTable<L::Field, L::CubicParams>
     where
         L::Instruction: From<ByteInstructionSet>
             + From<SelectInstruction<BitRegister>>
@@ -115,6 +116,8 @@ impl<L: AirParameters> AirBuilder<L> {
             self.register_instruction::<ByteInstructionSet>(digest_constraint.into());
         }
 
+        let lookup = self.new_lookup(&digests, &multiplicities);
+
         ByteLogLookupTable {
             a,
             b,
@@ -122,14 +125,18 @@ impl<L: AirParameters> AirBuilder<L> {
             a_bits,
             b_bits,
             results_bits,
-            multiplicity_data: Arc::new(multiplicity_data),
+            multiplicity_data,
             digests,
+            lookup,
         }
     }
 }
 
-impl ByteLogLookupTable {
-    pub fn write_table_entries<F: Field>(&self, writer: &TraceWriter<F>) {
+impl<F: PrimeField64, E: CubicParameters<F>> ByteLogLookupTable<F, E> {
+    pub fn multiplicities(&self) -> ArrayRegister<ElementRegister> {
+        self.multiplicity_data.multiplicities
+    }
+    pub fn write_table_entries(&self, writer: &TraceWriter<F>) {
         let operations_dict = &self.multiplicity_data.operations_dict;
         // Write the lookup table entries
         writer
