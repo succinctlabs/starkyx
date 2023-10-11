@@ -2,5 +2,5 @@
 //!
 
 pub mod generator;
-pub mod trae_data;
+pub mod data;
 pub mod writer;

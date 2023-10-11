@@ -14,7 +14,7 @@ use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::table::evaluation::Digest;
-use crate::chip::trace::trae_data::AirTraceData;
+use crate::chip::trace::data::AirTraceData;
 use crate::chip::{AirParameters, Chip};
 use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
 use crate::math::prelude::*;

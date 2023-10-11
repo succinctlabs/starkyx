@@ -20,7 +20,7 @@ use super::table::bus::global::Bus;
 use super::table::evaluation::Evaluation;
 use super::table::lookup::table::LookupTable;
 use super::table::lookup::values::LookupValues;
-use super::trace::trae_data::AirTraceData;
+use super::trace::data::AirTraceData;
 use super::{AirParameters, Chip};
 use crate::math::prelude::*;
 

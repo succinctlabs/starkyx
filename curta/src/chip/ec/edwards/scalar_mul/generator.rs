@@ -24,7 +24,7 @@ use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::RegisterSerializable;
 use crate::chip::trace::generator::ArithmeticGenerator;
-use crate::chip::trace::trae_data::AirTraceData;
+use crate::chip::trace::data::AirTraceData;
 use crate::chip::utils::{biguint_to_16_digits_field, biguint_to_bits_le, field_limbs_to_biguint};
 use crate::chip::Chip;
 use crate::math::extension::CubicParameters;
