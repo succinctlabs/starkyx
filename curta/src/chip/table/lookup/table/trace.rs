@@ -57,10 +57,7 @@ impl<F: PrimeField> TraceWriter<F> {
         mult_table_log_entries
     }
 
-    pub(crate) fn write_lookup_table<E: CubicParameters<F>>(
-        &self,
-        table_data: &LookupTable<F, E>,
-    ) {
+    pub(crate) fn write_lookup_table<E: CubicParameters<F>>(&self, table_data: &LookupTable<F, E>) {
         match table_data {
             LookupTable::Element(table) => {
                 self.write_log_lookup_table(table);

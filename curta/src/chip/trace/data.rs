@@ -32,5 +32,7 @@ pub struct AirTraceData<L: AirParameters> {
 }
 
 impl<L: AirParameters> AirTraceData<L> {
-    pub fn write_extended_trace(&self, writer: &TraceWriter<L::Field>) {}
+    pub fn write_extended_trace(&self, _writer: &TraceWriter<L::Field>) {
+        todo!()
+    }
 }

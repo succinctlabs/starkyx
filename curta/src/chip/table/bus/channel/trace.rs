@@ -20,6 +20,10 @@ impl<F: PrimeField> TraceWriter<F> {
         );
 
         // Write the final accumulated value to the output channel
-        self.write(&channel.out_channel, &accumulated_bus_value.0, self.height - 1);
+        self.write(
+            &channel.out_channel,
+            &accumulated_bus_value.0,
+            self.height - 1,
+        );
     }
 }
