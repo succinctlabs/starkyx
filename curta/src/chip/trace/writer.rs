@@ -33,15 +33,19 @@ pub struct TraceWriter<T>(pub Arc<WriterData<T>>);
 
 impl<T> TraceWriter<T> {
     #[inline]
-    pub fn new(width: usize, num_rows: usize) -> Self {
-        let height = num_rows;
-        Self(Arc::new(WriterData {
-            trace: RwLock::new(AirTrace::new_with_capacity(width, num_rows)),
-            global: RwLock::new(Vec::new()),
-            challenges: RwLock::new(Vec::new()),
-            public: RwLock::new(Vec::new()),
-            height,
-        }))
+    pub fn new<L: AirParameters<Field = T>>(air_data: &AirTraceData<L>, num_rows: usize) -> Self
+    where
+        T: Field,
+    {
+        let num_public_inputs = air_data.num_public_inputs;
+        let num_global_values = air_data.num_global_values;
+        Self::new_with_value(
+            L::Field::ZERO,
+            L::num_columns(),
+            num_rows,
+            num_public_inputs,
+            num_global_values,
+        )
     }
 
     #[inline]
