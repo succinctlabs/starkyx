@@ -1,4 +1,3 @@
-
 #[cfg(test)]
 mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField;
@@ -34,7 +33,6 @@ mod tests {
         const EXTENDED_COLUMNS: usize = 0;
     }
 
-    
     #[allow(unused)]
     fn test_mult_table_byte_ops() {
         type C = CurtaPoseidonGoldilocksConfig;
@@ -86,8 +84,8 @@ mod tests {
             writer.write_row_instructions(&trace_data, i);
         }
         let multiplicities = byte_data.get_multiplicities(&writer);
-        byte_writer.write_lookup_multiplicities(table.multiplicities(), &[multiplicities]); 
+        byte_writer.write_lookup_multiplicities(table.multiplicities(), &[multiplicities]);
 
-       todo!(); 
+        todo!();
     }
 }
