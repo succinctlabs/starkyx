@@ -19,6 +19,10 @@ use crate::trace::window::TraceWindow;
 use crate::trace::window_parser::TraceWindowParser;
 use crate::trace::AirTrace;
 
+pub trait AirWriter<F: Field> {
+    fn write_slice(&self, memory_slice: &MemorySlice, value: &[F], row_index: usize);
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WriterData<T> {
     pub(crate) trace: RwLock<AirTrace<T>>,

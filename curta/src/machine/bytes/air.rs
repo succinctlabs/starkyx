@@ -15,6 +15,6 @@ impl AirParameters for ByteParameters {
     type Instruction = U32Instruction;
 
     const NUM_ARITHMETIC_COLUMNS: usize = 0;
-    const NUM_FREE_COLUMNS: usize = 1;
-    const EXTENDED_COLUMNS: usize = 1;
+    const NUM_FREE_COLUMNS: usize = 107;
+    const EXTENDED_COLUMNS: usize = 21;
 }
