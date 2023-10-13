@@ -30,7 +30,7 @@ pub struct AirBuilder<L: AirParameters> {
     local_index: usize,
     local_arithmetic_index: usize,
     extended_index: usize,
-    shared_memory: SharedMemory,
+    pub(crate) shared_memory: SharedMemory,
     global_arithmetic: Vec<ElementRegister>,
     pub(crate) instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub(crate) global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>,

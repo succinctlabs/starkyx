@@ -3,6 +3,7 @@ mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField;
     use plonky2::field::polynomial::PolynomialValues;
     use plonky2::fri::oracle::PolynomialBatch;
+    use plonky2::iop::challenger::{Challenger, RecursiveChallenger};
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
@@ -21,7 +22,6 @@ mod tests {
     use crate::machine::bytes::air::ByteParameters;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
     use crate::maybe_rayon::*;
-    use crate::plonky2::challenger::{Plonky2Challenger, Plonky2RecursiveChallenger};
     use crate::plonky2::stark::config::{
         CurtaConfig, CurtaPoseidonGoldilocksConfig, PoseidonGoldilocksStarkConfig,
     };
@@ -91,7 +91,7 @@ mod tests {
         let writer = TraceWriter::new(&trace_data, num_rows);
         let byte_writer = TraceWriter::new(&table_trace_data, 1 << 16);
 
-        let mut challenger = Plonky2Challenger::<F, Hasher>::new();
+        let mut challenger = Challenger::<F, Hasher>::new();
 
         table.write_table_entries(&byte_writer);
         for i in 0..(1 << 16) {
@@ -164,10 +164,10 @@ mod tests {
             None,
         );
 
-        // challenger.0.observe_cap(&commitment.merkle_tree.cap);
-        // challenger.0.observe_cap(&table_commitment.merkle_tree.cap);
+        // challenger.observe_cap(&commitment.merkle_tree.cap);
+        // challenger.observe_cap(&table_commitment.merkle_tree.cap);
 
-        let challenges = challenger.0.get_n_challenges(stark.air.num_challenges);
+        let challenges = challenger.get_n_challenges(stark.air.num_challenges);
 
         // write challenges to both traces.
         let mut challenges_write = writer.challenges.write().unwrap();
@@ -314,12 +314,11 @@ mod tests {
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut builder = CircuitBuilder::<F, D>::new(config_rec);
         let mut recursive_challenger =
-            Plonky2RecursiveChallenger::<F, <Config as GenericConfig<2>>::InnerHasher, 2>::new(
+            RecursiveChallenger::<F, <Config as GenericConfig<2>>::InnerHasher, 2>::new(
                 &mut builder,
             );
-        let challenges_target = recursive_challenger
-            .0
-            .get_n_challenges(&mut builder, stark.air.num_challenges);
+        let challenges_target =
+            recursive_challenger.get_n_challenges(&mut builder, stark.air.num_challenges);
         let public_inputs_target = builder.constants(&public_inputs);
         let virtual_proof = builder.add_virtual_stark_proof(&stark, &config);
         let stark_challenges_target = virtual_proof.get_iop_challenges_target(

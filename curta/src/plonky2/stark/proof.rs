@@ -7,6 +7,7 @@ use plonky2::fri::structure::{
 };
 use plonky2::hash::hash_types::{MerkleCapTarget, RichField};
 use plonky2::hash::merkle_tree::MerkleCap;
+use plonky2::iop::challenger::{Challenger, RecursiveChallenger};
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
@@ -17,7 +18,6 @@ use super::config::{CurtaConfig, StarkyConfig};
 use super::Starky;
 use crate::air::{RAir, RAirData};
 use crate::maybe_rayon::*;
-use crate::plonky2::challenger::{Plonky2Challenger, Plonky2RecursiveChallenger};
 use crate::plonky2::parser::RecursiveStarkParser;
 use crate::utils::serde::{
     deserialize_extension_targets, deserialize_fri_proof_target, deserialize_merkle_cap_target,
@@ -57,7 +57,7 @@ impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> Sta
         config: &StarkyConfig<C, D>,
         degree_bits: usize,
         air_challenges: Vec<F>,
-        challenger: &mut Plonky2Challenger<F, C::Hasher>,
+        challenger: &mut Challenger<F, C::Hasher>,
     ) -> StarkProofChallenges<F, D> {
         let StarkProof {
             quotient_polys_cap,
@@ -73,18 +73,18 @@ impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> Sta
         } = &self;
 
         let num_challenges = config.num_challenges;
-        let stark_alphas = challenger.0.get_n_challenges(num_challenges);
+        let stark_alphas = challenger.get_n_challenges(num_challenges);
 
-        challenger.0.observe_cap(quotient_polys_cap);
-        let stark_zeta = challenger.0.get_extension_challenge::<D>();
+        challenger.observe_cap(quotient_polys_cap);
+        let stark_zeta = challenger.get_extension_challenge::<D>();
 
-        challenger.0.observe_openings(&openings.to_fri_openings());
+        challenger.observe_openings(&openings.to_fri_openings());
 
         StarkProofChallenges {
             stark_alphas,
             stark_betas: air_challenges,
             stark_zeta,
-            fri_challenges: challenger.0.fri_challenges::<C::GenericConfig, D>(
+            fri_challenges: challenger.fri_challenges::<C::GenericConfig, D>(
                 commit_phase_merkle_caps,
                 final_poly,
                 *pow_witness,
@@ -107,16 +107,16 @@ impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> Sta
             ..
         } = &self;
 
-        let mut challenger = Plonky2Challenger::<F, C::Hasher>::new();
+        let mut challenger = Challenger::<F, C::Hasher>::new();
         // Observe public inputs
-        challenger.0.observe_elements(public_inputs);
+        challenger.observe_elements(public_inputs);
 
         let mut challenges = vec![];
         for (round, cap) in stark.air().round_data().iter().zip_eq(trace_caps.iter()) {
             let (id_0, id_1) = round.global_values_range;
-            challenger.0.observe_elements(&global_values[id_0..id_1]);
-            challenger.0.observe_cap(cap);
-            let round_challenges = challenger.0.get_n_challenges(round.num_challenges);
+            challenger.observe_elements(&global_values[id_0..id_1]);
+            challenger.observe_cap(cap);
+            let round_challenges = challenger.get_n_challenges(round.num_challenges);
             challenges.extend(round_challenges);
         }
 
@@ -158,11 +158,7 @@ impl<const D: usize> StarkProofTarget<D> {
         builder: &mut CircuitBuilder<F, D>,
         config: &StarkyConfig<C, D>,
         air_challengs: Vec<Target>,
-        challenger: &mut Plonky2RecursiveChallenger<
-            F,
-            <C::GenericConfig as GenericConfig<D>>::InnerHasher,
-            D,
-        >,
+        challenger: &mut RecursiveChallenger<F, C::InnerHasher, D>,
     ) -> StarkProofChallengesTarget<D> {
         let StarkProofTarget {
             quotient_polys_cap,
@@ -179,18 +175,18 @@ impl<const D: usize> StarkProofTarget<D> {
 
         let num_challenges = config.num_challenges;
 
-        let stark_alphas = challenger.0.get_n_challenges(builder, num_challenges);
+        let stark_alphas = challenger.get_n_challenges(builder, num_challenges);
 
-        challenger.0.observe_cap(quotient_polys_cap);
-        let stark_zeta = challenger.0.get_extension_challenge(builder);
+        challenger.observe_cap(quotient_polys_cap);
+        let stark_zeta = challenger.get_extension_challenge(builder);
 
-        challenger.0.observe_openings(&openings.to_fri_openings());
+        challenger.observe_openings(&openings.to_fri_openings());
 
         StarkProofChallengesTarget {
             stark_alphas,
             stark_betas: air_challengs,
             stark_zeta,
-            fri_challenges: challenger.0.fri_challenges(
+            fri_challenges: challenger.fri_challenges(
                 builder,
                 commit_phase_merkle_caps,
                 final_poly,
@@ -217,21 +213,17 @@ impl<const D: usize> StarkProofTarget<D> {
             ..
         } = &self;
 
-        let mut challenger = Plonky2RecursiveChallenger::<
-            F,
-            <C::GenericConfig as GenericConfig<D>>::InnerHasher,
-            D,
-        >::new(builder);
+        let mut challenger = RecursiveChallenger::<F, C::InnerHasher, D>::new(builder);
 
         // Observe public inputs
-        challenger.0.observe_elements(public_inputs);
+        challenger.observe_elements(public_inputs);
 
         let mut challenges = vec![];
         for (round, cap) in stark.air().round_data().iter().zip(trace_caps.iter()) {
             let (id_0, id_1) = round.global_values_range;
-            challenger.0.observe_elements(&global_values[id_0..id_1]);
-            challenger.0.observe_cap(cap);
-            let round_challenges = challenger.0.get_n_challenges(builder, round.num_challenges);
+            challenger.observe_elements(&global_values[id_0..id_1]);
+            challenger.observe_cap(cap);
+            let round_challenges = challenger.get_n_challenges(builder, round.num_challenges);
             challenges.extend(round_challenges);
         }
 

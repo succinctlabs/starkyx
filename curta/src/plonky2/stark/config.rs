@@ -17,7 +17,14 @@ pub trait CurtaConfig<const D: usize>:
     type F: RichField + Extendable<D>;
     type FE: FieldExtension<D, BaseField = Self::F>;
     type Hasher: AlgebraicHasher<Self::F>;
-    type GenericConfig: GenericConfig<D, F = Self::F, FE = Self::FE, Hasher = Self::Hasher>;
+    type InnerHasher: AlgebraicHasher<Self::F>;
+    type GenericConfig: GenericConfig<
+        D,
+        F = Self::F,
+        FE = Self::FE,
+        Hasher = Self::Hasher,
+        InnerHasher = Self::InnerHasher,
+    >;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,6 +79,7 @@ impl CurtaConfig<2> for CurtaPoseidonGoldilocksConfig {
     type F = <PoseidonGoldilocksConfig as GenericConfig<2>>::F;
     type FE = <PoseidonGoldilocksConfig as GenericConfig<2>>::FE;
     type Hasher = <PoseidonGoldilocksConfig as GenericConfig<2>>::Hasher;
+    type InnerHasher = <PoseidonGoldilocksConfig as GenericConfig<2>>::InnerHasher;
     type GenericConfig = PoseidonGoldilocksConfig;
 }
 
