@@ -14,6 +14,8 @@ use crate::chip::{AirParameters, Chip};
 use crate::machine::bytes::builder::NUM_LOOKUP_ROWS;
 use crate::maybe_rayon::*;
 use crate::plonky2::stark::config::{CurtaConfig, StarkyConfig};
+use crate::plonky2::stark::proof::StarkProof;
+use crate::plonky2::stark::prover::StarkyProver;
 use crate::plonky2::stark::Starky;
 use crate::plonky2::Plonky2Air;
 use crate::trace::AirTrace;
@@ -208,15 +210,46 @@ where
         let mut challenger = Challenger::new();
 
         // Generate stark commitment.
-        let commitment = timed!(
+        let (main_air_commitment, lookup_air_commitment) = timed!(
             timing,
             "Generate stark trace",
             self.generate_trace(execusion_trace, public_values, &mut challenger, timing)
+                .air_commitments()
         );
 
         // Generate individual stark proofs.
+        let main_proof = timed!(
+            timing,
+            "Generate main proof",
+            StarkyProver::prove_with_trace(
+                &self.config,
+                &self.stark,
+                main_air_commitment,
+                &mut challenger,
+                &mut TimingTree::default(),
+            )
+            .unwrap()
+        );
 
-        todo!()
+        let lookup_proof = timed!(
+            timing,
+            "Generate lookup proof",
+            StarkyProver::prove_with_trace(
+                &self.lookup_config,
+                &self.lookup_stark,
+                lookup_air_commitment,
+                &mut challenger,
+                &mut TimingTree::default(),
+            )
+            .unwrap()
+        );
+
+        // Return the proof.
+        ByteStarkProof {
+            main_proof: main_proof.air_proof,
+            lookup_proof: lookup_proof.air_proof,
+            global_values: lookup_proof.global_values,
+        }
     }
 }
 

@@ -21,7 +21,7 @@ use super::Starky;
 use crate::maybe_rayon::*;
 use crate::plonky2::parser::consumer::ConstraintConsumer;
 use crate::plonky2::parser::StarkParser;
-use crate::plonky2::stark::proof::{StarkOpeningSet, StarkProof};
+use crate::plonky2::stark::proof::{AirProof, StarkOpeningSet, StarkProof};
 use crate::plonky2::StarkyAir;
 use crate::trace::generator::TraceGenerator;
 
@@ -214,11 +214,13 @@ where
             "Number of trace commitments does not match"
         );
         Ok(StarkProof {
-            trace_caps,
-            quotient_polys_cap,
+            air_proof: AirProof {
+                trace_caps,
+                quotient_polys_cap,
+                openings,
+                opening_proof,
+            },
             global_values,
-            openings,
-            opening_proof,
         })
     }
 

@@ -18,7 +18,7 @@ use plonky2::util::reducing::ReducingFactorTarget;
 
 use super::config::{CurtaConfig, StarkyConfig};
 use super::proof::{
-    StarkOpeningSet, StarkOpeningSetTarget, StarkProof, StarkProofChallenges,
+    AirProofTarget, StarkOpeningSet, StarkOpeningSetTarget, StarkProof, StarkProofChallenges,
     StarkProofChallengesTarget, StarkProofTarget,
 };
 use super::Starky;
@@ -26,6 +26,7 @@ use crate::air::{RAir, RAirData};
 use crate::plonky2::parser::consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
 use crate::plonky2::parser::global::{GlobalRecursiveStarkParser, GlobalStarkParser};
 use crate::plonky2::parser::{RecursiveStarkParser, StarkParser};
+use crate::plonky2::stark::proof::AirProof;
 use crate::plonky2::{Plonky2Air, StarkyAir};
 
 #[derive(Debug, Clone)]
@@ -54,7 +55,7 @@ where
             local_values,
             next_values,
             quotient_polys,
-        } = &proof.openings;
+        } = &proof.air_proof.openings;
 
         // Verify the global constraints
         let mut global_parser = GlobalStarkParser {
@@ -124,9 +125,10 @@ where
         }
 
         let merkle_caps = proof
+            .air_proof
             .trace_caps
             .into_iter()
-            .chain(once(proof.quotient_polys_cap))
+            .chain(once(proof.air_proof.quotient_polys_cap))
             .collect::<Vec<_>>();
 
         verify_fri_proof::<F, C::GenericConfig, D>(
@@ -135,10 +137,10 @@ where
                 F::primitive_root_of_unity(degree_bits),
                 config,
             ),
-            &proof.openings.to_fri_openings(),
+            &proof.air_proof.openings.to_fri_openings(),
             &challenges.fri_challenges,
             &merkle_caps,
-            &proof.opening_proof,
+            &proof.air_proof.opening_proof,
             &config.fri_params(),
         )?;
         Ok(())
@@ -167,13 +169,16 @@ where
         let cap_height = fri_params.config.cap_height;
 
         let StarkProof {
-            trace_caps,
-            quotient_polys_cap,
-            openings,
+            air_proof:
+                AirProof {
+                    trace_caps,
+                    quotient_polys_cap,
+                    openings,
+                    // The shape of the opening proof will be checked in the FRI verifier (see
+                    // validate_fri_proof_shape), so we ignore it here.
+                    opening_proof: _,
+                },
             global_values,
-            // The shape of the opening proof will be checked in the FRI verifier (see
-            // validate_fri_proof_shape), so we ignore it here.
-            opening_proof: _,
         } = proof;
 
         let StarkOpeningSet {
@@ -220,7 +225,7 @@ where
             local_values,
             next_values,
             quotient_polys,
-        } = &proof.openings;
+        } = &proof.air_proof.openings;
 
         let degree_bits = proof.recover_degree_bits(config);
 
@@ -296,10 +301,11 @@ where
         }
 
         let merkle_caps = proof
+            .air_proof
             .trace_caps
             .iter()
             .cloned()
-            .chain(once(proof.quotient_polys_cap.clone()))
+            .chain(once(proof.air_proof.quotient_polys_cap.clone()))
             .collect::<Vec<_>>();
 
         let fri_instance = stark.fri_instance_target(
@@ -310,10 +316,10 @@ where
         );
         builder.verify_fri_proof::<C::GenericConfig>(
             &fri_instance,
-            &proof.openings.to_fri_openings(),
+            &proof.air_proof.openings.to_fri_openings(),
             &challenges.fri_challenges,
             &merkle_caps,
-            &proof.opening_proof,
+            &proof.air_proof.opening_proof,
             &config.fri_params(),
         );
     }
@@ -387,12 +393,16 @@ pub fn add_virtual_stark_proof<
     let trace_caps = (0..num_rounds)
         .map(|_| builder.add_virtual_cap(cap_height))
         .collect::<Vec<_>>();
-    StarkProofTarget {
+
+    let air_proof = AirProofTarget {
         trace_caps,
         quotient_polys_cap: builder.add_virtual_cap(cap_height),
         openings: add_stark_opening_set_target(builder, stark, config),
-        global_values: global_values_target,
         opening_proof: builder.add_virtual_fri_proof(&num_leaves_per_oracle, &fri_params),
+    };
+    StarkProofTarget {
+        air_proof,
+        global_values: global_values_target,
     }
 }
 
@@ -425,13 +435,17 @@ pub fn set_stark_proof_target<F, C: CurtaConfig<D, F = F>, W, const D: usize>(
     W: WitnessWrite<F>,
 {
     for (cap, target_cap) in proof
+        .air_proof
         .trace_caps
         .iter()
-        .zip_eq(proof_target.trace_caps.iter())
+        .zip_eq(proof_target.air_proof.trace_caps.iter())
     {
         witness.set_cap_target(target_cap, cap);
     }
-    witness.set_cap_target(&proof_target.quotient_polys_cap, &proof.quotient_polys_cap);
+    witness.set_cap_target(
+        &proof_target.air_proof.quotient_polys_cap,
+        &proof.air_proof.quotient_polys_cap,
+    );
 
     for (target, value) in proof_target
         .global_values
@@ -442,9 +456,13 @@ pub fn set_stark_proof_target<F, C: CurtaConfig<D, F = F>, W, const D: usize>(
     }
 
     witness.set_fri_openings(
-        &proof_target.openings.to_fri_openings(),
-        &proof.openings.to_fri_openings(),
+        &proof_target.air_proof.openings.to_fri_openings(),
+        &proof.air_proof.openings.to_fri_openings(),
     );
 
-    set_fri_proof_target(witness, &proof_target.opening_proof, &proof.opening_proof);
+    set_fri_proof_target(
+        witness,
+        &proof_target.air_proof.opening_proof,
+        &proof.air_proof.opening_proof,
+    );
 }
