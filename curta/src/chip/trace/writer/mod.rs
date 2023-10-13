@@ -20,7 +20,7 @@ use crate::trace::window_parser::TraceWindowParser;
 use crate::trace::AirTrace;
 
 pub trait AirWriter<F: Field> {
-    fn write_slice(&self, memory_slice: &MemorySlice, value: &[F], row_index: usize);
+    fn write_slice(&self, memory_slice: &MemorySlice, value: &[F]);
 }
 
 #[derive(Debug, Serialize, Deserialize)]

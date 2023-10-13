@@ -186,7 +186,7 @@ pub mod tests {
 
         let trace = generator.trace_clone();
 
-        for window in trace.windows_iter() {
+        for window in trace.windows() {
             let mut window_parser = TraceWindowParser::new(window, &[], &[], &[]);
             air.eval(&mut window_parser);
         }
@@ -252,7 +252,7 @@ pub mod tests {
 
         let trace = generator.trace_clone();
 
-        for window in trace.windows_iter() {
+        for window in trace.windows() {
             let mut window_parser = TraceWindowParser::new(window, &[], &[], &[]);
             air.eval(&mut window_parser);
         }

@@ -262,7 +262,7 @@ mod tests {
 
         let trace = generator.trace_clone();
 
-        for window in trace.windows_iter() {
+        for window in trace.windows() {
             let mut window_parser = TraceWindowParser::new(window, &[], &[], &[]);
             assert_eq!(window_parser.local_slice().len(), L::num_columns());
             air.eval(&mut window_parser);
