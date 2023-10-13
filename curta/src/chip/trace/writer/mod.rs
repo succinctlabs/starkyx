@@ -19,8 +19,75 @@ use crate::trace::window::TraceWindow;
 use crate::trace::window_parser::TraceWindowParser;
 use crate::trace::AirTrace;
 
+pub mod row;
+pub mod window;
+
 pub trait AirWriter<F: Field> {
-    fn write_slice(&self, memory_slice: &MemorySlice, value: &[F]);
+    fn write_slice(&mut self, memory_slice: &MemorySlice, value: &[F]);
+
+    fn read_slice(&self, memory_slice: &MemorySlice) -> &[F];
+
+    fn read<T: Register>(&self, data: &T) -> T::Value<F> {
+        let slice = self.read_slice(data.register());
+        T::value_from_slice(slice)
+    }
+
+    fn read_vec<R: Register>(&self, array: &ArrayRegister<R>) -> Vec<R::Value<F>> {
+        array
+            .into_iter()
+            .map(|register| self.read(&register))
+            .collect()
+    }
+
+    fn read_array<R: Register, const N: usize>(
+        &self,
+        array: &ArrayRegister<R>,
+    ) -> [R::Value<F>; N] {
+        let elem_fn = |i| self.read(&array.get(i));
+        core::array::from_fn(elem_fn)
+    }
+
+    fn write<T: Register>(&mut self, data: &T, value: &T::Value<F>) {
+        self.write_slice(data.register(), T::align(value))
+    }
+
+    fn write_array<T: Register, I>(&mut self, array: &ArrayRegister<T>, values: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<T::Value<F>>,
+    {
+        for (data, value) in array.into_iter().zip(values) {
+            self.write(&data, value.borrow());
+        }
+    }
+
+    fn read_log_entry<T: EvalCubic>(&self, entry: &LogEntry<T>) -> LogEntryValue<F> {
+        let eval = |value: &T| T::trace_value_as_cubic(self.read(value));
+        match entry {
+            LogEntry::Input(value) => LogEntryValue {
+                value: eval(value),
+                multiplier: F::ONE,
+            },
+            LogEntry::Output(value) => LogEntryValue {
+                value: eval(value),
+                multiplier: -F::ONE,
+            },
+            LogEntry::InputMultiplicity(value, multiplier) => {
+                let multiplier = self.read(multiplier);
+                LogEntryValue {
+                    value: eval(value),
+                    multiplier,
+                }
+            }
+            LogEntry::OutputMultiplicity(value, multiplier) => {
+                let multiplier = self.read(multiplier);
+                LogEntryValue {
+                    value: eval(value),
+                    multiplier: -multiplier,
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
