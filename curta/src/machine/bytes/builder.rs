@@ -9,7 +9,7 @@ use crate::chip::AirParameters;
 use crate::plonky2::stark::config::{CurtaConfig, StarkyConfig};
 use crate::plonky2::stark::Starky;
 
-const NUM_LOOKUP_ROWS: usize = 1 << 16;
+pub(crate) const NUM_LOOKUP_ROWS: usize = 1 << 16;
 
 pub struct BytesBuilder<L: AirParameters> {
     pub api: AirBuilder<L>,

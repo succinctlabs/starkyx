@@ -25,6 +25,31 @@ use crate::utils::serde::{
     serialize_merkle_cap_target, serialize_merkle_cap_targets,
 };
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(bound = "")]
+pub struct AirProof<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> {
+    /// Merkle cap of LDEs of trace values for each round.
+    pub trace_caps: Vec<MerkleCap<F, C::Hasher>>,
+    /// Merkle cap of LDEs of trace values.
+    pub quotient_polys_cap: MerkleCap<F, C::Hasher>,
+    /// Purported values of each polynomial at the challenge point.
+    pub openings: StarkOpeningSet<F, D>,
+    /// A batch FRI argument for all openings.
+    pub opening_proof: FriProof<F, C::Hasher, D>,
+}
+
+impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> AirProof<F, C, D> {
+    pub fn into_stark_proof(self, global_values: Vec<F>) -> StarkProof<F, C, D> {
+        StarkProof {
+            trace_caps: self.trace_caps,
+            quotient_polys_cap: self.quotient_polys_cap,
+            global_values,
+            openings: self.openings,
+            opening_proof: self.opening_proof,
+        }
+    }
+}
+
 /// A proof of a STARK computation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(bound = "")]
@@ -125,6 +150,20 @@ impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> Sta
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AirProofTarget<const D: usize> {
+    #[serde(serialize_with = "serialize_merkle_cap_targets")]
+    #[serde(deserialize_with = "deserialize_merkle_cap_targets")]
+    pub trace_caps: Vec<MerkleCapTarget>,
+    #[serde(serialize_with = "serialize_merkle_cap_target")]
+    #[serde(deserialize_with = "deserialize_merkle_cap_target")]
+    pub quotient_polys_cap: MerkleCapTarget,
+    pub openings: StarkOpeningSetTarget<D>,
+    #[serde(serialize_with = "serialize_fri_proof_target")]
+    #[serde(deserialize_with = "deserialize_fri_proof_target")]
+    pub opening_proof: FriProofTarget<D>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StarkProofTarget<const D: usize> {
     #[serde(serialize_with = "serialize_merkle_cap_targets")]
     #[serde(deserialize_with = "deserialize_merkle_cap_targets")]
@@ -137,6 +176,18 @@ pub struct StarkProofTarget<const D: usize> {
     #[serde(serialize_with = "serialize_fri_proof_target")]
     #[serde(deserialize_with = "deserialize_fri_proof_target")]
     pub opening_proof: FriProofTarget<D>,
+}
+
+impl<const D: usize> AirProofTarget<D> {
+    pub fn into_stark_proof_target(self, global_values: Vec<Target>) -> StarkProofTarget<D> {
+        StarkProofTarget {
+            trace_caps: self.trace_caps,
+            quotient_polys_cap: self.quotient_polys_cap,
+            global_values,
+            openings: self.openings,
+            opening_proof: self.opening_proof,
+        }
+    }
 }
 
 impl<const D: usize> StarkProofTarget<D> {

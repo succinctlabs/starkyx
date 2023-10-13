@@ -3,6 +3,7 @@ use core::borrow::Borrow;
 use core::ops::Deref;
 use std::sync::{LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 
 use super::data::AirTraceData;
@@ -100,6 +101,15 @@ pub struct WriterData<T> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InnerWriterData<F> {
+    pub trace: AirTrace<F>,
+    pub global: Vec<F>,
+    pub public: Vec<F>,
+    pub challenges: Vec<F>,
+    pub height: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TraceWriter<T>(pub Arc<WriterData<T>>);
 
 impl<T> TraceWriter<T> {
@@ -117,6 +127,27 @@ impl<T> TraceWriter<T> {
             num_public_inputs,
             num_global_values,
         )
+    }
+
+    pub fn into_inner(self) -> Result<InnerWriterData<T>>
+    where
+        T: 'static + Send + Sync,
+    {
+        let WriterData {
+            trace,
+            global,
+            public,
+            challenges,
+            height,
+        } = Arc::into_inner(self.0).ok_or(anyhow!("Arc unpacking failed"))?;
+
+        Ok(InnerWriterData {
+            trace: RwLock::into_inner(trace)?,
+            global: RwLock::into_inner(global)?,
+            public: RwLock::into_inner(public)?,
+            challenges: RwLock::into_inner(challenges)?,
+            height,
+        })
     }
 
     #[inline]
