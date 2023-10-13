@@ -14,14 +14,6 @@ impl<L: AirParameters> AirBuilder<L> {
         register
     }
 
-    /// Allocates `size` cells/columns worth of memory and returns it as a `MemorySlice` on the
-    /// next row.
-    fn get_next_memory(&mut self, size: usize) -> MemorySlice {
-        let register = MemorySlice::Next(self.next_index, size);
-        self.next_index += size;
-        register
-    }
-
     fn get_extended_memory(&mut self, size: usize) -> MemorySlice {
         let register = MemorySlice::Local(self.extended_index, size);
         self.extended_index += size;
@@ -44,15 +36,6 @@ impl<L: AirParameters> AirBuilder<L> {
     /// cell will be range checked using the lookup table to be in the range `[0, 2^16]`.
     fn get_local_u16_memory(&mut self, size: usize) -> MemorySlice {
         let register = MemorySlice::Local(self.local_arithmetic_index, size);
-        self.local_arithmetic_index += size;
-        register
-    }
-
-    /// Allocates `size` cells/columns worth of memory and returns it as a `MemorySlice` in the
-    /// next row. Each cell will be range checked using the lookup table to be in the range
-    /// `[0, 2^16]`.
-    fn get_next_u16_memory(&mut self, size: usize) -> MemorySlice {
-        let register = MemorySlice::Next(self.next_arithmetic_index, size);
         self.local_arithmetic_index += size;
         register
     }
@@ -184,22 +167,6 @@ impl<L: AirParameters> AirBuilder<L> {
             CellType::Bit => self.get_public_memory(size_of),
         };
         ArrayRegister::<T>::from_register_unsafe(register)
-    }
-
-    /// Allocates a new register on the next row according to type `T` which implements the Register
-    /// trait and returns it.
-    pub fn alloc_next<T: Register>(&mut self) -> T {
-        let register = match T::CELL {
-            CellType::Element => self.get_next_memory(T::size_of()),
-            CellType::U16 => self.get_next_u16_memory(T::size_of()),
-            CellType::Bit => {
-                let reg = self.get_next_memory(T::size_of());
-                let constraint = AirInstruction::bits(&reg);
-                self.register_air_instruction_internal(constraint).unwrap();
-                reg
-            }
-        };
-        T::from_register(register)
     }
 
     pub fn is_local<T: RegisterSerializable>(&self, register: &T) -> bool {

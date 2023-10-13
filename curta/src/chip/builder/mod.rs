@@ -29,8 +29,6 @@ use crate::math::prelude::*;
 pub struct AirBuilder<L: AirParameters> {
     local_index: usize,
     local_arithmetic_index: usize,
-    next_arithmetic_index: usize,
-    next_index: usize,
     extended_index: usize,
     shared_memory: SharedMemory,
     global_arithmetic: Vec<ElementRegister>,
@@ -62,9 +60,7 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn new_with_shared_memory(shared_memory: SharedMemory) -> Self {
         Self {
             local_index: L::NUM_ARITHMETIC_COLUMNS,
-            next_index: L::NUM_ARITHMETIC_COLUMNS,
             local_arithmetic_index: 0,
-            next_arithmetic_index: 0,
             extended_index: L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS,
             global_arithmetic: Vec::new(),
             shared_memory,
