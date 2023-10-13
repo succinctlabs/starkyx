@@ -129,7 +129,7 @@ mod tests {
 
         type Instruction = U32Instruction;
 
-        const NUM_FREE_COLUMNS: usize = 2800;
+        const NUM_FREE_COLUMNS: usize = 2814;
         const EXTENDED_COLUMNS: usize = 900;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
     }
