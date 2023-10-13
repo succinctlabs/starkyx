@@ -17,7 +17,7 @@ use crate::chip::register::Register;
 use crate::chip::trace::generator::ArithmeticGenerator;
 use crate::chip::uint::bytes::lookup_table::multiplicity_data::ByteMultiplicityData;
 use crate::chip::uint::bytes::lookup_table::table::ByteLogLookupTable;
-use crate::chip::uint::operations::instruction::U32Instruction;
+use crate::chip::uint::operations::instruction::UintInstruction;
 use crate::chip::uint::register::U32Register;
 use crate::chip::uint::util::u32_to_le_field_bytes;
 use crate::chip::{AirParameters, Chip};
@@ -70,7 +70,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for SHA256AirParamete
     type Field = F;
     type CubicParams = E;
 
-    type Instruction = U32Instruction;
+    type Instruction = UintInstruction;
 
     const NUM_FREE_COLUMNS: usize = 745;
     const EXTENDED_COLUMNS: usize = 330;

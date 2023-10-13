@@ -19,7 +19,7 @@ use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperat
 use crate::chip::uint::bytes::operations::value::ByteOperation;
 use crate::chip::uint::bytes::register::ByteRegister;
 use crate::chip::uint::operations::add::ByteArrayAdd;
-use crate::chip::uint::operations::instruction::U32Instructions;
+use crate::chip::uint::operations::instruction::UintInstructions;
 use crate::chip::uint::register::U32Register;
 use crate::chip::uint::util::u32_to_le_field_bytes;
 use crate::chip::AirParameters;
@@ -86,7 +86,7 @@ impl<L: AirParameters> AirBuilder<L> {
         operations: &mut ByteLookupOperations,
     ) -> SHA256Gadget
     where
-        L::Instruction: U32Instructions,
+        L::Instruction: UintInstructions,
     {
         // Registers to be written to
         let w_window = self.alloc_array::<U32Register>(17);
@@ -266,7 +266,7 @@ impl<L: AirParameters> AirBuilder<L> {
         cycle_64: &Cycle<L::Field>,
         operations: &mut ByteLookupOperations,
     ) where
-        L::Instruction: U32Instructions,
+        L::Instruction: UintInstructions,
     {
         let cycle_16 = self.cycle(4);
 
@@ -318,7 +318,7 @@ impl<L: AirParameters> AirBuilder<L> {
         operations: &mut ByteLookupOperations,
     ) -> ArrayRegister<U32Register>
     where
-        L::Instruction: U32Instructions,
+        L::Instruction: UintInstructions,
     {
         // Initialize working variables
         let a = msg.get(0);
@@ -588,7 +588,7 @@ mod tests {
     use super::*;
     pub use crate::chip::builder::tests::*;
     use crate::chip::builder::AirBuilder;
-    use crate::chip::uint::operations::instruction::U32Instruction;
+    use crate::chip::uint::operations::instruction::UintInstruction;
     use crate::chip::uint::util::u32_to_le_field_bytes;
     use crate::chip::AirParameters;
 
@@ -599,7 +599,7 @@ mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        type Instruction = U32Instruction;
+        type Instruction = UintInstruction;
 
         const NUM_FREE_COLUMNS: usize = 745;
         const EXTENDED_COLUMNS: usize = 345;

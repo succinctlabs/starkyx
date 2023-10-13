@@ -15,25 +15,25 @@ use crate::chip::uint::register::U64Register;
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum U32Instruction {
+pub enum UintInstruction {
     Bit(ByteInstructionSet),
     Add(ByteArrayAdd<4>),
     Select(SelectInstruction<U64Register>),
 }
 
-pub trait U32Instructions:
+pub trait UintInstructions:
     ByteInstructions
-    + From<U32Instruction>
+    + From<UintInstruction>
     + From<ByteArrayAdd<4>>
     + From<SelectInstruction<U64Register>>
 {
 }
 
-impl ByteInstructions for U32Instruction {}
+impl ByteInstructions for UintInstruction {}
 
-impl U32Instructions for U32Instruction {}
+impl UintInstructions for UintInstruction {}
 
-impl<AP: AirParser> AirConstraint<AP> for U32Instruction {
+impl<AP: AirParser> AirConstraint<AP> for UintInstruction {
     fn eval(&self, parser: &mut AP) {
         match self {
             Self::Bit(op) => op.eval(parser),
@@ -43,7 +43,7 @@ impl<AP: AirParser> AirConstraint<AP> for U32Instruction {
     }
 }
 
-impl<F: PrimeField64> Instruction<F> for U32Instruction {
+impl<F: PrimeField64> Instruction<F> for UintInstruction {
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         match self {
             Self::Bit(op) => Instruction::<F>::write(op, writer, row_index),
@@ -53,43 +53,43 @@ impl<F: PrimeField64> Instruction<F> for U32Instruction {
     }
 }
 
-impl From<ByteInstructionSet> for U32Instruction {
+impl From<ByteInstructionSet> for UintInstruction {
     fn from(op: ByteInstructionSet) -> Self {
         Self::Bit(op)
     }
 }
 
-impl From<ByteArrayAdd<4>> for U32Instruction {
+impl From<ByteArrayAdd<4>> for UintInstruction {
     fn from(op: ByteArrayAdd<4>) -> Self {
         Self::Add(op)
     }
 }
 
-impl From<ByteOperationInstruction> for U32Instruction {
+impl From<ByteOperationInstruction> for UintInstruction {
     fn from(op: ByteOperationInstruction) -> Self {
         Self::Bit(op.into())
     }
 }
 
-impl From<SelectInstruction<BitRegister>> for U32Instruction {
+impl From<SelectInstruction<BitRegister>> for UintInstruction {
     fn from(op: SelectInstruction<BitRegister>) -> Self {
         Self::Bit(op.into())
     }
 }
 
-impl From<ByteDecodeInstruction> for U32Instruction {
+impl From<ByteDecodeInstruction> for UintInstruction {
     fn from(op: ByteDecodeInstruction) -> Self {
         Self::Bit(op.into())
     }
 }
 
-impl From<SelectInstruction<U64Register>> for U32Instruction {
+impl From<SelectInstruction<U64Register>> for UintInstruction {
     fn from(op: SelectInstruction<U64Register>) -> Self {
         Self::Select(op)
     }
 }
 
-impl From<ByteOperationDigestConstraint> for U32Instruction {
+impl From<ByteOperationDigestConstraint> for UintInstruction {
     fn from(op: ByteOperationDigestConstraint) -> Self {
         Self::Bit(op.into())
     }
@@ -113,7 +113,7 @@ mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        type Instruction = U32Instruction;
+        type Instruction = UintInstruction;
 
         const NUM_FREE_COLUMNS: usize = 1600;
         const EXTENDED_COLUMNS: usize = 500;
@@ -127,7 +127,7 @@ mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        type Instruction = U32Instruction;
+        type Instruction = UintInstruction;
 
         const NUM_FREE_COLUMNS: usize = 2814;
         const EXTENDED_COLUMNS: usize = 900;

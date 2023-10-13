@@ -14,7 +14,7 @@ mod tests {
     use crate::chip::builder::shared_memory::SharedMemory;
     use crate::chip::builder::AirBuilder;
     use crate::chip::trace::writer::TraceWriter;
-    use crate::chip::uint::operations::instruction::U32Instruction;
+    use crate::chip::uint::operations::instruction::UintInstruction;
     use crate::chip::uint::register::U32Register;
     use crate::chip::uint::util::u32_to_le_field_bytes;
     use crate::chip::AirParameters;
@@ -38,7 +38,7 @@ mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        type Instruction = U32Instruction;
+        type Instruction = UintInstruction;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
         const NUM_FREE_COLUMNS: usize = 88;
@@ -57,7 +57,9 @@ mod tests {
 
         let shared_memory = SharedMemory::new();
 
-        let mut table_builder = AirBuilder::<ByteParameters>::init(shared_memory.clone());
+        let mut table_builder = AirBuilder::<
+            ByteParameters<GoldilocksField, GoldilocksCubicParameters>,
+        >::init(shared_memory.clone());
         let mut builder = AirBuilder::<ByteTest>::init(shared_memory);
 
         let mut table = table_builder.new_byte_lookup_table();
@@ -226,7 +228,8 @@ mod tests {
 
         let table_extended_trace = AirTrace {
             values: extended_table_trace_values,
-            width: ByteParameters::num_columns() - table_stark.air.execution_trace_length,
+            width: ByteParameters::<GoldilocksField, GoldilocksCubicParameters>::num_columns()
+                - table_stark.air.execution_trace_length,
         };
         let trace_cols = table_extended_trace
             .as_columns()

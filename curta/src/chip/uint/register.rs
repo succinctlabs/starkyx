@@ -74,7 +74,7 @@ mod tests {
 
     use super::*;
     use crate::chip::builder::AirBuilder;
-    use crate::chip::uint::operations::instruction::U32Instruction;
+    use crate::chip::uint::operations::instruction::UintInstruction;
     use crate::chip::AirParameters;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
 
@@ -85,7 +85,7 @@ mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        type Instruction = U32Instruction;
+        type Instruction = UintInstruction;
 
         const NUM_FREE_COLUMNS: usize = 2;
         const EXTENDED_COLUMNS: usize = 2;

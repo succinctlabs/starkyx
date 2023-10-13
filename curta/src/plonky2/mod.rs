@@ -15,6 +15,7 @@ pub mod cubic;
 pub mod field;
 pub mod parser;
 pub mod stark;
+pub mod trace;
 
 /// an air that can generate constraints for the Starky proving system.
 pub trait StarkyAir<F: RichField + Extendable<D>, const D: usize>:
