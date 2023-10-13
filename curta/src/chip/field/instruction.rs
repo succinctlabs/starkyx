@@ -12,7 +12,6 @@ use super::sub::FpSubInstruction;
 use crate::air::AirConstraint;
 use crate::chip::bool::SelectInstruction;
 use crate::chip::instruction::Instruction;
-use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 use crate::polynomial::parser::PolynomialParser;
@@ -60,32 +59,6 @@ impl<AP: PolynomialParser, P: FieldParameters> AirConstraint<AP> for FpInstructi
 }
 
 impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpInstruction<P> {
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        match self {
-            FpInstruction::Add(instruction) => Instruction::<F>::trace_layout(instruction),
-            FpInstruction::Mul(instruction) => Instruction::<F>::trace_layout(instruction),
-            FpInstruction::MulConst(instruction) => Instruction::<F>::trace_layout(instruction),
-            FpInstruction::Inner(instruction) => Instruction::<F>::trace_layout(instruction),
-            FpInstruction::Den(instruction) => Instruction::<F>::trace_layout(instruction),
-            FpInstruction::Select(instruction) => Instruction::<F>::trace_layout(instruction),
-            FpInstruction::Sub(instruction) => Instruction::<F>::trace_layout(instruction),
-            FpInstruction::Div(instruction) => Instruction::<F>::trace_layout(instruction),
-        }
-    }
-
-    fn inputs(&self) -> Vec<MemorySlice> {
-        match self {
-            FpInstruction::Add(instruction) => Instruction::<F>::inputs(instruction),
-            FpInstruction::Mul(instruction) => Instruction::<F>::inputs(instruction),
-            FpInstruction::MulConst(instruction) => Instruction::<F>::inputs(instruction),
-            FpInstruction::Inner(instruction) => Instruction::<F>::inputs(instruction),
-            FpInstruction::Den(instruction) => Instruction::<F>::inputs(instruction),
-            FpInstruction::Select(instruction) => Instruction::<F>::inputs(instruction),
-            FpInstruction::Sub(instruction) => Instruction::<F>::inputs(instruction),
-            FpInstruction::Div(instruction) => Instruction::<F>::inputs(instruction),
-        }
-    }
-
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         match self {
             FpInstruction::Add(instruction) => {

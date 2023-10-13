@@ -9,7 +9,6 @@ use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
-use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::AirParameters;
@@ -154,24 +153,6 @@ impl<AP: AirParser<Field = F>, F: Field> AirConstraint<AP> for Cycle<F> {
 }
 
 impl<F: Field> Instruction<F> for Cycle<F> {
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        vec![
-            *self.start_bit.register(),
-            *self.end_bit.register(),
-            *self.start_bit_witness.register(),
-            *self.end_bit_witness.register(),
-            *self.element.register(),
-        ]
-    }
-
-    fn inputs(&self) -> Vec<MemorySlice> {
-        Vec::new()
-    }
-
-    fn constraint_degree(&self) -> usize {
-        2
-    }
-
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let cycle = row_index % self.group.len();
         let element = self.group[cycle];

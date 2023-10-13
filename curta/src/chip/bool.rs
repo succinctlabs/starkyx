@@ -5,8 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::builder::AirBuilder;
 use super::instruction::Instruction;
 use super::register::bit::BitRegister;
-use super::register::memory::MemorySlice;
-use super::register::{Register, RegisterSerializable};
+use super::register::Register;
 use super::trace::writer::TraceWriter;
 use super::AirParameters;
 use crate::air::parser::AirParser;
@@ -80,18 +79,6 @@ impl<AP: AirParser, T: Register> AirConstraint<AP> for SelectInstruction<T> {
 }
 
 impl<F: Field, T: Register + Debug> Instruction<F> for SelectInstruction<T> {
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        vec![*self.result.register()]
-    }
-
-    fn inputs(&self) -> Vec<MemorySlice> {
-        vec![
-            *self.bit.register(),
-            *self.true_value.register(),
-            *self.false_value.register(),
-        ]
-    }
-
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let bit = writer.read(&self.bit, row_index);
         let true_value = writer.read(&self.true_value, row_index);

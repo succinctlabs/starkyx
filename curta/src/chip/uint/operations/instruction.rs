@@ -6,7 +6,6 @@ use crate::air::AirConstraint;
 use crate::chip::bool::SelectInstruction;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::bit::BitRegister;
-use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::decode::ByteDecodeInstruction;
 use crate::chip::uint::bytes::lookup_table::{ByteInstructionSet, ByteInstructions};
@@ -45,22 +44,6 @@ impl<AP: AirParser> AirConstraint<AP> for U32Instruction {
 }
 
 impl<F: PrimeField64> Instruction<F> for U32Instruction {
-    fn inputs(&self) -> Vec<MemorySlice> {
-        match self {
-            Self::Bit(op) => Instruction::<F>::inputs(op),
-            Self::Add(op) => Instruction::<F>::inputs(op),
-            Self::Select(op) => Instruction::<F>::inputs(op),
-        }
-    }
-
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        match self {
-            Self::Bit(op) => Instruction::<F>::trace_layout(op),
-            Self::Add(op) => Instruction::<F>::trace_layout(op),
-            Self::Select(op) => Instruction::<F>::trace_layout(op),
-        }
-    }
-
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         match self {
             Self::Bit(op) => Instruction::<F>::write(op, writer, row_index),

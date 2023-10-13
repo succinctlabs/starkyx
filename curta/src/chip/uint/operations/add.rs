@@ -5,8 +5,7 @@ use crate::air::AirConstraint;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::bit::BitRegister;
-use crate::chip::register::memory::MemorySlice;
-use crate::chip::register::{Register, RegisterSerializable};
+use crate::chip::register::Register;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
 use crate::chip::uint::bytes::operations::instruction::ByteOperationInstruction;
@@ -202,18 +201,6 @@ impl<AP: AirParser, const N: usize> AirConstraint<AP> for ByteArrayAdd<N> {
 }
 
 impl<F: PrimeField64> Instruction<F> for ByteArrayAdd<4> {
-    fn inputs(&self) -> Vec<MemorySlice> {
-        let mut inputs = vec![*self.a.register(), *self.b.register()];
-        if let Some(carry) = self.in_carry {
-            inputs.push(*carry.register());
-        }
-        inputs
-    }
-
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        vec![*self.result.register(), *self.result_carry.register()]
-    }
-
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let a = writer.read(&self.a, row_index);
         let b = writer.read(&self.b, row_index);

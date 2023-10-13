@@ -82,14 +82,6 @@ impl<L: AirParameters> AirBuilder<L> {
         }
     }
 
-    /// Adds the ability to write to trace location represented by a data register.
-    ///
-    /// Registers a write instruction into the builder
-    pub fn write_data<T: Register>(&mut self, data: &T) {
-        let instruction = AirInstruction::write(data.register());
-        self.register_air_instruction_internal(instruction).unwrap();
-    }
-
     /// Registers an custom instruction with the builder.
     pub fn register_instruction<I>(&mut self, instruction: I)
     where

@@ -15,7 +15,6 @@ use crate::chip::bool::SelectInstruction;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::bit::BitRegister;
-use crate::chip::register::memory::MemorySlice;
 use crate::chip::table::lookup::values::LogLookupValues;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::AirParameters;
@@ -99,30 +98,6 @@ impl<AP: AirParser> AirConstraint<AP> for ByteInstructionSet {
 }
 
 impl<F: PrimeField64> Instruction<F> for ByteInstructionSet {
-    fn inputs(&self) -> Vec<MemorySlice> {
-        match self {
-            Self::Op(op) => Instruction::<F>::inputs(op),
-            Self::BitAnd(op) => Instruction::<F>::inputs(op),
-            Self::BitXor(op) => Instruction::<F>::inputs(op),
-            Self::BitNot(op) => Instruction::<F>::inputs(op),
-            Self::BitSelect(op) => Instruction::<F>::inputs(op),
-            Self::Decode(instruction) => Instruction::<F>::inputs(instruction),
-            Self::Digest(instruction) => Instruction::<F>::inputs(instruction),
-        }
-    }
-
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        match self {
-            Self::Op(op) => Instruction::<F>::trace_layout(op),
-            Self::BitAnd(op) => Instruction::<F>::trace_layout(op),
-            Self::BitXor(op) => Instruction::<F>::trace_layout(op),
-            Self::BitNot(op) => Instruction::<F>::trace_layout(op),
-            Self::BitSelect(op) => Instruction::<F>::trace_layout(op),
-            Self::Decode(instruction) => Instruction::<F>::trace_layout(instruction),
-            Self::Digest(instruction) => Instruction::<F>::trace_layout(instruction),
-        }
-    }
-
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         match self {
             Self::Op(op) => Instruction::<F>::write(op, writer, row_index),
