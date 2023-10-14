@@ -375,7 +375,7 @@ where
     }
 }
 
-pub fn add_virtual_stark_proof<
+pub fn add_virtual_air_proof<
     F: RichField + Extendable<D>,
     A: Plonky2Air<F, D>,
     C: CurtaConfig<D, F = F>,
@@ -384,7 +384,7 @@ pub fn add_virtual_stark_proof<
     builder: &mut CircuitBuilder<F, D>,
     stark: &Starky<A>,
     config: &StarkyConfig<C, D>,
-) -> StarkProofTarget<D> {
+) -> AirProofTarget<D> {
     let fri_params = config.fri_params();
     let cap_height = fri_params.config.cap_height;
 
@@ -399,18 +399,31 @@ pub fn add_virtual_stark_proof<
         .collect::<Vec<_>>();
 
     let num_rounds = stark.air().num_rounds();
-    let num_global_values = stark.air().num_global_values();
-    let global_values_target = builder.add_virtual_targets(num_global_values);
     let trace_caps = (0..num_rounds)
         .map(|_| builder.add_virtual_cap(cap_height))
         .collect::<Vec<_>>();
 
-    let air_proof = AirProofTarget {
+    AirProofTarget {
         trace_caps,
         quotient_polys_cap: builder.add_virtual_cap(cap_height),
         openings: add_stark_opening_set_target(builder, stark, config),
         opening_proof: builder.add_virtual_fri_proof(&num_leaves_per_oracle, &fri_params),
-    };
+    }
+}
+
+pub fn add_virtual_stark_proof<
+    F: RichField + Extendable<D>,
+    A: Plonky2Air<F, D>,
+    C: CurtaConfig<D, F = F>,
+    const D: usize,
+>(
+    builder: &mut CircuitBuilder<F, D>,
+    stark: &Starky<A>,
+    config: &StarkyConfig<C, D>,
+) -> StarkProofTarget<D> {
+    let num_global_values = stark.air().num_global_values();
+    let global_values_target = builder.add_virtual_targets(num_global_values);
+    let air_proof = add_virtual_air_proof(builder, stark, config);
     StarkProofTarget {
         air_proof,
         global_values: global_values_target,
@@ -436,6 +449,32 @@ pub(crate) fn add_stark_opening_set_target<
     }
 }
 
+pub fn set_air_proof_target<F, C: CurtaConfig<D, F = F>, W, const D: usize>(
+    witness: &mut W,
+    proof_target: &AirProofTarget<D>,
+    proof: &AirProof<F, C, D>,
+) where
+    F: RichField + Extendable<D>,
+    C::Hasher: AlgebraicHasher<F>,
+    W: WitnessWrite<F>,
+{
+    for (cap, target_cap) in proof
+        .trace_caps
+        .iter()
+        .zip_eq(proof_target.trace_caps.iter())
+    {
+        witness.set_cap_target(target_cap, cap);
+    }
+    witness.set_cap_target(&proof_target.quotient_polys_cap, &proof.quotient_polys_cap);
+
+    witness.set_fri_openings(
+        &proof_target.openings.to_fri_openings(),
+        &proof.openings.to_fri_openings(),
+    );
+
+    set_fri_proof_target(witness, &proof_target.opening_proof, &proof.opening_proof);
+}
+
 pub fn set_stark_proof_target<F, C: CurtaConfig<D, F = F>, W, const D: usize>(
     witness: &mut W,
     proof_target: &StarkProofTarget<D>,
@@ -445,18 +484,7 @@ pub fn set_stark_proof_target<F, C: CurtaConfig<D, F = F>, W, const D: usize>(
     C::Hasher: AlgebraicHasher<F>,
     W: WitnessWrite<F>,
 {
-    for (cap, target_cap) in proof
-        .air_proof
-        .trace_caps
-        .iter()
-        .zip_eq(proof_target.air_proof.trace_caps.iter())
-    {
-        witness.set_cap_target(target_cap, cap);
-    }
-    witness.set_cap_target(
-        &proof_target.air_proof.quotient_polys_cap,
-        &proof.air_proof.quotient_polys_cap,
-    );
+    set_air_proof_target(witness, &proof_target.air_proof, &proof.air_proof);
 
     for (target, value) in proof_target
         .global_values
@@ -465,15 +493,4 @@ pub fn set_stark_proof_target<F, C: CurtaConfig<D, F = F>, W, const D: usize>(
     {
         witness.set_target(*target, *value);
     }
-
-    witness.set_fri_openings(
-        &proof_target.air_proof.openings.to_fri_openings(),
-        &proof.air_proof.openings.to_fri_openings(),
-    );
-
-    set_fri_proof_target(
-        witness,
-        &proof_target.air_proof.opening_proof,
-        &proof.air_proof.opening_proof,
-    );
 }

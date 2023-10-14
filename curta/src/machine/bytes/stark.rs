@@ -2,6 +2,7 @@ use anyhow::Result;
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::challenger::Challenger;
+use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 
@@ -16,6 +17,7 @@ use crate::machine::bytes::builder::NUM_LOOKUP_ROWS;
 use crate::maybe_rayon::*;
 use crate::plonky2::stark::config::{CurtaConfig, StarkyConfig};
 use crate::plonky2::stark::prover::{AirCommitment, StarkyProver};
+use crate::plonky2::stark::verifier::{StarkyVerifier, add_virtual_air_proof};
 use crate::plonky2::stark::Starky;
 use crate::plonky2::Plonky2Air;
 use crate::trace::AirTrace;
@@ -31,9 +33,10 @@ pub struct ByteStark<L: AirParameters, C, const D: usize> {
     pub(crate) lookup_table: ByteLogLookupTable<L::Field, L::CubicParams>,
 }
 
-impl<L: AirParameters, C: CurtaConfig<D, F = L::Field>, const D: usize> ByteStark<L, C, D>
+impl<L: AirParameters, C, const D: usize> ByteStark<L, C, D>
 where
     L::Field: RichField + Extendable<D>,
+    C: CurtaConfig<D, F = L::Field, FE = <L::Field as Extendable<D>>::Extension>,
     Chip<L>: Plonky2Air<L::Field, D>,
 {
     fn generate_execusion_traces(
@@ -118,19 +121,40 @@ where
         let (main_writer, lookup_writer) =
             self.generate_execusion_traces(execusion_trace, public_values);
 
+        let main_execusion_trace_values = main_writer
+            .read_trace()
+            .unwrap()
+            .rows_par()
+            .flat_map(|row| row[0..self.stark.air.execution_trace_length].to_vec())
+            .collect::<Vec<_>>();
+        let main_execusion_trace = AirTrace {
+            values: main_execusion_trace_values,
+            width: self.stark.air.execution_trace_length,
+        };
+
+        let lookup_execusion_trace_values = lookup_writer
+            .read_trace()
+            .unwrap()
+            .rows_par()
+            .flat_map(|row| row[0..self.lookup_stark.air.execution_trace_length].to_vec())
+            .collect::<Vec<_>>();
+
+        let lookup_execusion_trace = AirTrace {
+            values: lookup_execusion_trace_values,
+            width: self.lookup_stark.air.execution_trace_length,
+        };
+
         // Commit to execusion traces
         let main_execusion_commitment = timed!(
             timing,
             "Commit to execusion trace",
-            self.config
-                .commit(&main_writer.read_trace().unwrap(), timing)
+            self.config.commit(&main_execusion_trace, timing)
         );
 
         let lookup_execusion_commitment = timed!(
             timing,
             "Commit to lookup execusion trace",
-            self.lookup_config
-                .commit(&lookup_writer.read_trace().unwrap(), timing)
+            self.lookup_config.commit(&lookup_execusion_trace, timing)
         );
 
         // Absorve the trace commitments into the challenger.
@@ -154,7 +178,6 @@ where
         // Generate extended traces.
         self.generate_extended_traces(&main_writer, &lookup_writer);
 
-        // Destruct writers.
         let InnerWriterData {
             trace: main_trace,
             public: main_public,
@@ -199,6 +222,12 @@ where
             "Commit to lookup extended trace",
             self.lookup_config.commit(&lookup_extended_trace, timing)
         );
+
+        // Obsderve global values.
+        challenger.observe_elements(&main_global);
+        // Observe extended trace commitments.
+        challenger.observe_cap(&main_extended_commitment.merkle_tree.cap);
+        challenger.observe_cap(&lookup_extended_commitment.merkle_tree.cap);
 
         // Return the air commitments.
         (
@@ -284,6 +313,8 @@ where
         // Get challenges.
         let challenges = challenger.get_n_challenges(self.stark.air.num_challenges);
 
+        // Observe global values.
+        challenger.observe_elements(&proof.global_values);
         // Observe extended trace commitments.
         challenger.observe_cap(&proof.main_proof.trace_caps[1]);
         challenger.observe_cap(&proof.lookup_proof.trace_caps[1]);
@@ -310,10 +341,13 @@ where
 
     pub fn verify(
         &self,
-        proof: &ByteStarkProof<L::Field, C, D>,
+        proof: ByteStarkProof<L::Field, C, D>,
         public_values: &[L::Field],
     ) -> Result<()> {
-        let challenges = self.get_challenges(proof, public_values);
+        let ByteStarkChallenges {
+            main_challenges,
+            lookup_challenges,
+        } = self.get_challenges(&proof, public_values);
 
         let ByteStarkProof {
             main_proof,
@@ -321,7 +355,36 @@ where
             global_values,
         } = proof;
 
-        Ok(())
+        StarkyVerifier::verify_with_challenges(
+            &self.config,
+            &self.stark,
+            main_proof,
+            public_values,
+            &global_values,
+            main_challenges,
+        )?;
+        StarkyVerifier::verify_with_challenges(
+            &self.lookup_config,
+            &self.lookup_stark,
+            lookup_proof,
+            public_values,
+            &global_values,
+            lookup_challenges,
+        )
+    }
+
+    pub fn add_virtual_proof_target(&self, builder: &mut CircuitBuilder<L::Field, D>) -> ByteStarkProofTarget<D> {
+        let main_proof = add_virtual_air_proof(builder, &self.stark, &self.config);
+        let lookup_proof = add_virtual_air_proof(builder, &self.lookup_stark, &self.lookup_config);
+
+        let num_global_values = self.stark.air.num_global_values;
+        let global_values = builder.add_virtual_targets(num_global_values);
+
+        ByteStarkProofTarget {
+            main_proof,
+            lookup_proof,
+            global_values,
+        }
     }
 }
 
@@ -388,7 +451,9 @@ mod tests {
         }
 
         let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
-        let proof = stark.prove(&trace, &public, &mut timing);
+        let proof = stark.prove(&trace, &public, &mut timing).unwrap();
+
+        stark.verify(proof, &public).unwrap();
 
         timing.print();
     }
