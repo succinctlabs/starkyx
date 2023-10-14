@@ -38,6 +38,50 @@ pub struct AirProof<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, cons
     pub opening_proof: FriProof<F, C::Hasher, D>,
 }
 
+impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> AirProof<F, C, D> {
+    pub fn get_iop_challenges(
+        &self,
+        config: &StarkyConfig<C, D>,
+        degree_bits: usize,
+        air_challenges: Vec<F>,
+        challenger: &mut Challenger<F, C::Hasher>,
+    ) -> StarkProofChallenges<F, D> {
+        let AirProof {
+            quotient_polys_cap,
+            openings,
+            opening_proof:
+                FriProof {
+                    commit_phase_merkle_caps,
+                    final_poly,
+                    pow_witness,
+                    ..
+                },
+            ..
+        } = &self;
+
+        let num_challenges = config.num_challenges;
+        let stark_alphas = challenger.get_n_challenges(num_challenges);
+
+        challenger.observe_cap(quotient_polys_cap);
+        let stark_zeta = challenger.get_extension_challenge::<D>();
+
+        challenger.observe_openings(&openings.to_fri_openings());
+
+        StarkProofChallenges {
+            stark_alphas,
+            stark_betas: air_challenges,
+            stark_zeta,
+            fri_challenges: challenger.fri_challenges::<C::GenericConfig, D>(
+                commit_phase_merkle_caps,
+                final_poly,
+                *pow_witness,
+                degree_bits,
+                &config.fri_config,
+            ),
+        }
+    }
+}
+
 /// A proof of a STARK computation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(bound = "")]
@@ -64,43 +108,8 @@ impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> Sta
         air_challenges: Vec<F>,
         challenger: &mut Challenger<F, C::Hasher>,
     ) -> StarkProofChallenges<F, D> {
-        let StarkProof {
-            air_proof:
-                AirProof {
-                    quotient_polys_cap,
-                    openings,
-                    opening_proof:
-                        FriProof {
-                            commit_phase_merkle_caps,
-                            final_poly,
-                            pow_witness,
-                            ..
-                        },
-                    ..
-                },
-            ..
-        } = &self;
-
-        let num_challenges = config.num_challenges;
-        let stark_alphas = challenger.get_n_challenges(num_challenges);
-
-        challenger.observe_cap(quotient_polys_cap);
-        let stark_zeta = challenger.get_extension_challenge::<D>();
-
-        challenger.observe_openings(&openings.to_fri_openings());
-
-        StarkProofChallenges {
-            stark_alphas,
-            stark_betas: air_challenges,
-            stark_zeta,
-            fri_challenges: challenger.fri_challenges::<C::GenericConfig, D>(
-                commit_phase_merkle_caps,
-                final_poly,
-                *pow_witness,
-                degree_bits,
-                &config.fri_config,
-            ),
-        }
+        self.air_proof
+            .get_iop_challenges(config, degree_bits, air_challenges, challenger)
     }
 
     pub(crate) fn get_challenges<A: RAirData>(
@@ -147,6 +156,51 @@ pub struct AirProofTarget<const D: usize> {
     pub opening_proof: FriProofTarget<D>,
 }
 
+impl<const D: usize> AirProofTarget<D> {
+    pub fn get_iop_challenges_target<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>>(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        config: &StarkyConfig<C, D>,
+        air_challengs: Vec<Target>,
+        challenger: &mut RecursiveChallenger<F, C::InnerHasher, D>,
+    ) -> StarkProofChallengesTarget<D> {
+        let AirProofTarget {
+            quotient_polys_cap,
+            openings,
+            opening_proof:
+                FriProofTarget {
+                    commit_phase_merkle_caps,
+                    final_poly,
+                    pow_witness,
+                    ..
+                },
+            ..
+        } = &self;
+
+        let num_challenges = config.num_challenges;
+
+        let stark_alphas = challenger.get_n_challenges(builder, num_challenges);
+
+        challenger.observe_cap(quotient_polys_cap);
+        let stark_zeta = challenger.get_extension_challenge(builder);
+
+        challenger.observe_openings(&openings.to_fri_openings());
+
+        StarkProofChallengesTarget {
+            stark_alphas,
+            stark_betas: air_challengs,
+            stark_zeta,
+            fri_challenges: challenger.fri_challenges(
+                builder,
+                commit_phase_merkle_caps,
+                final_poly,
+                *pow_witness,
+                &config.fri_config,
+            ),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StarkProofTarget<const D: usize> {
     pub air_proof: AirProofTarget<D>,
@@ -174,44 +228,8 @@ impl<const D: usize> StarkProofTarget<D> {
         air_challengs: Vec<Target>,
         challenger: &mut RecursiveChallenger<F, C::InnerHasher, D>,
     ) -> StarkProofChallengesTarget<D> {
-        let StarkProofTarget {
-            air_proof:
-                AirProofTarget {
-                    quotient_polys_cap,
-                    openings,
-                    opening_proof:
-                        FriProofTarget {
-                            commit_phase_merkle_caps,
-                            final_poly,
-                            pow_witness,
-                            ..
-                        },
-                    ..
-                },
-            ..
-        } = &self;
-
-        let num_challenges = config.num_challenges;
-
-        let stark_alphas = challenger.get_n_challenges(builder, num_challenges);
-
-        challenger.observe_cap(quotient_polys_cap);
-        let stark_zeta = challenger.get_extension_challenge(builder);
-
-        challenger.observe_openings(&openings.to_fri_openings());
-
-        StarkProofChallengesTarget {
-            stark_alphas,
-            stark_betas: air_challengs,
-            stark_zeta,
-            fri_challenges: challenger.fri_challenges(
-                builder,
-                commit_phase_merkle_caps,
-                final_poly,
-                *pow_witness,
-                &config.fri_config,
-            ),
-        }
+        self.air_proof
+            .get_iop_challenges_target(builder, config, air_challengs, challenger)
     }
 
     pub fn get_challenges_target<

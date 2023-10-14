@@ -40,33 +40,33 @@ where
     pub fn verify_with_challenges<A>(
         config: &StarkyConfig<C, D>,
         stark: &Starky<A>,
-        proof: StarkProof<F, C, D>,
+        proof: AirProof<F, C, D>,
         public_inputs: &[F],
+        global_values: &[F],
         challenges: StarkProofChallenges<F, D>,
     ) -> Result<()>
     where
         A: StarkyAir<F, D>,
     {
-        let degree_bits = proof.recover_degree_bits(config);
+        let degree_bits = config.degree_bits;
 
-        Self::validate_proof_shape(config, stark, &proof)?;
+        Self::validate_proof_shape(config, stark, &proof, global_values)?;
 
         let StarkOpeningSet {
             local_values,
             next_values,
             quotient_polys,
-        } = &proof.air_proof.openings;
+        } = &proof.openings;
 
         // Verify the global constraints
         let mut global_parser = GlobalStarkParser {
-            global_vars: &proof.global_values,
+            global_vars: global_values,
             public_vars: public_inputs,
             challenges: &challenges.stark_betas,
         };
         stark.air().eval_global(&mut global_parser);
 
-        let global_values_ext = proof
-            .global_values
+        let global_values_ext = global_values
             .iter()
             .map(|x| F::Extension::from_basefield(*x))
             .collect::<Vec<_>>();
@@ -125,10 +125,9 @@ where
         }
 
         let merkle_caps = proof
-            .air_proof
             .trace_caps
             .into_iter()
-            .chain(once(proof.air_proof.quotient_polys_cap))
+            .chain(once(proof.quotient_polys_cap))
             .collect::<Vec<_>>();
 
         verify_fri_proof::<F, C::GenericConfig, D>(
@@ -137,10 +136,10 @@ where
                 F::primitive_root_of_unity(degree_bits),
                 config,
             ),
-            &proof.air_proof.openings.to_fri_openings(),
+            &proof.openings.to_fri_openings(),
             &challenges.fri_challenges,
             &merkle_caps,
-            &proof.air_proof.opening_proof,
+            &proof.opening_proof,
             &config.fri_params(),
         )?;
         Ok(())
@@ -157,28 +156,36 @@ where
     {
         let degree_bits = proof.recover_degree_bits(config);
         let challenges = proof.get_challenges(config, stark, public_inputs, degree_bits);
-        Self::verify_with_challenges(config, stark, proof, public_inputs, challenges)
+        let StarkProof {
+            air_proof,
+            global_values,
+        } = proof;
+        Self::verify_with_challenges(
+            config,
+            stark,
+            air_proof,
+            public_inputs,
+            &global_values,
+            challenges,
+        )
     }
 
     pub fn validate_proof_shape<A: RAirData>(
         config: &StarkyConfig<C, D>,
         stark: &Starky<A>,
-        proof: &StarkProof<F, C, D>,
+        proof: &AirProof<F, C, D>,
+        global_values: &[F],
     ) -> Result<()> {
         let fri_params = config.fri_params();
         let cap_height = fri_params.config.cap_height;
 
-        let StarkProof {
-            air_proof:
-                AirProof {
-                    trace_caps,
-                    quotient_polys_cap,
-                    openings,
-                    // The shape of the opening proof will be checked in the FRI verifier (see
-                    // validate_fri_proof_shape), so we ignore it here.
-                    opening_proof: _,
-                },
-            global_values,
+        let AirProof {
+            trace_caps,
+            quotient_polys_cap,
+            openings,
+            // The shape of the opening proof will be checked in the FRI verifier (see
+            // validate_fri_proof_shape), so we ignore it here.
+            opening_proof: _,
         } = proof;
 
         let StarkOpeningSet {
@@ -215,8 +222,9 @@ where
         builder: &mut CircuitBuilder<F, D>,
         config: &StarkyConfig<C, D>,
         stark: &Starky<A>,
-        proof: &StarkProofTarget<D>,
+        proof: &AirProofTarget<D>,
         public_inputs: &[Target],
+        global_values: &[Target],
         challenges: StarkProofChallengesTarget<D>,
     ) where
         A: Plonky2Air<F, D>,
@@ -225,9 +233,9 @@ where
             local_values,
             next_values,
             quotient_polys,
-        } = &proof.air_proof.openings;
+        } = &proof.openings;
 
-        let degree_bits = proof.recover_degree_bits(config);
+        let degree_bits = config.degree_bits;
 
         let one = builder.one_extension();
 
@@ -255,15 +263,14 @@ where
         let mut cubic_results = HashMap::new();
         let mut global_parser = GlobalRecursiveStarkParser {
             builder,
-            global_vars: &proof.global_values,
+            global_vars: global_values,
             public_vars: public_inputs,
             challenges: &challenges.stark_betas,
             cubic_results: &mut cubic_results,
         };
         stark.air().eval_global(&mut global_parser);
 
-        let global_vals_ext = proof
-            .global_values
+        let global_vals_ext = global_values
             .iter()
             .map(|x| builder.convert_to_ext(*x))
             .collect::<Vec<_>>();
@@ -301,11 +308,10 @@ where
         }
 
         let merkle_caps = proof
-            .air_proof
             .trace_caps
             .iter()
             .cloned()
-            .chain(once(proof.air_proof.quotient_polys_cap.clone()))
+            .chain(once(proof.quotient_polys_cap.clone()))
             .collect::<Vec<_>>();
 
         let fri_instance = stark.fri_instance_target(
@@ -316,10 +322,10 @@ where
         );
         builder.verify_fri_proof::<C::GenericConfig>(
             &fri_instance,
-            &proof.air_proof.openings.to_fri_openings(),
+            &proof.openings.to_fri_openings(),
             &challenges.fri_challenges,
             &merkle_caps,
-            &proof.air_proof.opening_proof,
+            &proof.opening_proof,
             &config.fri_params(),
         );
     }
@@ -334,12 +340,17 @@ where
         A: Plonky2Air<F, D>,
     {
         let challenges = proof.get_challenges_target(builder, config, public_inputs, stark);
+        let StarkProofTarget {
+            air_proof,
+            global_values,
+        } = proof;
         Self::verify_with_challenges_circuit(
             builder,
             config,
             stark,
-            proof,
+            air_proof,
             public_inputs,
+            global_values,
             challenges,
         )
     }

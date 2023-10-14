@@ -1,3 +1,4 @@
+use anyhow::Result;
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::challenger::Challenger;
@@ -5,7 +6,7 @@ use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 
 use super::air::ByteParameters;
-use super::proof::{ByteAirCommitment, ByteStarkProof};
+use super::proof::{ByteStarkChallenges, ByteStarkProof, ByteStarkProofTarget};
 use crate::chip::trace::data::AirTraceData;
 use crate::chip::trace::writer::{InnerWriterData, TraceWriter};
 use crate::chip::uint::bytes::lookup_table::multiplicity_data::ByteMultiplicityData;
@@ -14,8 +15,7 @@ use crate::chip::{AirParameters, Chip};
 use crate::machine::bytes::builder::NUM_LOOKUP_ROWS;
 use crate::maybe_rayon::*;
 use crate::plonky2::stark::config::{CurtaConfig, StarkyConfig};
-use crate::plonky2::stark::proof::StarkProof;
-use crate::plonky2::stark::prover::StarkyProver;
+use crate::plonky2::stark::prover::{AirCommitment, StarkyProver};
 use crate::plonky2::stark::Starky;
 use crate::plonky2::Plonky2Air;
 use crate::trace::AirTrace;
@@ -95,6 +95,13 @@ where
 
         // Write the extended trace values
         self.lookup_air_data.write_extended_trace(lookup_writer);
+
+        // Update global values
+        main_writer
+            .global
+            .write()
+            .unwrap()
+            .copy_from_slice(&lookup_writer.global.read().unwrap());
     }
 
     fn generate_trace(
@@ -103,7 +110,7 @@ where
         public_values: &[L::Field],
         challenger: &mut Challenger<L::Field, C::Hasher>,
         timing: &mut TimingTree,
-    ) -> ByteAirCommitment<L::Field, C, D> {
+    ) -> (AirCommitment<L::Field, C, D>, AirCommitment<L::Field, C, D>) {
         // Absorve public values into the challenger.
         challenger.observe_elements(public_values);
 
@@ -150,6 +157,8 @@ where
         // Destruct writers.
         let InnerWriterData {
             trace: main_trace,
+            public: main_public,
+            global: main_global,
             challenges: main_challenges,
             ..
         } = main_writer.into_inner().unwrap();
@@ -157,6 +166,7 @@ where
             trace: lookup_trace,
             public: lookup_public,
             global: lookup_global,
+            challenges: global_challenges,
             ..
         } = lookup_writer.into_inner().unwrap();
 
@@ -190,14 +200,21 @@ where
             self.lookup_config.commit(&lookup_extended_trace, timing)
         );
 
-        // Return the air commitment.
-        ByteAirCommitment {
-            main_trace_commitments: vec![main_execusion_commitment, main_extended_commitment],
-            lookup_trace_commitments: vec![lookup_execusion_commitment, lookup_extended_commitment],
-            public_inputs: lookup_public,
-            global_values: lookup_global,
-            challenges: main_challenges,
-        }
+        // Return the air commitments.
+        (
+            AirCommitment {
+                trace_commitments: vec![main_execusion_commitment, main_extended_commitment],
+                public_inputs: main_public,
+                global_values: main_global,
+                challenges: main_challenges,
+            },
+            AirCommitment {
+                trace_commitments: vec![lookup_execusion_commitment, lookup_extended_commitment],
+                public_inputs: lookup_public,
+                global_values: lookup_global,
+                challenges: global_challenges,
+            },
+        )
     }
 
     pub fn prove(
@@ -205,7 +222,7 @@ where
         execusion_trace: &AirTrace<L::Field>,
         public_values: &[L::Field],
         timing: &mut TimingTree,
-    ) -> ByteStarkProof<L::Field, C, D> {
+    ) -> Result<ByteStarkProof<L::Field, C, D>> {
         // Initialize challenger.
         let mut challenger = Challenger::new();
 
@@ -214,7 +231,6 @@ where
             timing,
             "Generate stark trace",
             self.generate_trace(execusion_trace, public_values, &mut challenger, timing)
-                .air_commitments()
         );
 
         // Generate individual stark proofs.
@@ -227,8 +243,7 @@ where
                 main_air_commitment,
                 &mut challenger,
                 &mut TimingTree::default(),
-            )
-            .unwrap()
+            )?
         );
 
         let lookup_proof = timed!(
@@ -240,16 +255,73 @@ where
                 lookup_air_commitment,
                 &mut challenger,
                 &mut TimingTree::default(),
-            )
-            .unwrap()
+            )?
         );
 
         // Return the proof.
-        ByteStarkProof {
+        Ok(ByteStarkProof {
             main_proof: main_proof.air_proof,
             lookup_proof: lookup_proof.air_proof,
             global_values: lookup_proof.global_values,
+        })
+    }
+
+    pub fn get_challenges(
+        &self,
+        proof: &ByteStarkProof<L::Field, C, D>,
+        public_values: &[L::Field],
+    ) -> ByteStarkChallenges<L::Field, D> {
+        // Initialize challenger.
+        let mut challenger = Challenger::<L::Field, C::Hasher>::new();
+
+        // Observe public values.
+        challenger.observe_elements(public_values);
+
+        // Observe execusion trace commitments.
+        challenger.observe_cap(&proof.main_proof.trace_caps[0]);
+        challenger.observe_cap(&proof.lookup_proof.trace_caps[0]);
+
+        // Get challenges.
+        let challenges = challenger.get_n_challenges(self.stark.air.num_challenges);
+
+        // Observe extended trace commitments.
+        challenger.observe_cap(&proof.main_proof.trace_caps[1]);
+        challenger.observe_cap(&proof.lookup_proof.trace_caps[1]);
+
+        // Get all challenges.
+        let main_challenges = proof.main_proof.get_iop_challenges(
+            &self.config,
+            self.config.degree_bits,
+            challenges.clone(),
+            &mut challenger,
+        );
+        let lookup_challenges = proof.lookup_proof.get_iop_challenges(
+            &self.lookup_config,
+            self.lookup_config.degree_bits,
+            challenges,
+            &mut challenger,
+        );
+
+        ByteStarkChallenges {
+            main_challenges,
+            lookup_challenges,
         }
+    }
+
+    pub fn verify(
+        &self,
+        proof: &ByteStarkProof<L::Field, C, D>,
+        public_values: &[L::Field],
+    ) -> Result<()> {
+        let challenges = self.get_challenges(proof, public_values);
+
+        let ByteStarkProof {
+            main_proof,
+            lookup_proof,
+            global_values,
+        } = proof;
+
+        Ok(())
     }
 }
 
@@ -316,8 +388,7 @@ mod tests {
         }
 
         let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
-        let mut challenger = Challenger::new();
-        let _ = stark.generate_trace(&trace, &public, &mut challenger, &mut timing);
+        let proof = stark.prove(&trace, &public, &mut timing);
 
         timing.print();
     }
