@@ -1,13 +1,17 @@
 use anyhow::Result;
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
-use plonky2::iop::challenger::Challenger;
+use plonky2::iop::challenger::{Challenger, RecursiveChallenger};
+use plonky2::iop::target::Target;
+use plonky2::iop::witness::WitnessWrite;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 
 use super::air::ByteParameters;
-use super::proof::{ByteStarkChallenges, ByteStarkProof, ByteStarkProofTarget};
+use super::proof::{
+    ByteStarkChallenges, ByteStarkChallengesTarget, ByteStarkProof, ByteStarkProofTarget,
+};
 use crate::chip::trace::data::AirTraceData;
 use crate::chip::trace::writer::{InnerWriterData, TraceWriter};
 use crate::chip::uint::bytes::lookup_table::multiplicity_data::ByteMultiplicityData;
@@ -17,7 +21,9 @@ use crate::machine::bytes::builder::NUM_LOOKUP_ROWS;
 use crate::maybe_rayon::*;
 use crate::plonky2::stark::config::{CurtaConfig, StarkyConfig};
 use crate::plonky2::stark::prover::{AirCommitment, StarkyProver};
-use crate::plonky2::stark::verifier::{StarkyVerifier, add_virtual_air_proof};
+use crate::plonky2::stark::verifier::{
+    add_virtual_air_proof, set_air_proof_target, StarkyVerifier,
+};
 use crate::plonky2::stark::Starky;
 use crate::plonky2::Plonky2Air;
 use crate::trace::AirTrace;
@@ -373,24 +379,130 @@ where
         )
     }
 
-    pub fn add_virtual_proof_target(&self, builder: &mut CircuitBuilder<L::Field, D>) -> ByteStarkProofTarget<D> {
+    pub fn add_virtual_proof_with_pis_target(
+        &self,
+        builder: &mut CircuitBuilder<L::Field, D>,
+    ) -> (ByteStarkProofTarget<D>, Vec<Target>) {
         let main_proof = add_virtual_air_proof(builder, &self.stark, &self.config);
         let lookup_proof = add_virtual_air_proof(builder, &self.lookup_stark, &self.lookup_config);
 
         let num_global_values = self.stark.air.num_global_values;
         let global_values = builder.add_virtual_targets(num_global_values);
+        let public_inputs = builder.add_virtual_targets(self.stark.air.num_public_values);
 
-        ByteStarkProofTarget {
+        (
+            ByteStarkProofTarget {
+                main_proof,
+                lookup_proof,
+                global_values,
+            },
+            public_inputs,
+        )
+    }
+
+    pub fn get_challenges_target(
+        &self,
+        builder: &mut CircuitBuilder<L::Field, D>,
+        proof: &ByteStarkProofTarget<D>,
+        public_values: &[Target],
+    ) -> ByteStarkChallengesTarget<D> {
+        // Initialize challenger.
+        let mut challenger = RecursiveChallenger::<L::Field, C::InnerHasher, D>::new(builder);
+
+        // Observe public values.
+        challenger.observe_elements(public_values);
+
+        // Observe execusion trace commitments.
+        challenger.observe_cap(&proof.main_proof.trace_caps[0]);
+        challenger.observe_cap(&proof.lookup_proof.trace_caps[0]);
+
+        // Get challenges.
+        let challenges = challenger.get_n_challenges(builder, self.stark.air.num_challenges);
+
+        // Observe global values.
+        challenger.observe_elements(&proof.global_values);
+        // Observe extended trace commitments.
+        challenger.observe_cap(&proof.main_proof.trace_caps[1]);
+        challenger.observe_cap(&proof.lookup_proof.trace_caps[1]);
+
+        // Get all challenges.
+        let main_challenges = proof.main_proof.get_iop_challenges_target(
+            builder,
+            &self.config,
+            challenges.clone(),
+            &mut challenger,
+        );
+        let lookup_challenges = proof.lookup_proof.get_iop_challenges_target(
+            builder,
+            &self.lookup_config,
+            challenges,
+            &mut challenger,
+        );
+
+        ByteStarkChallengesTarget {
+            main_challenges,
+            lookup_challenges,
+        }
+    }
+
+    pub fn verify_circuit(
+        &self,
+        builder: &mut CircuitBuilder<L::Field, D>,
+        proof: &ByteStarkProofTarget<D>,
+        public_values: &[Target],
+    ) {
+        let challenges = self.get_challenges_target(builder, proof, public_values);
+        let ByteStarkProofTarget {
             main_proof,
             lookup_proof,
             global_values,
-        }
+        } = proof;
+
+        StarkyVerifier::verify_with_challenges_circuit(
+            builder,
+            &self.config,
+            &self.stark,
+            main_proof,
+            public_values,
+            global_values,
+            challenges.main_challenges,
+        );
+
+        StarkyVerifier::verify_with_challenges_circuit(
+            builder,
+            &self.lookup_config,
+            &self.lookup_stark,
+            lookup_proof,
+            public_values,
+            global_values,
+            challenges.lookup_challenges,
+        )
+    }
+
+    pub fn set_proof_target<W: WitnessWrite<L::Field>>(
+        &self,
+        witness: &mut W,
+        proof_tagret: &ByteStarkProofTarget<D>,
+        proof: ByteStarkProof<L::Field, C, D>,
+    ) {
+        let ByteStarkProofTarget {
+            main_proof,
+            lookup_proof,
+            global_values,
+        } = proof_tagret;
+
+        set_air_proof_target(witness, &main_proof, &proof.main_proof);
+        set_air_proof_target(witness, &lookup_proof, &proof.lookup_proof);
+
+        witness.set_target_arr(&global_values, &proof.global_values);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField;
+    use plonky2::iop::witness::{PartialWitness, WitnessWrite};
+    use plonky2::plonk::circuit_data::CircuitConfig;
     use rand::Rng;
     use serde::{Deserialize, Serialize};
 
@@ -421,6 +533,7 @@ mod tests {
     fn test_byte_multi_stark() {
         type L = ByteTest;
         type C = CurtaPoseidonGoldilocksConfig;
+        type Config = <C as CurtaConfig<2>>::GenericConfig;
 
         let _ = env_logger::builder().is_test(true).try_init();
 
@@ -453,7 +566,24 @@ mod tests {
         let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
         let proof = stark.prove(&trace, &public, &mut timing).unwrap();
 
-        stark.verify(proof, &public).unwrap();
+        stark.verify(proof.clone(), &public).unwrap();
+
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
+
+        let (proof_target, public_input) =
+            stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
+        stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
+
+        let data = recursive_builder.build::<Config>();
+
+        let mut pw = PartialWitness::new();
+
+        pw.set_target_arr(&public_input, &public);
+        stark.set_proof_target(&mut pw, &proof_target, proof);
+
+        let rec_proof = data.prove(pw).unwrap();
+        data.verify(rec_proof).unwrap();
 
         timing.print();
     }
