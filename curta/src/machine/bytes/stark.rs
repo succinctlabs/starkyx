@@ -491,10 +491,10 @@ where
             global_values,
         } = proof_tagret;
 
-        set_air_proof_target(witness, &main_proof, &proof.main_proof);
-        set_air_proof_target(witness, &lookup_proof, &proof.lookup_proof);
+        set_air_proof_target(witness, main_proof, &proof.main_proof);
+        set_air_proof_target(witness, lookup_proof, &proof.lookup_proof);
 
-        witness.set_target_arr(&global_values, &proof.global_values);
+        witness.set_target_arr(global_values, &proof.global_values);
     }
 }
 
