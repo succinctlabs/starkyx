@@ -14,6 +14,7 @@ pub mod builder;
 pub mod constraint;
 pub mod ec;
 pub mod field;
+pub mod memory;
 pub mod hash;
 pub mod instruction;
 pub mod register;
