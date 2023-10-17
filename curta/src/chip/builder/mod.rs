@@ -163,8 +163,10 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 
     pub fn build(mut self) -> (Chip<L>, AirTraceData<L>) {
-        // Constrain memory bus
-        self.constrain_memory_bus();
+        // Register all bus constraints.
+        for i in 0..self.buses.len() {
+            self.register_bus_constraint(i);
+        }
         // constrain all bus channels
         for channel in self.bus_channels.iter() {
             self.constraints.push(channel.clone().into());

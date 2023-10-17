@@ -9,25 +9,27 @@ pub struct RawPointer {
     challenge: CubicRegister,
 }
 
+impl RawPointer {
+    pub(crate) fn from_challenge(challenge: CubicRegister) -> Self {
+        Self { challenge }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Hash)]
 pub struct Pointer<T> {
-    ptr: RawPointer,
+    pub raw: RawPointer,
     _marker: PhantomData<T>,
 }
 
 impl<T> Pointer<T> {
-    pub fn new(ptr: RawPointer) -> Self {
+    pub fn new(raw_ptr: RawPointer) -> Self {
         Self {
-            ptr,
+            raw: raw_ptr,
             _marker: PhantomData,
         }
     }
 
-    pub fn from_challenge(challenge: CubicRegister) -> Self {
-        Self::new(RawPointer { challenge })
-    }
-
-    pub fn raw_ptr(&self) -> RawPointer {
-        self.ptr
+    pub(crate) fn from_challenge(challenge: CubicRegister) -> Self {
+        Self::new(RawPointer::from_challenge(challenge))
     }
 }

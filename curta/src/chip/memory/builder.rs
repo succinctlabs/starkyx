@@ -2,11 +2,13 @@ use super::get::GetInstruction;
 use super::instruction::MemoryInstruction;
 use super::pointer::Pointer;
 use super::set::SetInstruction;
+use super::slice::Slice;
 use super::time::TimeRegister;
 use super::value::MemoryValue;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::set::AirInstruction;
 use crate::chip::register::cubic::CubicRegister;
+use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::AirParameters;
@@ -15,6 +17,10 @@ use crate::math::prelude::*;
 impl<L: AirParameters> AirBuilder<L> {
     pub fn set_time(&mut self, time: TimeRegister) {
         self.time = Some(time)
+    }
+
+    pub fn get_at<V: MemoryValue>(&mut self, slice: &Slice<V>, idx: ElementRegister) -> Pointer<V> {
+        slice.get_at(self, idx)
     }
 
     pub fn init_local_memory(&mut self) {
@@ -33,7 +39,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let challenge = self.alloc_challenge();
         let ptr = Pointer::from_challenge(challenge);
         let time = self.time.unwrap();
-        let digest = value.compress(self, ptr.raw_ptr(), time);
+        let digest = value.compress(self, ptr.raw, time);
         self.input_to_memory_bus(digest);
 
         ptr
@@ -55,13 +61,6 @@ impl<L: AirParameters> AirBuilder<L> {
             MemorySlice::Global(_, _) => self.buses[0].output_global_value(&digest),
             _ => panic!("Expected local, public, or global register"),
         }
-    }
-
-    pub(crate) fn constrain_memory_bus(&mut self) {
-        if self.buses.is_empty() {
-            return;
-        }
-        self.register_bus_constraint(0);
     }
 
     /// Connects a timestamp `time` from the current row to the timestamp at location `time_next`
@@ -86,13 +85,13 @@ impl<L: AirParameters> AirBuilder<L> {
     /// Reads the value from the memory at location `ptr`.
     pub fn get<V: MemoryValue>(&mut self, ptr: &Pointer<V>) -> V {
         let (value, last_write_ts) = self.unsafe_raw_read(ptr);
-        let read_digest = value.compress(self, ptr.raw_ptr(), last_write_ts);
+        let read_digest = value.compress(self, ptr.raw, last_write_ts);
         // TODO: maybe migrate from channel zero to a dedicated channel.
         self.output_from_memory_bus(read_digest);
         // Advance timestamp to mark the event.
         self.advance_timestamp(1);
         let new_write_ts = self.time.unwrap();
-        let write_digest = value.compress(self, ptr.raw_ptr(), new_write_ts);
+        let write_digest = value.compress(self, ptr.raw, new_write_ts);
         self.input_to_memory_bus(write_digest);
         self.unsafe_raw_write(ptr, value, new_write_ts);
         value
@@ -101,28 +100,26 @@ impl<L: AirParameters> AirBuilder<L> {
     fn unsafe_raw_read<V: MemoryValue>(&mut self, ptr: &Pointer<V>) -> (V, TimeRegister) {
         let value = self.alloc::<V>();
         let time = self.alloc::<TimeRegister>();
-        let instr =
-            MemoryInstruction::Get(GetInstruction::new(ptr.raw_ptr(), *value.register(), time));
+        let instr = MemoryInstruction::Get(GetInstruction::new(ptr.raw, *value.register(), time));
         self.register_air_instruction_internal(AirInstruction::mem(instr))
             .unwrap();
         (value, time)
     }
 
     fn unsafe_raw_write<V: MemoryValue>(&mut self, ptr: &Pointer<V>, value: V, time: TimeRegister) {
-        let instr =
-            MemoryInstruction::Set(SetInstruction::new(ptr.raw_ptr(), *value.register(), time));
+        let instr = MemoryInstruction::Set(SetInstruction::new(ptr.raw, *value.register(), time));
         self.register_air_instruction_internal(AirInstruction::mem(instr))
             .unwrap();
     }
 
     pub fn set<V: MemoryValue>(&mut self, ptr: &Pointer<V>, value: V) {
         let (last_value, last_write_ts) = self.unsafe_raw_read(ptr);
-        let read_digest = last_value.compress(self, ptr.raw_ptr(), last_write_ts);
+        let read_digest = last_value.compress(self, ptr.raw, last_write_ts);
         self.output_from_memory_bus(read_digest);
         self.advance_timestamp(1);
 
         let write_ts = self.time.unwrap();
-        let write_digest = value.compress(self, ptr.raw_ptr(), write_ts);
+        let write_digest = value.compress(self, ptr.raw, write_ts);
         self.input_to_memory_bus(write_digest)
     }
 }

@@ -48,12 +48,8 @@ impl<L: AirParameters> AirBuilder<L> {
         }
     }
 
-    pub fn constrain_bus(&mut self, mut bus: Bus<CubicRegister, L::CubicParams>) {
-        let global_accumulators =
-            self.alloc_array_global::<CubicRegister>(bus.global_entries.len() / 2);
-        bus.global_accumulators = global_accumulators;
+    pub fn constrain_bus(&mut self, bus: Bus<CubicRegister, L::CubicParams>) {
         self.buses.push(bus.clone());
-        self.global_constraints.push(bus.into());
     }
 
     pub fn register_bus_constraint(&mut self, index: usize) {
