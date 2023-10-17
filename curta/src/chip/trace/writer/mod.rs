@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use super::data::AirTraceData;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::instruction::Instruction;
+use crate::chip::memory::map::MemoryMap;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::EvalCubic;
 use crate::chip::register::memory::MemorySlice;
@@ -97,6 +98,7 @@ pub struct WriterData<T> {
     pub(crate) global: RwLock<Vec<T>>,
     pub(crate) public: RwLock<Vec<T>>,
     pub(crate) challenges: RwLock<Vec<T>>,
+    pub(crate) memory: RwLock<MemoryMap<T>>,
     pub height: usize,
 }
 
@@ -106,7 +108,6 @@ pub struct InnerWriterData<F> {
     pub global: Vec<F>,
     pub public: Vec<F>,
     pub challenges: Vec<F>,
-    pub height: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -138,7 +139,7 @@ impl<T> TraceWriter<T> {
             global,
             public,
             challenges,
-            height,
+            ..
         } = Arc::into_inner(self.0).ok_or(anyhow!("Arc unpacking failed"))?;
 
         Ok(InnerWriterData {
@@ -146,7 +147,6 @@ impl<T> TraceWriter<T> {
             global: RwLock::into_inner(global)?,
             public: RwLock::into_inner(public)?,
             challenges: RwLock::into_inner(challenges)?,
-            height,
         })
     }
 
@@ -167,6 +167,7 @@ impl<T> TraceWriter<T> {
             global: RwLock::new(vec![value; num_global_values]),
             public: RwLock::new(vec![value; num_public_inputs]),
             challenges: RwLock::new(Vec::new()),
+            memory: RwLock::new(MemoryMap::new()),
             height,
         }))
     }
@@ -201,6 +202,14 @@ impl<T> TraceWriter<T> {
 
     pub fn public(&self) -> LockResult<RwLockReadGuard<'_, Vec<T>>> {
         self.0.public.read()
+    }
+
+    pub fn memory(&self) -> LockResult<RwLockReadGuard<'_, MemoryMap<T>>> {
+        self.0.memory.read()
+    }
+
+    pub fn memory_mut(&self) -> LockResult<RwLockWriteGuard<'_, MemoryMap<T>>> {
+        self.0.memory.write()
     }
 }
 

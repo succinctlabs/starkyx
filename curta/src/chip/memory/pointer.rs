@@ -1,10 +1,33 @@
-use crate::chip::{AirParameters, register::{cubic::EvalCubic, Register}, builder::AirBuilder};
+use core::marker::PhantomData;
 
-use core::hash::Hash;
+use serde::{Deserialize, Serialize};
 
-pub trait Pointer<L: AirParameters> : 'static + Hash + Copy + Send + Sync {
-    type Digest: EvalCubic;
-    type Value : Register;
+use crate::chip::register::cubic::CubicRegister;
 
-    fn compress(&self, builder: &mut AirBuilder<L>, value: &Self::Value) -> Self::Digest;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct RawPointer {
+    challenge: CubicRegister,
+}
+
+#[derive(Debug, Clone, Copy, Hash)]
+pub struct Pointer<T> {
+    ptr: RawPointer,
+    _marker: PhantomData<T>,
+}
+
+impl<T> Pointer<T> {
+    pub fn new(ptr: RawPointer) -> Self {
+        Self {
+            ptr,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn from_challenge(challenge: CubicRegister) -> Self {
+        Self::new(RawPointer { challenge })
+    }
+
+    pub fn raw_ptr(&self) -> RawPointer {
+        self.ptr
+    }
 }

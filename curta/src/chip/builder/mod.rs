@@ -11,6 +11,7 @@ use self::shared_memory::SharedMemory;
 use super::arithmetic::expression::ArithmeticExpression;
 use super::constraint::Constraint;
 use super::instruction::set::AirInstruction;
+use super::memory::time::TimeRegister;
 use super::register::cubic::CubicRegister;
 use super::register::element::ElementRegister;
 use super::register::{Register, RegisterSerializable};
@@ -33,6 +34,7 @@ pub struct AirBuilder<L: AirParameters> {
     pub(crate) shared_memory: SharedMemory,
     global_arithmetic: Vec<ElementRegister>,
     pub(crate) instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
+    pub(crate) time: Option<TimeRegister>,
     pub(crate) global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub(crate) constraints: Vec<Constraint<L>>,
     pub(crate) global_constraints: Vec<Constraint<L>>,
@@ -64,6 +66,7 @@ impl<L: AirParameters> AirBuilder<L> {
             extended_index: L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS,
             global_arithmetic: Vec::new(),
             shared_memory,
+            time: None,
             instructions: Vec::new(),
             global_instructions: Vec::new(),
             constraints: Vec::new(),
@@ -76,6 +79,15 @@ impl<L: AirParameters> AirBuilder<L> {
             evaluation_data: Vec::new(),
             range_data: None,
         }
+    }
+
+    pub fn constant<T: Register>(&mut self, value: &T::Value<L::Field>) -> T {
+        let register = self.alloc::<T>();
+        self.set_to_expression_public(
+            &register,
+            ArithmeticExpression::from_constant_vec(T::align(value).to_vec()),
+        );
+        register
     }
 
     /// Registers an custom instruction with the builder.
@@ -151,6 +163,8 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 
     pub fn build(mut self) -> (Chip<L>, AirTraceData<L>) {
+        // Constrain memory bus
+        self.constrain_memory_bus();
         // constrain all bus channels
         for channel in self.bus_channels.iter() {
             self.constraints.push(channel.clone().into());

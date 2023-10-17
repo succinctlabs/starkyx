@@ -55,6 +55,14 @@ impl<L: AirParameters> AirBuilder<L> {
         self.buses.push(bus.clone());
         self.global_constraints.push(bus.into());
     }
+
+    pub fn register_bus_constraint(&mut self, index: usize) {
+        let global_entries_len = self.buses[index].global_entries.len();
+        let global_accumulators = self.alloc_array_global::<CubicRegister>(global_entries_len / 2);
+        self.buses[index].global_accumulators = global_accumulators;
+        self.global_constraints
+            .push(self.buses[index].clone().into());
+    }
 }
 
 impl<T: EvalCubic, E: Clone> Bus<T, E> {
