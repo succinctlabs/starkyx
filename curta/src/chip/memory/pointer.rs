@@ -2,7 +2,9 @@ use core::marker::PhantomData;
 
 use serde::{Deserialize, Serialize};
 
+use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::CubicRegister;
+use crate::chip::register::RegisterSerializable;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RawPointer {
@@ -12,6 +14,10 @@ pub struct RawPointer {
 impl RawPointer {
     pub(crate) fn from_challenge(challenge: CubicRegister) -> Self {
         Self { challenge }
+    }
+
+    pub fn challenge(&self) -> ArrayRegister<CubicRegister> {
+        ArrayRegister::from_register_unsafe(*self.challenge.register())
     }
 }
 

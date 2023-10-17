@@ -1,10 +1,17 @@
 use serde::{Deserialize, Serialize};
 
 use super::bytes::register::ByteRegister;
+use crate::chip::arithmetic::expression::ArithmeticExpression;
+use crate::chip::builder::AirBuilder;
+use crate::chip::memory::pointer::RawPointer;
+use crate::chip::memory::time::TimeRegister;
+use crate::chip::memory::value::MemoryValue;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cell::CellType;
+use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
+use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct ByteArrayRegister<const N: usize>(MemorySlice);
@@ -58,6 +65,32 @@ impl<const N: usize> Register for ByteArrayRegister<N> {
 
     fn align<T>(value: &Self::Value<T>) -> &[T] {
         value
+    }
+}
+
+impl MemoryValue for U32Register {
+    fn compress<L: crate::chip::AirParameters>(
+        &self,
+        builder: &mut AirBuilder<L>,
+        ptr: RawPointer,
+        time: TimeRegister,
+    ) -> CubicRegister {
+        let bytes = self.to_le_bytes();
+        let mut acc_expression = ArithmeticExpression::zero();
+
+        for (i, byte) in bytes.iter().enumerate() {
+            let two_i = ArithmeticExpression::from(L::Field::from_canonical_u32(1 << (8 * i)));
+            acc_expression = acc_expression + two_i * byte.expr();
+        }
+
+        let two_32 = ArithmeticExpression::from(L::Field::from_canonical_u64(1 << 32));
+        acc_expression = acc_expression + two_32 * time.expr();
+
+        if time.register().is_trace() {
+            builder.accumulate_expressions(&ptr.challenge(), &[acc_expression])
+        } else {
+            builder.accumulate_public_expressions(&ptr.challenge(), &[acc_expression])
+        }
     }
 }
 

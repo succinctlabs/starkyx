@@ -13,6 +13,12 @@ pub struct TimeRegister(ElementRegister);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TimeStamp<T>(T);
 
+impl TimeRegister {
+    pub fn as_register(&self) -> ElementRegister {
+        self.0
+    }
+}
+
 impl RegisterSerializable for TimeRegister {
     const CELL: CellType = CellType::Element;
 
