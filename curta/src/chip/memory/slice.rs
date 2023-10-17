@@ -24,6 +24,14 @@ pub struct Slice<T> {
 }
 
 impl<V: MemoryValue> Slice<V> {
+
+    pub fn new(raw_slice: RawSlice) -> Self {
+        Self {
+            raw: raw_slice,
+            _marker: PhantomData,
+        }
+    }
+
     pub fn get(&self, idx: usize) -> Pointer<V> {
         let raw = self.raw.get(idx);
         Pointer::new(raw)
@@ -40,12 +48,33 @@ impl<V: MemoryValue> Slice<V> {
 }
 
 impl RawSlice {
-    fn get(&self, idx: usize) -> RawPointer {
+    pub(crate) fn get(&self, idx: usize) -> RawPointer {
         let challenge = self.idx_challenges.get(idx).expect("Index out of bounds");
         RawPointer::from_challenge(*challenge)
     }
 
-    fn get_at<L: AirParameters>(
+    pub(crate) fn new<L: AirParameters>(builder: &mut AirBuilder<L>, length: usize) -> Self {
+        let challenges = builder.alloc_challenge_array(2);
+
+        let idx_challenges = (0..length)
+            .map(|i| {
+                builder.accumulate_public_expressions(
+                    &challenges,
+                    &[
+                        L::Field::ONE.into(),
+                        L::Field::from_canonical_usize(i).into(),
+                    ],
+                )
+            })
+            .collect();
+
+        Self {
+            challenges,
+            idx_challenges,
+        }
+    }
+
+    pub(crate) fn get_at<L: AirParameters>(
         &self,
         builder: &mut AirBuilder<L>,
         idx: ElementRegister,
