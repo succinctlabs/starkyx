@@ -18,6 +18,16 @@ impl<const N: usize> ByteArrayRegister<N> {
     pub fn to_le_bytes(&self) -> ArrayRegister<ByteRegister> {
         ArrayRegister::from_register_unsafe(self.0)
     }
+
+    pub fn to_le_limbs<const M: usize>(&self) -> ArrayRegister<ByteArrayRegister<M>> {
+        assert!(N % M == 0);
+        ArrayRegister::from_register_unsafe(self.0)
+    }
+
+    pub fn from_limbs<const M: usize>(register: &ArrayRegister<ByteArrayRegister<M>>) -> Self {
+        assert!(N % M == 0);
+        Self::from_register_unsafe(*register.register())
+    }
 }
 
 impl<const N: usize> RegisterSerializable for ByteArrayRegister<N> {
@@ -49,23 +59,6 @@ impl<const N: usize> Register for ByteArrayRegister<N> {
     fn align<T>(value: &Self::Value<T>) -> &[T] {
         value
     }
-}
-
-/// N is the number of bytes in the input register.
-/// M is the number of bytes that the input register is split into.
-pub fn to_le_limbs<const N: usize, const M: usize>(
-    register: &ByteArrayRegister<N>,
-) -> ArrayRegister<ByteArrayRegister<M>> {
-    assert!(N % M == 0);
-    ArrayRegister::from_register_unsafe(register.0)
-}
-
-pub fn from_limbs<const N: usize, const M: usize>(
-    register: &ArrayRegister<ByteArrayRegister<M>>,
-) -> ByteArrayRegister<N> {
-    assert!(N % M == 0);
-
-    ByteArrayRegister::<N>::from_register_unsafe(*register.register())
 }
 
 #[cfg(test)]
@@ -103,9 +96,9 @@ mod tests {
 
         let a = builder.alloc::<ByteArrayRegister<N>>();
 
-        let a_as_limbs = to_le_limbs::<N, M>(&a);
+        let a_as_limbs = a.to_le_limbs::<M>();
 
-        let b = from_limbs::<N, M>(&a_as_limbs);
+        let b = ByteArrayRegister::<N>::from_limbs(&a_as_limbs);
 
         builder.assert_equal(&a, &b);
     }

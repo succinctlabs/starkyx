@@ -24,7 +24,6 @@ pub struct Slice<T> {
 }
 
 impl<V: MemoryValue> Slice<V> {
-
     pub fn new(raw_slice: RawSlice) -> Self {
         Self {
             raw: raw_slice,

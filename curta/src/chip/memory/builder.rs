@@ -2,7 +2,7 @@ use super::get::GetInstruction;
 use super::instruction::MemoryInstruction;
 use super::pointer::Pointer;
 use super::set::SetInstruction;
-use super::slice::{Slice, RawSlice};
+use super::slice::{RawSlice, Slice};
 use super::time::TimeRegister;
 use super::value::MemoryValue;
 use crate::chip::builder::AirBuilder;
@@ -47,7 +47,7 @@ impl<L: AirParameters> AirBuilder<L> {
 
     pub fn initialize_slice<V: MemoryValue>(&mut self, values: &[V]) -> Slice<V> {
         let raw_slice = RawSlice::new(self, values.len());
-        
+
         let time = self.time.unwrap();
         for (i, value) in values.iter().enumerate() {
             let digest = value.compress(self, raw_slice.get(i), time);
