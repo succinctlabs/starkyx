@@ -758,7 +758,7 @@ mod tests {
             .map(|_| u32_to_le_field_bytes(rng.gen::<u32>()))
             .collect::<Vec<_>>();
         writer.write(&zero, &GoldilocksField::ZERO, 0);
-        writer.write_array(&a_init, &a_val, 0);
+        writer.write_array(&a_init, a_val, 0);
         writer.write_global_instructions(&stark.air_data);
         writer.write(&zero, &GoldilocksField::ZERO, 0);
         for i in 0..num_rows {
