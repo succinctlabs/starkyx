@@ -45,25 +45,25 @@ where
     C: CurtaConfig<D, F = L::Field, FE = <L::Field as Extendable<D>>::Extension>,
     Chip<L>: Plonky2Air<L::Field, D>,
 {
-    fn generate_execusion_traces(
+    fn generate_execution_traces(
         &self,
-        execusion_trace: &AirTrace<L::Field>,
+        execution_trace: &AirTrace<L::Field>,
         public_values: &[L::Field],
     ) -> (TraceWriter<L::Field>, TraceWriter<L::Field>) {
         // Initialize writers.
-        let main_writer = TraceWriter::new(&self.air_data, execusion_trace.height());
+        let main_writer = TraceWriter::new(&self.air_data, execution_trace.height());
         let lookup_writer = TraceWriter::new(&self.lookup_air_data, NUM_LOOKUP_ROWS);
 
-        // Insert execusion trace and into main writer.
-        let execusion_trace_length = self.stark.air.execution_trace_length;
+        // Insert execution trace and into main writer.
+        let execution_trace_length = self.stark.air.execution_trace_length;
         main_writer
             .write_trace()
             .unwrap()
             .rows_par_mut()
-            .zip(execusion_trace.rows_par())
-            .for_each(|(row, execusion_row)| {
-                row[0..execusion_trace_length]
-                    .copy_from_slice(&execusion_row[0..execusion_trace_length]);
+            .zip(execution_trace.rows_par())
+            .for_each(|(row, execution_row)| {
+                row[0..execution_trace_length]
+                    .copy_from_slice(&execution_row[0..execution_trace_length]);
             });
         // Insert public inputs into both writers.
         main_writer
@@ -115,7 +115,7 @@ where
 
     fn generate_trace(
         &self,
-        execusion_trace: &AirTrace<L::Field>,
+        execution_trace: &AirTrace<L::Field>,
         public_values: &[L::Field],
         challenger: &mut Challenger<L::Field, C::Hasher>,
         timing: &mut TimingTree,
@@ -123,49 +123,49 @@ where
         // Absorve public values into the challenger.
         challenger.observe_elements(public_values);
 
-        // Generate execusion traces.
+        // Generate execution traces.
         let (main_writer, lookup_writer) =
-            self.generate_execusion_traces(execusion_trace, public_values);
+            self.generate_execution_traces(execution_trace, public_values);
 
-        let main_execusion_trace_values = main_writer
+        let main_execution_trace_values = main_writer
             .read_trace()
             .unwrap()
             .rows_par()
             .flat_map(|row| row[0..self.stark.air.execution_trace_length].to_vec())
             .collect::<Vec<_>>();
-        let main_execusion_trace = AirTrace {
-            values: main_execusion_trace_values,
+        let main_execution_trace = AirTrace {
+            values: main_execution_trace_values,
             width: self.stark.air.execution_trace_length,
         };
 
-        let lookup_execusion_trace_values = lookup_writer
+        let lookup_execution_trace_values = lookup_writer
             .read_trace()
             .unwrap()
             .rows_par()
             .flat_map(|row| row[0..self.lookup_stark.air.execution_trace_length].to_vec())
             .collect::<Vec<_>>();
 
-        let lookup_execusion_trace = AirTrace {
-            values: lookup_execusion_trace_values,
+        let lookup_execution_trace = AirTrace {
+            values: lookup_execution_trace_values,
             width: self.lookup_stark.air.execution_trace_length,
         };
 
-        // Commit to execusion traces
-        let main_execusion_commitment = timed!(
+        // Commit to execution traces
+        let main_execution_commitment = timed!(
             timing,
-            "Commit to execusion trace",
-            self.config.commit(&main_execusion_trace, timing)
+            "Commit to execution trace",
+            self.config.commit(&main_execution_trace, timing)
         );
 
-        let lookup_execusion_commitment = timed!(
+        let lookup_execution_commitment = timed!(
             timing,
-            "Commit to lookup execusion trace",
-            self.lookup_config.commit(&lookup_execusion_trace, timing)
+            "Commit to lookup execution trace",
+            self.lookup_config.commit(&lookup_execution_trace, timing)
         );
 
         // Absorve the trace commitments into the challenger.
-        challenger.observe_cap(&main_execusion_commitment.merkle_tree.cap);
-        challenger.observe_cap(&lookup_execusion_commitment.merkle_tree.cap);
+        challenger.observe_cap(&main_execution_commitment.merkle_tree.cap);
+        challenger.observe_cap(&lookup_execution_commitment.merkle_tree.cap);
 
         // Get random AIR challenges.
         let challenges = challenger.get_n_challenges(self.stark.air.num_challenges);
@@ -238,13 +238,13 @@ where
         // Return the air commitments.
         (
             AirCommitment {
-                trace_commitments: vec![main_execusion_commitment, main_extended_commitment],
+                trace_commitments: vec![main_execution_commitment, main_extended_commitment],
                 public_inputs: main_public,
                 global_values: main_global,
                 challenges: main_challenges,
             },
             AirCommitment {
-                trace_commitments: vec![lookup_execusion_commitment, lookup_extended_commitment],
+                trace_commitments: vec![lookup_execution_commitment, lookup_extended_commitment],
                 public_inputs: lookup_public,
                 global_values: lookup_global,
                 challenges: global_challenges,
@@ -254,7 +254,7 @@ where
 
     pub fn prove(
         &self,
-        execusion_trace: &AirTrace<L::Field>,
+        execution_trace: &AirTrace<L::Field>,
         public_values: &[L::Field],
         timing: &mut TimingTree,
     ) -> Result<ByteStarkProof<L::Field, C, D>> {
@@ -265,7 +265,7 @@ where
         let (main_air_commitment, lookup_air_commitment) = timed!(
             timing,
             "Generate stark trace",
-            self.generate_trace(execusion_trace, public_values, &mut challenger, timing)
+            self.generate_trace(execution_trace, public_values, &mut challenger, timing)
         );
 
         // Generate individual stark proofs.
@@ -312,7 +312,7 @@ where
         // Observe public values.
         challenger.observe_elements(public_values);
 
-        // Observe execusion trace commitments.
+        // Observe execution trace commitments.
         challenger.observe_cap(&proof.main_proof.trace_caps[0]);
         challenger.observe_cap(&proof.lookup_proof.trace_caps[0]);
 
@@ -412,7 +412,7 @@ where
         // Observe public values.
         challenger.observe_elements(public_values);
 
-        // Observe execusion trace commitments.
+        // Observe execution trace commitments.
         challenger.observe_cap(&proof.main_proof.trace_caps[0]);
         challenger.observe_cap(&proof.lookup_proof.trace_caps[0]);
 
