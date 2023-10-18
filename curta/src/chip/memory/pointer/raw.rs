@@ -7,7 +7,7 @@ use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::element::ElementRegister;
-use crate::chip::register::Register;
+use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::AirParameters;
 use crate::math::field::Field;
@@ -42,12 +42,16 @@ impl RawPointer {
         }
     }
 
+    pub fn is_trace(&self) -> bool {
+        self.element_shift.map(|e| e.is_trace()).unwrap_or(false)
+    }
+
     pub fn accumulate<L: AirParameters>(
         &self,
         builder: &mut AirBuilder<L>,
         value: ArithmeticExpression<L::Field>,
     ) -> CubicRegister {
-        let digest = if value.is_trace() {
+        let digest = if value.is_trace() || self.is_trace() {
             builder.alloc_extended()
         } else {
             builder.alloc_global()
@@ -65,7 +69,7 @@ impl RawPointer {
         builder: &mut AirBuilder<L>,
         value: CubicElement<ArithmeticExpression<L::Field>>,
     ) -> CubicRegister {
-        let digest = if !value.as_slice().iter().all(|e| !e.is_trace()) {
+        let digest = if !value.as_slice().iter().all(|e| !e.is_trace()) || self.is_trace() {
             builder.alloc_extended()
         } else {
             builder.alloc_global()
