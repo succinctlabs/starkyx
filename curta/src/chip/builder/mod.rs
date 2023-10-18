@@ -11,7 +11,7 @@ use self::shared_memory::SharedMemory;
 use super::arithmetic::expression::ArithmeticExpression;
 use super::constraint::Constraint;
 use super::instruction::set::AirInstruction;
-use super::memory::time::TimeRegister;
+use super::memory::pointer::accumulate::PointerAccumulator;
 use super::register::cubic::CubicRegister;
 use super::register::element::ElementRegister;
 use super::register::{Register, RegisterSerializable};
@@ -34,11 +34,12 @@ pub struct AirBuilder<L: AirParameters> {
     pub(crate) shared_memory: SharedMemory,
     global_arithmetic: Vec<ElementRegister>,
     pub(crate) instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
-    pub(crate) time: Option<TimeRegister>,
     pub(crate) global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub(crate) constraints: Vec<Constraint<L>>,
     pub(crate) global_constraints: Vec<Constraint<L>>,
     pub(crate) accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
+    pub(crate) pointer_row_accumulators: Vec<PointerAccumulator<L::Field, L::CubicParams>>,
+    pub(crate) pointer_global_accumulators: Vec<PointerAccumulator<L::Field, L::CubicParams>>,
     pub(crate) bus_channels: Vec<BusChannel<CubicRegister, L::CubicParams>>,
     pub(crate) buses: Vec<Bus<CubicRegister, L::CubicParams>>,
     pub(crate) lookup_values: Vec<LookupValues<L::Field, L::CubicParams>>,
@@ -66,12 +67,13 @@ impl<L: AirParameters> AirBuilder<L> {
             extended_index: L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS,
             global_arithmetic: Vec::new(),
             shared_memory,
-            time: None,
             instructions: Vec::new(),
             global_instructions: Vec::new(),
             constraints: Vec::new(),
             global_constraints: Vec::new(),
             accumulators: Vec::new(),
+            pointer_row_accumulators: Vec::new(),
+            pointer_global_accumulators: Vec::new(),
             bus_channels: Vec::new(),
             buses: Vec::new(),
             lookup_values: Vec::new(),
@@ -82,7 +84,7 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 
     pub fn constant<T: Register>(&mut self, value: &T::Value<L::Field>) -> T {
-        let register = self.alloc::<T>();
+        let register = self.alloc_public::<T>();
         self.set_to_expression_public(
             &register,
             ArithmeticExpression::from_constant_vec(T::align(value).to_vec()),
@@ -151,6 +153,20 @@ impl<L: AirParameters> AirBuilder<L> {
             .push(Constraint::from_instruction_set(instruction));
 
         Ok(())
+    }
+
+    pub(crate) fn register_constraint<I>(&mut self, constraint: I)
+    where
+        Constraint<L>: From<I>,
+    {
+        self.constraints.push(constraint.into());
+    }
+
+    pub(crate) fn register_global_constraint<I>(&mut self, constraint: I)
+    where
+        Constraint<L>: From<I>,
+    {
+        self.global_constraints.push(constraint.into());
     }
 
     pub fn clock(&mut self) -> ElementRegister {
@@ -247,6 +263,8 @@ impl<L: AirParameters> AirBuilder<L> {
                 instructions: self.instructions,
                 global_instructions: self.global_instructions,
                 accumulators: self.accumulators,
+                pointer_row_accumulators: self.pointer_row_accumulators,
+                pointer_global_accumulators: self.pointer_global_accumulators,
                 bus_channels: self.bus_channels,
                 buses: self.buses,
                 lookup_values: self.lookup_values,

@@ -9,6 +9,7 @@ use super::channel::BusChannel;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::{CubicRegister, EvalCubic};
+use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::table::log_derivative::entry::LogEntry;
 use crate::chip::AirParameters;
@@ -82,6 +83,24 @@ impl<T: EvalCubic, E: Clone> Bus<T, E> {
             }
             MemorySlice::Public(..) => {
                 self.global_entries.push(LogEntry::Input(*value));
+            }
+            _ => panic!("Expected public or global register"),
+        }
+    }
+
+    pub fn insert_global_value_with_multiplicity(
+        &mut self,
+        value: &T,
+        multiplicity: ElementRegister,
+    ) {
+        match value.register() {
+            MemorySlice::Global(..) => {
+                self.global_entries
+                    .push(LogEntry::InputMultiplicity(*value, multiplicity));
+            }
+            MemorySlice::Public(..) => {
+                self.global_entries
+                    .push(LogEntry::InputMultiplicity(*value, multiplicity));
             }
             _ => panic!("Expected public or global register"),
         }

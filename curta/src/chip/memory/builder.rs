@@ -1,28 +1,22 @@
+use core::borrow::Borrow;
+
 use super::get::GetInstruction;
 use super::instruction::MemoryInstruction;
+use super::pointer::slice::{RawSlice, Slice};
 use super::pointer::Pointer;
 use super::set::SetInstruction;
-use super::slice::{RawSlice, Slice};
-use super::time::TimeRegister;
+use super::time::Time;
 use super::value::MemoryValue;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::set::AirInstruction;
 use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
-use crate::chip::register::{Register, RegisterSerializable};
+use crate::chip::register::slice::RegisterSlice;
+use crate::chip::register::RegisterSerializable;
 use crate::chip::AirParameters;
-use crate::math::prelude::*;
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn set_time(&mut self, time: TimeRegister) {
-        self.time = Some(time)
-    }
-
-    pub fn get_at<V: MemoryValue>(&mut self, slice: &Slice<V>, idx: ElementRegister) -> Pointer<V> {
-        slice.get_at(self, idx)
-    }
-
     pub fn init_local_memory(&mut self) {
         let mut bus = self.new_bus();
         let channel = bus.new_channel(self);
@@ -32,35 +26,71 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 
     /// Initializes a register with the current time.
-    pub fn initialize<V: MemoryValue>(&mut self, value: &V) -> Pointer<V> {
+    pub fn initialize<V: MemoryValue>(
+        &mut self,
+        value: &V,
+        time: &Time<L::Field>,
+        multiplicity: Option<ElementRegister>,
+    ) -> Pointer<V> {
         if value.register().is_trace() {
             panic!("Cannot initialize a trace register");
         }
         let challenge = self.alloc_challenge();
         let ptr = Pointer::from_challenge(challenge);
-        let time = self.time.unwrap();
         let digest = value.compress(self, ptr.raw, time);
-        self.input_to_memory_bus(digest);
+        self.input_to_memory_bus(digest, multiplicity);
+        self.unsafe_raw_write(&ptr, *value, true);
 
         ptr
     }
 
-    pub fn initialize_slice<V: MemoryValue>(&mut self, values: &[V]) -> Slice<V> {
-        let raw_slice = RawSlice::new(self, values.len());
-
-        let time = self.time.unwrap();
-        for (i, value) in values.iter().enumerate() {
-            let digest = value.compress(self, raw_slice.get(i), time);
-            self.input_to_memory_bus(digest);
-        }
-        Slice::new(raw_slice)
+    pub fn free<V: MemoryValue>(
+        &mut self,
+        ptr: &Pointer<V>,
+        value: V,
+        last_write: &Time<L::Field>,
+    ) {
+        let digest = value.compress(self, ptr.raw, last_write);
+        self.output_from_memory_bus(digest)
     }
 
-    fn input_to_memory_bus(&mut self, digest: CubicRegister) {
-        match digest.register() {
-            MemorySlice::Local(_, _) => self.input_to_bus(0, digest),
-            MemorySlice::Public(_, _) => self.buses[0].insert_global_value(&digest),
-            MemorySlice::Global(_, _) => self.buses[0].insert_global_value(&digest),
+    pub fn initialize_slice<V: MemoryValue>(
+        &mut self,
+        values: &impl RegisterSlice<V>,
+        time: &Time<L::Field>,
+        multiplicity: Option<ElementRegister>,
+    ) -> Slice<V> {
+        let raw_slice = RawSlice::new(self);
+        let slice = Slice::new(raw_slice);
+
+        for (i, value) in values.value_iter().enumerate() {
+            let value = value.borrow();
+            let ptr = slice.get(i);
+            let digest = value.compress(self, ptr.raw, time);
+            self.input_to_memory_bus(digest, multiplicity);
+            self.unsafe_raw_write(&ptr, *value, true);
+        }
+        slice
+    }
+
+    fn input_to_memory_bus(
+        &mut self,
+        digest: CubicRegister,
+        multiplicity: Option<ElementRegister>,
+    ) {
+        match (digest.register(), multiplicity) {
+            (MemorySlice::Local(_, _), None) => self.input_to_bus(0, digest),
+            (MemorySlice::Public(_, _), None) => self.buses[0].insert_global_value(&digest),
+            (MemorySlice::Global(_, _), None) => self.buses[0].insert_global_value(&digest),
+            (MemorySlice::Local(_, _), Some(m)) => {
+                self.input_to_bus_with_multiplicity(0, digest, m)
+            }
+            (MemorySlice::Public(_, _), Some(m)) => {
+                self.buses[0].insert_global_value_with_multiplicity(&digest, m)
+            }
+            (MemorySlice::Global(_, _), Some(m)) => {
+                self.buses[0].insert_global_value_with_multiplicity(&digest, m)
+            }
             _ => panic!("Expected local, public, or global register"),
         }
     }
@@ -74,63 +104,42 @@ impl<L: AirParameters> AirBuilder<L> {
         }
     }
 
-    /// Connects a timestamp `time` from the current row to the timestamp at location `time_next`
-    /// in the next row.
-    pub fn connect_times(&mut self, time: TimeRegister, time_next: TimeRegister) {
-        self.set_to_expression_transition(&time_next.next(), time.expr());
-    }
-
-    /// Adancing the timestamp by `amount`. The user is responsible for ensuring that the timestamp
-    /// does not overflow in the finite field.
-    ///
-    /// TODO: a special instruction to update the timestamp.
-    pub(crate) fn advance_timestamp(&mut self, amount: usize) {
-        let time = self.time.expect("Time register not initialized.");
-        let new_time = self.alloc::<TimeRegister>();
-        self.set_to_expression(
-            &new_time,
-            time.expr() + L::Field::from_canonical_usize(amount),
-        );
-    }
-
     /// Reads the value from the memory at location `ptr`.
-    pub fn get<V: MemoryValue>(&mut self, ptr: &Pointer<V>) -> V {
-        let (value, last_write_ts) = self.unsafe_raw_read(ptr);
+    pub fn get<V: MemoryValue>(&mut self, ptr: &Pointer<V>, last_write_ts: &Time<L::Field>) -> V {
+        let value = self.unsafe_raw_read(ptr);
         let read_digest = value.compress(self, ptr.raw, last_write_ts);
-        // TODO: maybe migrate from channel zero to a dedicated channel.
         self.output_from_memory_bus(read_digest);
-        // Advance timestamp to mark the event.
-        self.advance_timestamp(1);
-        let new_write_ts = self.time.unwrap();
-        let write_digest = value.compress(self, ptr.raw, new_write_ts);
-        self.input_to_memory_bus(write_digest);
-        self.unsafe_raw_write(ptr, value, new_write_ts);
         value
     }
 
-    fn unsafe_raw_read<V: MemoryValue>(&mut self, ptr: &Pointer<V>) -> (V, TimeRegister) {
+    fn unsafe_raw_read<V: MemoryValue>(&mut self, ptr: &Pointer<V>) -> V {
         let value = self.alloc::<V>();
-        let time = self.alloc::<TimeRegister>();
-        let instr = MemoryInstruction::Get(GetInstruction::new(ptr.raw, *value.register(), time));
+        let instr = MemoryInstruction::Get(GetInstruction::new(ptr.raw, *value.register()));
         self.register_air_instruction_internal(AirInstruction::mem(instr))
             .unwrap();
-        (value, time)
+        value
     }
 
-    fn unsafe_raw_write<V: MemoryValue>(&mut self, ptr: &Pointer<V>, value: V, time: TimeRegister) {
-        let instr = MemoryInstruction::Set(SetInstruction::new(ptr.raw, *value.register(), time));
-        self.register_air_instruction_internal(AirInstruction::mem(instr))
-            .unwrap();
+    fn unsafe_raw_write<V: MemoryValue>(&mut self, ptr: &Pointer<V>, value: V, global: bool) {
+        let instr = MemoryInstruction::Set(SetInstruction::new(ptr.raw, *value.register()));
+        if global {
+            self.register_global_air_instruction_internal(AirInstruction::mem(instr))
+                .unwrap();
+        } else {
+            self.register_air_instruction_internal(AirInstruction::mem(instr))
+                .unwrap();
+        }
     }
 
-    pub fn set<V: MemoryValue>(&mut self, ptr: &Pointer<V>, value: V) {
-        let (last_value, last_write_ts) = self.unsafe_raw_read(ptr);
-        let read_digest = last_value.compress(self, ptr.raw, last_write_ts);
-        self.output_from_memory_bus(read_digest);
-        self.advance_timestamp(1);
-
-        let write_ts = self.time.unwrap();
+    pub fn set<V: MemoryValue>(
+        &mut self,
+        ptr: &Pointer<V>,
+        value: V,
+        write_ts: &Time<L::Field>,
+        multiplicity: Option<ElementRegister>,
+    ) {
         let write_digest = value.compress(self, ptr.raw, write_ts);
-        self.input_to_memory_bus(write_digest)
+        self.input_to_memory_bus(write_digest, multiplicity);
+        self.unsafe_raw_write(ptr, value, false)
     }
 }

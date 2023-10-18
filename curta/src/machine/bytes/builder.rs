@@ -2,6 +2,7 @@ use super::air::ByteParameters;
 use super::stark::ByteStark;
 use crate::chip::builder::shared_memory::SharedMemory;
 use crate::chip::builder::AirBuilder;
+use crate::chip::register::element::ElementRegister;
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
 use crate::chip::uint::operations::instruction::UintInstructions;
 use crate::chip::uint::register::ByteArrayRegister;
@@ -14,6 +15,7 @@ pub(crate) const NUM_LOOKUP_ROWS: usize = 1 << 16;
 pub struct BytesBuilder<L: AirParameters> {
     pub api: AirBuilder<L>,
     operations: ByteLookupOperations,
+    pub clk: ElementRegister,
 }
 
 impl<L: AirParameters> BytesBuilder<L>
@@ -21,18 +23,23 @@ where
     L::Instruction: UintInstructions,
 {
     pub fn new() -> Self {
-        let api = AirBuilder::<L>::new();
+        let mut api = AirBuilder::<L>::new();
+        let clk = api.clock();
+        api.init_local_memory();
         BytesBuilder {
             api,
             operations: ByteLookupOperations::new(),
+            clk,
         }
     }
 
     pub fn init(shared_memory: SharedMemory) -> Self {
-        let api = AirBuilder::<L>::init(shared_memory);
+        let mut api = AirBuilder::<L>::init(shared_memory);
+        let clk = api.clock();
         BytesBuilder {
             api,
             operations: ByteLookupOperations::new(),
+            clk,
         }
     }
 
@@ -51,6 +58,7 @@ where
         let BytesBuilder {
             mut api,
             operations,
+            ..
         } = self;
         let shared_memory = api.shared_memory.clone();
         let mut lookup_builder =

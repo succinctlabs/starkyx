@@ -1,32 +1,32 @@
+use core::hash::Hash;
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::pointer::RawPointer;
-use super::time::TimeStamp;
+use super::pointer::key::RawPointerKey;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MemoryMap<T>(HashMap<RawPointer, (Vec<T>, TimeStamp<T>)>);
+pub struct MemoryMap<T: PartialEq + Eq + Hash>(pub(crate) HashMap<RawPointerKey<T>, Vec<T>>);
 
-impl<T> MemoryMap<T> {
+impl<T: PartialEq + Eq + Hash> MemoryMap<T> {
     pub fn new() -> Self {
         Self(HashMap::new())
     }
 
-    pub fn get(&self, ptr: &RawPointer) -> Option<&(Vec<T>, TimeStamp<T>)> {
+    pub fn get(&self, ptr: &RawPointerKey<T>) -> Option<&Vec<T>> {
         self.0.get(ptr)
     }
 
-    pub fn insert(&mut self, ptr: RawPointer, value: Vec<T>, timestamp: TimeStamp<T>) {
-        self.0.insert(ptr, (value, timestamp));
+    pub fn insert(&mut self, ptr: RawPointerKey<T>, value: Vec<T>) {
+        self.0.insert(ptr, value);
     }
 
-    pub fn get_mut(&mut self, ptr: &RawPointer) -> Option<&mut (Vec<T>, TimeStamp<T>)> {
+    pub fn get_mut(&mut self, ptr: &RawPointerKey<T>) -> Option<&mut Vec<T>> {
         self.0.get_mut(ptr)
     }
 }
 
-impl<T> Default for MemoryMap<T> {
+impl<T: PartialEq + Eq + Hash> Default for MemoryMap<T> {
     fn default() -> Self {
         Self::new()
     }

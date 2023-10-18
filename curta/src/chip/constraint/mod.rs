@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::arithmetic::ArithmeticConstraint;
 use super::instruction::set::AirInstruction;
+use super::memory::pointer::accumulate::PointerAccumulator;
 use super::register::cubic::CubicRegister;
 use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
@@ -18,6 +19,7 @@ pub enum Constraint<L: AirParameters> {
     Instruction(AirInstruction<L::Field, L::Instruction>),
     Arithmetic(ArithmeticConstraint<L::Field>),
     Accumulator(Accumulator<L::Field, L::CubicParams>),
+    Pointer(PointerAccumulator<L::Field, L::CubicParams>),
     BusChannel(BusChannel<CubicRegister, L::CubicParams>),
     Bus(Bus<CubicRegister, L::CubicParams>),
     Lookup(LookupChipConstraint<L::Field, L::CubicParams>),
@@ -66,6 +68,7 @@ where
             // }
             Constraint::Arithmetic(constraint) => constraint.eval(parser),
             Constraint::Accumulator(accumulator) => accumulator.eval(parser),
+            Constraint::Pointer(accumulator) => accumulator.eval(parser),
             Constraint::BusChannel(bus_channel) => bus_channel.eval(parser),
             Constraint::Bus(bus) => bus.eval(parser),
             Constraint::Lookup(lookup) => lookup.eval(parser),
@@ -83,6 +86,12 @@ impl<L: AirParameters> From<ArithmeticConstraint<L::Field>> for Constraint<L> {
 impl<L: AirParameters> From<Accumulator<L::Field, L::CubicParams>> for Constraint<L> {
     fn from(accumulator: Accumulator<L::Field, L::CubicParams>) -> Self {
         Self::Accumulator(accumulator)
+    }
+}
+
+impl<L: AirParameters> From<PointerAccumulator<L::Field, L::CubicParams>> for Constraint<L> {
+    fn from(accumulator: PointerAccumulator<L::Field, L::CubicParams>) -> Self {
+        Self::Pointer(accumulator)
     }
 }
 

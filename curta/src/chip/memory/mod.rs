@@ -4,6 +4,5 @@ pub mod instruction;
 pub mod map;
 pub mod pointer;
 pub mod set;
-pub mod slice;
 pub mod time;
 pub mod value;

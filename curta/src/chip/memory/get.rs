@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::pointer::RawPointer;
-use super::time::TimeRegister;
+use super::pointer::raw::RawPointer;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::instruction::Instruction;
@@ -13,7 +12,6 @@ use crate::math::prelude::*;
 pub struct GetInstruction {
     ptr: RawPointer,
     register: MemorySlice,
-    time: TimeRegister,
 }
 
 impl<AP: AirParser> AirConstraint<AP> for GetInstruction {
@@ -24,18 +22,14 @@ impl<AP: AirParser> AirConstraint<AP> for GetInstruction {
 impl<F: Field> Instruction<F> for GetInstruction {
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let memory = writer.memory().unwrap();
-        let (value, ts) = memory.get(&self.ptr).expect("Memory not initialized.");
+        let key = self.ptr.read(writer, row_index);
+        let value = memory.get(&key).expect("Memory not initialized.");
         writer.write_slice(&self.register, value, row_index);
-        writer.write(&self.time, ts, row_index);
     }
 }
 
 impl GetInstruction {
-    pub fn new(ptr: RawPointer, register: MemorySlice, time: TimeRegister) -> Self {
-        Self {
-            ptr,
-            register,
-            time,
-        }
+    pub fn new(ptr: RawPointer, register: MemorySlice) -> Self {
+        Self { ptr, register }
     }
 }

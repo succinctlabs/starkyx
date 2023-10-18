@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use super::bytes::register::ByteRegister;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
-use crate::chip::memory::pointer::RawPointer;
-use crate::chip::memory::time::TimeRegister;
+use crate::chip::memory::pointer::raw::RawPointer;
+use crate::chip::memory::time::Time;
 use crate::chip::memory::value::MemoryValue;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cell::CellType;
@@ -73,7 +73,7 @@ impl MemoryValue for U32Register {
         &self,
         builder: &mut AirBuilder<L>,
         ptr: RawPointer,
-        time: TimeRegister,
+        time: &Time<L::Field>,
     ) -> CubicRegister {
         let bytes = self.to_le_bytes();
         let mut acc_expression = ArithmeticExpression::zero();
@@ -86,11 +86,7 @@ impl MemoryValue for U32Register {
         let two_32 = ArithmeticExpression::from(L::Field::from_canonical_u64(1 << 32));
         acc_expression = acc_expression + two_32 * time.expr();
 
-        if time.register().is_trace() {
-            builder.accumulate_expressions(&ptr.challenge(), &[acc_expression])
-        } else {
-            builder.accumulate_public_expressions(&ptr.challenge(), &[acc_expression])
-        }
+        ptr.accumulate(builder, acc_expression)
     }
 }
 

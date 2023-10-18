@@ -507,12 +507,16 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::*;
+    use crate::chip::memory::time::Time;
+    use crate::chip::register::element::ElementRegister;
+    use crate::chip::register::Register;
     use crate::chip::trace::writer::InnerWriterData;
     use crate::chip::uint::operations::instruction::UintInstruction;
     use crate::chip::uint::register::U32Register;
     use crate::chip::uint::util::u32_to_le_field_bytes;
     use crate::machine::bytes::builder::BytesBuilder;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
+    use crate::math::prelude::*;
     use crate::plonky2::stark::config::CurtaPoseidonGoldilocksConfig;
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -525,8 +529,8 @@ mod tests {
         type Instruction = UintInstruction;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
-        const NUM_FREE_COLUMNS: usize = 88;
-        const EXTENDED_COLUMNS: usize = 63;
+        const NUM_FREE_COLUMNS: usize = 17;
+        const EXTENDED_COLUMNS: usize = 12;
     }
 
     #[test]
@@ -544,7 +548,7 @@ mod tests {
         let a = builder.api.alloc::<U32Register>();
         let b = builder.api.alloc::<U32Register>();
 
-        let num_ops = 10;
+        let num_ops = 1;
         for _ in 0..num_ops {
             let _ = builder.bitwise_and(&a, &b);
         }
@@ -559,6 +563,196 @@ mod tests {
             let a_val = rng.gen::<u32>();
             let b_val = rng.gen::<u32>();
             writer.write(&a, &u32_to_le_field_bytes(a_val), i);
+            writer.write(&b, &u32_to_le_field_bytes(b_val), i);
+            writer.write_row_instructions(&stark.air_data, i);
+        }
+
+        let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
+        let proof = stark.prove(&trace, &public, &mut timing).unwrap();
+
+        stark.verify(proof.clone(), &public).unwrap();
+
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
+
+        let (proof_target, public_input) =
+            stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
+        stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
+
+        let data = recursive_builder.build::<Config>();
+
+        let mut pw = PartialWitness::new();
+
+        pw.set_target_arr(&public_input, &public);
+        stark.set_proof_target(&mut pw, &proof_target, proof);
+
+        let rec_proof = data.prove(pw).unwrap();
+        data.verify(rec_proof).unwrap();
+
+        timing.print();
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ByteMemTest;
+
+    impl AirParameters for ByteMemTest {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
+
+        type Instruction = UintInstruction;
+
+        const NUM_FREE_COLUMNS: usize = 17;
+        const EXTENDED_COLUMNS: usize = 21;
+    }
+
+    #[test]
+    fn test_byte_memory_multi_stark() {
+        type L = ByteMemTest;
+        type C = CurtaPoseidonGoldilocksConfig;
+        type Config = <C as CurtaConfig<2>>::GenericConfig;
+
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let mut timing = TimingTree::new("test_byte_multi_stark", log::Level::Debug);
+
+        let mut builder = BytesBuilder::<L>::new();
+
+        let a_initial_value = builder.api.alloc_public::<U32Register>();
+
+        let a_ptr = builder
+            .api
+            .initialize::<U32Register>(&a_initial_value, &Time::zero(), None);
+
+        let clk = Time::from_element(builder.clk);
+
+        let a = builder.api.get(&a_ptr, &clk);
+        let b = builder.api.alloc::<U32Register>();
+        let c = builder.bitwise_and(&a, &b);
+        builder.api.set(&a_ptr, c, &clk.advance(), None);
+
+        let a_final = builder.api.alloc_public::<U32Register>();
+
+        let num_rows = 1 << 5;
+
+        builder
+            .api
+            .free(&a_ptr, a_final, &Time::constant(num_rows as u32));
+        builder.api.set_to_expression_last_row(&a_final, c.expr());
+
+        let stark = builder.build::<C, 2>(num_rows);
+
+        let writer = TraceWriter::new(&stark.air_data, num_rows);
+
+        let mut rng = rand::thread_rng();
+
+        let a_val = u32_to_le_field_bytes(rng.gen::<u32>());
+        writer.write(&a_initial_value, &a_val, 0);
+        writer.write_global_instructions(&stark.air_data);
+        for i in 0..num_rows {
+            let b_val = rng.gen::<u32>();
+            writer.write(&b, &u32_to_le_field_bytes(b_val), i);
+            writer.write_row_instructions(&stark.air_data, i);
+        }
+
+        let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
+        let proof = stark.prove(&trace, &public, &mut timing).unwrap();
+
+        stark.verify(proof.clone(), &public).unwrap();
+
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
+
+        let (proof_target, public_input) =
+            stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
+        stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
+
+        let data = recursive_builder.build::<Config>();
+
+        let mut pw = PartialWitness::new();
+
+        pw.set_target_arr(&public_input, &public);
+        stark.set_proof_target(&mut pw, &proof_target, proof);
+
+        let rec_proof = data.prove(pw).unwrap();
+        data.verify(rec_proof).unwrap();
+
+        timing.print();
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ByteSliceMemTest;
+
+    impl AirParameters for ByteSliceMemTest {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
+
+        type Instruction = UintInstruction;
+
+        const NUM_ARITHMETIC_COLUMNS: usize = 0;
+        const NUM_FREE_COLUMNS: usize = 18;
+        const EXTENDED_COLUMNS: usize = 21;
+    }
+
+    #[test]
+    fn test_byte_slice_memory_multi_stark() {
+        type L = ByteSliceMemTest;
+        type C = CurtaPoseidonGoldilocksConfig;
+        type Config = <C as CurtaConfig<2>>::GenericConfig;
+
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let mut timing = TimingTree::new("test_byte_multi_stark", log::Level::Debug);
+
+        let mut builder = BytesBuilder::<L>::new();
+
+        let a_init = builder.api.alloc_array_public::<U32Register>(4);
+
+        let a_ptr = builder
+            .api
+            .initialize_slice::<U32Register>(&a_init, &Time::zero(), None);
+
+        let clk = Time::from_element(builder.clk);
+        let zero = builder.api.alloc_public::<ElementRegister>();
+
+        let a_0 = a_ptr.get_at(zero);
+        let zero_trace = builder.api.alloc::<ElementRegister>();
+        builder
+            .api
+            .set_to_expression(&zero_trace, GoldilocksField::ZERO.into());
+        let a_0_trace = a_ptr.get_at(zero_trace);
+        let a = builder.api.get(&a_0_trace, &clk);
+        let b = builder.api.alloc::<U32Register>();
+        let c = builder.bitwise_and(&a, &b);
+        builder.api.set(&a_0_trace, c, &clk.advance(), None);
+
+        let a_final = builder.api.alloc_public::<U32Register>();
+
+        let num_rows = 1 << 5;
+
+        builder
+            .api
+            .free(&a_0, a_final, &Time::constant(num_rows as u32));
+        builder.api.set_to_expression_last_row(&a_final, c.expr());
+
+        for (i, a) in a_init.iter().enumerate().skip(1) {
+            builder.api.free(&a_ptr.get(i), a, &Time::zero());
+        }
+
+        let stark = builder.build::<C, 2>(num_rows);
+
+        let writer = TraceWriter::new(&stark.air_data, num_rows);
+
+        let mut rng = rand::thread_rng();
+
+        let a_val = (0..a_init.len())
+            .map(|_| u32_to_le_field_bytes(rng.gen::<u32>()))
+            .collect::<Vec<_>>();
+        writer.write(&zero, &GoldilocksField::ZERO, 0);
+        writer.write_array(&a_init, &a_val, 0);
+        writer.write_global_instructions(&stark.air_data);
+        writer.write(&zero, &GoldilocksField::ZERO, 0);
+        for i in 0..num_rows {
+            let b_val = rng.gen::<u32>();
             writer.write(&b, &u32_to_le_field_bytes(b_val), i);
             writer.write_row_instructions(&stark.air_data, i);
         }

@@ -1,5 +1,5 @@
-use super::pointer::RawPointer;
-use super::time::TimeRegister;
+use super::pointer::raw::RawPointer;
+use super::time::Time;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::Register;
@@ -10,6 +10,6 @@ pub trait MemoryValue: Register {
         &self,
         builder: &mut AirBuilder<L>,
         ptr: RawPointer,
-        time: TimeRegister,
+        time: &Time<L::Field>,
     ) -> CubicRegister;
 }
