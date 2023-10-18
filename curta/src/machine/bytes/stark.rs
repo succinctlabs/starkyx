@@ -690,7 +690,7 @@ mod tests {
 
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
         const NUM_FREE_COLUMNS: usize = 18;
-        const EXTENDED_COLUMNS: usize = 21;
+        const EXTENDED_COLUMNS: usize = 24;
     }
 
     #[test]
@@ -707,9 +707,21 @@ mod tests {
 
         let a_init = builder.api.alloc_array_public::<U32Register>(4);
 
+        let num_rows = 1 << 5;
+
         let a_ptr = builder
             .api
             .initialize_slice::<U32Register>(&a_init, &Time::zero(), None);
+
+        let num_rows_reg = builder
+            .api
+            .constant::<ElementRegister>(&GoldilocksField::from_canonical_usize(num_rows));
+        builder.api.set(
+            &a_ptr.get(1),
+            a_init.get(1),
+            &Time::zero(),
+            Some(num_rows_reg),
+        );
 
         let clk = Time::from_element(builder.clk);
         let zero = builder.api.alloc_public::<ElementRegister>();
@@ -721,13 +733,11 @@ mod tests {
             .set_to_expression(&zero_trace, GoldilocksField::ZERO.into());
         let a_0_trace = a_ptr.get_at(zero_trace);
         let a = builder.api.get(&a_0_trace, &clk);
-        let b = builder.api.alloc::<U32Register>();
+        let b = builder.api.get(&a_ptr.get(1), &Time::zero());
         let c = builder.bitwise_and(&a, &b);
         builder.api.set(&a_0_trace, c, &clk.advance(), None);
 
         let a_final = builder.api.alloc_public::<U32Register>();
-
-        let num_rows = 1 << 5;
 
         builder
             .api
@@ -752,8 +762,6 @@ mod tests {
         writer.write_global_instructions(&stark.air_data);
         writer.write(&zero, &GoldilocksField::ZERO, 0);
         for i in 0..num_rows {
-            let b_val = rng.gen::<u32>();
-            writer.write(&b, &u32_to_le_field_bytes(b_val), i);
             writer.write_row_instructions(&stark.air_data, i);
         }
 
