@@ -36,13 +36,18 @@ impl<L: AirParameters> AirBuilder<L> {
         if value.register().is_trace() {
             panic!("Cannot initialize a trace register");
         }
-        let challenge = self.alloc_challenge();
-        let ptr = Pointer::from_challenge(challenge);
+        let ptr = self.uninit();
         let digest = value.compress(self, ptr.raw, time);
         self.input_to_memory_bus(digest, multiplicity);
         self.unsafe_raw_write(&ptr, *value, true);
 
         ptr
+    }
+
+    #[inline]
+    pub(crate) fn uninit<V: MemoryValue>(&mut self) -> Pointer<V> {
+        let challenge = self.alloc_challenge();
+        Pointer::from_challenge(challenge)
     }
 
     /// Frees the memory at location `ptr` with value `value` and write time given by `time`.
@@ -63,8 +68,7 @@ impl<L: AirParameters> AirBuilder<L> {
         time: &Time<L::Field>,
         multiplicity: Option<ElementRegister>,
     ) -> Slice<V> {
-        let raw_slice = RawSlice::new(self);
-        let slice = Slice::new(raw_slice);
+        let slice = self.uninit_slice();
 
         for (i, value) in values.value_iter().enumerate() {
             let value = value.borrow();
@@ -74,6 +78,12 @@ impl<L: AirParameters> AirBuilder<L> {
             self.unsafe_raw_write(&ptr, *value, true);
         }
         slice
+    }
+
+    #[inline]
+    pub(crate) fn uninit_slice<V: MemoryValue>(&mut self) -> Slice<V> {
+        let raw_slice = RawSlice::new(self);
+        Slice::new(raw_slice)
     }
 
     fn input_to_memory_bus(

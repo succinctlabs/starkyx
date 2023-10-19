@@ -58,6 +58,11 @@ pub trait Builder: Sized {
         self.api().initialize(value, time, multiplicity)
     }
 
+    /// Creates a pointer which is not initialized to any value.
+    fn uninit<V: MemoryValue>(&mut self) -> Pointer<V> {
+        self.api().uninit()
+    }
+
     /// Initializes a slice of mutable memory with initial `value` and write time given by `time`.
     fn initialize_slice<V: MemoryValue>(
         &mut self,
@@ -66,6 +71,11 @@ pub trait Builder: Sized {
         multiplicity: Option<ElementRegister>,
     ) -> Slice<V> {
         self.api().initialize_slice(values, time, multiplicity)
+    }
+
+    /// Creates an uninitialized slice reference.
+    fn uninit_slice<V: MemoryValue>(&mut self) -> Slice<V> {
+        self.api().uninit_slice()
     }
 
     /// Reads the memory at location `ptr` with last write time given by `last_write_ts`.
