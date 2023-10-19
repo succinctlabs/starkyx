@@ -1,12 +1,12 @@
 use super::air::ByteParameters;
 use super::stark::ByteStark;
-use crate::chip::builder::shared_memory::SharedMemory;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
 use crate::chip::uint::operations::instruction::UintInstructions;
 use crate::chip::uint::register::ByteArrayRegister;
 use crate::chip::AirParameters;
+use crate::machine::builder::Builder;
 use crate::plonky2::stark::config::{CurtaConfig, StarkyConfig};
 use crate::plonky2::stark::Starky;
 
@@ -18,6 +18,15 @@ pub struct BytesBuilder<L: AirParameters> {
     pub clk: ElementRegister,
 }
 
+impl<L: AirParameters> Builder for BytesBuilder<L> {
+    type Field = L::Field;
+    type Parameters = L;
+
+    fn api(&mut self) -> &mut AirBuilder<Self::Parameters> {
+        &mut self.api
+    }
+}
+
 impl<L: AirParameters> BytesBuilder<L>
 where
     L::Instruction: UintInstructions,
@@ -26,16 +35,6 @@ where
         let mut api = AirBuilder::<L>::new();
         let clk = api.clock();
         api.init_local_memory();
-        BytesBuilder {
-            api,
-            operations: ByteLookupOperations::new(),
-            clk,
-        }
-    }
-
-    pub fn init(shared_memory: SharedMemory) -> Self {
-        let mut api = AirBuilder::<L>::init(shared_memory);
-        let clk = api.clock();
         BytesBuilder {
             api,
             operations: ByteLookupOperations::new(),

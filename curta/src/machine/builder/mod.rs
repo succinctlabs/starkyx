@@ -1,3 +1,4 @@
+use self::ops::{Add, And, Mul, Neg, Or, Shl, Shr, Sub, Xor, Zero};
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::memory::pointer::Pointer;
@@ -9,8 +10,10 @@ use crate::chip::register::Register;
 use crate::chip::AirParameters;
 use crate::math::field::PrimeField64;
 
+pub mod ops;
+
 /// A safe interface for an AIR builder.
-pub trait Builder {
+pub trait Builder: Sized {
     type Field: PrimeField64;
     type Parameters: AirParameters<Field = Self::Field>;
 
@@ -163,6 +166,92 @@ pub trait Builder {
         );
         self.api()
             .set_to_expression_transition(register, expression);
+    }
+
+    fn add<Lhs, Rhs>(&mut self, lhs: Lhs, rhs: Rhs) -> <Lhs as ops::Add<Self, Rhs>>::Output
+    where
+        Lhs: Add<Self, Rhs>,
+    {
+        lhs.add(rhs, self)
+    }
+
+    fn sub<Lhs, Rhs>(&mut self, lhs: Lhs, rhs: Rhs) -> <Lhs as ops::Sub<Self, Rhs>>::Output
+    where
+        Lhs: Sub<Self, Rhs>,
+    {
+        lhs.sub(rhs, self)
+    }
+
+    fn mul<Lhs, Rhs>(&mut self, lhs: Lhs, rhs: Rhs) -> <Lhs as ops::Mul<Self, Rhs>>::Output
+    where
+        Lhs: Mul<Self, Rhs>,
+    {
+        lhs.mul(rhs, self)
+    }
+
+    fn zero<T: Zero<Self>>(&mut self) -> <T as Zero<Self>>::Output {
+        T::zero(self)
+    }
+
+    fn neg<T: Neg<Self>>(&mut self, value: T) -> <T as Neg<Self>>::Output {
+        value.neg(self)
+    }
+
+    fn and<Lhs, Rhs>(&mut self, lhs: Lhs, rhs: Rhs) -> <Lhs as ops::And<Self, Rhs>>::Output
+    where
+        Lhs: And<Self, Rhs>,
+    {
+        lhs.and(rhs, self)
+    }
+
+    fn or<Lhs, Rhs>(&mut self, lhs: Lhs, rhs: Rhs) -> <Lhs as ops::Or<Self, Rhs>>::Output
+    where
+        Lhs: Or<Self, Rhs>,
+    {
+        lhs.or(rhs, self)
+    }
+
+    fn xor<Lhs, Rhs>(&mut self, lhs: Lhs, rhs: Rhs) -> <Lhs as ops::Xor<Self, Rhs>>::Output
+    where
+        Lhs: Xor<Self, Rhs>,
+    {
+        lhs.xor(rhs, self)
+    }
+
+    fn shl<Lhs, Rhs>(&mut self, lhs: Lhs, rhs: Rhs) -> <Lhs as ops::Shl<Self, Rhs>>::Output
+    where
+        Lhs: Shl<Self, Rhs>,
+    {
+        lhs.shl(rhs, self)
+    }
+
+    fn shr<Lhs, Rhs>(&mut self, lhs: Lhs, rhs: Rhs) -> <Lhs as ops::Shr<Self, Rhs>>::Output
+    where
+        Lhs: Shr<Self, Rhs>,
+    {
+        lhs.shr(rhs, self)
+    }
+
+    fn rotate_left<Lhs, Rhs>(
+        &mut self,
+        lhs: Lhs,
+        rhs: Rhs,
+    ) -> <Lhs as ops::RotateLeft<Self, Rhs>>::Output
+    where
+        Lhs: ops::RotateLeft<Self, Rhs>,
+    {
+        lhs.rotate_left(rhs, self)
+    }
+
+    fn rotate_right<Lhs, Rhs>(
+        &mut self,
+        lhs: Lhs,
+        rhs: Rhs,
+    ) -> <Lhs as ops::RotateRight<Self, Rhs>>::Output
+    where
+        Lhs: ops::RotateRight<Self, Rhs>,
+    {
+        lhs.rotate_right(rhs, self)
     }
 }
 
