@@ -148,13 +148,6 @@ pub trait Builder: Sized {
         register: &T,
         expression: ArithmeticExpression<Self::Field>,
     ) {
-        // if expression.is_trace() {
-        //     assert!(
-        //         register.is_trace(),
-        //         "Cannot set a non-trace register to a trace expression"
-        //     );
-        //     self.api().set_to_expression(register, expression)
-        // }
         match (register.is_trace(), expression.is_trace()) {
             (true, _) => self.api().set_to_expression(register, expression),
             (false, true) => panic!("Cannot set a non-trace register to a trace expression"),
@@ -189,6 +182,23 @@ pub trait Builder: Sized {
         );
         self.api()
             .set_to_expression_transition(register, expression);
+    }
+
+    /// Computes the expression `expression` and returns the result as a trace register of type `T`.
+    fn expression<T: Register>(&mut self, expression: ArithmeticExpression<Self::Field>) -> T {
+        let register = self.alloc::<T>();
+        self.set_to_expression(&register, expression);
+        register
+    }
+
+    /// Computes the expression `expression` and returns the result as a public register of type `T`.
+    fn public_expression<T: Register>(
+        &mut self,
+        expression: ArithmeticExpression<Self::Field>,
+    ) -> T {
+        let register = self.alloc_public::<T>();
+        self.set_to_expression(&register, expression);
+        register
     }
 
     fn add<Lhs, Rhs>(&mut self, lhs: Lhs, rhs: Rhs) -> <Lhs as ops::Add<Self, Rhs>>::Output
