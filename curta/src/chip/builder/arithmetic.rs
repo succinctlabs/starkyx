@@ -9,8 +9,13 @@ use crate::chip::AirParameters;
 impl<L: AirParameters> AirBuilder<L> {
     #[inline]
     pub fn assert_expression_zero(&mut self, expression: ArithmeticExpression<L::Field>) {
+        let flag = expression.is_trace();
         let constraint = ArithmeticConstraint::All(expression);
-        self.constraints.push(constraint.into());
+        if flag {
+            self.constraints.push(constraint.into());
+        } else {
+            self.global_constraints.push(constraint.into());
+        }
     }
 
     #[inline]
