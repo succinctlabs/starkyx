@@ -1,4 +1,5 @@
 use super::Builder;
+use crate::chip::register::bit::BitRegister;
 
 /// The addition operation.
 ///
@@ -43,6 +44,25 @@ pub trait Zero<B: Builder> {
     type Output;
 
     fn zero(builder: &mut B) -> Self::Output;
+}
+
+/// A one element.
+///
+/// Types implementing this trait can be used via the `builder.one()` method.
+pub trait One<B: Builder> {
+    type Output;
+
+    fn one(builder: &mut B) -> Self::Output;
+}
+
+/// The addition with carry operation.
+///
+/// Types implementing this trait can be used within the `builder.carrying_add(lhs, rhs, carry)`
+/// method.
+pub trait Adc<B: Builder, Rhs = Self, Carry = BitRegister> {
+    type Output;
+
+    fn adc(self, rhs: Rhs, carry: Carry, builder: &mut B) -> Self::Output;
 }
 
 /// The bitwise AND operation.

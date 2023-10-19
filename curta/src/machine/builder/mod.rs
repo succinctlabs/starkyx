@@ -1,4 +1,4 @@
-use self::ops::{Add, And, Mul, Neg, Or, Shl, Shr, Sub, Xor, Zero};
+use self::ops::{Adc, Add, And, Mul, Neg, One, Or, Shl, Shr, Sub, Xor, Zero};
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::memory::pointer::Pointer;
@@ -193,8 +193,24 @@ pub trait Builder: Sized {
         T::zero(self)
     }
 
+    fn one<T: One<Self>>(&mut self) -> <T as One<Self>>::Output {
+        T::one(self)
+    }
+
     fn neg<T: Neg<Self>>(&mut self, value: T) -> <T as Neg<Self>>::Output {
         value.neg(self)
+    }
+
+    fn carrying_add<Lhs, Rhs, Carry>(
+        &mut self,
+        lhs: Lhs,
+        rhs: Rhs,
+        carry: Carry,
+    ) -> <Lhs as ops::Adc<Self, Rhs, Carry>>::Output
+    where
+        Lhs: Adc<Self, Rhs, Carry>,
+    {
+        lhs.adc(rhs, carry, self)
     }
 
     fn and<Lhs, Rhs>(&mut self, lhs: Lhs, rhs: Rhs) -> <Lhs as ops::And<Self, Rhs>>::Output

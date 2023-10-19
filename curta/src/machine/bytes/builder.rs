@@ -14,7 +14,7 @@ pub(crate) const NUM_LOOKUP_ROWS: usize = 1 << 16;
 
 pub struct BytesBuilder<L: AirParameters> {
     pub api: AirBuilder<L>,
-    operations: ByteLookupOperations,
+    pub(crate) operations: ByteLookupOperations,
     pub clk: ElementRegister,
 }
 
