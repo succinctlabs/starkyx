@@ -3,6 +3,7 @@ use core::marker::PhantomData;
 use super::raw::RawPointer;
 use crate::chip::register::cubic::CubicRegister;
 
+/// A pointer emulating a mutable reference to a data of register type `T`.
 #[derive(Debug, Clone, Copy)]
 pub struct Pointer<T> {
     pub raw: RawPointer,

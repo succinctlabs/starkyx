@@ -17,6 +17,7 @@ use crate::chip::register::RegisterSerializable;
 use crate::chip::AirParameters;
 
 impl<L: AirParameters> AirBuilder<L> {
+    /// Initializes the memory bus.
     pub fn init_local_memory(&mut self) {
         let mut bus = self.new_bus();
         let channel = bus.new_channel(self);
@@ -25,7 +26,7 @@ impl<L: AirParameters> AirBuilder<L> {
         self.buses.push(bus);
     }
 
-    /// Initializes a register with the current time.
+    /// Initializes a pointer with initial `value` and write time given by `time`.
     pub fn initialize<V: MemoryValue>(
         &mut self,
         value: &V,
@@ -44,6 +45,7 @@ impl<L: AirParameters> AirBuilder<L> {
         ptr
     }
 
+    /// Frees the memory at location `ptr` with value `value` and write time given by `time`.
     pub fn free<V: MemoryValue>(
         &mut self,
         ptr: &Pointer<V>,
@@ -54,6 +56,7 @@ impl<L: AirParameters> AirBuilder<L> {
         self.output_from_memory_bus(digest)
     }
 
+    /// Initializes a slice with initial `values` and write time given by `time`.
     pub fn initialize_slice<V: MemoryValue>(
         &mut self,
         values: &impl RegisterSlice<V>,
@@ -131,6 +134,12 @@ impl<L: AirParameters> AirBuilder<L> {
         }
     }
 
+    /// Writes `value` to the memory at location `ptr` with write time given by `write_ts`. Values
+    /// can be written with an optional `multiplicity`.
+    ///
+    /// If `multiplicity` is `None`, then the value is written to the memory bus with multiplicity
+    /// set to 1 allowing a single read. If `multiplicity` is `Some(m)`, then the value is written
+    /// to the memory bus with multiplicity given by the value of `m`, allowing `m` reads.
     pub fn set<V: MemoryValue>(
         &mut self,
         ptr: &Pointer<V>,
@@ -140,6 +149,6 @@ impl<L: AirParameters> AirBuilder<L> {
     ) {
         let write_digest = value.compress(self, ptr.raw, write_ts);
         self.input_to_memory_bus(write_digest, multiplicity);
-        self.unsafe_raw_write(ptr, value, false)
+        self.unsafe_raw_write(ptr, value, !write_digest.is_trace())
     }
 }
