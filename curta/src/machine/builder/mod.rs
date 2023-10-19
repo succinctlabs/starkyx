@@ -1,11 +1,14 @@
 use self::ops::{Adc, Add, And, Mul, Neg, One, Or, Shl, Shr, Sub, Xor, Zero};
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
+use crate::chip::memory::pointer::slice::Slice;
 use crate::chip::memory::pointer::Pointer;
 use crate::chip::memory::time::Time;
 use crate::chip::memory::value::MemoryValue;
+use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
+use crate::chip::register::slice::RegisterSlice;
 use crate::chip::register::Register;
 use crate::chip::AirParameters;
 use crate::math::field::PrimeField64;
@@ -25,9 +28,19 @@ pub trait Builder: Sized {
         self.api().alloc()
     }
 
+    /// Allocates a trace array register with type `T` and length `len`.
+    fn alloc_array<T: Register>(&mut self, len: usize) -> ArrayRegister<T> {
+        self.api().alloc_array(len)
+    }
+
     /// Allocates a register in public inputs.
     fn alloc_public<T: Register>(&mut self) -> T {
         self.api().alloc_public()
+    }
+
+    /// Allocates an array register in public inputs with type `T` and length `len`.
+    fn alloc_array_public<T: Register>(&mut self, len: usize) -> ArrayRegister<T> {
+        self.api().alloc_array_public(len)
     }
 
     /// Allocates a constant register with set value `value`.
@@ -43,6 +56,16 @@ pub trait Builder: Sized {
         multiplicity: Option<ElementRegister>,
     ) -> Pointer<V> {
         self.api().initialize(value, time, multiplicity)
+    }
+
+    /// Initializes a slice of mutable memory with initial `value` and write time given by `time`.
+    fn initialize_slice<V: MemoryValue>(
+        &mut self,
+        values: &impl RegisterSlice<V>,
+        time: &Time<Self::Field>,
+        multiplicity: Option<ElementRegister>,
+    ) -> Slice<V> {
+        self.api().initialize_slice(values, time, multiplicity)
     }
 
     /// Reads the memory at location `ptr` with last write time given by `last_write_ts`.

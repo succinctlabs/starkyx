@@ -514,6 +514,7 @@ mod tests {
     use crate::chip::uint::operations::instruction::UintInstruction;
     use crate::chip::uint::register::U32Register;
     use crate::chip::uint::util::u32_to_le_field_bytes;
+    use crate::machine::builder::Builder;
     use crate::machine::bytes::builder::BytesBuilder;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
     use crate::math::prelude::*;
@@ -545,12 +546,12 @@ mod tests {
 
         let mut builder = BytesBuilder::<L>::new();
 
-        let a = builder.api.alloc::<U32Register>();
-        let b = builder.api.alloc::<U32Register>();
+        let a = builder.alloc::<U32Register>();
+        let b = builder.alloc::<U32Register>();
 
         let num_ops = 1;
         for _ in 0..num_ops {
-            let _ = builder.bitwise_and(&a, &b);
+            let _ = builder.and(&a, &b);
         }
 
         let num_rows = 1 << 5;
@@ -625,19 +626,17 @@ mod tests {
 
         let clk = Time::from_element(builder.clk);
 
-        let a = builder.api.get(&a_ptr, &clk);
-        let b = builder.api.alloc::<U32Register>();
-        let c = builder.bitwise_and(&a, &b);
-        builder.api.set(&a_ptr, c, &clk.advance(), None);
+        let a = builder.get(&a_ptr, &clk);
+        let b = builder.alloc::<U32Register>();
+        let c = builder.and(&a, &b);
+        builder.set(&a_ptr, c, &clk.advance(), None);
 
-        let a_final = builder.api.alloc_public::<U32Register>();
+        let a_final = builder.alloc_public::<U32Register>();
 
         let num_rows = 1 << 5;
 
-        builder
-            .api
-            .free(&a_ptr, a_final, &Time::constant(num_rows as u32));
-        builder.api.set_to_expression_last_row(&a_final, c.expr());
+        builder.free(&a_ptr, a_final, &Time::constant(num_rows as u32));
+        builder.set_to_expression_last_row(&a_final, c.expr());
 
         let stark = builder.build::<C, 2>(num_rows);
 
@@ -705,13 +704,11 @@ mod tests {
 
         let mut builder = BytesBuilder::<L>::new();
 
-        let a_init = builder.api.alloc_array_public::<U32Register>(4);
+        let a_init = builder.alloc_array_public::<U32Register>(4);
 
         let num_rows = 1 << 5;
 
-        let a_ptr = builder
-            .api
-            .initialize_slice::<U32Register>(&a_init, &Time::zero(), None);
+        let a_ptr = builder.initialize_slice::<U32Register>(&a_init, &Time::zero(), None);
 
         let num_rows_reg = builder
             .api
@@ -732,10 +729,10 @@ mod tests {
             .api
             .set_to_expression(&zero_trace, GoldilocksField::ZERO.into());
         let a_0_trace = a_ptr.get_at(zero_trace);
-        let a = builder.api.get(&a_0_trace, &clk);
-        let b = builder.api.get(&a_ptr.get(1), &Time::zero());
-        let c = builder.bitwise_and(&a, &b);
-        builder.api.set(&a_0_trace, c, &clk.advance(), None);
+        let a = builder.get(&a_0_trace, &clk);
+        let b = builder.get(&a_ptr.get(1), &Time::zero());
+        let c = builder.and(&a, &b);
+        builder.set(&a_0_trace, c, &clk.advance(), None);
 
         let a_final = builder.api.alloc_public::<U32Register>();
 

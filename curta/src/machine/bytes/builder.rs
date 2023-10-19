@@ -4,7 +4,6 @@ use crate::chip::builder::AirBuilder;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
 use crate::chip::uint::operations::instruction::UintInstructions;
-use crate::chip::uint::register::ByteArrayRegister;
 use crate::chip::AirParameters;
 use crate::machine::builder::Builder;
 use crate::plonky2::stark::config::{CurtaConfig, StarkyConfig};
@@ -40,14 +39,6 @@ where
             operations: ByteLookupOperations::new(),
             clk,
         }
-    }
-
-    pub fn bitwise_and<const N: usize>(
-        &mut self,
-        a: &ByteArrayRegister<N>,
-        b: &ByteArrayRegister<N>,
-    ) -> ByteArrayRegister<N> {
-        self.api.bitwise_and(a, b, &mut self.operations)
     }
 
     pub fn build<C: CurtaConfig<D, F = L::Field>, const D: usize>(
