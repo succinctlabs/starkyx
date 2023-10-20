@@ -1,6 +1,7 @@
 use self::ops::{Adc, Add, And, Mul, Neg, One, Or, Shl, Shr, Sub, Xor, Zero};
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
+use crate::chip::instruction::cycle::Cycle;
 use crate::chip::memory::pointer::slice::Slice;
 use crate::chip::memory::pointer::Pointer;
 use crate::chip::memory::time::Time;
@@ -323,6 +324,10 @@ pub trait Builder: Sized {
         Lhs: ops::RotateRight<Self, Rhs>,
     {
         lhs.rotate_right(rhs, self)
+    }
+
+    fn cycle(&mut self, length_log: usize) -> Cycle<Self::Field> {
+        self.api().cycle(length_log)
     }
 }
 

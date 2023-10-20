@@ -1,218 +1,278 @@
-// use super::data::SHA256Data;
-// use super::{INITIAL_HASH, ROUND_CONSTANTS};
-// use crate::chip::arithmetic::expression::ArithmeticExpression;
-// use crate::chip::memory::time::Time;
-// use crate::chip::register::element::ElementRegister;
-// use crate::chip::register::Register;
-// use crate::chip::uint::operations::instruction::UintInstructions;
-// use crate::chip::uint::register::U32Register;
-// use crate::chip::uint::util::u32_to_le_field_bytes;
-// use crate::chip::AirParameters;
-// use crate::machine::builder::Builder;
-// use crate::machine::bytes::builder::BytesBuilder;
-// use crate::math::prelude::*;
+use super::data::SHA256Data;
+use super::{INITIAL_HASH, ROUND_CONSTANTS};
+use crate::chip::memory::time::Time;
+use crate::chip::register::bit::BitRegister;
+use crate::chip::register::element::ElementRegister;
+use crate::chip::register::{Register, RegisterSerializable};
+use crate::chip::uint::operations::instruction::UintInstructions;
+use crate::chip::uint::register::U32Register;
+use crate::chip::uint::util::u32_to_le_field_bytes;
+use crate::chip::AirParameters;
+use crate::machine::builder::Builder;
+use crate::machine::bytes::builder::BytesBuilder;
+use crate::math::prelude::*;
 
-// impl<L: AirParameters> BytesBuilder<L>
-// where
-//     L::Instruction: UintInstructions,
-// {
-//     pub fn sha_256_data(&mut self, num_rounds: usize) -> SHA256Data {
-//         let num_round_element = self.constant(&L::Field::from_canonical_usize(num_rounds));
+impl<L: AirParameters> BytesBuilder<L>
+where
+    L::Instruction: UintInstructions,
+{
+    pub fn sha_256_data(&mut self, num_rounds: usize) -> SHA256Data {
+        let num_round_element = self.constant(&L::Field::from_canonical_usize(num_rounds));
 
-//         // let state = self.uninit_slice();
-//         let initial_hash =
-//             self.constant_array::<U32Register>(&INITIAL_HASH.map(u32_to_le_field_bytes));
+        // let state = self.uninit_slice();
+        let initial_hash =
+            self.constant_array::<U32Register>(&INITIAL_HASH.map(u32_to_le_field_bytes));
 
-//         let round_constant_values =
-//             self.constant_array::<U32Register>(&ROUND_CONSTANTS.map(u32_to_le_field_bytes));
+        let round_constant_values =
+            self.constant_array::<U32Register>(&ROUND_CONSTANTS.map(u32_to_le_field_bytes));
 
-//         let round_constants = self.initialize_slice(
-//             &round_constant_values,
-//             &Time::zero(),
-//             Some(num_round_element),
-//         );
+        // let round_constants = self.initialize_slice(
+        //     &round_constant_values,
+        //     &Time::zero(),
+        //     Some(num_round_element),
+        // );
 
-//         // let state = self.uninit_slice();
+        // let state = self.uninit_slice();
 
-//         let process_id = self.alloc();
+        // Initialize shift read multiplicities with zeros.
+        let mut shift_read_mult = [L::Field::ZERO; 64];
+        // Add multiplicities for reading the elements w[i-15].
+        for mult in shift_read_mult.iter_mut().skip(1).take(48) {
+            *mult += L::Field::ONE;
+        }
+        // // Add multiplicities for reading the elements w[i-2].
+        for mult in shift_read_mult.iter_mut().skip(14).take(48) {
+            *mult += L::Field::ONE;
+        }
+        // Add multiplicities for reading the elements w[i-16].
+        for mult in shift_read_mult.iter_mut().take(48) {
+            *mult += L::Field::ONE;
+        }
+        // Add multiplicities for reading the elements w[i-7].
+        for mult in shift_read_mult.iter_mut().skip(16 - 7).take(48) {
+            *mult += L::Field::ONE;
+        }
 
-//         let index = self.alloc();
-//         let is_preprocessing = self.alloc();
-//         let w = self.uninit_slice();
+        let shift_read_values = self.constant_array::<ElementRegister>(&shift_read_mult);
 
-//         let padded_messages = (0..num_rounds)
-//             .map(|_| self.alloc_array_public::<U32Register>(16))
-//             .collect::<Vec<_>>();
-//         let dummy_entry = self.constant::<U32Register>(&[L::Field::ZERO; 4]);
+        let shift_read_mult =
+            self.initialize_slice(&shift_read_values, &Time::zero(), Some(num_round_element));
 
-//         let num_dummy_reads =
-//             self.constant::<ElementRegister>(&L::Field::from_canonical_usize(64 - 16));
+        let w = self.uninit_slice();
+        let padded_messages = (0..num_rounds)
+            .map(|_| self.alloc_array_public::<U32Register>(16))
+            .collect::<Vec<_>>();
+        let dummy_entry = self.constant::<U32Register>(&[L::Field::ZERO; 4]);
 
-//         for (i, padded_message) in padded_messages.iter().enumerate() {
-//             for (j, word) in padded_message.iter().enumerate().take(16) {
-//                 self.store(&w.get(j), word, &Time::zero(), None);
-//             }
-//             self.store(
-//                 &w.get(16),
-//                 dummy_entry,
-//                 &Time::zero(),
-//                 Some(num_dummy_reads),
-//             );
-//         }
+        let dummy_index = self.constant(&L::Field::from_canonical_u8(64));
 
-//         SHA256Data {
-//             // state,
-//             initial_hash,
-//             round_constants,
-//             w,
-//             index,
-//             is_preprocessing,
-//             padded_messages,
-//             process_id,
-//         }
-//     }
+        let num_dummy_reads =
+            self.constant::<ElementRegister>(&L::Field::from_canonical_usize(16 * 4 + 64 - 16));
 
-//     pub fn sha_256_preprocessing(&mut self, data: &SHA256Data) -> U32Register {
-//         let w = &data.w;
-//         let index = data.index;
-//         let is_preprocessing = data.is_preprocessing;
+        for (i, padded_message) in padded_messages.iter().enumerate() {
+            for (j, word) in padded_message.iter().enumerate().take(16) {
+                self.store(&w.get(j), word, &Time::constant(i), None);
+            }
+            self.store(
+                &w.get(64),
+                dummy_entry,
+                &Time::constant(i),
+                Some(num_dummy_reads),
+            );
+        }
 
-//         // let index_shift = |j: usize| {
-//         //     is_preprocessing.expr() * (index.expr() - L::Field::from_canonical_usize(j))
-//         //         + is_preprocessing.not_expr() * L::Field::from_canonical_u8(16)
-//         // };
+        // Initialize cycles to generate process id and is_processing flag.
+        let cycle_16 = self.cycle(4);
+        let cycle_64 = self.cycle(6);
 
-//         // // Calculate the value:
-//         // // s_0 = w_i_minus_15.rotate_right(7) ^ w_i_minus_15.rotate_right(18) ^ (w_i_minus_15 >> 3)
-//         // let i_m_15 = self.expression(index_shift(15));
-//         // let w_i_minus_15 = self.load(&w.get_at(i_m_15), &time);
-//         // let w_i_minus_15_rotate_7 = self.rotate_right(w_i_minus_15, 7);
-//         // let w_i_minus_15_rotate_18 = self.rotate_right(w_i_minus_15, 18);
-//         // let w_i_minus_15_shr_3 = self.shr(w_i_minus_15, 3);
+        // `process_id` is a register is computed by counting the number of cycles. We do this by
+        // setting `process_id` to be the cumulatibe sum of the `end_bit` of each cycle.
+        let process_id = self.alloc::<ElementRegister>();
+        self.set_to_expression_transition(
+            &process_id.next(),
+            process_id.expr() + cycle_64.end_bit.expr(),
+        );
+        // The array index register can be computed as `clock - process_id * 64`.
+        let index =
+            self.expression(self.clk.expr() - process_id.expr() * L::Field::from_canonical_u32(64));
 
-//         // let mut s_0 = self.xor(&w_i_minus_15_rotate_7, &w_i_minus_15_rotate_18);
-//         // s_0 = self.xor(&s_0, &w_i_minus_15_shr_3);
+        // Preprocessing happens in steps 16..64 of each 64-cycle. We compute this register by
+        // having an accumnumator so that:
+        //    - `is_preprocessing` becomes `0` at the beginning of each 64 cycle.
+        //    - `is_preprocessing` becomes `1` at the end of every 16 cycle unless this coincides
+        //       with the end of a 64-cycle.
+        //    - otherwise, `is_preprocessing` remains the same.
+        let is_preprocessing = self.alloc::<BitRegister>();
+        self.set_to_expression_transition(
+            &is_preprocessing.next(),
+            cycle_64.end_bit.not_expr()
+                * (cycle_16.end_bit.expr() + cycle_16.end_bit.not_expr() * is_preprocessing.expr()),
+        );
 
-//         // // Calculate the value:
-//         // // s_1 = w_i_minus_2.rotate_right(17) ^ w_i_minus_2.rotate_right(19) ^ (w_i_minus_2 >> 10)
-//         // let i_m_2 = self.expression(index_shift(2));
-//         // let time_m_2_expr = self.expression(
-//         //     is_preprocessing.expr() * (self.clk.expr() - L::Field::from_canonical_usize(2)),
-//         // );
-//         // let time_m_2 = Time::from_element(time_m_2_expr);
-//         // let w_i_minus_2 = self.load(&w.get_at(i_m_2), &time_m_2);
-//         // let w_i_minus_2_rotate_17 = self.rotate_right(w_i_minus_2, 17);
-//         // let w_i_minus_2_rotate_19 = self.rotate_right(w_i_minus_2, 19);
-//         // let w_i_minus_2_shr_10 = self.shr(w_i_minus_2, 10);
+        SHA256Data {
+            // state,
+            initial_hash,
+            // round_constants,
+            w,
+            index,
+            is_preprocessing,
+            padded_messages,
+            process_id,
+            dummy_index,
+            shift_read_mult,
+        }
+    }
 
-//         // let mut s_1 = self.xor(&w_i_minus_2_rotate_17, &w_i_minus_2_rotate_19);
-//         // s_1 = self.xor(&s_1, &w_i_minus_2_shr_10);
+    pub fn sha_256_preprocessing(&mut self, data: &SHA256Data) -> U32Register {
+        let w = &data.w;
+        let index = data.index;
+        let dummy_index = data.dummy_index;
+        let process_id = data.process_id;
+        let is_preprocessing = data.is_preprocessing;
+        let shift_read_mult = &data.shift_read_mult;
 
-//         // // Calculate the value:
-//         // // w_i = w_i_minus_16 + s_0 + w_i_minus_7 + s_1
-//         // let i_m_16 = self.expression(index_shift(16));
-//         // let i_m_7 = self.expression(index_shift(7));
-//         // let w_i_mimus_16 = self.load(&w.get_at(i_m_16), &time);
-//         // let w_i_mimus_7 = self.load(&w.get_at(i_m_7), &time);
-//         // let mut w_i_pre_process = self.add(w_i_mimus_16, s_0);
-//         // w_i_pre_process = self.add(w_i_pre_process, w_i_mimus_7);
-//         // w_i_pre_process = self.add(w_i_pre_process, s_1);
+        let time = Time::from_element(process_id);
 
-//         let i_idx = self.expression(
-//             is_preprocessing.not_expr() * index.expr()
-//                 + is_preprocessing.expr() * L::Field::from_canonical_u8(16),
-//         );
-//         let w_i_read = self.load(&w.get_at(i_idx), &Time::zero());
+        let shifted_index = |i: u32, builder: &mut BytesBuilder<L>| {
+            builder.expression(
+                is_preprocessing.expr() * (index.expr() - L::Field::from_canonical_u32(i))
+                    + is_preprocessing.not_expr() * dummy_index.expr(),
+            )
+        };
 
-//         let w_i = w_i_read;
+        // Calculate the value:
+        // s_0 = w_i_minus_15.rotate_right(7) ^ w_i_minus_15.rotate_right(18) ^ (w_i_minus_15 >> 3)
+        let i_m_15 = shifted_index(15, self);
+        let w_i_minus_15 = self.load(&w.get_at(i_m_15), &time);
+        let w_i_minus_15_rotate_7 = self.rotate_right(w_i_minus_15, 7);
+        let w_i_minus_15_rotate_18 = self.rotate_right(w_i_minus_15, 18);
+        let w_i_minus_15_shr_3 = self.shr(w_i_minus_15, 3);
 
-//         w_i
-//     }
-// }
+        let mut s_0 = self.xor(&w_i_minus_15_rotate_7, &w_i_minus_15_rotate_18);
+        s_0 = self.xor(&s_0, &w_i_minus_15_shr_3);
 
-// #[cfg(test)]
-// mod tests {
-//     use plonky2::field::goldilocks_field::GoldilocksField;
-//     use plonky2::util::timing::TimingTree;
-//     use serde::{Deserialize, Serialize};
+        // Calculate the value:
+        // s_1 = w_i_minus_2.rotate_right(17) ^ w_i_minus_2.rotate_right(19) ^ (w_i_minus_2 >> 10)
+        let i_m_2 = shifted_index(2, self);
+        let w_i_minus_2 = self.load(&w.get_at(i_m_2), &time);
+        let w_i_minus_2_rotate_17 = self.rotate_right(w_i_minus_2, 17);
+        let w_i_minus_2_rotate_19 = self.rotate_right(w_i_minus_2, 19);
+        let w_i_minus_2_shr_10 = self.shr(w_i_minus_2, 10);
 
-//     use super::*;
-//     use crate::chip::hash::sha::sha256::SHA256Gadget;
-//     use crate::chip::trace::writer::{InnerWriterData, TraceWriter};
-//     use crate::chip::uint::operations::instruction::UintInstruction;
-//     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
-//     use crate::plonky2::stark::config::{CurtaConfig, CurtaPoseidonGoldilocksConfig};
+        let mut s_1 = self.xor(&w_i_minus_2_rotate_17, &w_i_minus_2_rotate_19);
+        s_1 = self.xor(&s_1, &w_i_minus_2_shr_10);
 
-//     #[derive(Clone, Debug, Serialize, Deserialize)]
-//     pub struct SHAPreprocessingTest;
+        // Calculate the value:
+        // w_i = w_i_minus_16 + s_0 + w_i_minus_7 + s_1
+        let i_m_16 = shifted_index(16, self);
+        let w_i_mimus_16 = self.load(&w.get_at(i_m_16), &time);
+        let i_m_7 = shifted_index(7, self);
+        let w_i_mimus_7 = self.load(&w.get_at(i_m_7), &time);
+        let mut w_i_pre_process = self.add(w_i_mimus_16, s_0);
+        w_i_pre_process = self.add(w_i_pre_process, w_i_mimus_7);
+        w_i_pre_process = self.add(w_i_pre_process, s_1);
 
-//     impl AirParameters for SHAPreprocessingTest {
-//         type Field = GoldilocksField;
-//         type CubicParams = GoldilocksCubicParameters;
+        let i_idx = self.select(is_preprocessing, &dummy_index, &index);
+        let w_i_read = self.load(&w.get_at(i_idx), &time);
 
-//         type Instruction = UintInstruction;
+        let w_i = self.select(is_preprocessing, &w_i_pre_process, &w_i_read);
 
-//         const NUM_FREE_COLUMNS: usize = 186;
-//         const EXTENDED_COLUMNS: usize = 120;
-//     }
+        let reading_mult = self.load(&shift_read_mult.get_at(index), &Time::zero());
+        self.store(&w.get_at(index), w_i, &time, Some(reading_mult));
 
-//     #[test]
-//     fn test_sha256_preprocessing() {
-//         type L = SHAPreprocessingTest;
-//         type C = CurtaPoseidonGoldilocksConfig;
-//         type Config = <C as CurtaConfig<2>>::GenericConfig;
+        w_i
+    }
+}
 
-//         let _ = env_logger::builder().is_test(true).try_init();
-//         let mut timing = TimingTree::new("test_sha256_preprocessing", log::Level::Debug);
+#[cfg(test)]
+mod tests {
+    use itertools::Itertools;
+    use plonky2::field::goldilocks_field::GoldilocksField;
+    use plonky2::util::timing::TimingTree;
+    use serde::{Deserialize, Serialize};
 
-//         let mut builder = BytesBuilder::<L>::new();
+    use super::*;
+    use crate::chip::hash::sha::sha256::SHA256Gadget;
+    use crate::chip::trace::writer::{InnerWriterData, TraceWriter};
+    use crate::chip::uint::operations::instruction::UintInstruction;
+    use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
+    use crate::plonky2::stark::config::{CurtaConfig, CurtaPoseidonGoldilocksConfig};
 
-//         let num_rounds = 1;
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct SHAPreprocessingTest;
 
-//         let data = builder.sha_256_data(num_rounds);
+    impl AirParameters for SHAPreprocessingTest {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
 
-//         let w_i = builder.sha_256_preprocessing(&data);
+        type Instruction = UintInstruction;
 
-//         let num_rows = 1 << (6 * num_rounds);
-//         let stark = builder.build::<C, 2>(num_rows);
+        const NUM_FREE_COLUMNS: usize = 196;
+        const EXTENDED_COLUMNS: usize = 111;
+    }
 
-//         let writer = TraceWriter::new(&stark.air_data, num_rows);
+    #[test]
+    fn test_sha256_preprocessing() {
+        type L = SHAPreprocessingTest;
+        type C = CurtaPoseidonGoldilocksConfig;
+        type Config = <C as CurtaConfig<2>>::GenericConfig;
 
-//         let msg = b"abc";
-//         // let expected_digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        let _ = env_logger::builder().is_test(true).try_init();
+        let mut timing = TimingTree::new("test_sha256_preprocessing", log::Level::Debug);
 
-//         let padded_msg_bytes = SHA256Gadget::pad(msg);
-//         assert_eq!(padded_msg_bytes.len(), 64);
-//         let padded_msg = padded_msg_bytes
-//             .chunks_exact(4)
-//             .map(|slice| u32::from_be_bytes(slice.try_into().unwrap()))
-//             .map(u32_to_le_field_bytes::<GoldilocksField>)
-//             .collect::<Vec<_>>();
+        let mut builder = BytesBuilder::<L>::new();
 
-//         assert_eq!(data.padded_messages.len(), 1);
-//         writer.write_array(&data.padded_messages[0], &padded_msg, 0);
+        let num_rounds = 1 << 8;
+        let data = builder.sha_256_data(num_rounds);
 
-//         writer.write_global_instructions(&stark.air_data);
+        let w_i = builder.sha_256_preprocessing(&data);
 
-//         for i in 0..num_rows {
-//             let k = i % 64;
-//             writer.write(
-//                 &data.process_id,
-//                 &GoldilocksField::from_canonical_usize(i / 64),
-//                 i,
-//             );
-//             writer.write(&data.index, &GoldilocksField::from_canonical_usize(k), i);
-//             writer.write(
-//                 &data.is_preprocessing,
-//                 &GoldilocksField::from_canonical_u8((k >= 16) as u8),
-//                 i,
-//             );
-//             writer.write_row_instructions(&stark.air_data, i);
-//         }
+        let num_rows = 64 * num_rounds;
+        let stark = builder.build::<C, 2>(num_rows);
 
-//         let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
-//         let proof = stark.prove(&trace, &public, &mut timing).unwrap();
+        let writer = TraceWriter::new(&stark.air_data, num_rows);
 
-//         stark.verify(proof.clone(), &public).unwrap();
-//     }
-// }
+        let msg = b"abc";
+        // let expected_digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+        let padded_messages = (0..num_rounds).map(|_| SHA256Gadget::pad(msg));
+        let mut expected_w = Vec::new();
+
+        for (message, register) in padded_messages.zip_eq(data.padded_messages.iter()) {
+            let padded_msg = message
+                .chunks_exact(4)
+                .map(|slice| u32::from_be_bytes(slice.try_into().unwrap()))
+                .map(u32_to_le_field_bytes::<GoldilocksField>)
+                .collect::<Vec<_>>();
+
+            writer.write_array(register, padded_msg, 0);
+
+            let pre_processed = SHA256Gadget::process_inputs(&message);
+
+            expected_w.push(pre_processed);
+        }
+        writer.write_global_instructions(&stark.air_data);
+        (0..num_rounds).for_each(|r| {
+            for k in 0..64 {
+                let i = r * 64 + k;
+                writer.write_row_instructions(&stark.air_data, i);
+            }
+        });
+
+        for (r, exp_w) in expected_w.iter().enumerate() {
+            for (j, exp) in exp_w.iter().enumerate() {
+                let w_i_value = u32::from_le_bytes(
+                    writer
+                        .read(&w_i, 64 * r + j)
+                        .map(|x| x.as_canonical_u64() as u8),
+                );
+                assert_eq!(w_i_value, *exp);
+            }
+        }
+
+        let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
+        let proof = stark.prove(&trace, &public, &mut timing).unwrap();
+
+        stark.verify(proof.clone(), &public).unwrap();
+    }
+}

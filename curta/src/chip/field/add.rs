@@ -180,7 +180,7 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpAddInstruction<P>
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
-    use num::BigUint;
+    use num::{BigUint, Zero};
     use rand::thread_rng;
 
     use super::*;
@@ -216,6 +216,9 @@ mod tests {
         let b = builder.alloc::<FieldRegister<P>>();
         let _add_insr = builder.fp_add(&a, &b);
 
+        let f_zero = Polynomial::<F>::from_biguint_field(&BigUint::zero(), 16, 16);
+        let x = builder.constant::<FieldRegister<P>>(&f_zero);
+
         let (air, trace_data) = builder.build();
         let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
@@ -247,10 +250,12 @@ mod tests {
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
 
+        let writer = generator.new_writer();
+        let public = writer.public().unwrap().clone();
         // Generate proof and verify as a stark
-        test_starky(&stark, &config, &generator, &[]);
+        test_starky(&stark, &config, &generator, &public);
 
         // Test the recursive proof.
-        test_recursive_starky(stark, config, generator, &[]);
+        test_recursive_starky(stark, config, generator, &public);
     }
 }
