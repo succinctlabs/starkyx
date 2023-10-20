@@ -7,10 +7,8 @@ use super::inner_product::FpInnerProductInstruction;
 use super::mul::FpMulInstruction;
 use super::mul_const::FpMulConstInstruction;
 use super::parameters::FieldParameters;
-use super::register::FieldRegister;
 use super::sub::FpSubInstruction;
 use crate::air::AirConstraint;
-use crate::chip::bool::SelectInstruction;
 use crate::chip::instruction::Instruction;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
@@ -24,7 +22,6 @@ pub enum FpInstruction<P: FieldParameters> {
     MulConst(FpMulConstInstruction<P>),
     Inner(FpInnerProductInstruction<P>),
     Den(FpDenInstruction<P>),
-    Select(SelectInstruction<FieldRegister<P>>),
     Sub(FpSubInstruction<P>),
     Div(FpDivInstruction<P>),
 }
@@ -37,7 +34,6 @@ pub trait FromFieldInstruction<P: FieldParameters>:
     + From<FpMulConstInstruction<P>>
     + From<FpInnerProductInstruction<P>>
     + From<FpDenInstruction<P>>
-    + From<SelectInstruction<FieldRegister<P>>>
 {
 }
 
@@ -51,7 +47,6 @@ impl<AP: PolynomialParser, P: FieldParameters> AirConstraint<AP> for FpInstructi
             FpInstruction::MulConst(instruction) => AirConstraint::<AP>::eval(instruction, parser),
             FpInstruction::Inner(instruction) => AirConstraint::<AP>::eval(instruction, parser),
             FpInstruction::Den(instruction) => AirConstraint::<AP>::eval(instruction, parser),
-            FpInstruction::Select(instruction) => AirConstraint::<AP>::eval(instruction, parser),
             FpInstruction::Sub(instruction) => AirConstraint::<AP>::eval(instruction, parser),
             FpInstruction::Div(instruction) => AirConstraint::<AP>::eval(instruction, parser),
         }
@@ -74,9 +69,6 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpInstruction<P> {
                 Instruction::<F>::write(instruction, writer, row_index)
             }
             FpInstruction::Den(instruction) => {
-                Instruction::<F>::write(instruction, writer, row_index)
-            }
-            FpInstruction::Select(instruction) => {
                 Instruction::<F>::write(instruction, writer, row_index)
             }
             FpInstruction::Sub(instruction) => {
@@ -116,12 +108,6 @@ impl<P: FieldParameters> From<FpInnerProductInstruction<P>> for FpInstruction<P>
 impl<P: FieldParameters> From<FpDenInstruction<P>> for FpInstruction<P> {
     fn from(instr: FpDenInstruction<P>) -> Self {
         FpInstruction::Den(instr)
-    }
-}
-
-impl<P: FieldParameters> From<SelectInstruction<FieldRegister<P>>> for FpInstruction<P> {
-    fn from(instr: SelectInstruction<FieldRegister<P>>) -> Self {
-        FpInstruction::Select(instr)
     }
 }
 

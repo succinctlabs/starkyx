@@ -128,8 +128,7 @@ impl<L: AirParameters> AirBuilder<L> {
     fn unsafe_raw_read<V: MemoryValue>(&mut self, ptr: &Pointer<V>) -> V {
         let value = self.alloc::<V>();
         let instr = MemoryInstruction::Get(GetInstruction::new(ptr.raw, *value.register()));
-        self.register_air_instruction_internal(AirInstruction::mem(instr))
-            .unwrap();
+        self.register_air_instruction_internal(AirInstruction::mem(instr));
         value
     }
 
@@ -137,10 +136,8 @@ impl<L: AirParameters> AirBuilder<L> {
         let instr = MemoryInstruction::Set(SetInstruction::new(ptr.raw, *value.register()));
         if global {
             self.register_global_air_instruction_internal(AirInstruction::mem(instr))
-                .unwrap();
         } else {
             self.register_air_instruction_internal(AirInstruction::mem(instr))
-                .unwrap();
         }
     }
 
@@ -157,6 +154,11 @@ impl<L: AirParameters> AirBuilder<L> {
         write_ts: &Time<L::Field>,
         multiplicity: Option<ElementRegister>,
     ) {
+        if value.is_trace() {
+            if let Some(mult) = multiplicity {
+                assert!(mult.is_trace());
+            }
+        }
         let write_digest = value.compress(self, ptr.raw, write_ts);
         self.input_to_memory_bus(write_digest, multiplicity);
         self.unsafe_raw_write(ptr, value, !write_digest.is_trace())

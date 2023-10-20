@@ -626,16 +626,16 @@ mod tests {
 
         let clk = Time::from_element(builder.clk);
 
-        let a = builder.get(&a_ptr, &clk);
+        let a = builder.load(&a_ptr, &clk);
         let b = builder.alloc::<U32Register>();
         let c = builder.and(&a, &b);
-        builder.set(&a_ptr, c, &clk.advance(), None);
+        builder.store(&a_ptr, c, &clk.advance(), None);
 
         let a_final = builder.alloc_public::<U32Register>();
 
         let num_rows = 1 << 5;
 
-        builder.free(&a_ptr, a_final, &Time::constant(num_rows as u32));
+        builder.free(&a_ptr, a_final, &Time::constant(num_rows));
         builder.set_to_expression_last_row(&a_final, c.expr());
 
         let stark = builder.build::<C, 2>(num_rows);
@@ -729,16 +729,14 @@ mod tests {
             .api
             .set_to_expression(&zero_trace, GoldilocksField::ZERO.into());
         let a_0_trace = a_ptr.get_at(zero_trace);
-        let a = builder.get(&a_0_trace, &clk);
-        let b = builder.get(&a_ptr.get(1), &Time::zero());
+        let a = builder.load(&a_0_trace, &clk);
+        let b = builder.load(&a_ptr.get(1), &Time::zero());
         let c = builder.and(&a, &b);
-        builder.set(&a_0_trace, c, &clk.advance(), None);
+        builder.store(&a_0_trace, c, &clk.advance(), None);
 
         let a_final = builder.api.alloc_public::<U32Register>();
 
-        builder
-            .api
-            .free(&a_0, a_final, &Time::constant(num_rows as u32));
+        builder.api.free(&a_0, a_final, &Time::constant(num_rows));
         builder.api.set_to_expression_last_row(&a_final, c.expr());
 
         for (i, a) in a_init.iter().enumerate().skip(1) {

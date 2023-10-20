@@ -23,7 +23,15 @@ impl<F: Field> Instruction<F> for GetInstruction {
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let memory = writer.memory().unwrap();
         let key = self.ptr.read(writer, row_index);
-        let value = memory.get(&key).expect("Memory not initialized.");
+        let value = memory.get(&key).unwrap_or_else(|| {
+            panic!(
+                "Memory uninitialized at: \n
+                pointer {:?}]\n
+                value {:?} \n
+                row_index: {:?}\n",
+                key, self.register, row_index
+            )
+        });
         writer.write_slice(&self.register, value, row_index);
     }
 }

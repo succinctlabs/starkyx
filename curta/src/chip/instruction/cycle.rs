@@ -56,8 +56,7 @@ impl<L: AirParameters> AirBuilder<L> {
             group,
         };
 
-        self.register_air_instruction_internal(AirInstruction::cycle(cycle.clone()))
-            .unwrap();
+        self.register_air_instruction_internal(AirInstruction::cycle(cycle.clone()));
 
         cycle
     }

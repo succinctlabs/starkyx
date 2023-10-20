@@ -6,6 +6,7 @@ use crate::chip::memory::pointer::Pointer;
 use crate::chip::memory::time::Time;
 use crate::chip::memory::value::MemoryValue;
 use crate::chip::register::array::ArrayRegister;
+use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::slice::RegisterSlice;
@@ -48,6 +49,13 @@ pub trait Builder: Sized {
         self.api().constant(value)
     }
 
+    fn constant_array<T: Register>(
+        &mut self,
+        values: &[T::Value<Self::Field>],
+    ) -> ArrayRegister<T> {
+        self.api().constant_array(values)
+    }
+
     /// Initializes a pointer with initial `value` and write time given by `time`.
     fn initialize<V: MemoryValue>(
         &mut self,
@@ -79,7 +87,7 @@ pub trait Builder: Sized {
     }
 
     /// Reads the memory at location `ptr` with last write time given by `last_write_ts`.
-    fn get<V: MemoryValue>(&mut self, ptr: &Pointer<V>, last_write_ts: &Time<Self::Field>) -> V {
+    fn load<V: MemoryValue>(&mut self, ptr: &Pointer<V>, last_write_ts: &Time<Self::Field>) -> V {
         self.api().get(ptr, last_write_ts)
     }
 
@@ -89,7 +97,7 @@ pub trait Builder: Sized {
     /// If `multiplicity` is `None`, then the value is written to the memory bus with multiplicity
     /// set to 1 allowing a single read. If `multiplicity` is `Some(m)`, then the value is written
     /// to the memory bus with multiplicity given by the value of `m`, allowing `m` reads.
-    fn set<V: MemoryValue>(
+    fn store<V: MemoryValue>(
         &mut self,
         ptr: &Pointer<V>,
         value: V,
@@ -163,6 +171,10 @@ pub trait Builder: Sized {
             (false, true) => panic!("Cannot set a non-trace register to a trace expression"),
             (false, false) => self.api().set_to_expression_public(register, expression),
         }
+    }
+
+    fn select<T: Register>(&mut self, flag: BitRegister, true_value: &T, false_value: &T) -> T {
+        self.api().select(&flag, true_value, false_value)
     }
 
     fn set_to_expression_first_row<T: Register>(

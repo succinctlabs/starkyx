@@ -9,6 +9,7 @@ use super::Instruction;
 use crate::air::parser::{AirParser, MulParser};
 use crate::air::AirConstraint;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
+use crate::chip::bool::SelectInstruction;
 use crate::chip::memory::instruction::MemoryInstruction;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
@@ -19,6 +20,7 @@ pub enum AirInstruction<F, I> {
     CustomInstruction(I),
     BitConstraint(BitConstraint),
     Assign(AssignInstruction<F>),
+    Select(SelectInstruction),
     Cycle(Cycle<F>),
     Filtered(ArithmeticExpression<F>, Arc<Self>),
     Mem(MemoryInstruction),
@@ -33,6 +35,7 @@ where
             AirInstruction::CustomInstruction(i) => AirConstraint::<AP>::eval(i, parser),
             AirInstruction::BitConstraint(i) => AirConstraint::<AP>::eval(i, parser),
             AirInstruction::Assign(i) => AirConstraint::<AP>::eval(i, parser),
+            AirInstruction::Select(i) => AirConstraint::<AP>::eval(i, parser),
             AirInstruction::Cycle(i) => AirConstraint::<AP>::eval(i, parser),
             AirInstruction::Filtered(expression, instr) => {
                 assert_eq!(
@@ -59,6 +62,7 @@ impl<F: Field, I: Instruction<F>> Instruction<F> for AirInstruction<F, I> {
         match self {
             AirInstruction::CustomInstruction(i) => i.write(writer, row_index),
             AirInstruction::BitConstraint(i) => Instruction::<F>::write(i, writer, row_index),
+            AirInstruction::Select(i) => Instruction::<F>::write(i, writer, row_index),
             AirInstruction::Assign(i) => Instruction::<F>::write(i, writer, row_index),
             AirInstruction::Cycle(i) => Instruction::<F>::write(i, writer, row_index),
             AirInstruction::Filtered(expression, i) => {
