@@ -22,12 +22,15 @@ where
         // Convert the number of rounds to a field element.
         let num_round_element = self.constant(&L::Field::from_canonical_usize(num_rounds));
 
+        // Initialize the initial hash and set it to the constant value.
         let initial_hash =
             self.constant_array::<U32Register>(&INITIAL_HASH.map(u32_to_le_field_bytes));
 
+        // Initialize the round constants and set them to the constant value.
         let round_constant_values =
             self.constant_array::<U32Register>(&ROUND_CONSTANTS.map(u32_to_le_field_bytes));
 
+        // Store the round constants in a slice to be able to load them in the trace.
         let round_constants = self.initialize_slice(
             &round_constant_values,
             &Time::zero(),
@@ -40,7 +43,7 @@ where
         for mult in shift_read_mult.iter_mut().skip(1).take(48) {
             *mult += L::Field::ONE;
         }
-        // // Add multiplicities for reading the elements w[i-2].
+        // Add multiplicities for reading the elements w[i-2].
         for mult in shift_read_mult.iter_mut().skip(14).take(48) {
             *mult += L::Field::ONE;
         }
