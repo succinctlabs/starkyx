@@ -180,7 +180,7 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpAddInstruction<P>
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
-    use num::{BigUint, Zero};
+    use num::BigUint;
     use rand::thread_rng;
 
     use super::*;
@@ -215,9 +215,6 @@ mod tests {
         let a = builder.alloc::<FieldRegister<P>>();
         let b = builder.alloc::<FieldRegister<P>>();
         let _add_insr = builder.fp_add(&a, &b);
-
-        let f_zero = Polynomial::<F>::from_biguint_field(&BigUint::zero(), 16, 16);
-        let x = builder.constant::<FieldRegister<P>>(&f_zero);
 
         let (air, trace_data) = builder.build();
         let num_rows = 1 << 16;
