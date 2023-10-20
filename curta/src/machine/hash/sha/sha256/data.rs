@@ -5,9 +5,9 @@ use crate::chip::register::element::ElementRegister;
 use crate::chip::uint::register::U32Register;
 
 pub struct SHA256Data {
-    // pub state: Slice<U32Register>,
+    pub state: Slice<U32Register>,
     pub initial_hash: ArrayRegister<U32Register>,
-    // pub round_constants: Slice<U32Register>,
+    pub round_constants: Slice<U32Register>,
     pub w: Slice<U32Register>,
     pub index: ElementRegister,
     pub is_preprocessing: BitRegister,

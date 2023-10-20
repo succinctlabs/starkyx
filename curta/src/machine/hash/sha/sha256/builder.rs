@@ -17,22 +17,22 @@ where
     L::Instruction: UintInstructions,
 {
     pub fn sha_256_data(&mut self, num_rounds: usize) -> SHA256Data {
+        let state = self.uninit_slice();
+
+        // Convert the number of rounds to a field element.
         let num_round_element = self.constant(&L::Field::from_canonical_usize(num_rounds));
 
-        // let state = self.uninit_slice();
         let initial_hash =
             self.constant_array::<U32Register>(&INITIAL_HASH.map(u32_to_le_field_bytes));
 
         let round_constant_values =
             self.constant_array::<U32Register>(&ROUND_CONSTANTS.map(u32_to_le_field_bytes));
 
-        // let round_constants = self.initialize_slice(
-        //     &round_constant_values,
-        //     &Time::zero(),
-        //     Some(num_round_element),
-        // );
-
-        // let state = self.uninit_slice();
+        let round_constants = self.initialize_slice(
+            &round_constant_values,
+            &Time::zero(),
+            Some(num_round_element),
+        );
 
         // Initialize shift read multiplicities with zeros.
         let mut shift_read_mult = [L::Field::ZERO; 64];
@@ -110,9 +110,9 @@ where
         );
 
         SHA256Data {
-            // state,
+            state,
             initial_hash,
-            // round_constants,
+            round_constants,
             w,
             index,
             is_preprocessing,
@@ -188,6 +188,9 @@ where
 mod tests {
     use itertools::Itertools;
     use plonky2::field::goldilocks_field::GoldilocksField;
+    use plonky2::iop::witness::{PartialWitness, WitnessWrite};
+    use plonky2::plonk::circuit_builder::CircuitBuilder;
+    use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::util::timing::TimingTree;
     use serde::{Deserialize, Serialize};
 
@@ -207,8 +210,8 @@ mod tests {
 
         type Instruction = UintInstruction;
 
-        const NUM_FREE_COLUMNS: usize = 196;
-        const EXTENDED_COLUMNS: usize = 111;
+        const NUM_FREE_COLUMNS: usize = 200;
+        const EXTENDED_COLUMNS: usize = 117;
     }
 
     #[test]
@@ -226,6 +229,9 @@ mod tests {
         let data = builder.sha_256_data(num_rounds);
 
         let w_i = builder.sha_256_preprocessing(&data);
+
+        // Read the round constant to make the bus argument work.
+        let _ = builder.load(&data.round_constants.get_at(data.index), &Time::zero());
 
         let num_rows = 64 * num_rounds;
         let stark = builder.build::<C, 2>(num_rows);
@@ -274,5 +280,24 @@ mod tests {
         let proof = stark.prove(&trace, &public, &mut timing).unwrap();
 
         stark.verify(proof.clone(), &public).unwrap();
+
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
+
+        let (proof_target, public_input) =
+            stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
+        stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
+
+        let data = recursive_builder.build::<Config>();
+
+        let mut pw = PartialWitness::new();
+
+        pw.set_target_arr(&public_input, &public);
+        stark.set_proof_target(&mut pw, &proof_target, proof);
+
+        let rec_proof = data.prove(pw).unwrap();
+        data.verify(rec_proof).unwrap();
+
+        timing.print();
     }
 }
