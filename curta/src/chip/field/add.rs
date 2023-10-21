@@ -257,7 +257,6 @@ mod tests {
                 writer.write_slice(&a, p_a.coefficients(), i);
                 writer.write_slice(&b, p_b.coefficients(), i);
 
-                writer.write();
                 writer.write_slice(&a_pub, p_a.coefficients(), i);
                 writer.write_slice(&b_pub, p_b.coefficients(), i);
 
