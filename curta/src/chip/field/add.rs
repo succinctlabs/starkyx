@@ -44,8 +44,14 @@ impl<L: AirParameters> AirBuilder<L> {
     where
         L::Instruction: From<FpAddInstruction<P>>,
     {
-        let result = self.alloc::<FieldRegister<P>>();
+        let is_trace = a.is_trace() || b.is_trace();
+        let result = if is_trace {
+            self.alloc::<FieldRegister<P>>()
+        } else {
+            self.alloc_public::<FieldRegister<P>>()
+        };
         self.set_fp_add(a, b, &result);
+
         result
     }
 
@@ -57,6 +63,7 @@ impl<L: AirParameters> AirBuilder<L> {
     ) where
         L::Instruction: From<FpAddInstruction<P>>,
     {
+        let is_trace = a.is_trace() || b.is_trace() || result.is_trace();
         let carry = self.alloc::<FieldRegister<P>>();
         let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
         let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
@@ -68,7 +75,11 @@ impl<L: AirParameters> AirBuilder<L> {
             witness_low,
             witness_high,
         };
-        self.register_instruction(instr);
+        if is_trace {
+            self.register_instruction(instr);
+        } else {
+            self.register_global_instruction(instr);
+        }
     }
 
     pub fn alloc_fp_add_instruction<P: FieldParameters>(
@@ -194,9 +205,9 @@ mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        const NUM_ARITHMETIC_COLUMNS: usize = 140;
+        const NUM_ARITHMETIC_COLUMNS: usize = 200;
         const NUM_FREE_COLUMNS: usize = 2;
-        const EXTENDED_COLUMNS: usize = 219;
+        const EXTENDED_COLUMNS: usize = 309;
 
         type Instruction = FpAddInstruction<Fp25519>;
     }
@@ -211,6 +222,10 @@ mod tests {
         let p = Fp25519::modulus();
 
         let mut builder = AirBuilder::<L>::new();
+
+        let a_pub = builder.alloc_public::<FieldRegister<P>>();
+        let b_pub = builder.alloc_public::<FieldRegister<P>>();
+        let _ = builder.fp_add(&a_pub, &b_pub);
 
         let a = builder.alloc::<FieldRegister<P>>();
         let b = builder.alloc::<FieldRegister<P>>();
@@ -241,8 +256,16 @@ mod tests {
 
                 writer.write_slice(&a, p_a.coefficients(), i);
                 writer.write_slice(&b, p_b.coefficients(), i);
+
+                writer.write();
+                writer.write_slice(&a_pub, p_a.coefficients(), i);
+                writer.write_slice(&b_pub, p_b.coefficients(), i);
+
                 writer.write_row_instructions(&generator.air_data, i);
             });
+
+        let writer = generator.new_writer();
+        writer.write_global_instructions(&generator.air_data);
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
