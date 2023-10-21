@@ -3,7 +3,7 @@ use crate::chip::register::bit::BitRegister;
 use crate::chip::uint::operations::instruction::UintInstructions;
 use crate::chip::uint::register::{ByteArrayRegister, U32Register, U64Register};
 use crate::chip::AirParameters;
-use crate::machine::builder::ops::{Adc, Add, And, RotateRight, Shr, Xor};
+use crate::machine::builder::ops::{Adc, Add, And, Not, RotateRight, Shr, Xor};
 use crate::machine::builder::Builder;
 
 impl<L: AirParameters, const N: usize> And<BytesBuilder<L>> for &ByteArrayRegister<N>
@@ -25,6 +25,28 @@ where
 
     fn and(self, rhs: Self, builder: &mut BytesBuilder<L>) -> Self::Output {
         builder.and(&self, &rhs)
+    }
+}
+
+impl<L: AirParameters, const N: usize> Not<BytesBuilder<L>> for &ByteArrayRegister<N>
+where
+    L::Instruction: UintInstructions,
+{
+    type Output = ByteArrayRegister<N>;
+
+    fn not(self, builder: &mut BytesBuilder<L>) -> Self::Output {
+        builder.api.bitwise_not(self, &mut builder.operations)
+    }
+}
+
+impl<L: AirParameters, const N: usize> Not<BytesBuilder<L>> for ByteArrayRegister<N>
+where
+    L::Instruction: UintInstructions,
+{
+    type Output = ByteArrayRegister<N>;
+
+    fn not(self, builder: &mut BytesBuilder<L>) -> Self::Output {
+        builder.not(&self)
     }
 }
 

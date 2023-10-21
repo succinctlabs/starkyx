@@ -1,3 +1,5 @@
+use core::array::from_fn;
+
 use super::data::SHA256Data;
 use super::{INITIAL_HASH, ROUND_CONSTANTS};
 use crate::chip::memory::time::Time;
@@ -123,6 +125,7 @@ where
             process_id,
             dummy_index,
             shift_read_mult,
+            cycle_64_end_bit: cycle_64.end_bit,
         }
     }
 
@@ -184,6 +187,95 @@ where
         self.store(&w.get_at(index), w_i, &time, Some(reading_mult));
 
         w_i
+    }
+
+    pub fn sha_processing(&mut self, w_i: U32Register, data: &SHA256Data) {
+        let time = Time::from_element(self.clk);
+        let round_constant = self.load(&data.round_constants.get_at(data.index), &Time::zero());
+
+        // Initialize working variables
+        let state: [U32Register; 8] = from_fn(|i| self.load(&data.state.get(i), &time));
+
+        // Initialize working variables and set them to the inital hash in the first row.
+        let vars = self.alloc_array::<U32Register>(8);
+        for (v, h_init) in vars.iter().zip(data.initial_hash.iter()) {
+            self.set_to_expression_first_row(&v, h_init.expr());
+        }
+
+        let a = vars.get(0);
+        let b = vars.get(1);
+        let c = vars.get(2);
+        let d = vars.get(3);
+        let e = vars.get(4);
+        let f = vars.get(5);
+        let g = vars.get(6);
+        let h = vars.get(7);
+
+        // Calculate sum_1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25).
+        let e_rotate_6 = self.rotate_right(e, 6);
+        let e_rotate_11 = self.rotate_right(e, 11);
+        let e_rotate_25 = self.rotate_right(e, 25);
+        let mut sum_1 = self.xor(e_rotate_6, e_rotate_11);
+        sum_1 = self.xor(sum_1, e_rotate_25);
+
+        // Calculate ch = (e & f) ^ (!e & g).
+        let e_and_f = self.and(&e, &f);
+        let not_e = self.not(e);
+        let not_e_and_g = self.and(&not_e, &g);
+        let ch = self.xor(&e_and_f, &not_e_and_g);
+
+        // Calculate temp_1 = h + sum_1 +ch + round_constant + w.
+        let mut temp_1 = self.add(h, sum_1);
+        temp_1 = self.add(temp_1, ch);
+        temp_1 = self.add(temp_1, round_constant);
+        temp_1 = self.add(temp_1, w_i);
+
+        // Calculate sum_0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22).
+        let a_rotate_2 = self.rotate_right(a, 2);
+        let a_rotate_13 = self.rotate_right(a, 13);
+        let a_rotate_22 = self.rotate_right(a, 22);
+        let mut sum_0 = self.xor(a_rotate_2, a_rotate_13);
+        sum_0 = self.xor(sum_0, a_rotate_22);
+
+        // Calculate maj = (a & b) ^ (a & c) ^ (b & c);
+        let a_and_b = self.and(a, b);
+        let a_and_c = self.and(a, c);
+        let b_and_c = self.and(b, c);
+        let mut maj = self.xor(a_and_b, a_and_c);
+        maj = self.xor(maj, b_and_c);
+
+        // Calculate temp_2 = sum_0 + maj.
+        let temp_2 = self.add(sum_0, maj);
+
+        // Calculate the next cycle values.
+        let a_next = self.add(temp_1, temp_2);
+        let b_next = a;
+        let c_next = b;
+        let d_next = c;
+        let e_next = self.add(d, temp_1);
+        let f_next = e;
+        let g_next = f;
+        let h_next = g;
+
+        let state_0_plus_a = self.add(state[0], a_next);
+        let state_1_plus_b = self.add(state[1], b_next);
+        let state_2_plus_c = self.add(state[2], c_next);
+        let state_3_plus_d = self.add(state[3], d_next);
+        let state_4_plus_e = self.add(state[4], e_next);
+        let state_5_plus_f = self.add(state[5], f_next);
+        let state_6_plus_g = self.add(state[6], g_next);
+        let state_7_plus_h = self.add(state[7], h_next);
+
+        // Store the new state values
+        let flag = Some(data.cycle_64_end_bit.as_element());
+        self.store(&data.state.get(0), state_0_plus_a, &time.advance(), flag);
+        self.store(&data.state.get(1), state_1_plus_b, &time.advance(), flag);
+        self.store(&data.state.get(2), state_2_plus_c, &time.advance(), flag);
+        self.store(&data.state.get(3), state_3_plus_d, &time.advance(), flag);
+        self.store(&data.state.get(4), state_4_plus_e, &time.advance(), flag);
+        self.store(&data.state.get(5), state_5_plus_f, &time.advance(), flag);
+        self.store(&data.state.get(6), state_6_plus_g, &time.advance(), flag);
+        self.store(&data.state.get(7), state_7_plus_h, &time.advance(), flag);
     }
 }
 

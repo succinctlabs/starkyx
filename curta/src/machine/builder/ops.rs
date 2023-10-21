@@ -74,6 +74,15 @@ pub trait And<B: Builder, Rhs = Self> {
     fn and(self, rhs: Rhs, builder: &mut B) -> Self::Output;
 }
 
+/// The bitwise NOT operation.
+///
+/// Types implementing this trait can be used within the `builder.not(value)` method.
+pub trait Not<B: Builder> {
+    type Output;
+
+    fn not(self, builder: &mut B) -> Self::Output;
+}
+
 /// The bitwise OR operation.
 ///
 /// Types implementing this trait can be used within the `builder.or(lhs, rhs)` method.

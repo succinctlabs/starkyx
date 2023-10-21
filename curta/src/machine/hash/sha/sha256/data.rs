@@ -15,4 +15,5 @@ pub struct SHA256Data {
     pub dummy_index: ElementRegister,
     pub padded_messages: Vec<ArrayRegister<U32Register>>,
     pub shift_read_mult: Slice<ElementRegister>,
+    pub cycle_64_end_bit: BitRegister,
 }
