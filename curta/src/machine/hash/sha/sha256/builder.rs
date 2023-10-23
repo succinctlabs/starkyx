@@ -1,12 +1,12 @@
 use super::data::{SHA256Data, SHA256Memory, SHA256PublicData, SHA256TraceData};
+use super::register::SHA256DigestRegister;
 use super::{INITIAL_HASH, ROUND_CONSTANTS};
 use crate::chip::memory::time::Time;
-use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::uint::operations::instruction::UintInstructions;
-use crate::chip::uint::register::U32Register;
+use crate::chip::uint::register::{U32Register, U64Register};
 use crate::chip::uint::util::u32_to_le_field_bytes;
 use crate::chip::AirParameters;
 use crate::machine::builder::Builder;
@@ -212,15 +212,15 @@ where
         &mut self,
         w_i: U32Register,
         data: &SHA256Data,
-    ) -> Vec<ArrayRegister<U32Register>> {
+    ) -> Vec<SHA256DigestRegister> {
         let hash_state_public = (0..data.num_chunks)
-            .map(|_| self.alloc_array_public::<U32Register>(8))
+            .map(|_| self.alloc_public::<SHA256DigestRegister>())
             .collect::<Vec<_>>();
         let state_ptr = self.uninit_slice();
 
         for (i, h_slice) in hash_state_public.iter().enumerate() {
-            for (j, h) in h_slice.iter().enumerate() {
-                self.free(&state_ptr.get(j), h, &Time::constant(i));
+            for (j, h) in h_slice.split().iter().enumerate() {
+                self.free(&state_ptr.get(j), *h, &Time::constant(i));
             }
         }
         let round_constant = &data.memory.round_constants;
@@ -305,19 +305,25 @@ where
         vars_next.push(g_next);
         vars_next.push(h_next);
 
-        let state_plus_vars = state
+        let state_plus_vars = self.alloc_array(8);
+        for ((s, v), res) in state
             .iter()
             .zip(vars_next.iter())
-            .map(|(s, v)| self.add(s, *v))
-            .collect::<Vec<_>>();
+            .zip(state_plus_vars.iter())
+        {
+            let carry = self.alloc();
+            self.api
+                .set_add_u32(&s, v, &None, &res, &carry, &mut self.operations)
+        }
 
         // Store the new state values
         let flag = Some(cycle_end_bit.as_element());
         let process_id = data.trace.process_id;
-        for (i, state_plus_var) in state_plus_vars.iter().enumerate() {
+        for i in 0..4 {
+            let val = U64Register::from_limbs(&state_plus_vars.get_subarray(i * 2..i * 2 + 2));
             self.store(
                 &state_ptr.get(i),
-                *state_plus_var,
+                val,
                 &Time::from_element(process_id),
                 flag,
             );
@@ -494,7 +500,7 @@ mod tests {
         type Instruction = UintInstruction;
 
         const NUM_FREE_COLUMNS: usize = 600;
-        const EXTENDED_COLUMNS: usize = 360;
+        const EXTENDED_COLUMNS: usize = 342;
     }
 
     #[test]
@@ -508,7 +514,7 @@ mod tests {
 
         let mut builder = BytesBuilder::<L>::new();
 
-        let num_rounds = 1 << 13;
+        let num_rounds = 1 << 14;
         let data = builder.sha_256_data(num_rounds);
 
         let w_i = builder.sha_256_preprocessing(&data);
@@ -549,7 +555,7 @@ mod tests {
             let pre_processed = SHA256Gadget::process_inputs(&message);
             let state = SHA256Gadget::compress_round(INITIAL_HASH, &pre_processed, ROUND_CONSTANTS)
                 .map(u32_to_le_field_bytes);
-            writer.write_array(h_arr, state, 0);
+            writer.write_slice(h_arr, &state.concat(), 0);
 
             expected_w.push(pre_processed);
         }
