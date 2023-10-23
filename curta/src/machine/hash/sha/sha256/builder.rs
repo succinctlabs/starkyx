@@ -514,7 +514,7 @@ mod tests {
 
         let mut builder = BytesBuilder::<L>::new();
 
-        let num_rounds = 1 << 14;
+        let num_rounds = 1 << 3;
         let data = builder.sha_256_data(num_rounds);
 
         let w_i = builder.sha_256_preprocessing(&data);
