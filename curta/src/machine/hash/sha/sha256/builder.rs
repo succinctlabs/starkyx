@@ -228,12 +228,13 @@ where
         let initial_hash = data.public.initial_hash;
         let cycle_end_bit = data.trace.cycle_64_end_bit;
 
-        let time = Time::from_element(self.clk);
         let round_constant = self.load(&round_constant.get_at(index), &Time::zero());
 
         // Initialize working variables
         let state = self.alloc_array::<U32Register>(8);
-
+        for (h, h_init) in state.iter().zip(initial_hash.iter()) {
+            self.set_to_expression_first_row(&h, h_init.expr());
+        }
         // Initialize working variables and set them to the inital hash in the first row.
         let vars = self.alloc_array::<U32Register>(8);
         for (v, h_init) in vars.iter().zip(initial_hash.iter()) {
@@ -312,8 +313,14 @@ where
 
         // Store the new state values
         let flag = Some(cycle_end_bit.as_element());
+        let process_id = data.trace.process_id;
         for (i, state_plus_var) in state_plus_vars.iter().enumerate() {
-            self.store(&state_ptr.get(i), *state_plus_var, &time.advance(), flag);
+            self.store(
+                &state_ptr.get(i),
+                *state_plus_var,
+                &Time::from_element(process_id),
+                flag,
+            );
         }
 
         // Set the next row of working variables.
@@ -322,8 +329,9 @@ where
             &Time::zero(),
         );
         let bit = cycle_end_bit;
-        for (((var, init), var_next), h_next) in vars
+        for ((((var, h), init), var_next), h_next) in vars
             .iter()
+            .zip(state.iter())
             .zip(initial_hash.iter())
             .zip(vars_next.iter())
             .zip(state_plus_vars.iter())
@@ -331,6 +339,12 @@ where
             self.set_to_expression_transition(
                 &var.next(),
                 var_next.expr() * bit.not_expr()
+                    + (h_next.expr() * end_bit.not_expr() + init.expr() * end_bit.expr())
+                        * bit.expr(),
+            );
+            self.set_to_expression_transition(
+                &h.next(),
+                h.expr() * bit.not_expr()
                     + (h_next.expr() * end_bit.not_expr() + init.expr() * end_bit.expr())
                         * bit.expr(),
             );
@@ -347,6 +361,7 @@ mod tests {
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
+    use plonky2::timed;
     use plonky2::util::timing::TimingTree;
     use serde::{Deserialize, Serialize};
 
@@ -478,29 +493,38 @@ mod tests {
 
         type Instruction = UintInstruction;
 
-        const NUM_FREE_COLUMNS: usize = 604;
-        const EXTENDED_COLUMNS: usize = 366;
+        const NUM_FREE_COLUMNS: usize = 600;
+        const EXTENDED_COLUMNS: usize = 360;
     }
 
     #[test]
-    fn sha256_processing_test() {
+    fn test_sha256_processing() {
         type L = SHA256Test;
         type C = CurtaPoseidonGoldilocksConfig;
         type Config = <C as CurtaConfig<2>>::GenericConfig;
 
         let _ = env_logger::builder().is_test(true).try_init();
-        let mut timing = TimingTree::new("test_sha256_preprocessing", log::Level::Debug);
+        let mut timing = TimingTree::new("test_sha256_processing", log::Level::Debug);
 
         let mut builder = BytesBuilder::<L>::new();
 
-        let num_rounds = 1 << 3;
+        let num_rounds = 1 << 13;
         let data = builder.sha_256_data(num_rounds);
 
         let w_i = builder.sha_256_preprocessing(&data);
-        builder.sha_processing(w_i, &data);
+        let hash_state = builder.sha_processing(w_i, &data);
 
         let num_rows = 64 * num_rounds;
         let stark = builder.build::<C, 2>(num_rows);
+
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
+
+        let (proof_target, public_input) =
+            stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
+        stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
+
+        let rec_data = recursive_builder.build::<Config>();
 
         let writer = TraceWriter::new(&stark.air_data, num_rows);
 
@@ -510,7 +534,10 @@ mod tests {
         let padded_messages = (0..num_rounds).map(|_| SHA256Gadget::pad(msg));
         let mut expected_w = Vec::new();
 
-        for (message, register) in padded_messages.zip_eq(data.public.padded_chunks.iter()) {
+        for ((message, register), h_arr) in padded_messages
+            .zip_eq(data.public.padded_chunks.iter())
+            .zip(hash_state.iter())
+        {
             let padded_msg = message
                 .chunks_exact(4)
                 .map(|slice| u32::from_be_bytes(slice.try_into().unwrap()))
@@ -520,6 +547,9 @@ mod tests {
             writer.write_array(register, padded_msg, 0);
 
             let pre_processed = SHA256Gadget::process_inputs(&message);
+            let state = SHA256Gadget::compress_round(INITIAL_HASH, &pre_processed, ROUND_CONSTANTS)
+                .map(u32_to_le_field_bytes);
+            writer.write_array(h_arr, state, 0);
 
             expected_w.push(pre_processed);
         }
@@ -535,38 +565,41 @@ mod tests {
             }
         });
 
-        for (r, exp_w) in expected_w.iter().enumerate() {
-            for (j, exp) in exp_w.iter().enumerate() {
-                let w_i_value = u32::from_le_bytes(
-                    writer
-                        .read(&w_i, 64 * r + j)
-                        .map(|x| x.as_canonical_u64() as u8),
-                );
-                assert_eq!(w_i_value, *exp);
+        timed!(
+            timing,
+            "insert inputs",
+            for (r, exp_w) in expected_w.iter().enumerate() {
+                for (j, exp) in exp_w.iter().enumerate() {
+                    let w_i_value = u32::from_le_bytes(
+                        writer
+                            .read(&w_i, 64 * r + j)
+                            .map(|x| x.as_canonical_u64() as u8),
+                    );
+                    assert_eq!(w_i_value, *exp);
+                }
             }
-        }
+        );
 
         let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
-        let proof = stark.prove(&trace, &public, &mut timing).unwrap();
+        let proof = timed!(
+            timing,
+            "generate stark proof",
+            stark.prove(&trace, &public, &mut timing).unwrap()
+        );
 
         stark.verify(proof.clone(), &public).unwrap();
-
-        let config_rec = CircuitConfig::standard_recursion_config();
-        let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
-
-        let (proof_target, public_input) =
-            stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
-        stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
-
-        let data = recursive_builder.build::<Config>();
 
         let mut pw = PartialWitness::new();
 
         pw.set_target_arr(&public_input, &public);
         stark.set_proof_target(&mut pw, &proof_target, proof);
 
-        let rec_proof = data.prove(pw).unwrap();
-        data.verify(rec_proof).unwrap();
+        let rec_proof = timed!(
+            timing,
+            "generate recursive proof",
+            rec_data.prove(pw).unwrap()
+        );
+        rec_data.verify(rec_proof).unwrap();
 
         timing.print();
     }
