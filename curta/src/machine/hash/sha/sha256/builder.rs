@@ -1,8 +1,7 @@
-use core::array::from_fn;
-
-use super::data::SHA256Data;
+use super::data::{SHA256Data, SHA256Memory, SHA256PublicData, SHA256TraceData};
 use super::{INITIAL_HASH, ROUND_CONSTANTS};
 use crate::chip::memory::time::Time;
+use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
@@ -19,8 +18,6 @@ where
     L::Instruction: UintInstructions,
 {
     pub fn sha_256_data(&mut self, num_rounds: usize) -> SHA256Data {
-        let state = self.uninit_slice();
-
         // Convert the number of rounds to a field element.
         let num_round_element = self.constant(&L::Field::from_canonical_usize(num_rounds));
 
@@ -64,7 +61,7 @@ where
             self.initialize_slice(&shift_read_values, &Time::zero(), Some(num_round_element));
 
         let w = self.uninit_slice();
-        let padded_messages = (0..num_rounds)
+        let padded_chunks = (0..num_rounds)
             .map(|_| self.alloc_array_public::<U32Register>(16))
             .collect::<Vec<_>>();
         let dummy_entry = self.constant::<U32Register>(&[L::Field::ZERO; 4]);
@@ -74,8 +71,8 @@ where
         let num_dummy_reads =
             self.constant::<ElementRegister>(&L::Field::from_canonical_usize(16 * 4 + 64 - 16));
 
-        for (i, padded_message) in padded_messages.iter().enumerate() {
-            for (j, word) in padded_message.iter().enumerate().take(16) {
+        for (i, padded_chunk) in padded_chunks.iter().enumerate() {
+            for (j, word) in padded_chunk.iter().enumerate().take(16) {
                 self.store(&w.get(j), word, &Time::constant(i), None);
             }
             self.store(
@@ -114,28 +111,49 @@ where
                 * (cycle_16.end_bit.expr() + cycle_16.end_bit.not_expr() * is_preprocessing.expr()),
         );
 
-        SHA256Data {
-            state,
+        // Allocate end_bits for public input.
+        let end_bits_input = self.alloc_array_public::<BitRegister>(num_rounds);
+        let reg_64 = self.constant(&L::Field::from_canonical_u8(64));
+        let end_bit = self.uninit_slice();
+        for (i, end_bit_val) in end_bits_input.iter().enumerate() {
+            self.store(&end_bit.get(i), end_bit_val, &Time::zero(), Some(reg_64));
+        }
+
+        let public = SHA256PublicData {
             initial_hash,
+            padded_chunks,
+            end_bits: end_bits_input,
+        };
+
+        let trace = SHA256TraceData {
+            is_preprocessing,
+            process_id,
+            cycle_64_end_bit: cycle_64.end_bit,
+            index,
+        };
+
+        let memory = SHA256Memory {
             round_constants,
             w,
-            index,
-            is_preprocessing,
-            padded_messages,
-            process_id,
-            dummy_index,
             shift_read_mult,
-            cycle_64_end_bit: cycle_64.end_bit,
+            end_bit,
+            dummy_index,
+        };
+        SHA256Data {
+            public,
+            trace,
+            memory,
+            num_chunks: num_rounds,
         }
     }
 
     pub fn sha_256_preprocessing(&mut self, data: &SHA256Data) -> U32Register {
-        let w = &data.w;
-        let index = data.index;
-        let dummy_index = data.dummy_index;
-        let process_id = data.process_id;
-        let is_preprocessing = data.is_preprocessing;
-        let shift_read_mult = &data.shift_read_mult;
+        let w = &data.memory.w;
+        let index = data.trace.index;
+        let dummy_index = data.memory.dummy_index;
+        let process_id = data.trace.process_id;
+        let is_preprocessing = data.trace.is_preprocessing;
+        let shift_read_mult = &data.memory.shift_read_mult;
 
         let time = Time::from_element(process_id);
 
@@ -189,16 +207,36 @@ where
         w_i
     }
 
-    pub fn sha_processing(&mut self, w_i: U32Register, data: &SHA256Data) {
+    /// The processing step of a SHA256 round.
+    pub fn sha_processing(
+        &mut self,
+        w_i: U32Register,
+        data: &SHA256Data,
+    ) -> Vec<ArrayRegister<U32Register>> {
+        let hash_state_public = (0..data.num_chunks)
+            .map(|_| self.alloc_array_public::<U32Register>(8))
+            .collect::<Vec<_>>();
+        let state_ptr = self.uninit_slice();
+
+        for (i, h_slice) in hash_state_public.iter().enumerate() {
+            for (j, h) in h_slice.iter().enumerate() {
+                self.free(&state_ptr.get(j), h, &Time::constant(i));
+            }
+        }
+        let round_constant = &data.memory.round_constants;
+        let index = data.trace.index;
+        let initial_hash = data.public.initial_hash;
+        let cycle_end_bit = data.trace.cycle_64_end_bit;
+
         let time = Time::from_element(self.clk);
-        let round_constant = self.load(&data.round_constants.get_at(data.index), &Time::zero());
+        let round_constant = self.load(&round_constant.get_at(index), &Time::zero());
 
         // Initialize working variables
-        let state: [U32Register; 8] = from_fn(|i| self.load(&data.state.get(i), &time));
+        let state = self.alloc_array::<U32Register>(8);
 
         // Initialize working variables and set them to the inital hash in the first row.
         let vars = self.alloc_array::<U32Register>(8);
-        for (v, h_init) in vars.iter().zip(data.initial_hash.iter()) {
+        for (v, h_init) in vars.iter().zip(initial_hash.iter()) {
             self.set_to_expression_first_row(&v, h_init.expr());
         }
 
@@ -224,7 +262,7 @@ where
         let not_e_and_g = self.and(&not_e, &g);
         let ch = self.xor(&e_and_f, &not_e_and_g);
 
-        // Calculate temp_1 = h + sum_1 +ch + round_constant + w.
+        // Calculate temp_1 = h + sum_1 + ch + round_constant + w.
         let mut temp_1 = self.add(h, sum_1);
         temp_1 = self.add(temp_1, ch);
         temp_1 = self.add(temp_1, round_constant);
@@ -248,6 +286,7 @@ where
         let temp_2 = self.add(sum_0, maj);
 
         // Calculate the next cycle values.
+        let mut vars_next = Vec::new();
         let a_next = self.add(temp_1, temp_2);
         let b_next = a;
         let c_next = b;
@@ -256,26 +295,48 @@ where
         let f_next = e;
         let g_next = f;
         let h_next = g;
+        vars_next.push(a_next);
+        vars_next.push(b_next);
+        vars_next.push(c_next);
+        vars_next.push(d_next);
+        vars_next.push(e_next);
+        vars_next.push(f_next);
+        vars_next.push(g_next);
+        vars_next.push(h_next);
 
-        let state_0_plus_a = self.add(state[0], a_next);
-        let state_1_plus_b = self.add(state[1], b_next);
-        let state_2_plus_c = self.add(state[2], c_next);
-        let state_3_plus_d = self.add(state[3], d_next);
-        let state_4_plus_e = self.add(state[4], e_next);
-        let state_5_plus_f = self.add(state[5], f_next);
-        let state_6_plus_g = self.add(state[6], g_next);
-        let state_7_plus_h = self.add(state[7], h_next);
+        let state_plus_vars = state
+            .iter()
+            .zip(vars_next.iter())
+            .map(|(s, v)| self.add(s, *v))
+            .collect::<Vec<_>>();
 
         // Store the new state values
-        let flag = Some(data.cycle_64_end_bit.as_element());
-        self.store(&data.state.get(0), state_0_plus_a, &time.advance(), flag);
-        self.store(&data.state.get(1), state_1_plus_b, &time.advance(), flag);
-        self.store(&data.state.get(2), state_2_plus_c, &time.advance(), flag);
-        self.store(&data.state.get(3), state_3_plus_d, &time.advance(), flag);
-        self.store(&data.state.get(4), state_4_plus_e, &time.advance(), flag);
-        self.store(&data.state.get(5), state_5_plus_f, &time.advance(), flag);
-        self.store(&data.state.get(6), state_6_plus_g, &time.advance(), flag);
-        self.store(&data.state.get(7), state_7_plus_h, &time.advance(), flag);
+        let flag = Some(cycle_end_bit.as_element());
+        for (i, state_plus_var) in state_plus_vars.iter().enumerate() {
+            self.store(&state_ptr.get(i), *state_plus_var, &time.advance(), flag);
+        }
+
+        // Set the next row of working variables.
+        let end_bit = self.load(
+            &data.memory.end_bit.get_at(data.trace.process_id),
+            &Time::zero(),
+        );
+        let bit = cycle_end_bit;
+        for (((var, init), var_next), h_next) in vars
+            .iter()
+            .zip(initial_hash.iter())
+            .zip(vars_next.iter())
+            .zip(state_plus_vars.iter())
+        {
+            self.set_to_expression_transition(
+                &var.next(),
+                var_next.expr() * bit.not_expr()
+                    + (h_next.expr() * end_bit.not_expr() + init.expr() * end_bit.expr())
+                        * bit.expr(),
+            );
+        }
+
+        hash_state_public
     }
 }
 
@@ -305,8 +366,8 @@ mod tests {
 
         type Instruction = UintInstruction;
 
-        const NUM_FREE_COLUMNS: usize = 200;
-        const EXTENDED_COLUMNS: usize = 117;
+        const NUM_FREE_COLUMNS: usize = 201;
+        const EXTENDED_COLUMNS: usize = 120;
     }
 
     #[test]
@@ -325,8 +386,15 @@ mod tests {
 
         let w_i = builder.sha_256_preprocessing(&data);
 
-        // Read the round constant to make the bus argument work.
-        let _ = builder.load(&data.round_constants.get_at(data.index), &Time::zero());
+        // Dummy reads and writes to make the bus argument work.
+        let _ = builder.load(
+            &data.memory.round_constants.get_at(data.trace.index),
+            &Time::zero(),
+        );
+        let _ = builder.load(
+            &data.memory.end_bit.get_at(data.trace.process_id),
+            &Time::zero(),
+        );
 
         let num_rows = 64 * num_rounds;
         let stark = builder.build::<C, 2>(num_rows);
@@ -339,7 +407,7 @@ mod tests {
         let padded_messages = (0..num_rounds).map(|_| SHA256Gadget::pad(msg));
         let mut expected_w = Vec::new();
 
-        for (message, register) in padded_messages.zip_eq(data.padded_messages.iter()) {
+        for (message, register) in padded_messages.zip_eq(data.public.padded_chunks.iter()) {
             let padded_msg = message
                 .chunks_exact(4)
                 .map(|slice| u32::from_be_bytes(slice.try_into().unwrap()))
@@ -352,6 +420,113 @@ mod tests {
 
             expected_w.push(pre_processed);
         }
+
+        for end_bit in data.public.end_bits.iter() {
+            writer.write(&end_bit, &GoldilocksField::ONE, 0);
+        }
+
+        writer.write_global_instructions(&stark.air_data);
+        (0..num_rounds).for_each(|r| {
+            for k in 0..64 {
+                let i = r * 64 + k;
+                writer.write_row_instructions(&stark.air_data, i);
+            }
+        });
+
+        for (r, exp_w) in expected_w.iter().enumerate() {
+            for (j, exp) in exp_w.iter().enumerate() {
+                let w_i_value = u32::from_le_bytes(
+                    writer
+                        .read(&w_i, 64 * r + j)
+                        .map(|x| x.as_canonical_u64() as u8),
+                );
+                assert_eq!(w_i_value, *exp);
+            }
+        }
+
+        let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
+        let proof = stark.prove(&trace, &public, &mut timing).unwrap();
+
+        stark.verify(proof.clone(), &public).unwrap();
+
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
+
+        let (proof_target, public_input) =
+            stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
+        stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
+
+        let data = recursive_builder.build::<Config>();
+
+        let mut pw = PartialWitness::new();
+
+        pw.set_target_arr(&public_input, &public);
+        stark.set_proof_target(&mut pw, &proof_target, proof);
+
+        let rec_proof = data.prove(pw).unwrap();
+        data.verify(rec_proof).unwrap();
+
+        timing.print();
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct SHA256Test;
+
+    impl AirParameters for SHA256Test {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
+
+        type Instruction = UintInstruction;
+
+        const NUM_FREE_COLUMNS: usize = 604;
+        const EXTENDED_COLUMNS: usize = 366;
+    }
+
+    #[test]
+    fn sha256_processing_test() {
+        type L = SHA256Test;
+        type C = CurtaPoseidonGoldilocksConfig;
+        type Config = <C as CurtaConfig<2>>::GenericConfig;
+
+        let _ = env_logger::builder().is_test(true).try_init();
+        let mut timing = TimingTree::new("test_sha256_preprocessing", log::Level::Debug);
+
+        let mut builder = BytesBuilder::<L>::new();
+
+        let num_rounds = 1 << 3;
+        let data = builder.sha_256_data(num_rounds);
+
+        let w_i = builder.sha_256_preprocessing(&data);
+        builder.sha_processing(w_i, &data);
+
+        let num_rows = 64 * num_rounds;
+        let stark = builder.build::<C, 2>(num_rows);
+
+        let writer = TraceWriter::new(&stark.air_data, num_rows);
+
+        let msg = b"abc";
+        // let expected_digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+        let padded_messages = (0..num_rounds).map(|_| SHA256Gadget::pad(msg));
+        let mut expected_w = Vec::new();
+
+        for (message, register) in padded_messages.zip_eq(data.public.padded_chunks.iter()) {
+            let padded_msg = message
+                .chunks_exact(4)
+                .map(|slice| u32::from_be_bytes(slice.try_into().unwrap()))
+                .map(u32_to_le_field_bytes::<GoldilocksField>)
+                .collect::<Vec<_>>();
+
+            writer.write_array(register, padded_msg, 0);
+
+            let pre_processed = SHA256Gadget::process_inputs(&message);
+
+            expected_w.push(pre_processed);
+        }
+        for end_bit in data.public.end_bits.iter() {
+            writer.write(&end_bit, &GoldilocksField::ONE, 0);
+        }
+
         writer.write_global_instructions(&stark.air_data);
         (0..num_rounds).for_each(|r| {
             for k in 0..64 {

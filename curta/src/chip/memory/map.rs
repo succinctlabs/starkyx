@@ -17,6 +17,10 @@ impl<T: PartialEq + Eq + Hash> MemoryMap<T> {
         self.0.get(ptr)
     }
 
+    pub fn remove(&mut self, ptr: &RawPointerKey<T>) -> Option<Vec<T>> {
+        self.0.remove(ptr)
+    }
+
     pub fn insert(&mut self, ptr: RawPointerKey<T>, value: Vec<T>) {
         self.0.insert(ptr, value);
     }
