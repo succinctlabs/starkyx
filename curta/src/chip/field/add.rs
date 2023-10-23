@@ -64,9 +64,18 @@ impl<L: AirParameters> AirBuilder<L> {
         L::Instruction: From<FpAddInstruction<P>>,
     {
         let is_trace = a.is_trace() || b.is_trace() || result.is_trace();
-        let carry = self.alloc::<FieldRegister<P>>();
-        let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
-        let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        let carry: FieldRegister<P>;
+        let witness_low: ArrayRegister<U16Register>;
+        let witness_high: ArrayRegister<U16Register>;
+        if is_trace {
+            carry = self.alloc::<FieldRegister<P>>();
+            witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+            witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        } else {
+            carry = self.alloc_public::<FieldRegister<P>>();
+            witness_low = self.alloc_array_public::<U16Register>(P::NB_WITNESS_LIMBS);
+            witness_high = self.alloc_array_public::<U16Register>(P::NB_WITNESS_LIMBS);
+        }
         let instr = FpAddInstruction {
             a: *a,
             b: *b,
@@ -169,22 +178,10 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpAddInstruction<P>
         let p_witness = util::compute_root_quotient_and_shift(&p_vanishing, P::WITNESS_OFFSET);
         let (p_witness_low, p_witness_high) = split_u32_limbs_to_u16_limbs(&p_witness);
 
-        let mut values = p_result.coefficients;
-        values.extend_from_slice(p_carry.coefficients());
-        values.extend_from_slice(&p_witness_low);
-        values.extend_from_slice(&p_witness_high);
-
-        // Row must match layout of instruction.
-        writer.write_unsafe_batch_raw(
-            &[
-                *self.result.register(),
-                *self.carry.register(),
-                *self.witness_low.register(),
-                *self.witness_high.register(),
-            ],
-            &values,
-            row_index,
-        );
+        writer.write(&self.result, &p_result, row_index);
+        writer.write(&self.carry, &p_carry, row_index);
+        writer.write_array(&self.witness_low, &p_witness_low, row_index);
+        writer.write_array(&self.witness_high, &p_witness_high, row_index);
     }
 }
 
@@ -205,9 +202,9 @@ mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        const NUM_ARITHMETIC_COLUMNS: usize = 200;
+        const NUM_ARITHMETIC_COLUMNS: usize = 124;
         const NUM_FREE_COLUMNS: usize = 2;
-        const EXTENDED_COLUMNS: usize = 309;
+        const EXTENDED_COLUMNS: usize = 195;
 
         type Instruction = FpAddInstruction<Fp25519>;
     }
