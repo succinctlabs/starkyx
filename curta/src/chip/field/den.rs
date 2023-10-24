@@ -41,10 +41,24 @@ impl<L: AirParameters> AirBuilder<L> {
     where
         L::Instruction: From<FpDenInstruction<P>>,
     {
-        let result = self.alloc::<FieldRegister<P>>();
-        let carry = self.alloc::<FieldRegister<P>>();
-        let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
-        let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        let is_trace = a.is_trace() || b.is_trace();
+
+        let result: FieldRegister<P>;
+        let carry: FieldRegister<P>;
+        let witness_low: ArrayRegister<U16Register>;
+        let witness_high: ArrayRegister<U16Register>;
+
+        if is_trace {
+            result = self.alloc::<FieldRegister<P>>();
+            carry = self.alloc::<FieldRegister<P>>();
+            witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+            witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        } else {
+            result = self.alloc_public::<FieldRegister<P>>();
+            carry = self.alloc_public::<FieldRegister<P>>();
+            witness_low = self.alloc_array_public::<U16Register>(P::NB_WITNESS_LIMBS);
+            witness_high = self.alloc_array_public::<U16Register>(P::NB_WITNESS_LIMBS);
+        }
         let instr = FpDenInstruction {
             a: *a,
             b: *b,
@@ -54,7 +68,11 @@ impl<L: AirParameters> AirBuilder<L> {
             witness_low,
             witness_high,
         };
-        self.register_instruction(instr);
+        if is_trace {
+            self.register_instruction(instr);
+        } else {
+            self.register_global_instruction(instr);
+        }
         instr
     }
 }
@@ -140,23 +158,10 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpDenInstruction<P>
         let p_witness_shifted = compute_root_quotient_and_shift(&vanishing_poly, P::WITNESS_OFFSET);
         let (p_witness_low, p_witness_high) = split_u32_limbs_to_u16_limbs::<F>(&p_witness_shifted);
 
-        // Row must match layout of instruction.
-        let mut values = p_result.coefficients;
-        values.extend_from_slice(p_carry.coefficients());
-        values.extend_from_slice(&p_witness_low);
-        values.extend_from_slice(&p_witness_high);
-
-        // Row must match layout of instruction.
-        writer.write_unsafe_batch_raw(
-            &[
-                *self.result.register(),
-                *self.carry.register(),
-                *self.witness_low.register(),
-                *self.witness_high.register(),
-            ],
-            &values,
-            row_index,
-        )
+        writer.write(&self.result, &p_result, row_index);
+        writer.write(&self.carry, &p_carry, row_index);
+        writer.write_array(&self.witness_low, &p_witness_low, row_index);
+        writer.write_array(&self.witness_high, &p_witness_high, row_index);
     }
 }
 
@@ -177,9 +182,9 @@ mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        const NUM_ARITHMETIC_COLUMNS: usize = 140;
+        const NUM_ARITHMETIC_COLUMNS: usize = 124;
         const NUM_FREE_COLUMNS: usize = 2;
-        const EXTENDED_COLUMNS: usize = 219;
+        const EXTENDED_COLUMNS: usize = 195;
 
         type Instruction = FpDenInstruction<Fp25519>;
     }
@@ -195,6 +200,11 @@ mod tests {
         let p = Fp25519::modulus();
 
         let mut builder = AirBuilder::<L>::new();
+
+        let a_pub = builder.alloc_public::<Fp>();
+        let b_pub = builder.alloc_public::<Fp>();
+        let sign = false;
+        let den_ins_pub = builder.fp_den(&a_pub, &b_pub, sign);
 
         let a = builder.alloc::<Fp>();
         let b = builder.alloc::<Fp>();
@@ -220,20 +230,29 @@ mod tests {
                 writer.write(&b, &p_b, i);
                 writer.write_instruction(&den_ins, i);
 
+                writer.write(&a_pub, &p_a, i);
+                writer.write(&b_pub, &p_b, i);
+                writer.write_instruction(&den_ins_pub, i);
+
                 handle.send(1).unwrap();
             });
         }
+
+        let writer = generator.new_writer();
+        writer.write_global_instructions(&generator.air_data);
+
         drop(tx);
         for msg in rx.iter() {
             assert!(msg == 1);
         }
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
+        let public = writer.public().unwrap().clone();
 
         // Generate proof and verify as a stark
-        test_starky(&stark, &config, &generator, &[]);
+        test_starky(&stark, &config, &generator, &public);
 
         // Test the recursive proof.
-        test_recursive_starky(stark, config, generator, &[]);
+        test_recursive_starky(stark, config, generator, &public);
     }
 }
