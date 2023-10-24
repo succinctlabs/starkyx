@@ -4,12 +4,12 @@ use crate::chip::register::array::{ArrayIterator, ArrayRegister};
 use crate::chip::register::cell::CellType;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
-use crate::chip::uint::register::{U32Register, U64Register};
+use crate::chip::uint::register::U64Register;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct SHA256DigestRegister(ArrayRegister<U32Register>);
+pub struct SHA512DigestRegister(ArrayRegister<U64Register>);
 
-impl RegisterSerializable for SHA256DigestRegister {
+impl RegisterSerializable for SHA512DigestRegister {
     const CELL: CellType = CellType::Element;
     fn register(&self) -> &MemorySlice {
         self.0.register()
@@ -20,14 +20,14 @@ impl RegisterSerializable for SHA256DigestRegister {
     }
 }
 
-impl RegisterSized for SHA256DigestRegister {
+impl RegisterSized for SHA512DigestRegister {
     fn size_of() -> usize {
-        U32Register::size_of() * 8
+        U64Register::size_of() * 8
     }
 }
 
-impl Register for SHA256DigestRegister {
-    type Value<T> = [T; 32];
+impl Register for SHA512DigestRegister {
+    type Value<T> = [T; 64];
 
     fn align<T>(value: &Self::Value<T>) -> &[T] {
         value
@@ -39,19 +39,12 @@ impl Register for SHA256DigestRegister {
     }
 }
 
-impl SHA256DigestRegister {
-    pub fn as_array(&self) -> ArrayRegister<U32Register> {
-        self.0
-    }
-    pub fn split(&self) -> [U64Register; 4] {
-        core::array::from_fn(|i| U64Register::from_limbs(&self.0.get_subarray(2 * i..2 * i + 2)))
-    }
-
-    pub fn get(&self, index: usize) -> U32Register {
+impl SHA512DigestRegister {
+    pub fn get(&self, index: usize) -> U64Register {
         self.0.get(index)
     }
 
-    pub fn iter(&self) -> ArrayIterator<U32Register> {
+    pub fn iter(&self) -> ArrayIterator<U64Register> {
         self.0.iter()
     }
 }
