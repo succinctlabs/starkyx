@@ -22,7 +22,7 @@ use crate::polynomial::to_u16_le_limbs_polynomial;
 
 /// Fp Square Root. Computes `sqrt(a) = result`.
 ///
-/// This is done by computing `b_inv = b^(-1)` followed by `a * b_inv = result`.
+/// This is done by witnessing the square root and then constraining that result * result == a.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub struct FpSqrtInstruction {
@@ -58,13 +58,9 @@ impl<L: AirParameters> AirBuilder<L> {
     {
         let is_trace = a.is_trace() || result.is_trace();
 
-        let mut one_value = vec![L::Field::ONE];
-        one_value.resize(Ed25519BaseField::NB_LIMBS, L::Field::ZERO);
-
         let square_carry: FieldRegister<Ed25519BaseField>;
         let square_witness_low: ArrayRegister<U16Register>;
         let square_witness_high: ArrayRegister<U16Register>;
-        let a_sqrt: FieldRegister<Ed25519BaseField>;
 
         if is_trace {
             square_carry = self.alloc::<FieldRegister<Ed25519BaseField>>();
@@ -72,20 +68,18 @@ impl<L: AirParameters> AirBuilder<L> {
                 self.alloc_array::<U16Register>(Ed25519BaseField::NB_WITNESS_LIMBS);
             square_witness_high =
                 self.alloc_array::<U16Register>(Ed25519BaseField::NB_WITNESS_LIMBS);
-            a_sqrt = self.alloc::<FieldRegister<Ed25519BaseField>>();
         } else {
             square_carry = self.alloc_public::<FieldRegister<Ed25519BaseField>>();
             square_witness_low =
                 self.alloc_array_public::<U16Register>(Ed25519BaseField::NB_WITNESS_LIMBS);
             square_witness_high =
                 self.alloc_array_public::<U16Register>(Ed25519BaseField::NB_WITNESS_LIMBS);
-            a_sqrt = self.alloc_public::<FieldRegister<Ed25519BaseField>>();
         }
 
-        // check that b * b_inv = one.
+        // check that a_sqrt * a_sqrt == a
         let square = FpMulInstruction {
-            a: a_sqrt,
-            b: a_sqrt,
+            a: *result,
+            b: *result,
             result: *a,
             carry: square_carry,
             witness_low: square_witness_low,
@@ -179,9 +173,9 @@ mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        const NUM_ARITHMETIC_COLUMNS: usize = 124;
+        const NUM_ARITHMETIC_COLUMNS: usize = 108;
         const NUM_FREE_COLUMNS: usize = 2;
-        const EXTENDED_COLUMNS: usize = 195;
+        const EXTENDED_COLUMNS: usize = 171;
 
         type Instruction = FpSqrtInstruction;
     }
