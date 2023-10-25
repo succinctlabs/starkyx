@@ -206,9 +206,8 @@ mod tests {
     use crate::chip::AirParameters;
     use crate::machine::builder::Builder;
     use crate::machine::bytes::builder::BytesBuilder;
-    use crate::machine::hash::sha::algorithm::SHAir;
+    use crate::machine::hash::sha::algorithm::{SHAPure, SHAir};
     use crate::machine::hash::sha::builder::SHABuilder;
-    use crate::machine::hash::sha::sha512::util::SHA512Util;
     use crate::machine::hash::sha::sha512::{INITIAL_HASH, ROUND_CONSTANTS, SHA512};
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
     use crate::math::prelude::*;
@@ -265,7 +264,7 @@ mod tests {
         let msg_1 = b"plonky2";
         let msg_2 = b"";
 
-        let padded_messages = [SHA512Util::pad(msg_1), SHA512Util::pad(msg_2)];
+        let padded_messages = [SHA512::pad(msg_1), SHA512::pad(msg_2)];
         let mut expected_w = Vec::new();
 
         for (message, register) in padded_messages
@@ -280,7 +279,7 @@ mod tests {
 
             writer.write_array(register, padded_msg, 0);
 
-            let pre_processed = SHA512Util::pre_process(message);
+            let pre_processed = SHA512::pre_process(message);
             expected_w.push(pre_processed);
         }
 
@@ -355,7 +354,7 @@ mod tests {
         let padded_chunks_values = messages
             .into_iter()
             .flat_map(|msg| {
-                let padded_msg = SHA512Util::pad(msg);
+                let padded_msg = SHA512::pad(msg);
                 let num_chunks = padded_msg.len() / 128;
                 end_bits_values.extend_from_slice(&vec![GoldilocksField::ZERO; num_chunks - 1]);
                 end_bits_values.push(GoldilocksField::ONE);
@@ -416,8 +415,8 @@ mod tests {
 
             writer.write_array(register, padded_msg, 0);
 
-            let pre_processed = SHA512Util::pre_process(message);
-            current_state = SHA512Util::process(current_state, &pre_processed, ROUND_CONSTANTS);
+            let pre_processed = SHA512::pre_process(message);
+            current_state = SHA512::process(current_state, &pre_processed, ROUND_CONSTANTS);
             let state = current_state.map(u64_to_le_field_bytes);
             if *end_bit_value == GoldilocksField::ONE {
                 current_state = INITIAL_HASH;
@@ -442,7 +441,7 @@ mod tests {
             let digest = writer
                 .read_array::<_, 8>(&state.as_array(), 0)
                 .map(|x| u64_from_le_field_bytes(&x));
-            let expected_digest = SHA512Util::decode(expected_digests.next().unwrap());
+            let expected_digest = SHA512::decode(expected_digests.next().unwrap());
             assert_eq!(digest, expected_digest);
         }
 
