@@ -83,7 +83,7 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
     fn store_state(
         builder: &mut B,
         state_ptr: &Self::StatePointer,
-        state_next: [Self::Variable; 8],
+        state_next: Self::StateVariable,
         time: &Time<B::Field>,
         flag: Option<ElementRegister>,
     );
@@ -92,7 +92,7 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         builder: &mut B,
         state: ArrayRegister<Self::Variable>,
         vars_next: &[Self::Variable],
-    ) -> [Self::Variable; 8];
+    ) -> Self::StateVariable;
 
     fn sha(
         builder: &mut B,
@@ -157,20 +157,21 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
 
         // Initialize shift read multiplicities with zeros.
         let mut shift_read_mult = [B::Field::ZERO; CYCLE_LENGTH];
+        let read_len = CYCLE_LENGTH - 16;
         // Add multiplicities for reading the elements w[i-15].
-        for mult in shift_read_mult.iter_mut().skip(1).take(64) {
+        for mult in shift_read_mult.iter_mut().skip(16 - 15).take(read_len) {
             *mult += B::Field::ONE;
         }
         // Add multiplicities for reading the elements w[i-2].
-        for mult in shift_read_mult.iter_mut().skip(14).take(64) {
+        for mult in shift_read_mult.iter_mut().skip(16 - 2).take(read_len) {
             *mult += B::Field::ONE;
         }
         // Add multiplicities for reading the elements w[i-16].
-        for mult in shift_read_mult.iter_mut().take(64) {
+        for mult in shift_read_mult.iter_mut().take(read_len) {
             *mult += B::Field::ONE;
         }
         // Add multiplicities for reading the elements w[i-7].
-        for mult in shift_read_mult.iter_mut().skip(16 - 7).take(64) {
+        for mult in shift_read_mult.iter_mut().skip(16 - 7).take(read_len) {
             *mult += B::Field::ONE;
         }
 
@@ -203,7 +204,7 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         let dummy_index = builder.constant(&B::Field::from_canonical_u32(DUMMY_INDEX));
 
         let num_dummy_reads = builder.constant::<ElementRegister>(&B::Field::from_canonical_usize(
-            num_real_rounds * (16 * 4 + 64)
+            num_real_rounds * (16 * 4 + read_len)
                 + (num_dummy_rounds - 1) * CYCLE_LENGTH * 5
                 + length_last_round * 5,
         ));
@@ -438,12 +439,13 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
             &Time::zero(),
         );
         let bit = cycle_end_bit;
+        let state_next_arr: ArrayRegister<Self::Variable> = state_next.into();
         for ((((var, h), init), var_next), h_next) in vars
             .iter()
             .zip(state.iter())
             .zip(initial_hash.iter())
             .zip(vars_next.iter())
-            .zip(state_next.iter())
+            .zip(state_next_arr.iter())
         {
             builder.set_to_expression_transition(
                 &var.next(),

@@ -1,5 +1,5 @@
-use super::register::SHA512DigestRegister;
-use super::SHA512;
+use super::register::SHA256DigestRegister;
+use super::SHA256;
 use crate::chip::memory::pointer::slice::Slice;
 use crate::chip::memory::time::Time;
 use crate::chip::register::array::ArrayRegister;
@@ -7,28 +7,28 @@ use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::Register;
 use crate::chip::uint::operations::instruction::UintInstructions;
-use crate::chip::uint::register::U64Register;
-use crate::chip::uint::util::{u64_from_le_field_bytes, u64_to_le_field_bytes};
+use crate::chip::uint::register::{U32Register, U64Register};
+use crate::chip::uint::util::{u32_from_le_field_bytes, u32_to_le_field_bytes};
 use crate::chip::AirParameters;
 use crate::machine::builder::Builder;
 use crate::machine::bytes::builder::BytesBuilder;
 use crate::machine::hash::sha::algorithm::SHAir;
 
-impl<L: AirParameters> SHAir<BytesBuilder<L>, 80> for SHA512
+impl<L: AirParameters> SHAir<BytesBuilder<L>, 64> for SHA256
 where
     L::Instruction: UintInstructions,
 {
-    type Value = <U64Register as Register>::Value<L::Field>;
-    type Variable = U64Register;
-    type StateVariable = SHA512DigestRegister;
+    type Value = <U32Register as Register>::Value<L::Field>;
+    type Variable = U32Register;
+    type StateVariable = SHA256DigestRegister;
     type StatePointer = Slice<U64Register>;
 
     fn int_to_field_value(int: Self::Integer) -> Self::Value {
-        u64_to_le_field_bytes(int)
+        u32_to_le_field_bytes(int)
     }
 
     fn field_value_to_int(value: &Self::Value) -> Self::Integer {
-        u64_from_le_field_bytes(value)
+        u32_from_le_field_bytes(value)
     }
 
     fn clk(builder: &mut BytesBuilder<L>) -> ElementRegister {
@@ -37,13 +37,9 @@ where
 
     fn cycles_end_bits(builder: &mut BytesBuilder<L>) -> (BitRegister, BitRegister) {
         let cycle_16 = builder.cycle(4);
-        let cycle_80_end_bit = {
-            let loop_5 = builder.api.loop_instr(5);
-            let five_end_bit = loop_5.get_iteration_reg(4);
-            builder.mul(five_end_bit, cycle_16.end_bit)
-        };
+        let cycle_64 = builder.cycle(6);
 
-        (cycle_16.end_bit, cycle_80_end_bit)
+        (cycle_16.end_bit, cycle_64.end_bit)
     }
 
     fn load_state(
@@ -53,8 +49,8 @@ where
         let state_ptr = builder.uninit_slice();
 
         for (i, h_slice) in hash_state_public.iter().enumerate() {
-            for (j, h) in h_slice.iter().enumerate() {
-                builder.free(&state_ptr.get(j), h, &Time::constant(i));
+            for (j, h) in h_slice.split().iter().enumerate() {
+                builder.free(&state_ptr.get(j), *h, &Time::constant(i));
             }
         }
 
@@ -68,8 +64,10 @@ where
         time: &Time<L::Field>,
         flag: Option<ElementRegister>,
     ) {
-        for (i, element) in state_next.iter().enumerate() {
-            builder.store(&state_ptr.get(i), element, time, flag);
+        let state_next = state_next.as_array();
+        for i in 0..4 {
+            let val = U64Register::from_limbs(&state_next.get_subarray(i * 2..i * 2 + 2));
+            builder.store(&state_ptr.get(i), val, time, flag);
         }
     }
 
@@ -81,20 +79,22 @@ where
         w_i_mimus_7: Self::Variable,
     ) -> Self::Variable {
         // Calculate the value:
-        // s_0 = w_i_minus_15.rotate_right(1) ^ w_i_minus_15.rotate_right(8) ^ (w_i_minus_15 >> 7)
-        let w_i_minus_15_rotate_1 = builder.rotate_right(w_i_minus_15, 1);
-        let w_i_minus_15_rotate_8 = builder.rotate_right(w_i_minus_15, 8);
-        let w_i_minus_15_shr_7 = builder.shr(w_i_minus_15, 7);
+        // s_0 = w_i_minus_15.rotate_right(7) ^ w_i_minus_15.rotate_right(18) ^ (w_i_minus_15 >> 3)
+        let w_i_minus_15_rotate_7 = builder.rotate_right(w_i_minus_15, 7);
+        let w_i_minus_15_rotate_18 = builder.rotate_right(w_i_minus_15, 18);
+        let w_i_minus_15_shr_3 = builder.shr(w_i_minus_15, 3);
 
-        let mut s_0 = builder.xor(&w_i_minus_15_rotate_1, &w_i_minus_15_rotate_8);
-        s_0 = builder.xor(&s_0, &w_i_minus_15_shr_7);
+        let mut s_0 = builder.xor(&w_i_minus_15_rotate_7, &w_i_minus_15_rotate_18);
+        s_0 = builder.xor(&s_0, &w_i_minus_15_shr_3);
 
+        // Calculate the value:
+        // s_1 = w_i_minus_2.rotate_right(17) ^ w_i_minus_2.rotate_right(19) ^ (w_i_minus_2 >> 10)
+        let w_i_minus_2_rotate_17 = builder.rotate_right(w_i_minus_2, 17);
         let w_i_minus_2_rotate_19 = builder.rotate_right(w_i_minus_2, 19);
-        let w_i_minus_2_rotate_61 = builder.rotate_right(w_i_minus_2, 61);
-        let w_i_minus_2_shr_6 = builder.shr(w_i_minus_2, 6);
+        let w_i_minus_2_shr_10 = builder.shr(w_i_minus_2, 10);
 
-        let mut s_1 = builder.xor(&w_i_minus_2_rotate_19, &w_i_minus_2_rotate_61);
-        s_1 = builder.xor(&s_1, &w_i_minus_2_shr_6);
+        let mut s_1 = builder.xor(&w_i_minus_2_rotate_17, &w_i_minus_2_rotate_19);
+        s_1 = builder.xor(&s_1, &w_i_minus_2_shr_10);
 
         // Calculate the value:
         // w_i = w_i_minus_16 + s_0 + w_i_minus_7 + s_1
@@ -118,12 +118,12 @@ where
         let g = vars.get(6);
         let h = vars.get(7);
 
-        // Calculate S1 = e.rotate_right(14) ^ e.rotate_right(18) ^ e.rotate_right(41).
-        let e_rotate_14 = builder.rotate_right(e, 14);
-        let e_rotate_18 = builder.rotate_right(e, 18);
-        let e_rotate_41 = builder.rotate_right(e, 41);
-        let mut sum_1 = builder.xor(e_rotate_14, e_rotate_18);
-        sum_1 = builder.xor(sum_1, e_rotate_41);
+        // Calculate sum_1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25).
+        let e_rotate_6 = builder.rotate_right(e, 6);
+        let e_rotate_11 = builder.rotate_right(e, 11);
+        let e_rotate_25 = builder.rotate_right(e, 25);
+        let mut sum_1 = builder.xor(e_rotate_6, e_rotate_11);
+        sum_1 = builder.xor(sum_1, e_rotate_25);
 
         // Calculate ch = (e & f) ^ (!e & g).
         let e_and_f = builder.and(&e, &f);
@@ -137,12 +137,12 @@ where
         temp_1 = builder.add(temp_1, round_constant);
         temp_1 = builder.add(temp_1, w_i);
 
-        // Calculate S0 = a.rotate_right(28) ^ a.rotate_right(34) ^ a.rotate_right(39).
-        let a_rotate_28 = builder.rotate_right(a, 28);
-        let a_rotate_34 = builder.rotate_right(a, 34);
-        let a_rotate_39 = builder.rotate_right(a, 39);
-        let mut sum_0 = builder.xor(a_rotate_28, a_rotate_34);
-        sum_0 = builder.xor(sum_0, a_rotate_39);
+        // Calculate sum_0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22).
+        let a_rotate_2 = builder.rotate_right(a, 2);
+        let a_rotate_13 = builder.rotate_right(a, 13);
+        let a_rotate_22 = builder.rotate_right(a, 22);
+        let mut sum_0 = builder.xor(a_rotate_2, a_rotate_13);
+        sum_0 = builder.xor(sum_0, a_rotate_22);
 
         // Calculate maj = (a & b) ^ (a & c) ^ (b & c);
         let a_and_b = builder.and(a, b);
@@ -175,11 +175,11 @@ where
         vars_next: &[Self::Variable],
     ) -> Self::StateVariable {
         let state_next = builder.alloc_array(8);
-        for ((s, v), sum) in state.iter().zip(vars_next.iter()).zip(state_next.iter()) {
+        for ((s, v), res) in state.iter().zip(vars_next.iter()).zip(state_next.iter()) {
             let carry = builder.alloc();
             builder
                 .api
-                .set_add_u64(&s, v, &None, &sum, &carry, &mut builder.operations)
+                .set_add_u32(&s, v, &None, &res, &carry, &mut builder.operations)
         }
         Self::StateVariable::from_array(state_next)
     }
@@ -187,67 +187,67 @@ where
 
 #[cfg(test)]
 mod tests {
-    use core::fmt::Debug;
     use core::iter;
 
     use plonky2::field::goldilocks_field::GoldilocksField;
     use serde::{Deserialize, Serialize};
 
+    use super::*;
     use crate::chip::uint::operations::instruction::UintInstruction;
-    use crate::chip::AirParameters;
     use crate::machine::hash::sha::builder::test_utils::test_sha;
-    use crate::machine::hash::sha::sha512::SHA512;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct SHA512Test;
+    pub struct SHA256Test;
 
-    impl AirParameters for SHA512Test {
+    impl AirParameters for SHA256Test {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
         type Instruction = UintInstruction;
 
-        const NUM_FREE_COLUMNS: usize = 1190;
-        const EXTENDED_COLUMNS: usize = 651;
+        const NUM_FREE_COLUMNS: usize = 604;
+        const EXTENDED_COLUMNS: usize = 348;
     }
 
-    fn test_sha512<'a, I: IntoIterator<Item = &'a [u8]>, J: IntoIterator<Item = &'a str>>(
+    fn test_sha256<'a, I: IntoIterator<Item = &'a [u8]>, J: IntoIterator<Item = &'a str>>(
         messages: I,
         expected_digests: J,
     ) {
-        test_sha::<SHA512Test, SHA512, _, _, 80>(messages, expected_digests)
+        test_sha::<SHA256Test, SHA256, _, _, 64>(messages, expected_digests)
     }
 
     #[test]
-    fn test_sha512_short_message() {
-        let msg = b"plonky2";
-        let expected_digest = "7c6159dd615db8c15bc76e23d36106e77464759979a0fcd1366e531f552cfa0852dbf5c832f00bb279cbc945b44a132bff3ed0028259813b6a07b57326e88c87";
-        let num_messages = 2;
-        test_sha512(
+    fn test_sha256_short_message() {
+        let msg = b"abc";
+        let expected_digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        let num_messages = 10;
+        test_sha256(
             iter::repeat(msg).take(num_messages).map(|x| x.as_slice()),
             iter::repeat(expected_digest).take(num_messages),
         )
     }
 
     #[test]
-    fn test_sha512_long_nessage() {
+    fn test_sha256_long_nessage() {
         let num_messages = 2;
-        let msg = hex::decode("35c323757c20640a294345c89c0bfcebe3d554fdb0c7b7a0bdb72222c531b1ecf7ec1c43f4de9d49556de87b86b26a98942cb078486fdb44de38b80864c3973153756363696e6374204c616273").unwrap();
-        let expected_digest = "4388243c4452274402673de881b2f942ff5730fd2c7d8ddb94c3e3d789fb3754380cba8faa40554d9506a0730a681e88ab348a04bc5c41d18926f140b59aed39";
-        test_sha512(
+        let msg = hex::decode("243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89452821e638d01377be5466cf34e90c6cc0ac29b7c97c50dd3f84d5b5b5470917").unwrap();
+        let expected_digest = "aca16131a2e4c4c49e656d35aac1f0e689b3151bb108fa6cf5bcc3ac08a09bf9";
+        test_sha256(
             iter::repeat(msg.as_slice()).take(num_messages),
             iter::repeat(expected_digest).take(num_messages),
         )
     }
 
     #[test]
-    fn test_sha512_changing_length_nessage() {
-        let short_msg = b"plonky2";
-        let short_expected_digest = "7c6159dd615db8c15bc76e23d36106e77464759979a0fcd1366e531f552cfa0852dbf5c832f00bb279cbc945b44a132bff3ed0028259813b6a07b57326e88c87";
-        let long_msg = hex::decode("35c323757c20640a294345c89c0bfcebe3d554fdb0c7b7a0bdb72222c531b1ecf7ec1c43f4de9d49556de87b86b26a98942cb078486fdb44de38b80864c3973153756363696e6374204c616273").unwrap();
-        let long_expected_digest = "4388243c4452274402673de881b2f942ff5730fd2c7d8ddb94c3e3d789fb3754380cba8faa40554d9506a0730a681e88ab348a04bc5c41d18926f140b59aed39";
-        test_sha512(
+    fn test_sha256_changing_length_nessage() {
+        let short_msg = b"abc";
+        let short_expected_digest =
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        let long_msg = hex::decode("243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89452821e638d01377be5466cf34e90c6cc0ac29b7c97c50dd3f84d5b5b5470917").unwrap();
+        let long_expected_digest =
+            "aca16131a2e4c4c49e656d35aac1f0e689b3151bb108fa6cf5bcc3ac08a09bf9";
+        test_sha256(
             [
                 short_msg.as_slice(),
                 long_msg.as_slice(),
