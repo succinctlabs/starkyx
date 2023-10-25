@@ -2,7 +2,6 @@ use super::data::SHAData;
 use crate::chip::uint::register::U64Register;
 
 pub mod air;
-pub mod builder;
 pub mod pure;
 pub mod register;
 pub mod util;
