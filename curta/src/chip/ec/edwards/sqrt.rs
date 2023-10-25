@@ -125,6 +125,8 @@ impl<F: PrimeField64> Instruction<F> for FpSqrtInstruction {
             .unwrap(),
             &modulus,
         );
+
+        // The square root of -1 in the field.
         let sqrt_m1 = BigUint::from_str(
             "19681161376707505956807079304988542015446066515923890162744021073123829784752",
         )
