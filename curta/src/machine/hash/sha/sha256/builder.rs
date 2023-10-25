@@ -82,21 +82,21 @@ where
 
         let dummy_index = self.constant(&L::Field::from_canonical_u8(64));
 
-        let num_dummy_reads =
-            self.constant::<ElementRegister>(&L::Field::from_canonical_usize(16 * 4 + 64 - 16));
+        let num_dummy_reads = self.constant::<ElementRegister>(&L::Field::from_canonical_usize(
+            num_rounds * (16 * 4 + 64 - 16),
+        ));
 
         for (i, padded_chunk) in padded_chunks.iter().enumerate() {
             for (j, word) in padded_chunk.iter().enumerate().take(16) {
-                self.store(&w.get(j), word, &Time::constant(i), None);
+                self.store(&w.get(j), word, &Time::zero(), None);
             }
-            self.store(
-                &w.get(64),
-                dummy_entry,
-                &Time::constant(i),
-                Some(num_dummy_reads),
-            );
         }
-
+        self.store(
+            &w.get(64),
+            dummy_entry,
+            &Time::zero(),
+            Some(num_dummy_reads),
+        );
         // Initialize cycles to generate process id and is_processing flag.
         let cycle_16 = self.cycle(4);
         let cycle_64 = self.cycle(6);
@@ -387,7 +387,6 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::chip::hash::sha::sha256::SHA256Gadget;
     use crate::chip::trace::writer::{InnerWriterData, TraceWriter};
     use crate::chip::uint::operations::instruction::UintInstruction;
     use crate::chip::uint::util::u32_from_le_field_bytes;
@@ -445,7 +444,7 @@ mod tests {
 
         let msg = b"abc";
 
-        let padded_messages = (0..num_rounds).map(|_| SHA256Gadget::pad(msg));
+        let padded_messages = (0..num_rounds).map(|_| SHA256Util::pad(msg));
         let mut expected_w = Vec::new();
 
         for (message, register) in padded_messages.zip_eq(data.public.padded_chunks.iter()) {
@@ -457,7 +456,7 @@ mod tests {
 
             writer.write_array(register, padded_msg, 0);
 
-            let pre_processed = SHA256Gadget::process_inputs(&message);
+            let pre_processed = SHA256Util::pre_process(&message);
 
             expected_w.push(pre_processed);
         }
@@ -523,6 +522,8 @@ mod tests {
         const EXTENDED_COLUMNS: usize = 342;
     }
 
+    fn test_sha256() {}
+
     #[test]
     fn test_sha256_byte_stark() {
         type L = SHA256Test;
@@ -558,7 +559,7 @@ mod tests {
         let msg = b"abc";
         let expected_digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 
-        let padded_messages = (0..num_rounds).map(|_| SHA256Gadget::pad(msg));
+        let padded_messages = (0..num_rounds).map(|_| SHA256Util::pad(msg));
 
         for ((message, register), h_arr) in padded_messages
             .zip_eq(padded_chunks.iter())
@@ -572,8 +573,8 @@ mod tests {
 
             writer.write_array(register, padded_msg, 0);
 
-            let pre_processed = SHA256Gadget::process_inputs(&message);
-            let state = SHA256Gadget::compress_round(INITIAL_HASH, &pre_processed, ROUND_CONSTANTS)
+            let pre_processed = SHA256Util::pre_process(&message);
+            let state = SHA256Util::process(INITIAL_HASH, &pre_processed, ROUND_CONSTANTS)
                 .map(u32_to_le_field_bytes);
             writer.write_slice(h_arr, &state.concat(), 0);
         }

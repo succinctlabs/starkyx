@@ -9,11 +9,11 @@ impl SHA512Util {
         // Find number of zeros
         let mdi = msg.len() % 128;
         assert!(mdi < 240);
-        let padlen = if mdi < 112 { 112 - mdi } else { 240 - mdi };
+        let padlen = if mdi < 112 { 111 - mdi } else { 239 - mdi };
         // Pad with zeros
         padded_msg.extend_from_slice(&vec![0u8; padlen]);
 
-        // add length as 64 bit number
+        // add length as 128 bit number
         let len = ((msg.len() * 8) as u128).to_be_bytes();
         padded_msg.extend_from_slice(&len);
 
@@ -38,6 +38,57 @@ impl SHA512Util {
                 .wrapping_add(s1);
         }
         w
+    }
+
+    pub fn process(hash: [u64; 8], w: &[u64; 80], round_constants: [u64; 80]) -> [u64; 8] {
+        let mut msg = hash;
+        for i in 0..80 {
+            msg = Self::step(msg, w[i], round_constants[i]);
+        }
+
+        [
+            hash[0].wrapping_add(msg[0]),
+            hash[1].wrapping_add(msg[1]),
+            hash[2].wrapping_add(msg[2]),
+            hash[3].wrapping_add(msg[3]),
+            hash[4].wrapping_add(msg[4]),
+            hash[5].wrapping_add(msg[5]),
+            hash[6].wrapping_add(msg[6]),
+            hash[7].wrapping_add(msg[7]),
+        ]
+    }
+
+    pub fn step(msg: [u64; 8], w_i: u64, round_constant: u64) -> [u64; 8] {
+        let mut a = msg[0];
+        let mut b = msg[1];
+        let mut c = msg[2];
+        let mut d = msg[3];
+        let mut e = msg[4];
+        let mut f = msg[5];
+        let mut g = msg[6];
+        let mut h = msg[7];
+
+        let sum_1 = e.rotate_right(14) ^ e.rotate_right(18) ^ e.rotate_right(41);
+        let ch = (e & f) ^ (!e & g);
+        let temp_1 = h
+            .wrapping_add(sum_1)
+            .wrapping_add(ch)
+            .wrapping_add(round_constant)
+            .wrapping_add(w_i);
+        let sum_0 = a.rotate_right(28) ^ a.rotate_right(34) ^ a.rotate_right(39);
+        let maj = (a & b) ^ (a & c) ^ (b & c);
+        let temp_2 = sum_0.wrapping_add(maj);
+
+        h = g;
+        g = f;
+        f = e;
+        e = d.wrapping_add(temp_1);
+        d = c;
+        c = b;
+        b = a;
+        a = temp_1.wrapping_add(temp_2);
+
+        [a, b, c, d, e, f, g, h]
     }
 
     pub fn decode(digest: &str) -> [u64; 8] {

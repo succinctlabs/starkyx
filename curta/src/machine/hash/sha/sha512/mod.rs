@@ -1,8 +1,16 @@
+use super::data::SHAData;
+use crate::chip::uint::register::U64Register;
+
+pub mod air;
 pub mod builder;
-pub mod data;
-pub mod parameters;
+pub mod pure;
 pub mod register;
 pub mod util;
+
+#[derive(Clone, Copy, Debug)]
+pub struct SHA512;
+
+pub type SHA512Data = SHAData<U64Register, 80>;
 
 pub(crate) const ROUND_CONSTANTS: [u64; 80] = [
     0x428a2f98d728ae22,

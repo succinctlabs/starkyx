@@ -40,6 +40,10 @@ impl Register for SHA512DigestRegister {
 }
 
 impl SHA512DigestRegister {
+    pub fn as_array(&self) -> ArrayRegister<U64Register> {
+        self.0
+    }
+
     pub fn get(&self, index: usize) -> U64Register {
         self.0.get(index)
     }
