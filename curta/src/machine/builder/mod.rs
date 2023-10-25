@@ -1,4 +1,4 @@
-use self::ops::{Adc, Add, And, Mul, Neg, One, Or, Shl, Shr, Sub, Xor, Zero};
+use self::ops::{Adc, Add, And, Mul, Neg, Not, One, Or, Shl, Shr, Sub, Xor, Zero};
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::cycle::Cycle;
@@ -274,6 +274,10 @@ pub trait Builder: Sized {
         Lhs: And<Self, Rhs>,
     {
         lhs.and(rhs, self)
+    }
+
+    fn not<T: Not<Self>>(&mut self, value: T) -> <T as Not<Self>>::Output {
+        value.not(self)
     }
 
     fn or<Lhs, Rhs>(&mut self, lhs: Lhs, rhs: Rhs) -> <Lhs as ops::Or<Self, Rhs>>::Output
