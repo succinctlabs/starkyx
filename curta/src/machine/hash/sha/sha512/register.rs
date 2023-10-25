@@ -52,3 +52,9 @@ impl SHA512DigestRegister {
         self.0.iter()
     }
 }
+
+impl From<SHA512DigestRegister> for ArrayRegister<U64Register> {
+    fn from(register: SHA512DigestRegister) -> Self {
+        register.0
+    }
+}

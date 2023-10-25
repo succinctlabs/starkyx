@@ -18,14 +18,14 @@ const DUMMY_INDEX: u32 = (u16::MAX as u32) * 2;
 ///
 /// An interface for the SHA algorithm as a Rust function operating on numerical values.
 pub trait SHAPure<const CYCLE_LENGTH: usize> {
-    type Integer: Num;
+    type Integer: Num + Copy;
 
     const INITIAL_HASH: [Self::Integer; 8];
     const ROUND_CONSTANTS: [Self::Integer; CYCLE_LENGTH];
 
-    fn pad(msg: &[u8]) -> Vec<u8>;
+    fn pad(msg: &[u8]) -> Vec<Self::Integer>;
 
-    fn pre_process(chunk: &[u8]) -> [Self::Integer; CYCLE_LENGTH];
+    fn pre_process(chunk: &[Self::Integer]) -> [Self::Integer; CYCLE_LENGTH];
 
     fn process(
         hash: [Self::Integer; 8],
@@ -41,7 +41,7 @@ pub trait SHAPure<const CYCLE_LENGTH: usize> {
 /// An interface for the SHA algorithm as an AIR.
 pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
     type Variable: MemoryValue + Register<Value<B::Field> = Self::Value>;
-    type StateVariable: Register;
+    type StateVariable: Register + Into<ArrayRegister<Self::Variable>>;
     type StatePointer;
     type Value;
 

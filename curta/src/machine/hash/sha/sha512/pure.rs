@@ -7,7 +7,7 @@ impl SHAPure<80> for SHA512 {
     const INITIAL_HASH: [Self::Integer; 8] = INITIAL_HASH;
     const ROUND_CONSTANTS: [Self::Integer; 80] = ROUND_CONSTANTS;
 
-    fn pad(msg: &[u8]) -> Vec<u8> {
+    fn pad(msg: &[u8]) -> Vec<Self::Integer> {
         let mut padded_msg = Vec::new();
         padded_msg.extend_from_slice(msg);
         padded_msg.push(1 << 7);
@@ -24,16 +24,19 @@ impl SHAPure<80> for SHA512 {
         padded_msg.extend_from_slice(&len);
 
         padded_msg
+            .chunks_exact(8)
+            .map(|slice| u64::from_be_bytes(slice.try_into().unwrap()))
+            .collect::<Vec<_>>()
     }
 
-    fn pre_process(chunk: &[u8]) -> [Self::Integer; 80] {
-        let chunk_u64 = chunk
-            .chunks_exact(8)
-            .map(|x| u64::from_be_bytes(x.try_into().unwrap()))
-            .collect::<Vec<_>>();
+    fn pre_process(chunk: &[u64]) -> [Self::Integer; 80] {
+        // let chunk_u64 = chunk
+        //     .chunks_exact(8)
+        //     .map(|x| u64::from_be_bytes(x.try_into().unwrap()))
+        //     .collect::<Vec<_>>();
         let mut w = [0u64; 80];
 
-        w[..16].copy_from_slice(&chunk_u64[..16]);
+        w[..16].copy_from_slice(&chunk[..16]);
 
         for i in 16..80 {
             let s0 = w[i - 15].rotate_right(1) ^ w[i - 15].rotate_right(8) ^ (w[i - 15] >> 7);
