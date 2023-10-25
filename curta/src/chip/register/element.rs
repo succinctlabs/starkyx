@@ -8,6 +8,8 @@ use crate::chip::builder::AirBuilder;
 use crate::chip::memory::pointer::raw::RawPointer;
 use crate::chip::memory::time::Time;
 use crate::chip::memory::value::MemoryValue;
+use crate::machine::builder::ops::{Add, Mul};
+use crate::machine::builder::Builder;
 use crate::math::prelude::cubic::element::CubicElement;
 use crate::math::prelude::*;
 
@@ -54,5 +56,21 @@ impl MemoryValue for ElementRegister {
     ) -> CubicRegister {
         let value = CubicElement([time.expr(), self.expr(), L::Field::ZERO.into()]);
         ptr.accumulate_cubic(builder, value)
+    }
+}
+
+impl<B: Builder> Add<B> for ElementRegister {
+    type Output = Self;
+
+    fn add(self, rhs: Self, builder: &mut B) -> Self::Output {
+        builder.expression(self.expr() + rhs.expr())
+    }
+}
+
+impl<B: Builder> Mul<B> for ElementRegister {
+    type Output = Self;
+
+    fn mul(self, rhs: Self, builder: &mut B) -> Self::Output {
+        builder.expression(self.expr() * rhs.expr())
     }
 }
