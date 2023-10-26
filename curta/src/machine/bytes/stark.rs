@@ -7,6 +7,7 @@ use plonky2::iop::witness::WitnessWrite;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
+use serde::{Deserialize, Serialize};
 
 use super::air::ByteParameters;
 use super::proof::{
@@ -28,6 +29,8 @@ use crate::plonky2::stark::Starky;
 use crate::plonky2::Plonky2Air;
 use crate::trace::AirTrace;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct ByteStark<L: AirParameters, C, const D: usize> {
     pub(crate) config: StarkyConfig<C, D>,
     pub(crate) stark: Starky<Chip<L>>,
