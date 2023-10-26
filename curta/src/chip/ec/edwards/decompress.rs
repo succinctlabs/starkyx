@@ -22,39 +22,48 @@ impl<L: AirParameters> AirBuilder<L> {
         //
         // This function uses a similar logic as this function:
         // https://github.com/succinctlabs/curve25519-dalek/blob/e2d1bd10d6d772af07cac5c8161cd7655016af6d/curve25519-dalek/src/edwards.rs#L187
-        let mut one_limbs = [0; Ed25519BaseField::NB_LIMBS];
+        let num_limbs: usize = Ed25519BaseField::NB_LIMBS;
+
+        let mut one_limbs = vec![0u16; num_limbs];
         one_limbs[0] = 1;
         let one_p = Polynomial::<L::Field>::from_coefficients(
-            one_limbs.map(L::Field::from_canonical_u16).to_vec(),
-        );
-        let one = self.constant::<FieldRegister<Ed25519BaseField>>(&one_p);
-
-        let d_p = Polynomial::<L::Field>::from_coefficients(
-            Ed25519Parameters::D[0..Ed25519BaseField::NB_LIMBS]
+            one_limbs
                 .iter()
                 .map(|x| L::Field::from_canonical_u16(*x))
                 .collect_vec(),
         );
+        let one = self.constant(&one_p);
 
-        let d = self.constant::<FieldRegister<Ed25519BaseField>>(&d_p);
-
-        let zero_limbs = [0; Ed25519BaseField::NB_LIMBS];
-        let zero_p = Polynomial::<L::Field>::from_coefficients(
-            zero_limbs.map(L::Field::from_canonical_u16).to_vec(),
+        let d_p = Polynomial::<L::Field>::from_coefficients(
+            Ed25519Parameters::D[0..num_limbs]
+                .iter()
+                .map(|x| L::Field::from_canonical_u16(*x))
+                .collect_vec(),
         );
-        let zero = self.constant::<FieldRegister<Ed25519BaseField>>(&zero_p);
+        let d: FieldRegister<Ed25519BaseField> = self.constant(&d_p);
+
+        let zero_limbs = vec![0; num_limbs];
+        let zero_p = Polynomial::<L::Field>::from_coefficients(
+            zero_limbs
+                .iter()
+                .map(|x| L::Field::from_canonical_u16(*x))
+                .collect_vec(),
+        );
+        let zero: FieldRegister<Ed25519BaseField> = self.constant(&zero_p);
 
         let yy = self.fp_mul::<Ed25519BaseField>(&compressed_p.y, &compressed_p.y);
         let u = self.fp_sub::<Ed25519BaseField>(&yy, &one);
-        let dyy = self.fp_mul::<Ed25519BaseField>(&d, &compressed_p.y);
+        let dyy = self.fp_mul::<Ed25519BaseField>(&d, &yy);
         let v = self.fp_add::<Ed25519BaseField>(&one, &dyy);
         let u_div_v = self.fp_div::<Ed25519BaseField>(&u, &v);
 
         let mut x = self.fp_sqrt(&u_div_v);
         let neg_x = self.fp_sub::<Ed25519BaseField>(&zero, &x);
-        x = self.select(&compressed_p.sign, &x, &neg_x);
+        x = self.select(&compressed_p.sign, &neg_x, &x);
 
         AffinePointRegister::<EdwardsCurve<Ed25519Parameters>>::new(x, compressed_p.y)
+
+        //AffinePointRegister::<EdwardsCurve<Ed25519Parameters>>::new(one, one)
     }
 }
 
@@ -70,7 +79,7 @@ mod tests {
     use crate::chip::builder::tests::*;
     use crate::chip::ec::edwards::ed25519::Ed25519FpInstruction;
     use crate::chip::ec::gadget::{
-        CompressedPointGadget, CompressedPointWriter, EllipticCurveWriter,
+        CompressedPointGadget, CompressedPointWriter, EllipticCurveGadget, EllipticCurveWriter,
     };
     use crate::chip::ec::point::AffinePoint;
 
@@ -81,9 +90,9 @@ mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        const NUM_ARITHMETIC_COLUMNS: usize = 784;
+        const NUM_ARITHMETIC_COLUMNS: usize = 816;
         const NUM_FREE_COLUMNS: usize = 3;
-        const EXTENDED_COLUMNS: usize = 1185;
+        const EXTENDED_COLUMNS: usize = 1233;
         type Instruction = Ed25519FpInstruction;
     }
 
@@ -112,7 +121,10 @@ mod tests {
         let mut builder = AirBuilder::<L>::new();
 
         let compressed_p_reg = builder.alloc_ec_compressed_point();
-        let _affine_p_reg = builder.ed_decompress(&compressed_p_reg);
+        let affine_p_reg = builder.ed_decompress(&compressed_p_reg);
+        let expected_affine_p = builder.alloc_ec_point();
+        //builder.assert_equal(&expected_affine_p.x, &affine_p_reg.x);
+        builder.assert_equal(&expected_affine_p.y, &affine_p_reg.y);
 
         let num_rows = 1 << 16;
         let (air, trace_data) = builder.build();
@@ -133,13 +145,13 @@ mod tests {
         let affine_p = AffinePoint::<EdwardsCurve<Ed25519Parameters>>::new(affine_p_x, affine_p_y);
 
         let writer = generator.new_writer();
+        writer.write_global_instructions(&generator.air_data);
+
         (0..num_rows).into_par_iter().for_each(|i| {
             writer.write_ec_compressed_point(&compressed_p_reg, &compressed_p, i);
-            //writer.write_ec_point(&affine_p_reg, &affine_p, i);
+            writer.write_ec_point(&expected_affine_p, &affine_p, i);
             writer.write_row_instructions(&generator.air_data, i);
         });
-
-        writer.write_global_instructions(&generator.air_data);
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
