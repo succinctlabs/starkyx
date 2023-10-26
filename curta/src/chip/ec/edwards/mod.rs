@@ -10,7 +10,6 @@ pub mod add;
 pub mod bigint_operations;
 pub mod ed25519;
 pub mod scalar_mul;
-pub mod sqrt;
 
 pub trait EdwardsParameters: EllipticCurveParameters {
     const D: [u16; MAX_NB_LIMBS];

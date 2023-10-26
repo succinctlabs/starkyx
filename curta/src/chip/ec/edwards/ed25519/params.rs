@@ -1,7 +1,7 @@
 use num::{BigUint, Num, One};
 use serde::{Deserialize, Serialize};
 
-use super::{EdwardsCurve, EdwardsParameters};
+use crate::chip::ec::edwards::{EdwardsCurve, EdwardsParameters};
 use crate::chip::ec::EllipticCurveParameters;
 use crate::chip::field::parameters::{FieldParameters, MAX_NB_LIMBS};
 
