@@ -740,7 +740,7 @@ mod tests {
         );
 
         let clk = Time::from_element(builder.clk);
-        let zero = builder.api.alloc_public::<ElementRegister>();
+        let zero = builder.constant::<ElementRegister>(&GoldilocksField::ZERO);
 
         let a_0 = a_ptr.get_at(zero);
         let zero_trace = builder.api.alloc::<ElementRegister>();
@@ -771,10 +771,8 @@ mod tests {
         let a_val = (0..a_init.len())
             .map(|_| u32_to_le_field_bytes(rng.gen::<u32>()))
             .collect::<Vec<_>>();
-        writer.write(&zero, &GoldilocksField::ZERO, 0);
         writer.write_array(&a_init, a_val, 0);
         writer.write_global_instructions(&stark.air_data);
-        writer.write(&zero, &GoldilocksField::ZERO, 0);
         for i in 0..num_rows {
             writer.write_row_instructions(&stark.air_data, i);
         }
