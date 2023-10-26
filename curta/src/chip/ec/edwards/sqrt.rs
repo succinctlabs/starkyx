@@ -138,7 +138,7 @@ impl<F: PrimeField64> Instruction<F> for FpSqrtInstruction {
         let neg_a = &modulus - &a;
 
         if beta_squared == neg_a {
-            beta = &beta * &sqrt_m1;
+            beta = (&beta * &sqrt_m1) % &modulus;
         }
 
         let correct_sign_sqrt = beta_squared == a;
@@ -148,12 +148,7 @@ impl<F: PrimeField64> Instruction<F> for FpSqrtInstruction {
             panic!("a is not a square");
         }
 
-        if flipped_sign_sqrt {
-            beta = (&beta * &sqrt_m1) % &modulus;
-        }
-
         let p_beta = to_u16_le_limbs_polynomial::<F, Ed25519BaseField>(&beta);
-
         let a = &self.square.a;
         writer.write(a, &p_beta, row_index);
 
