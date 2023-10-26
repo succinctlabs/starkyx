@@ -116,8 +116,6 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpSubInstruction<P>
         let c = (&modulus + &a - &b) % &modulus;
         let p_c = to_u16_le_limbs_polynomial::<F, P>(&c);
 
-        //println!("sub result is {:?}", c);
-
         writer.write(&self.inner.a, &p_c, row_index);
 
         self.inner.write(writer, row_index);

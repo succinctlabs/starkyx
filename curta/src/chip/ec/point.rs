@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 
 use super::EllipticCurve;
 use crate::chip::field::register::FieldRegister;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AffinePoint<E> {
     pub x: BigUint,
