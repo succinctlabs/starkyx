@@ -137,6 +137,8 @@ impl<F: PrimeField64> Instruction<F> for Ed25519FpSqrtInstruction {
         let beta_squared = &beta * &beta % &modulus;
         let neg_a = &modulus - &a;
 
+        //println!("beta before product is {:?}", beta);
+
         if beta_squared == neg_a {
             beta = (&beta * &sqrt_m1) % &modulus;
         }
@@ -148,8 +150,16 @@ impl<F: PrimeField64> Instruction<F> for Ed25519FpSqrtInstruction {
             panic!("a is not a square");
         }
 
+        let beta_bytes = beta.to_bytes_le();
+        if (beta_bytes[0] & 1) == 1 {
+            beta = (&modulus - &beta) % &modulus;
+        }
+
         let p_beta = to_u16_le_limbs_polynomial::<F, Ed25519BaseField>(&beta);
         let a = &self.square.a;
+
+        //println!("sqrt results is {:?}", beta);
+
         writer.write(a, &p_beta, row_index);
 
         self.square.write(writer, row_index);

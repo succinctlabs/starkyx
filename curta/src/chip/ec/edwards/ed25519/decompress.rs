@@ -2,9 +2,10 @@ use itertools::Itertools;
 
 use super::instruction::FromEd25519FieldInstruction;
 use super::params::{Ed25519BaseField, Ed25519Parameters};
+use super::point::CompressedPointRegister;
 use crate::chip::builder::AirBuilder;
 use crate::chip::ec::edwards::{EdwardsCurve, EdwardsParameters};
-use crate::chip::ec::point::{AffinePointRegister, CompressedPointRegister};
+use crate::chip::ec::point::AffinePointRegister;
 use crate::chip::field::parameters::FieldParameters;
 use crate::chip::field::register::FieldRegister;
 use crate::chip::AirParameters;
@@ -63,8 +64,6 @@ impl<L: AirParameters> AirBuilder<L> {
         x = self.select(&compressed_p.sign, &neg_x, &x);
 
         AffinePointRegister::<EdwardsCurve<Ed25519Parameters>>::new(x, compressed_p.y)
-
-        //AffinePointRegister::<EdwardsCurve<Ed25519Parameters>>::new(one, one)
     }
 }
 
@@ -78,10 +77,9 @@ mod tests {
 
     use super::*;
     use crate::chip::builder::tests::*;
+    use crate::chip::ec::edwards::ed25519::gadget::{CompressedPointGadget, CompressedPointWriter};
     use crate::chip::ec::edwards::ed25519::instruction::Ed25519FpInstruction;
-    use crate::chip::ec::gadget::{
-        CompressedPointGadget, CompressedPointWriter, EllipticCurveGadget, EllipticCurveWriter,
-    };
+    use crate::chip::ec::gadget::{EllipticCurveGadget, EllipticCurveWriter};
     use crate::chip::ec::point::AffinePoint;
 
     #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
@@ -269,7 +267,7 @@ mod tests {
         let compressed_p_reg = builder.alloc_ec_compressed_point();
         let affine_p_reg = builder.ed25519_decompress(&compressed_p_reg);
         let expected_affine_p = builder.alloc_ec_point();
-        //builder.assert_equal(&expected_affine_p.x, &affine_p_reg.x);
+        builder.assert_equal(&expected_affine_p.x, &affine_p_reg.x);
         builder.assert_equal(&expected_affine_p.y, &affine_p_reg.y);
 
         let num_rows = 1 << 16;
