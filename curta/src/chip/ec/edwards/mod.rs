@@ -8,6 +8,7 @@ use crate::chip::field::parameters::{FieldParameters, MAX_NB_LIMBS};
 use crate::chip::AirParameters;
 pub mod add;
 pub mod bigint_operations;
+pub mod decompress;
 pub mod ed25519;
 pub mod scalar_mul;
 pub mod sqrt;
