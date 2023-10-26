@@ -32,7 +32,7 @@ pub struct Ed25519FpSqrtInstruction {
 
 impl<L: AirParameters> AirBuilder<L> {
     /// given two field elements `a` and `b`, computes the quotient `a / b = c`.
-    pub fn fp_sqrt(
+    pub fn ed25519_sqrt(
         &mut self,
         a: &FieldRegister<Ed25519BaseField>,
     ) -> FieldRegister<Ed25519BaseField>
@@ -45,11 +45,11 @@ impl<L: AirParameters> AirBuilder<L> {
         } else {
             self.alloc_public::<FieldRegister<Ed25519BaseField>>()
         };
-        self.set_fp_sqrt(a, &result);
+        self.set_ed25519_sqrt(a, &result);
         result
     }
 
-    pub fn set_fp_sqrt(
+    pub fn set_ed25519_sqrt(
         &mut self,
         a: &FieldRegister<Ed25519BaseField>,
         result: &FieldRegister<Ed25519BaseField>,
@@ -191,10 +191,10 @@ mod tests {
         let mut builder = AirBuilder::<L>::new();
 
         let a_pub = builder.alloc_public::<FieldRegister<P>>();
-        let result_pub = builder.fp_sqrt(&a_pub);
+        let result_pub = builder.ed25519_sqrt(&a_pub);
 
         let a = builder.alloc::<FieldRegister<P>>();
-        let result = builder.fp_sqrt(&a);
+        let result = builder.ed25519_sqrt(&a);
 
         let (air, trace_data) = builder.build();
         let num_rows = 1 << 16;
