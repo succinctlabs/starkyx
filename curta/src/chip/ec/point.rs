@@ -9,7 +9,6 @@ use crate::chip::field::register::FieldRegister;
 use crate::chip::register::bit::BitRegister;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-
 pub struct CompressedPointRegister {
     pub sign: BitRegister,
     pub y: FieldRegister<Ed25519BaseField>,
