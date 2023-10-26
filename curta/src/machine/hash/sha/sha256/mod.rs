@@ -1,8 +1,10 @@
+use serde::{Deserialize, Serialize};
+
 pub mod air;
 pub mod pure;
 pub mod register;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SHA256;
 
 pub(crate) const ROUND_CONSTANTS: [u32; 64] = [

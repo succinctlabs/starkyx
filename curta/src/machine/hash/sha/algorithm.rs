@@ -1,5 +1,9 @@
+use core::fmt::Debug;
+
 use log::debug;
 use num::{Num, Zero};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use super::data::SHAData;
 use crate::chip::memory::time::Time;
@@ -17,7 +21,9 @@ const DUMMY_INDEX: u32 = (u16::MAX as u32) * 2;
 /// Pure SHA algorithm implementation.
 ///
 /// An interface for the SHA algorithm as a Rust function operating on numerical values.
-pub trait SHAPure<const CYCLE_LENGTH: usize> {
+pub trait SHAPure<const CYCLE_LENGTH: usize>:
+    Debug + Clone + 'static + Serialize + DeserializeOwned
+{
     type Integer: Num + Copy;
 
     const INITIAL_HASH: [Self::Integer; 8];
