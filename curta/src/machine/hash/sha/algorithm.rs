@@ -27,11 +27,7 @@ pub trait SHAPure<const CYCLE_LENGTH: usize> {
 
     fn pre_process(chunk: &[Self::Integer]) -> [Self::Integer; CYCLE_LENGTH];
 
-    fn process(
-        hash: [Self::Integer; 8],
-        w: &[Self::Integer; CYCLE_LENGTH],
-        round_constants: [Self::Integer; CYCLE_LENGTH],
-    ) -> [Self::Integer; 8];
+    fn process(hash: [Self::Integer; 8], w: &[Self::Integer; CYCLE_LENGTH]) -> [Self::Integer; 8];
 
     fn decode(digest: &str) -> [Self::Integer; 8];
 }

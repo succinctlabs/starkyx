@@ -121,7 +121,7 @@ pub mod test_utils {
             );
 
             let pre_processed = S::pre_process(message);
-            current_state = S::process(current_state, &pre_processed, S::ROUND_CONSTANTS);
+            current_state = S::process(current_state, &pre_processed);
             let state = current_state.map(S::int_to_field_value);
             if *end_bit_value == GoldilocksField::ONE {
                 current_state = S::INITIAL_HASH;

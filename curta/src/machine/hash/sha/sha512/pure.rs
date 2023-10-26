@@ -45,14 +45,10 @@ impl SHAPure<80> for SHA512 {
         w
     }
 
-    fn process(
-        hash: [Self::Integer; 8],
-        w: &[Self::Integer; 80],
-        round_constants: [Self::Integer; 80],
-    ) -> [Self::Integer; 8] {
+    fn process(hash: [Self::Integer; 8], w: &[Self::Integer; 80]) -> [Self::Integer; 8] {
         let mut msg = hash;
-        for i in 0..80 {
-            msg = step(msg, w[i], round_constants[i]);
+        for (&w, &round_constant) in w.iter().zip(Self::ROUND_CONSTANTS.iter()) {
+            msg = step(msg, w, round_constant);
         }
 
         [

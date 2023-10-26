@@ -45,14 +45,10 @@ impl SHAPure<64> for SHA256 {
         w
     }
 
-    fn process(
-        hash: [Self::Integer; 8],
-        w: &[Self::Integer; 64],
-        round_constants: [Self::Integer; 64],
-    ) -> [Self::Integer; 8] {
+    fn process(hash: [Self::Integer; 8], w: &[Self::Integer; 64]) -> [Self::Integer; 8] {
         let mut msg = hash;
-        for i in 0..64 {
-            msg = step(msg, w[i], round_constants[i]);
+        for (&w, &round_constant) in w.iter().zip(Self::ROUND_CONSTANTS.iter()) {
+            msg = step(msg, w, round_constant);
         }
 
         [
