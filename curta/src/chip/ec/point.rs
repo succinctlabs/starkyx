@@ -3,8 +3,8 @@ use core::ops::{Add, Neg};
 use num::BigUint;
 use serde::{Deserialize, Serialize};
 
+use super::edwards::ed25519::params::Ed25519BaseField;
 use super::EllipticCurve;
-use crate::chip::ec::edwards::ed25519::Ed25519BaseField;
 use crate::chip::field::register::FieldRegister;
 use crate::chip::register::bit::BitRegister;
 

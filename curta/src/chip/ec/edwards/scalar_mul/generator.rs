@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use super::air::ScalarMulEd25519;
 use super::gadget::EdScalarMulGadget;
-use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField, Ed25519Parameters};
+use crate::chip::ec::edwards::ed25519::params::{Ed25519, Ed25519BaseField, Ed25519Parameters};
 use crate::chip::ec::gadget::EllipticCurveWriter;
 use crate::chip::ec::point::{AffinePoint, AffinePointRegister};
 use crate::chip::ec::{EllipticCurve, EllipticCurveParameters};

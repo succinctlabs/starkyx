@@ -17,7 +17,7 @@
 //! RUST_LOG="debug" RUSTFLAGS=-Ctarget-cpu=native cargo run --release --example ed_scalar_mul
 //! ```
 
-use curta::chip::ec::edwards::ed25519::Ed25519;
+use curta::chip::ec::edwards::ed25519::params::Ed25519;
 use curta::chip::ec::edwards::scalar_mul::generator::{AffinePointTarget, ScalarMulEd25519Gadget};
 use curta::chip::ec::EllipticCurve;
 use curta::chip::utils::biguint_to_16_digits_field;

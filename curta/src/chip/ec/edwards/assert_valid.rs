@@ -62,7 +62,7 @@ mod tests {
 
     use super::*;
     use crate::chip::builder::tests::*;
-    use crate::chip::ec::edwards::ed25519::{Ed25519BaseField, Ed25519Parameters};
+    use crate::chip::ec::edwards::ed25519::params::{Ed25519BaseField, Ed25519Parameters};
     use crate::chip::ec::gadget::{EllipticCurveGadget, EllipticCurveWriter};
     use crate::chip::ec::point::AffinePoint;
     use crate::chip::field::instruction::FpInstruction;

@@ -3,7 +3,7 @@ use core::str::FromStr;
 use num::BigUint;
 use serde::{Deserialize, Serialize};
 
-use super::ed25519::Ed25519BaseField;
+use super::params::Ed25519BaseField;
 use crate::air::AirConstraint;
 use crate::chip::builder::AirBuilder;
 use crate::chip::field::mul::FpMulInstruction;
@@ -25,19 +25,19 @@ use crate::polynomial::to_u16_le_limbs_polynomial;
 /// This is done by witnessing the square root and then constraining that result * result == a.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(bound = "")]
-pub struct FpSqrtInstruction {
+pub struct Ed25519FpSqrtInstruction {
     /// a `FpMulInstruction` to compute `a * a = result`.
     square: FpMulInstruction<Ed25519BaseField>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
     /// given two field elements `a` and `b`, computes the quotient `a / b = c`.
-    pub fn fp_sqrt(
+    pub fn ed25519_sqrt(
         &mut self,
         a: &FieldRegister<Ed25519BaseField>,
     ) -> FieldRegister<Ed25519BaseField>
     where
-        L::Instruction: From<FpSqrtInstruction>,
+        L::Instruction: From<Ed25519FpSqrtInstruction>,
     {
         let is_trace = a.is_trace();
         let result = if is_trace {
@@ -45,16 +45,16 @@ impl<L: AirParameters> AirBuilder<L> {
         } else {
             self.alloc_public::<FieldRegister<Ed25519BaseField>>()
         };
-        self.set_fp_sqrt(a, &result);
+        self.set_ed25519_sqrt(a, &result);
         result
     }
 
-    pub fn set_fp_sqrt(
+    pub fn set_ed25519_sqrt(
         &mut self,
         a: &FieldRegister<Ed25519BaseField>,
         result: &FieldRegister<Ed25519BaseField>,
     ) where
-        L::Instruction: From<FpSqrtInstruction>,
+        L::Instruction: From<Ed25519FpSqrtInstruction>,
     {
         let is_trace = a.is_trace() || result.is_trace();
 
@@ -86,7 +86,7 @@ impl<L: AirParameters> AirBuilder<L> {
             witness_high: square_witness_high,
         };
 
-        let instr = FpSqrtInstruction { square };
+        let instr = Ed25519FpSqrtInstruction { square };
 
         if is_trace {
             self.register_instruction(instr);
@@ -96,13 +96,13 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 }
 
-impl<AP: PolynomialParser> AirConstraint<AP> for FpSqrtInstruction {
+impl<AP: PolynomialParser> AirConstraint<AP> for Ed25519FpSqrtInstruction {
     fn eval(&self, parser: &mut AP) {
         self.square.eval(parser);
     }
 }
 
-impl<F: PrimeField64> Instruction<F> for FpSqrtInstruction {
+impl<F: PrimeField64> Instruction<F> for Ed25519FpSqrtInstruction {
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let p_a = writer.read(&self.square.result, row_index);
 
@@ -176,7 +176,7 @@ mod tests {
         const NUM_FREE_COLUMNS: usize = 2;
         const EXTENDED_COLUMNS: usize = 171;
 
-        type Instruction = FpSqrtInstruction;
+        type Instruction = Ed25519FpSqrtInstruction;
     }
 
     #[test]
@@ -191,10 +191,10 @@ mod tests {
         let mut builder = AirBuilder::<L>::new();
 
         let a_pub = builder.alloc_public::<FieldRegister<P>>();
-        let result_pub = builder.fp_sqrt(&a_pub);
+        let result_pub = builder.ed25519_sqrt(&a_pub);
 
         let a = builder.alloc::<FieldRegister<P>>();
-        let result = builder.fp_sqrt(&a);
+        let result = builder.ed25519_sqrt(&a);
 
         let (air, trace_data) = builder.build();
         let num_rows = 1 << 16;

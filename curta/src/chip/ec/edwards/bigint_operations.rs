@@ -36,7 +36,7 @@ mod tests {
     use rand::thread_rng;
 
     use super::{EdwardsParameters, *};
-    use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519Parameters};
+    use crate::chip::ec::edwards::ed25519::params::{Ed25519, Ed25519Parameters};
     use crate::chip::ec::{EllipticCurve, EllipticCurveParameters};
 
     #[test]

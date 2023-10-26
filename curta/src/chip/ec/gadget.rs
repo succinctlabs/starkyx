@@ -1,7 +1,7 @@
 use curve25519_dalek::edwards::CompressedEdwardsY;
 use num::BigUint;
 
-use super::edwards::ed25519::Ed25519BaseField;
+use super::edwards::ed25519::params::Ed25519BaseField;
 use super::point::{AffinePoint, AffinePointRegister, CompressedPointRegister};
 use super::EllipticCurve;
 use crate::chip::builder::AirBuilder;
