@@ -220,13 +220,14 @@ mod tests {
 
         let mut builder = AirBuilder::<L>::new();
 
-        let a_pub = builder.alloc_public::<FieldRegister<P>>();
-        let b_pub = builder.alloc_public::<FieldRegister<P>>();
-        let _ = builder.fp_add(&a_pub, &b_pub);
+        let mut one_limbs = [0; P::NB_LIMBS];
+        one_limbs[0] = 1;
+        let one_p =
+            Polynomial::<F>::from_coefficients(one_limbs.map(F::from_canonical_u16).to_vec());
+        let one = builder.constant::<FieldRegister<P>>(&one_p);
 
         let a = builder.alloc::<FieldRegister<P>>();
-        let b = builder.alloc::<FieldRegister<P>>();
-        let _add_insr = builder.fp_add(&a, &b);
+        let _add_result = builder.fp_add(&a, &one);
 
         let (air, trace_data) = builder.build();
         let num_rows = 1 << 16;
@@ -239,23 +240,17 @@ mod tests {
                 let writer = generator.new_writer();
                 // let handle = tx.clone();
                 let a_int: BigUint = rng.gen_biguint(256) % &p;
-                let b_int = rng.gen_biguint(256) % &p;
-                (writer, a_int, b_int)
+                (writer, a_int)
             })
             .collect::<Vec<_>>();
 
         trace_initial
             .into_par_iter()
             .enumerate()
-            .for_each(|(i, (writer, a_int, b_int))| {
+            .for_each(|(i, (writer, a_int))| {
                 let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
-                let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
 
                 writer.write_slice(&a, p_a.coefficients(), i);
-                writer.write_slice(&b, p_b.coefficients(), i);
-
-                writer.write_slice(&a_pub, p_a.coefficients(), i);
-                writer.write_slice(&b_pub, p_b.coefficients(), i);
 
                 writer.write_row_instructions(&generator.air_data, i);
             });
