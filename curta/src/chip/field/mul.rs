@@ -153,6 +153,7 @@ mod tests {
 
     use super::*;
     use crate::chip::builder::tests::*;
+    use crate::chip::ec::edwards::ed25519::Ed25519BaseField;
     use crate::chip::field::parameters::tests::Fp25519;
 
     #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
@@ -162,9 +163,9 @@ mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        const NUM_ARITHMETIC_COLUMNS: usize = 124;
+        const NUM_ARITHMETIC_COLUMNS: usize = 216;
         const NUM_FREE_COLUMNS: usize = 2;
-        const EXTENDED_COLUMNS: usize = 195;
+        const EXTENDED_COLUMNS: usize = 333;
 
         type Instruction = FpMulInstruction<Fp25519>;
     }
@@ -176,17 +177,28 @@ mod tests {
         type SC = PoseidonGoldilocksStarkConfig;
         type P = Fp25519;
 
-        let p = Fp25519::modulus();
+        let p = P::modulus();
 
         let mut builder = AirBuilder::<L>::new();
 
+        let mut one_limbs = [0; P::NB_LIMBS];
+        one_limbs[0] = 1;
+        let one_p =
+            Polynomial::<F>::from_coefficients(one_limbs.map(F::from_canonical_u16).to_vec());
+        let one = builder.constant::<FieldRegister<P>>(&one_p);
+
+        /*
         let a_pub = builder.alloc_public::<FieldRegister<P>>();
         let b_pub = builder.alloc_public::<FieldRegister<P>>();
         let _ = builder.fp_mul(&a_pub, &b_pub);
+        */
 
         let a = builder.alloc::<FieldRegister<P>>();
-        let b = builder.alloc::<FieldRegister<P>>();
-        let _mul_insr = builder.fp_mul(&a, &b);
+        let _mul_result = builder.fp_mul(&a, &one);
+        //let b = builder.alloc::<FieldRegister<P>>();
+        //let _mul_result = builder.fp_mul(&a, &b);
+
+        //let _mul_result_2 = builder.fp_mul(&_mul_result, &_mul_result);
 
         let (air, trace_data) = builder.build();
         let num_rows = 1 << 16;
@@ -206,10 +218,10 @@ mod tests {
                 let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
 
                 writer.write(&a, &p_a, i);
-                writer.write(&b, &p_b, i);
+                //writer.write(&b, &p_b, i);
 
-                writer.write_slice(&a_pub, p_a.coefficients(), i);
-                writer.write_slice(&b_pub, p_b.coefficients(), i);
+                //writer.write_slice(&a_pub, p_a.coefficients(), i);
+                //writer.write_slice(&b_pub, p_b.coefficients(), i);
 
                 writer.write_row_instructions(&air_data, i);
 
