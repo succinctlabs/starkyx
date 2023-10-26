@@ -7,6 +7,7 @@ use crate::chip::field::instruction::FromFieldInstruction;
 use crate::chip::field::parameters::{FieldParameters, MAX_NB_LIMBS};
 use crate::chip::AirParameters;
 pub mod add;
+pub mod assert_valid;
 pub mod bigint_operations;
 pub mod decompress;
 pub mod ed25519;
