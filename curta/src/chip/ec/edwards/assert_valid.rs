@@ -76,7 +76,7 @@ mod tests {
 
         const NUM_ARITHMETIC_COLUMNS: usize = 584;
         const NUM_FREE_COLUMNS: usize = 2;
-        const EXTENDED_COLUMNS: usize = 1185;
+        const EXTENDED_COLUMNS: usize = 885;
         type Instruction = FpInstruction<Ed25519BaseField>;
     }
 
@@ -106,12 +106,57 @@ mod tests {
         let affine_p = AffinePoint::<EdwardsCurve<E>>::new(p_x, p_y);
 
         let writer = generator.new_writer();
+        writer.write_global_instructions(&generator.air_data);
+
         (0..num_rows).into_par_iter().for_each(|i| {
             writer.write_ec_point(&p, &affine_p, i);
             writer.write_row_instructions(&generator.air_data, i);
         });
 
+        let stark = Starky::new(air);
+        let config = SC::standard_fast_config(num_rows);
+        let public = writer.public().unwrap().clone();
+
+        // Generate proof and verify as a stark
+        test_starky(&stark, &config, &generator, &public);
+
+        // Test the recursive proof.
+        test_recursive_starky(stark, config, generator, &public);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_ed25519_assert_not_valid() {
+        type L = Ed25519AssertValidTest;
+        type SC = PoseidonGoldilocksStarkConfig;
+        type E = Ed25519Parameters;
+
+        let mut builder = AirBuilder::<L>::new();
+
+        let p = builder.alloc_ec_point();
+        builder.ed_assert_valid::<E>(&p);
+
+        let num_rows = 1 << 16;
+        let (air, trace_data) = builder.build();
+        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
+
+        let p_x = BigUint::from_str(
+            "46498302853928694666678954892487633213173616891947474062122140763021808627271",
+        )
+        .unwrap();
+        let p_y = BigUint::from_str(
+            "39631481484518050587569957685312118971016858466473658974116614941450822819848",
+        )
+        .unwrap();
+        let affine_p = AffinePoint::<EdwardsCurve<E>>::new(p_x, p_y);
+
+        let writer = generator.new_writer();
         writer.write_global_instructions(&generator.air_data);
+
+        (0..num_rows).into_par_iter().for_each(|i| {
+            writer.write_ec_point(&p, &affine_p, i);
+            writer.write_row_instructions(&generator.air_data, i);
+        });
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
