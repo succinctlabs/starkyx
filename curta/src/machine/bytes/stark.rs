@@ -32,9 +32,9 @@ use crate::trace::AirTrace;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub struct ByteStark<L: AirParameters, C, const D: usize> {
-    pub(crate) config: StarkyConfig<C, D>,
-    pub(crate) stark: Starky<Chip<L>>,
-    pub(crate) air_data: AirTraceData<L>,
+    pub config: StarkyConfig<C, D>,
+    pub stark: Starky<Chip<L>>,
+    pub air_data: AirTraceData<L>,
     pub(crate) multiplicity_data: ByteMultiplicityData,
     pub(crate) lookup_config: StarkyConfig<C, D>,
     pub(crate) lookup_stark: Starky<Chip<ByteParameters<L::Field, L::CubicParams>>>,
