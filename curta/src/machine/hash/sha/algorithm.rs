@@ -22,7 +22,7 @@ const DUMMY_INDEX: u32 = (u16::MAX as u32) * 2;
 ///
 /// An interface for the SHA algorithm as a Rust function operating on numerical values.
 pub trait SHAPure<const CYCLE_LENGTH: usize>:
-    Debug + Clone + 'static + Serialize + DeserializeOwned
+    Debug + Clone + 'static + Serialize + DeserializeOwned + Send + Sync
 {
     type Integer: Num + Copy;
 
