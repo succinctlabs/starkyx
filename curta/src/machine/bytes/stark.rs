@@ -45,6 +45,22 @@ where
     C: CurtaConfig<D, F = L::Field, FE = <L::Field as Extendable<D>>::Extension>,
     Chip<L>: Plonky2Air<L::Field, D>,
 {
+    pub const fn stark(&self) -> &Starky<Chip<L>> {
+        &self.stark
+    }
+
+    pub const fn config(&self) -> &StarkyConfig<C, D> {
+        &self.config
+    }
+
+    pub const fn lookup_stark(&self) -> &Starky<Chip<ByteParameters<L::Field, L::CubicParams>>> {
+        &self.lookup_stark
+    }
+
+    pub const fn lookup_config(&self) -> &StarkyConfig<C, D> {
+        &self.lookup_config
+    }
+
     fn generate_execution_traces(
         &self,
         execution_trace: &AirTrace<L::Field>,
