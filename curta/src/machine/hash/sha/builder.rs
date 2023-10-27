@@ -7,7 +7,7 @@ use crate::machine::builder::Builder;
 pub trait SHABuilder: Builder {
     fn sha<S: SHAir<Self, CYCLE_LENGTH>, const CYCLE_LENGTH: usize>(
         &mut self,
-        padded_chunks: &[ArrayRegister<S::Variable>],
+        padded_chunks: &[ArrayRegister<S::IntRegister>],
         end_bits: &ArrayRegister<BitRegister>,
         digest_bits: &ArrayRegister<BitRegister>,
         digest_indices: ArrayRegister<ElementRegister>,
@@ -82,7 +82,7 @@ pub mod test_utils {
         // Build the stark.
         let mut builder = BytesBuilder::<L>::new();
         let padded_chunks = (0..num_rounds)
-            .map(|_| builder.alloc_array_public::<S::Variable>(16))
+            .map(|_| builder.alloc_array_public::<S::IntRegister>(16))
             .collect::<Vec<_>>();
         let end_bits = builder.alloc_array_public::<BitRegister>(num_rounds);
         let digest_indices = builder.alloc_array_public(num_messages);
@@ -156,7 +156,7 @@ pub mod test_utils {
 
         // Compare expected digests with the trace values.
         for (digest, expected) in hash_state.iter().zip_eq(expected_digests) {
-            let array: ArrayRegister<S::Variable> = (*digest).into();
+            let array: ArrayRegister<S::IntRegister> = (*digest).into();
             let digest = writer
                 .read_array::<_, 8>(&array, 0)
                 .map(|x| S::field_value_to_int(&x));

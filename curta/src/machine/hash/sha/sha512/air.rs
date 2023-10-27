@@ -19,7 +19,7 @@ where
     L::Instruction: UintInstructions,
 {
     type Value = <U64Register as Register>::Value<L::Field>;
-    type Variable = U64Register;
+    type IntRegister = U64Register;
     type StateVariable = SHA512DigestRegister;
     type StatePointer = Slice<U64Register>;
 
@@ -76,11 +76,11 @@ where
 
     fn preprocessing_step(
         builder: &mut BytesBuilder<L>,
-        w_i_minus_15: Self::Variable,
-        w_i_minus_2: Self::Variable,
-        w_i_mimus_16: Self::Variable,
-        w_i_mimus_7: Self::Variable,
-    ) -> Self::Variable {
+        w_i_minus_15: Self::IntRegister,
+        w_i_minus_2: Self::IntRegister,
+        w_i_mimus_16: Self::IntRegister,
+        w_i_mimus_7: Self::IntRegister,
+    ) -> Self::IntRegister {
         // Calculate the value:
         // s_0 = w_i_minus_15.rotate_right(1) ^ w_i_minus_15.rotate_right(8) ^ (w_i_minus_15 >> 7)
         let w_i_minus_15_rotate_1 = builder.rotate_right(w_i_minus_15, 1);
@@ -106,10 +106,10 @@ where
 
     fn processing_step(
         builder: &mut BytesBuilder<L>,
-        vars: ArrayRegister<Self::Variable>,
-        w_i: Self::Variable,
-        round_constant: Self::Variable,
-    ) -> Vec<Self::Variable> {
+        vars: ArrayRegister<Self::IntRegister>,
+        w_i: Self::IntRegister,
+        round_constant: Self::IntRegister,
+    ) -> Vec<Self::IntRegister> {
         let a = vars.get(0);
         let b = vars.get(1);
         let c = vars.get(2);
@@ -172,8 +172,8 @@ where
 
     fn absorb(
         builder: &mut BytesBuilder<L>,
-        state: ArrayRegister<Self::Variable>,
-        vars_next: &[Self::Variable],
+        state: ArrayRegister<Self::IntRegister>,
+        vars_next: &[Self::IntRegister],
     ) -> Self::StateVariable {
         let state_next = builder.alloc_array(8);
         for ((s, v), sum) in state.iter().zip(vars_next.iter()).zip(state_next.iter()) {

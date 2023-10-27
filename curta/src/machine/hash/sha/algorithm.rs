@@ -46,15 +46,15 @@ pub trait SHAPure<const CYCLE_LENGTH: usize>:
 ///
 /// An interface for the SHA algorithm as an AIR.
 pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
-    type Variable: MemoryValue + Register<Value<B::Field> = Self::Value>;
-    type StateVariable: Register + Into<ArrayRegister<Self::Variable>>;
+    type IntRegister: MemoryValue + Register<Value<B::Field> = Self::Value>;
+    type StateVariable: Register + Into<ArrayRegister<Self::IntRegister>>;
     type StatePointer;
     type Value;
 
-    /// Convert an integer to the `Self::Variable` field value.
+    /// Convert an integer to the `Self::IntRegister` field value.
     fn int_to_field_value(int: Self::Integer) -> Self::Value;
 
-    /// Convert a `Self::Variable` field value to an integer.
+    /// Convert a `Self::IntRegister` field value to an integer.
     fn field_value_to_int(value: &Self::Value) -> Self::Integer;
 
     /// The clock register, whose value equals the current row.
@@ -70,18 +70,18 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
     /// Given the elements `w[i-15]`, `w[i-2]`, `w[i-16]`, `w[i-7]`, compute `w[i]`.
     fn preprocessing_step(
         builder: &mut B,
-        w_i_minus_15: Self::Variable,
-        w_i_minus_2: Self::Variable,
-        w_i_mimus_16: Self::Variable,
-        w_i_mimus_7: Self::Variable,
-    ) -> Self::Variable;
+        w_i_minus_15: Self::IntRegister,
+        w_i_minus_2: Self::IntRegister,
+        w_i_mimus_16: Self::IntRegister,
+        w_i_mimus_7: Self::IntRegister,
+    ) -> Self::IntRegister;
 
     fn processing_step(
         builder: &mut B,
-        vars: ArrayRegister<Self::Variable>,
-        w_i: Self::Variable,
-        round_constant: Self::Variable,
-    ) -> Vec<Self::Variable>;
+        vars: ArrayRegister<Self::IntRegister>,
+        w_i: Self::IntRegister,
+        round_constant: Self::IntRegister,
+    ) -> Vec<Self::IntRegister>;
 
     fn load_state(
         builder: &mut B,
@@ -99,13 +99,13 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
 
     fn absorb(
         builder: &mut B,
-        state: ArrayRegister<Self::Variable>,
-        vars_next: &[Self::Variable],
+        state: ArrayRegister<Self::IntRegister>,
+        vars_next: &[Self::IntRegister],
     ) -> Self::StateVariable;
 
     fn sha(
         builder: &mut B,
-        padded_chunks: &[ArrayRegister<Self::Variable>],
+        padded_chunks: &[ArrayRegister<Self::IntRegister>],
         end_bits: &ArrayRegister<BitRegister>,
         digest_bits: &ArrayRegister<BitRegister>,
         digest_indices: ArrayRegister<ElementRegister>,
@@ -123,11 +123,11 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
 
     fn data(
         builder: &mut B,
-        padded_chunks: &[ArrayRegister<Self::Variable>],
+        padded_chunks: &[ArrayRegister<Self::IntRegister>],
         end_bits: &ArrayRegister<BitRegister>,
         digest_bits: &ArrayRegister<BitRegister>,
         digest_indices: ArrayRegister<ElementRegister>,
-    ) -> SHAData<Self::Variable, CYCLE_LENGTH> {
+    ) -> SHAData<Self::IntRegister, CYCLE_LENGTH> {
         assert_eq!(padded_chunks.len(), end_bits.len());
         let num_real_rounds = padded_chunks.len();
         debug!(
@@ -147,11 +147,12 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
 
         // Initialize the initial hash and set it to the constant value.
         let initial_hash = builder
-            .constant_array::<Self::Variable>(&Self::INITIAL_HASH.map(Self::int_to_field_value));
+            .constant_array::<Self::IntRegister>(&Self::INITIAL_HASH.map(Self::int_to_field_value));
 
         // Initialize the round constants and set them to the constant value.
-        let round_constant_values = builder
-            .constant_array::<Self::Variable>(&Self::ROUND_CONSTANTS.map(Self::int_to_field_value));
+        let round_constant_values = builder.constant_array::<Self::IntRegister>(
+            &Self::ROUND_CONSTANTS.map(Self::int_to_field_value),
+        );
 
         // Store the round constants in a slice to be able to load them in the trace.
         let round_constants = builder.uninit_slice();
@@ -217,7 +218,7 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
 
         let w = builder.uninit_slice();
         let dummy_entry =
-            builder.constant::<Self::Variable>(&Self::int_to_field_value(Self::Integer::zero()));
+            builder.constant::<Self::IntRegister>(&Self::int_to_field_value(Self::Integer::zero()));
 
         assert!((DUMMY_INDEX as u64) < B::Field::order());
         let dummy_index = builder.constant(&B::Field::from_canonical_u32(DUMMY_INDEX));
@@ -378,8 +379,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
 
     fn preprocessing(
         builder: &mut B,
-        data: &SHAData<Self::Variable, CYCLE_LENGTH>,
-    ) -> Self::Variable {
+        data: &SHAData<Self::IntRegister, CYCLE_LENGTH>,
+    ) -> Self::IntRegister {
         let w = &data.memory.w;
         let dummy_index = data.memory.dummy_index;
         let is_preprocessing = data.trace.is_preprocessing;
@@ -433,8 +434,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
 
     fn processing(
         builder: &mut B,
-        w_i: Self::Variable,
-        data: &SHAData<Self::Variable, CYCLE_LENGTH>,
+        w_i: Self::IntRegister,
+        data: &SHAData<Self::IntRegister, CYCLE_LENGTH>,
     ) -> Vec<Self::StateVariable> {
         let num_digests = data.public.digest_indices.len();
         let hash_state_public = (0..num_digests)
@@ -450,12 +451,12 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
             builder.load(&data.memory.round_constants.get_at(index), &Time::zero());
 
         // Initialize working variables
-        let state = builder.alloc_array::<Self::Variable>(8);
+        let state = builder.alloc_array::<Self::IntRegister>(8);
         for (h, h_init) in state.iter().zip(initial_hash.iter()) {
             builder.set_to_expression_first_row(&h, h_init.expr());
         }
         // Initialize working variables and set them to the inital hash in the first row.
-        let vars = builder.alloc_array::<Self::Variable>(8);
+        let vars = builder.alloc_array::<Self::IntRegister>(8);
         for (v, h_init) in vars.iter().zip(initial_hash.iter()) {
             builder.set_to_expression_first_row(&v, h_init.expr());
         }
@@ -488,7 +489,7 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
             &Time::zero(),
         );
         let bit = cycle_end_bit;
-        let state_next_arr: ArrayRegister<Self::Variable> = state_next.into();
+        let state_next_arr: ArrayRegister<Self::IntRegister> = state_next.into();
         for ((((var, h), init), var_next), h_next) in vars
             .iter()
             .zip(state.iter())
