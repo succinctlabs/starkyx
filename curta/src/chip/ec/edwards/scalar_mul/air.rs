@@ -14,8 +14,7 @@ use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::table::evaluation::Digest;
-use crate::chip::trace::data::AirTraceData;
-use crate::chip::{AirParameters, Chip};
+use crate::chip::AirParameters;
 use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
 use crate::math::prelude::*;
 
@@ -43,35 +42,25 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for ScalarMulEd25519<
 
 impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
     #[allow(clippy::type_complexity)]
-    pub fn air() -> (
-        Chip<Self>,
-        AirTraceData<Self>,
+    pub fn air(
+        builder: &mut AirBuilder<ScalarMulEd25519<F, E>>,
+        input_points: &[AffinePointRegister<Ed25519>],
+        scalars_limbs: &[ArrayRegister<ElementRegister>],
+    ) -> (
         EdScalarMulGadget<F, Ed25519Parameters>,
-        Vec<ArrayRegister<ElementRegister>>,
-        Vec<AffinePointRegister<Ed25519>>,
         Vec<AffinePointRegister<Ed25519>>,
         (
             AirInstruction<F, FpInstruction<Ed25519BaseField>>,
             AirInstruction<F, FpInstruction<Ed25519BaseField>>,
         ),
     ) {
-        let mut builder = AirBuilder::<Self>::new();
-
         let res = builder.alloc_unchecked_ec_point();
         let temp = builder.alloc_unchecked_ec_point();
         let scalar_bit = builder.alloc::<BitRegister>();
         let scalar_mul_gadget =
             builder.ed_scalar_mul::<Ed25519Parameters>(&scalar_bit, &res, &temp);
 
-        let scalars_limbs = (0..256)
-            .map(|_| builder.alloc_array_public::<ElementRegister>(8))
-            .collect::<Vec<_>>();
-
         let scalars_u32 = scalars_limbs.iter().flat_map(|s| s.iter());
-
-        let input_points = (0..256)
-            .map(|_| builder.alloc_public_ec_point())
-            .collect::<Vec<_>>();
 
         let output_points = (0..256)
             .map(|_| builder.alloc_public_ec_point())
@@ -117,16 +106,6 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
             output_point_digest,
         );
 
-        let (air, trace_data) = builder.build();
-
-        (
-            air,
-            trace_data,
-            scalar_mul_gadget,
-            scalars_limbs,
-            input_points,
-            output_points,
-            (set_last, set_bit),
-        )
+        (scalar_mul_gadget, output_points, (set_last, set_bit))
     }
 }

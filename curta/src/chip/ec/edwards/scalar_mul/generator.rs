@@ -14,8 +14,9 @@ use serde::{Deserialize, Serialize};
 
 use super::air::ScalarMulEd25519;
 use super::gadget::EdScalarMulGadget;
+use crate::chip::builder::AirBuilder;
 use crate::chip::ec::edwards::ed25519::params::{Ed25519, Ed25519BaseField, Ed25519Parameters};
-use crate::chip::ec::gadget::EllipticCurveWriter;
+use crate::chip::ec::gadget::{EllipticCurveGadget, EllipticCurveWriter};
 use crate::chip::ec::point::{AffinePoint, AffinePointRegister};
 use crate::chip::ec::{EllipticCurve, EllipticCurveParameters};
 use crate::chip::field::instruction::FpInstruction;
@@ -86,18 +87,23 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
             })
             .collect::<Vec<_>>();
 
-        let (
-            air,
-            trace_data,
-            gadget,
-            scalars_limbs_input,
-            input_points,
-            output_points,
-            (set_last, set_bit),
-        ) = ScalarMulEd25519::<F, E>::air();
+        let mut builder = AirBuilder::<ScalarMulEd25519<F, E>>::new();
+
+        let scalars_limbs = (0..256)
+            .map(|_| builder.alloc_array_public::<ElementRegister>(8))
+            .collect::<Vec<_>>();
+
+        let input_points = (0..256)
+            .map(|_| builder.alloc_public_ec_point())
+            .collect::<Vec<_>>();
+
+        let (gadget, output_points, (set_last, set_bit)) =
+            ScalarMulEd25519::<F, E>::air(&mut builder, &input_points, &scalars_limbs);
+
+        let (air, trace_data) = builder.clone().build();
 
         let mut public_input_target_option = vec![None as Option<Target>; 256 * (8 + 2 * 32)];
-        for (scalar_register, scalar_target) in scalars_limbs_input.iter().zip_eq(scalars.iter()) {
+        for (scalar_register, scalar_target) in scalars_limbs.iter().zip_eq(scalars.iter()) {
             let (s_0, s_1) = scalar_register.register().get_range();
             let scalar_targets = scalar_target.iter().map(|x| Some(*x)).collect::<Vec<_>>();
             public_input_target_option[s_0..s_1].copy_from_slice(&scalar_targets);
@@ -151,7 +157,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
             stark,
             trace_data,
             proof_target,
-            scalars_limbs_input,
+            scalars_limbs_input: scalars_limbs,
             input_points,
             output_points,
         };

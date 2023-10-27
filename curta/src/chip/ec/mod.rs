@@ -3,7 +3,9 @@ use core::fmt::Debug;
 use self::point::{AffinePoint, AffinePointRegister};
 use super::builder::AirBuilder;
 use super::field::parameters::FieldParameters;
+use super::utils::biguint_to_16_digits_field;
 use super::AirParameters;
+use crate::polynomial::Polynomial;
 
 pub mod edwards;
 pub mod gadget;
@@ -38,6 +40,23 @@ pub trait EllipticCurve: EllipticCurveParameters {
     /// Returns the number of bits needed to represent a scalar in the group.
     fn nb_scalar_bits() -> usize {
         Self::BaseField::NB_LIMBS * Self::BaseField::NB_BITS_PER_LIMB
+    }
+
+    /// Returns the generator as a constant affine point register.
+    fn generator_affine_point_register<L: AirParameters>(
+        builder: &mut AirBuilder<L>,
+    ) -> AffinePointRegister<Self> {
+        let point = Self::ec_generator();
+
+        let x_limbs = biguint_to_16_digits_field(&point.x, Self::BaseField::NB_LIMBS);
+        let x_p = Polynomial::from_coefficients(x_limbs);
+        let x = builder.constant(&x_p);
+
+        let y_limbs = biguint_to_16_digits_field(&point.y, Self::BaseField::NB_LIMBS);
+        let y_p = Polynomial::from_coefficients(y_limbs);
+        let y = builder.constant(&y_p);
+
+        AffinePointRegister::new(x, y)
     }
 }
 
