@@ -6,7 +6,7 @@ use crate::chip::builder::AirBuilder;
 use crate::chip::ec::edwards::ed25519::params::{Ed25519, Ed25519BaseField, Ed25519Parameters};
 use crate::chip::ec::gadget::EllipticCurveGadget;
 use crate::chip::ec::point::AffinePointRegister;
-use crate::chip::field::instruction::FpInstruction;
+use crate::chip::field::instruction::{FpInstruction, FromFieldInstruction};
 use crate::chip::instruction::set::AirInstruction;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
@@ -42,7 +42,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for ScalarMulEd25519<
 
 impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
     #[allow(clippy::type_complexity)]
-    pub fn air(
+    pub fn air<L: AirParameters>(
         builder: &mut AirBuilder<ScalarMulEd25519<F, E>>,
         input_points: &[AffinePointRegister<Ed25519>],
         scalars_limbs: &[ArrayRegister<ElementRegister>],
@@ -53,7 +53,10 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
             AirInstruction<F, FpInstruction<Ed25519BaseField>>,
             AirInstruction<F, FpInstruction<Ed25519BaseField>>,
         ),
-    ) {
+    )
+    where
+        L::Instruction: FromFieldInstruction<Ed25519BaseField>,
+    {
         let res = builder.alloc_unchecked_ec_point();
         let temp = builder.alloc_unchecked_ec_point();
         let scalar_bit = builder.alloc::<BitRegister>();

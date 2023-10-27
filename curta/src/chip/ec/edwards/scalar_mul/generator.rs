@@ -98,7 +98,11 @@ impl<F: RichField + Extendable<D>, const D: usize> ScalarMulEd25519Gadget<F, D>
             .collect::<Vec<_>>();
 
         let (gadget, output_points, (set_last, set_bit)) =
-            ScalarMulEd25519::<F, E>::air(&mut builder, &input_points, &scalars_limbs);
+            ScalarMulEd25519::<F, E>::air::<ScalarMulEd25519<F, E>>(
+                &mut builder,
+                &input_points,
+                &scalars_limbs,
+            );
 
         let (air, trace_data) = builder.clone().build();
 
