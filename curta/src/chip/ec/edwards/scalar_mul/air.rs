@@ -40,38 +40,37 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for ScalarMulEd25519<
     type Instruction = FpInstruction<Ed25519BaseField>;
 }
 
-impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
+impl<L: AirParameters> AirBuilder<L>
+where
+    L::Instruction: FromFieldInstruction<Ed25519BaseField>,
+{
     #[allow(clippy::type_complexity)]
-    pub fn air<L: AirParameters>(
-        builder: &mut AirBuilder<ScalarMulEd25519<F, E>>,
+    pub fn batch_scalar_mul(
+        &mut self,
         input_points: &[AffinePointRegister<Ed25519>],
         scalars_limbs: &[ArrayRegister<ElementRegister>],
     ) -> (
-        EdScalarMulGadget<F, Ed25519Parameters>,
+        EdScalarMulGadget<L::Field, Ed25519Parameters>,
         Vec<AffinePointRegister<Ed25519>>,
         (
-            AirInstruction<F, FpInstruction<Ed25519BaseField>>,
-            AirInstruction<F, FpInstruction<Ed25519BaseField>>,
+            AirInstruction<L::Field, L::Instruction>,
+            AirInstruction<L::Field, L::Instruction>,
         ),
-    )
-    where
-        L::Instruction: FromFieldInstruction<Ed25519BaseField>,
-    {
-        let res = builder.alloc_unchecked_ec_point();
-        let temp = builder.alloc_unchecked_ec_point();
-        let scalar_bit = builder.alloc::<BitRegister>();
-        let scalar_mul_gadget =
-            builder.ed_scalar_mul::<Ed25519Parameters>(&scalar_bit, &res, &temp);
+    ) {
+        let res = self.alloc_unchecked_ec_point();
+        let temp = self.alloc_unchecked_ec_point();
+        let scalar_bit = self.alloc::<BitRegister>();
+        let scalar_mul_gadget = self.ed_scalar_mul::<Ed25519Parameters>(&scalar_bit, &res, &temp);
 
         let scalars_u32 = scalars_limbs.iter().flat_map(|s| s.iter());
 
         let output_points = (0..256)
-            .map(|_| builder.alloc_public_ec_point())
+            .map(|_| self.alloc_public_ec_point())
             .collect::<Vec<_>>();
 
         let scalar_digest = Digest::from_values(scalars_u32);
         // let (bit_eval, write_first, set_bit) = builder.bit_evaluation(&[scalar_bit], ArithmeticExpression::one(), scalar_digest);
-        let (_, set_last, set_bit) = builder.bit_evaluation(&scalar_bit, scalar_digest);
+        let (_, set_last, set_bit) = self.bit_evaluation(&scalar_bit, scalar_digest);
 
         let input_point_values = input_points
             .iter()
@@ -85,7 +84,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
         let input_point_register = scalar_mul_gadget.temp();
 
         let input_point_digest = Digest::from_values(input_point_values);
-        builder.evaluation(
+        self.evaluation(
             &[input_point_register.x, input_point_register.y],
             scalar_mul_gadget.cycle.start_bit.expr(),
             input_point_digest,
@@ -103,7 +102,7 @@ impl<F: PrimeField64, E: CubicParameters<F>> ScalarMulEd25519<F, E> {
         let output_point_register = scalar_mul_gadget.result();
 
         let output_point_digest = Digest::from_values(output_point_values);
-        builder.evaluation(
+        self.evaluation(
             &[output_point_register.x, output_point_register.y],
             scalar_mul_gadget.cycle.end_bit.expr(),
             output_point_digest,
