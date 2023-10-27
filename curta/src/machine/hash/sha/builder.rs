@@ -106,13 +106,6 @@ pub mod test_utils {
         // Write trace.
         let writer = TraceWriter::new(&stark.air_data, num_rows);
 
-        timed!(timing, "write input", {
-            writer.write_global_instructions(&stark.air_data);
-            for i in 0..num_rows {
-                writer.write_row_instructions(&stark.air_data, i);
-            }
-        });
-
         let mut current_state = S::INITIAL_HASH;
         let mut hash_iter = hash_state.iter();
         let mut digest_indices_iter = digest_indices.iter();
