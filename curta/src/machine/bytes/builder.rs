@@ -19,6 +19,7 @@ pub struct BytesBuilder<L: AirParameters> {
 
 impl<L: AirParameters> Builder for BytesBuilder<L> {
     type Field = L::Field;
+    type CubicParams = L::CubicParams;
     type Parameters = L;
 
     fn api(&mut self) -> &mut AirBuilder<Self::Parameters> {

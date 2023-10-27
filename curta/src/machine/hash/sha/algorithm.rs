@@ -29,12 +29,16 @@ pub trait SHAPure<const CYCLE_LENGTH: usize>:
     const INITIAL_HASH: [Self::Integer; 8];
     const ROUND_CONSTANTS: [Self::Integer; CYCLE_LENGTH];
 
+    /// Pad a byte message to a vector of `Self::Integer` values.
     fn pad(msg: &[u8]) -> Vec<Self::Integer>;
 
+    /// Pre-process a chunk of `Self::Integer` values.
     fn pre_process(chunk: &[Self::Integer]) -> [Self::Integer; CYCLE_LENGTH];
 
+    /// Process a chunk of `Self::Integer` values.
     fn process(hash: [Self::Integer; 8], w: &[Self::Integer; CYCLE_LENGTH]) -> [Self::Integer; 8];
 
+    /// Decode a digest encoded as a string to a vector of `Self::Integer` values.
     fn decode(digest: &str) -> [Self::Integer; 8];
 }
 
