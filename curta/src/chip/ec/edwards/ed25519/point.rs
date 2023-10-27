@@ -1,7 +1,10 @@
+use serde::{Deserialize, Serialize};
+
 use super::params::Ed25519BaseField;
 use crate::chip::field::register::FieldRegister;
 use crate::chip::register::bit::BitRegister;
-#[derive(Debug, Clone)]
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompressedPointRegister {
     pub sign: BitRegister,
     pub y: FieldRegister<Ed25519BaseField>,
