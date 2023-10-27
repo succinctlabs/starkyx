@@ -3,7 +3,8 @@ use itertools::Itertools;
 use super::{EdwardsCurve, EdwardsParameters};
 use crate::chip::builder::AirBuilder;
 use crate::chip::ec::point::AffinePointRegister;
-use crate::chip::field::instruction::FromFieldInstruction;
+use crate::chip::field::add::FpAddInstruction;
+use crate::chip::field::mul::FpMulInstruction;
 use crate::chip::field::parameters::FieldParameters;
 use crate::chip::AirParameters;
 use crate::math::field::Field;
@@ -14,7 +15,7 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         p: &AffinePointRegister<EdwardsCurve<E>>,
     ) where
-        L::Instruction: FromFieldInstruction<E::BaseField>,
+        L::Instruction: From<FpMulInstruction<E::BaseField>> + From<FpAddInstruction<E::BaseField>>,
     {
         // Ed25519 Elliptic Curve Assert Valid
         //
