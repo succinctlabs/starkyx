@@ -49,12 +49,13 @@ where
     fn load_state(
         builder: &mut BytesBuilder<L>,
         hash_state_public: &[Self::StateVariable],
+        digest_indices: ArrayRegister<ElementRegister>,
     ) -> Self::StatePointer {
         let state_ptr = builder.uninit_slice();
 
-        for (i, h_slice) in hash_state_public.iter().enumerate() {
+        for (i, h_slice) in digest_indices.iter().zip(hash_state_public.iter()) {
             for (j, h) in h_slice.iter().enumerate() {
-                builder.free(&state_ptr.get(j), h, &Time::constant(i));
+                builder.free(&state_ptr.get(j), h, &Time::from_element(i));
             }
         }
 
@@ -208,8 +209,8 @@ mod tests {
 
         type Instruction = UintInstruction;
 
-        const NUM_FREE_COLUMNS: usize = 1190;
-        const EXTENDED_COLUMNS: usize = 651;
+        const NUM_FREE_COLUMNS: usize = 1191;
+        const EXTENDED_COLUMNS: usize = 654;
     }
 
     fn test_sha512<'a, I: IntoIterator<Item = &'a [u8]>, J: IntoIterator<Item = &'a str>>(
@@ -231,7 +232,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sha512_long_nessage() {
+    fn test_sha512_long_message() {
         let num_messages = 2;
         let msg = hex::decode("35c323757c20640a294345c89c0bfcebe3d554fdb0c7b7a0bdb72222c531b1ecf7ec1c43f4de9d49556de87b86b26a98942cb078486fdb44de38b80864c3973153756363696e6374204c616273").unwrap();
         let expected_digest = "4388243c4452274402673de881b2f942ff5730fd2c7d8ddb94c3e3d789fb3754380cba8faa40554d9506a0730a681e88ab348a04bc5c41d18926f140b59aed39";

@@ -13,7 +13,7 @@ pub struct SHAData<T, const LENGTH: usize> {
 pub struct SHAPublicData<T> {
     pub initial_hash: ArrayRegister<T>,
     pub padded_chunks: Vec<ArrayRegister<T>>,
-    pub end_bits: ArrayRegister<BitRegister>,
+    pub digest_indices: ArrayRegister<ElementRegister>,
 }
 
 pub struct SHATraceData<const LENGTH: usize> {
@@ -29,5 +29,6 @@ pub struct SHAMemory<T> {
     pub(crate) w: Slice<T>,
     pub shift_read_mult: Slice<ElementRegister>,
     pub end_bit: Slice<BitRegister>,
+    pub digest_bit: Slice<BitRegister>,
     pub dummy_index: ElementRegister,
 }

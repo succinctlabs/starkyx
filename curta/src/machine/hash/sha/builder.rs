@@ -1,6 +1,7 @@
 use super::algorithm::SHAir;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
+use crate::chip::register::element::ElementRegister;
 use crate::machine::builder::Builder;
 
 pub trait SHABuilder: Builder {
@@ -8,8 +9,10 @@ pub trait SHABuilder: Builder {
         &mut self,
         padded_chunks: &[ArrayRegister<S::Variable>],
         end_bits: &ArrayRegister<BitRegister>,
+        digest_bits: &ArrayRegister<BitRegister>,
+        digest_indices: ArrayRegister<ElementRegister>,
     ) -> Vec<S::StateVariable> {
-        S::sha(self, padded_chunks, end_bits)
+        S::sha(self, padded_chunks, end_bits, digest_bits, digest_indices)
     }
 }
 
@@ -58,9 +61,11 @@ pub mod test_utils {
         type Config = <C as CurtaConfig<2>>::GenericConfig;
 
         let mut end_bits_values = Vec::new();
+        let mut num_messages = 0;
         let padded_chunks_values = messages
             .into_iter()
             .flat_map(|msg| {
+                num_messages += 1;
                 let padded_msg = S::pad(msg);
                 let num_chunks = padded_msg.len() / 16;
                 end_bits_values.extend_from_slice(&vec![GoldilocksField::ZERO; num_chunks - 1]);
@@ -80,7 +85,9 @@ pub mod test_utils {
             .map(|_| builder.alloc_array_public::<S::Variable>(16))
             .collect::<Vec<_>>();
         let end_bits = builder.alloc_array_public::<BitRegister>(num_rounds);
-        let hash_state = builder.sha::<S, CYCLE_LENGTH>(&padded_chunks, &end_bits);
+        let digest_indices = builder.alloc_array_public(num_messages);
+        let hash_state =
+            builder.sha::<S, CYCLE_LENGTH>(&padded_chunks, &end_bits, &end_bits, digest_indices);
 
         let num_rows_degree = (CYCLE_LENGTH * num_rounds).ilog2() as usize + 1;
         let num_rows = 1 << num_rows_degree;
@@ -107,12 +114,14 @@ pub mod test_utils {
         });
 
         let mut current_state = S::INITIAL_HASH;
-        for ((((message, register), hash_reg), end_bit), end_bit_value) in padded_chunks_values
+        let mut hash_iter = hash_state.iter();
+        let mut digest_indices_iter = digest_indices.iter();
+        for (i, (((message, register), end_bit), end_bit_value)) in padded_chunks_values
             .chunks_exact(16)
             .zip_eq(padded_chunks.iter())
-            .zip(hash_state.iter())
             .zip_eq(end_bits.iter())
             .zip_eq(end_bits_values.iter())
+            .enumerate()
         {
             writer.write_array(
                 register,
@@ -124,11 +133,17 @@ pub mod test_utils {
             current_state = S::process(current_state, &pre_processed);
             let state = current_state.map(S::int_to_field_value);
             if *end_bit_value == GoldilocksField::ONE {
+                writer.write(
+                    &digest_indices_iter.next().unwrap(),
+                    &GoldilocksField::from_canonical_usize(i),
+                    0,
+                );
+                let h: S::StateVariable = *hash_iter.next().unwrap();
+                let array: ArrayRegister<_> = h.into();
+                writer.write_array(&array, &state, 0);
                 current_state = S::INITIAL_HASH;
             }
-            let h: S::StateVariable = *hash_reg;
-            let array: ArrayRegister<_> = h.into();
-            writer.write_array(&array, &state, 0);
+
             writer.write(&end_bit, end_bit_value, 0);
         }
 
@@ -140,16 +155,12 @@ pub mod test_utils {
         });
 
         // Compare expected digests with the trace values.
-        let mut expected_digests = expected_digests.into_iter();
-        for (state, end_bit) in hash_state.iter().zip_eq(end_bits_values) {
-            if end_bit == GoldilocksField::ZERO {
-                continue;
-            }
-            let array: ArrayRegister<S::Variable> = (*state).into();
+        for (digest, expected) in hash_state.iter().zip_eq(expected_digests) {
+            let array: ArrayRegister<S::Variable> = (*digest).into();
             let digest = writer
                 .read_array::<_, 8>(&array, 0)
                 .map(|x| S::field_value_to_int(&x));
-            let expected_digest = S::decode(expected_digests.next().unwrap());
+            let expected_digest = S::decode(expected);
             assert_eq!(digest, expected_digest);
         }
 

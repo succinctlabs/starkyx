@@ -79,8 +79,11 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         round_constant: Self::Variable,
     ) -> Vec<Self::Variable>;
 
-    fn load_state(builder: &mut B, hash_state_public: &[Self::StateVariable])
-        -> Self::StatePointer;
+    fn load_state(
+        builder: &mut B,
+        hash_state_public: &[Self::StateVariable],
+        digest_indices: ArrayRegister<ElementRegister>,
+    ) -> Self::StatePointer;
 
     fn store_state(
         builder: &mut B,
@@ -100,8 +103,16 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         builder: &mut B,
         padded_chunks: &[ArrayRegister<Self::Variable>],
         end_bits: &ArrayRegister<BitRegister>,
+        digest_bits: &ArrayRegister<BitRegister>,
+        digest_indices: ArrayRegister<ElementRegister>,
     ) -> Vec<Self::StateVariable> {
-        let data = Self::data(builder, padded_chunks, end_bits);
+        let data = Self::data(
+            builder,
+            padded_chunks,
+            end_bits,
+            digest_bits,
+            digest_indices,
+        );
         let w_i = Self::preprocessing(builder, &data);
         Self::processing(builder, w_i, &data)
     }
@@ -110,6 +121,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         builder: &mut B,
         padded_chunks: &[ArrayRegister<Self::Variable>],
         end_bits: &ArrayRegister<BitRegister>,
+        digest_bits: &ArrayRegister<BitRegister>,
+        digest_indices: ArrayRegister<ElementRegister>,
     ) -> SHAData<Self::Variable, CYCLE_LENGTH> {
         assert_eq!(padded_chunks.len(), end_bits.len());
         let num_real_rounds = padded_chunks.len();
@@ -277,6 +290,29 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
             &Time::zero(),
             Some(reg_last_length),
         );
+        let digest_bit = builder.uninit_slice();
+        for (i, digest_bit_val) in digest_bits.iter().enumerate() {
+            builder.store(
+                &digest_bit.get(i),
+                digest_bit_val,
+                &Time::zero(),
+                Some(reg_cycle_length),
+            );
+        }
+        for i in num_real_rounds..num_rounds - 1 {
+            builder.store(
+                &digest_bit.get(i),
+                zero,
+                &Time::zero(),
+                Some(reg_cycle_length),
+            );
+        }
+        builder.store(
+            &digest_bit.get(num_rounds - 1),
+            zero,
+            &Time::zero(),
+            Some(reg_last_length),
+        );
 
         // Initialize a bit slice to commit to `is_dummy` bits.
         let is_dummy_slice = builder.uninit_slice();
@@ -309,7 +345,7 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         let public = SHAPublicData {
             initial_hash,
             padded_chunks: padded_chunks.to_vec(),
-            end_bits: *end_bits,
+            digest_indices,
         };
 
         let trace = SHATraceData {
@@ -325,6 +361,7 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
             w,
             shift_read_mult,
             end_bit,
+            digest_bit,
             dummy_index,
         };
         SHAData {
@@ -395,11 +432,11 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         w_i: Self::Variable,
         data: &SHAData<Self::Variable, CYCLE_LENGTH>,
     ) -> Vec<Self::StateVariable> {
-        let num_chunks = data.public.padded_chunks.len();
-        let hash_state_public = (0..num_chunks)
+        let num_digests = data.public.digest_indices.len();
+        let hash_state_public = (0..num_digests)
             .map(|_| builder.alloc_public::<Self::StateVariable>())
             .collect::<Vec<_>>();
-        let state_ptr = Self::load_state(builder, &hash_state_public);
+        let state_ptr = Self::load_state(builder, &hash_state_public, data.public.digest_indices);
 
         let index = data.trace.index;
         let initial_hash = data.public.initial_hash;
@@ -426,7 +463,13 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         // Store the new state values
         let process_id = data.trace.process_id;
         let is_dummy = data.trace.is_dummy;
-        let flag = Some(builder.expression(cycle_end_bit.expr() * is_dummy.not_expr()));
+        let digest_bit = builder.load(
+            &data.memory.digest_bit.get_at(data.trace.process_id),
+            &Time::zero(),
+        );
+        let flag = Some(
+            builder.expression(cycle_end_bit.expr() * is_dummy.not_expr() * digest_bit.expr()),
+        );
         Self::store_state(
             builder,
             &state_ptr,
