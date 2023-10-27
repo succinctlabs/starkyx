@@ -240,7 +240,7 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         let (cycle_16_end_bit, cycle_end_bit) = Self::cycles_end_bits(builder);
 
         // `process_id` is a register is computed by counting the number of cycles. We do this by
-        // setting `process_id` to be the cumulatibe sum of the `end_bit` of each cycle.
+        // setting `process_id` to be the cumulative sum of the `end_bit` of each cycle.
         let process_id = builder.alloc::<ElementRegister>();
         builder.set_to_expression_first_row(&process_id, B::Field::ZERO.into());
         builder.set_to_expression_transition(
