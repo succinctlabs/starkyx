@@ -28,6 +28,7 @@ pub mod test_utils {
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::timed;
+    use plonky2::util::log2_ceil;
     use plonky2::util::timing::TimingTree;
 
     use super::*;
@@ -89,7 +90,7 @@ pub mod test_utils {
         let hash_state =
             builder.sha::<S, CYCLE_LENGTH>(&padded_chunks, &end_bits, &end_bits, digest_indices);
 
-        let num_rows_degree = (CYCLE_LENGTH * num_rounds).ilog2() as usize + 1;
+        let num_rows_degree = log2_ceil(CYCLE_LENGTH * num_rounds);
         let num_rows = 1 << num_rows_degree;
         let stark = builder.build::<C, 2>(num_rows);
 

@@ -2,6 +2,7 @@ use core::fmt::Debug;
 
 use log::debug;
 use num::{Num, Zero};
+use plonky2::util::log2_ceil;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
@@ -134,8 +135,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
             "AIR degree before padding: {}",
             num_real_rounds * CYCLE_LENGTH
         );
-        let degree_log = (num_real_rounds * CYCLE_LENGTH).ilog2() + 1;
-        debug!("AIR degree after passing: {}", 1 << degree_log);
+        let degree_log = log2_ceil(num_real_rounds * CYCLE_LENGTH);
+        debug!("AIR degree after padding: {}", 1 << degree_log);
         let num_dummy_rounds = (1 << degree_log) / CYCLE_LENGTH + 1 - num_real_rounds;
         // Keep track of the last round length to know how many dummy reads to add.
         let length_last_round = (1 << degree_log) % CYCLE_LENGTH;

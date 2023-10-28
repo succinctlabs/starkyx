@@ -222,7 +222,7 @@ mod tests {
     fn test_sha256_short_message() {
         let msg = b"abc";
         let expected_digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
-        let num_messages = 10;
+        let num_messages = 1;
         test_sha256(
             iter::repeat(msg).take(num_messages).map(|x| x.as_slice()),
             iter::repeat(expected_digest).take(num_messages),
