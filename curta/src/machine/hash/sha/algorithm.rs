@@ -25,7 +25,7 @@ const DUMMY_INDEX: u32 = (u16::MAX as u32) * 2;
 pub trait SHAPure<const CYCLE_LENGTH: usize>:
     Debug + Clone + 'static + Serialize + DeserializeOwned + Send + Sync
 {
-    type Integer: Num + Copy;
+    type Integer: Num + Copy + Debug;
 
     const INITIAL_HASH: [Self::Integer; 8];
     const ROUND_CONSTANTS: [Self::Integer; CYCLE_LENGTH];
