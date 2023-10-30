@@ -18,14 +18,14 @@ use crate::math::prelude::CubicParameters;
 pub struct RawPointer {
     challenge: CubicRegister,
     element_shift: Option<ElementRegister>,
-    constant_shift: Option<u32>,
+    constant_shift: Option<i32>,
 }
 
 impl RawPointer {
     pub(crate) fn new(
         challenge: CubicRegister,
         element_shift: Option<ElementRegister>,
-        constant_shift: Option<u32>,
+        constant_shift: Option<i32>,
     ) -> Self {
         Self {
             challenge,
@@ -89,10 +89,10 @@ impl RawPointer {
 
         let shift = match (self.element_shift, self.constant_shift) {
             (Some(e), None) => Some(e.eval(parser)),
-            (None, Some(c)) => Some(parser.constant(AP::Field::from_canonical_u32(c))),
+            (None, Some(c)) => Some(parser.constant(i32_to_field(c))),
             (Some(e), Some(c)) => {
                 let element = e.eval(parser);
-                let constant = AP::Field::from_canonical_u32(c);
+                let constant = i32_to_field(c);
                 Some(parser.add_const(element, constant))
             }
             (None, None) => None,
@@ -109,11 +109,16 @@ impl RawPointer {
             .element_shift
             .map(|s| writer.read(&s, row_index))
             .unwrap_or(F::ZERO);
-        let constant_shift = self
-            .constant_shift
-            .map(|x| F::from_canonical_u32(x))
-            .unwrap_or(F::ZERO);
+        let constant_shift = self.constant_shift.map(i32_to_field).unwrap_or(F::ZERO);
         let shift = element_shift + constant_shift;
         RawPointerKey::new(self.challenge, shift)
+    }
+}
+
+fn i32_to_field<F: Field>(x: i32) -> F {
+    if x < 0 {
+        -F::from_canonical_u32(-x as u32)
+    } else {
+        F::from_canonical_u32(x as u32)
     }
 }

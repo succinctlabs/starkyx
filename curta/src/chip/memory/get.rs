@@ -21,10 +21,28 @@ impl<AP: AirParser> AirConstraint<AP> for GetInstruction {
 
 impl<F: Field> Instruction<F> for GetInstruction {
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
-        let memory = writer.memory().unwrap();
+        let mut memory = writer.memory_mut().unwrap();
         let key = self.ptr.read(writer, row_index);
-        let value = memory.get(&key).expect("Memory not initialized.");
-        writer.write_slice(&self.register, value, row_index);
+        let entry = memory.get_mut(&key).unwrap_or_else(|| {
+            panic!(
+                "Memory uninitialized at: \n
+                pointer {:?}]\n
+                value {:?} \n
+                row_index: {:?}\n",
+                key, self.register, row_index
+            )
+        });
+        if entry.multiplicity == F::ZERO {
+            panic!(
+                "Attempt to read with multiplicity zero at: \n
+                pointer {:?}]\n
+                value {:?} \n
+                row_index: {:?}\n",
+                key, self.register, row_index
+            )
+        }
+        entry.multiplicity -= F::ONE;
+        writer.write_slice(&self.register, &entry.value, row_index);
     }
 }
 

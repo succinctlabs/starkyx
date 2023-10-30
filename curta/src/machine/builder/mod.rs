@@ -1,24 +1,28 @@
-use self::ops::{Adc, Add, And, Mul, Neg, One, Or, Shl, Shr, Sub, Xor, Zero};
+use self::ops::{Adc, Add, And, Mul, Neg, Not, One, Or, Shl, Shr, Sub, Xor, Zero};
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
+use crate::chip::instruction::cycle::Cycle;
 use crate::chip::memory::pointer::slice::Slice;
 use crate::chip::memory::pointer::Pointer;
 use crate::chip::memory::time::Time;
 use crate::chip::memory::value::MemoryValue;
 use crate::chip::register::array::ArrayRegister;
+use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::slice::RegisterSlice;
 use crate::chip::register::Register;
 use crate::chip::AirParameters;
 use crate::math::field::PrimeField64;
+use crate::math::prelude::CubicParameters;
 
 pub mod ops;
 
 /// A safe interface for an AIR builder.
 pub trait Builder: Sized {
     type Field: PrimeField64;
-    type Parameters: AirParameters<Field = Self::Field>;
+    type CubicParams: CubicParameters<Self::Field>;
+    type Parameters: AirParameters<Field = Self::Field, CubicParams = Self::CubicParams>;
 
     /// Returns the underlying AIR builder.
     fn api(&mut self) -> &mut AirBuilder<Self::Parameters>;
@@ -48,6 +52,13 @@ pub trait Builder: Sized {
         self.api().constant(value)
     }
 
+    fn constant_array<T: Register>(
+        &mut self,
+        values: &[T::Value<Self::Field>],
+    ) -> ArrayRegister<T> {
+        self.api().constant_array(values)
+    }
+
     /// Initializes a pointer with initial `value` and write time given by `time`.
     fn initialize<V: MemoryValue>(
         &mut self,
@@ -56,6 +67,11 @@ pub trait Builder: Sized {
         multiplicity: Option<ElementRegister>,
     ) -> Pointer<V> {
         self.api().initialize(value, time, multiplicity)
+    }
+
+    /// Creates a pointer which is not initialized to any value.
+    fn uninit<V: MemoryValue>(&mut self) -> Pointer<V> {
+        self.api().uninit()
     }
 
     /// Initializes a slice of mutable memory with initial `value` and write time given by `time`.
@@ -68,8 +84,13 @@ pub trait Builder: Sized {
         self.api().initialize_slice(values, time, multiplicity)
     }
 
+    /// Creates an uninitialized slice reference.
+    fn uninit_slice<V: MemoryValue>(&mut self) -> Slice<V> {
+        self.api().uninit_slice()
+    }
+
     /// Reads the memory at location `ptr` with last write time given by `last_write_ts`.
-    fn get<V: MemoryValue>(&mut self, ptr: &Pointer<V>, last_write_ts: &Time<Self::Field>) -> V {
+    fn load<V: MemoryValue>(&mut self, ptr: &Pointer<V>, last_write_ts: &Time<Self::Field>) -> V {
         self.api().get(ptr, last_write_ts)
     }
 
@@ -79,7 +100,7 @@ pub trait Builder: Sized {
     /// If `multiplicity` is `None`, then the value is written to the memory bus with multiplicity
     /// set to 1 allowing a single read. If `multiplicity` is `Some(m)`, then the value is written
     /// to the memory bus with multiplicity given by the value of `m`, allowing `m` reads.
-    fn set<V: MemoryValue>(
+    fn store<V: MemoryValue>(
         &mut self,
         ptr: &Pointer<V>,
         value: V,
@@ -148,18 +169,15 @@ pub trait Builder: Sized {
         register: &T,
         expression: ArithmeticExpression<Self::Field>,
     ) {
-        // if expression.is_trace() {
-        //     assert!(
-        //         register.is_trace(),
-        //         "Cannot set a non-trace register to a trace expression"
-        //     );
-        //     self.api().set_to_expression(register, expression)
-        // }
         match (register.is_trace(), expression.is_trace()) {
             (true, _) => self.api().set_to_expression(register, expression),
             (false, true) => panic!("Cannot set a non-trace register to a trace expression"),
             (false, false) => self.api().set_to_expression_public(register, expression),
         }
+    }
+
+    fn select<T: Register>(&mut self, flag: BitRegister, true_value: &T, false_value: &T) -> T {
+        self.api().select(&flag, true_value, false_value)
     }
 
     fn set_to_expression_first_row<T: Register>(
@@ -189,6 +207,23 @@ pub trait Builder: Sized {
         );
         self.api()
             .set_to_expression_transition(register, expression);
+    }
+
+    /// Computes the expression `expression` and returns the result as a trace register of type `T`.
+    fn expression<T: Register>(&mut self, expression: ArithmeticExpression<Self::Field>) -> T {
+        let register = self.alloc::<T>();
+        self.set_to_expression(&register, expression);
+        register
+    }
+
+    /// Computes the expression `expression` and returns the result as a public register of type `T`.
+    fn public_expression<T: Register>(
+        &mut self,
+        expression: ArithmeticExpression<Self::Field>,
+    ) -> T {
+        let register = self.alloc_public::<T>();
+        self.set_to_expression(&register, expression);
+        register
     }
 
     fn add<Lhs, Rhs>(&mut self, lhs: Lhs, rhs: Rhs) -> <Lhs as ops::Add<Self, Rhs>>::Output
@@ -243,6 +278,10 @@ pub trait Builder: Sized {
         lhs.and(rhs, self)
     }
 
+    fn not<T: Not<Self>>(&mut self, value: T) -> <T as Not<Self>>::Output {
+        value.not(self)
+    }
+
     fn or<Lhs, Rhs>(&mut self, lhs: Lhs, rhs: Rhs) -> <Lhs as ops::Or<Self, Rhs>>::Output
     where
         Lhs: Or<Self, Rhs>,
@@ -292,10 +331,15 @@ pub trait Builder: Sized {
     {
         lhs.rotate_right(rhs, self)
     }
+
+    fn cycle(&mut self, length_log: usize) -> Cycle<Self::Field> {
+        self.api().cycle(length_log)
+    }
 }
 
 impl<L: AirParameters> Builder for AirBuilder<L> {
     type Field = L::Field;
+    type CubicParams = L::CubicParams;
     type Parameters = L;
 
     fn api(&mut self) -> &mut AirBuilder<L> {

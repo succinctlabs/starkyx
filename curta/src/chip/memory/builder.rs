@@ -36,13 +36,18 @@ impl<L: AirParameters> AirBuilder<L> {
         if value.register().is_trace() {
             panic!("Cannot initialize a trace register");
         }
-        let challenge = self.alloc_challenge();
-        let ptr = Pointer::from_challenge(challenge);
+        let ptr = self.uninit();
         let digest = value.compress(self, ptr.raw, time);
         self.input_to_memory_bus(digest, multiplicity);
-        self.unsafe_raw_write(&ptr, *value, true);
+        self.unsafe_raw_write(&ptr, *value, multiplicity, true);
 
         ptr
+    }
+
+    #[inline]
+    pub(crate) fn uninit<V: MemoryValue>(&mut self) -> Pointer<V> {
+        let challenge = self.alloc_challenge();
+        Pointer::from_challenge(challenge)
     }
 
     /// Frees the memory at location `ptr` with value `value` and write time given by `time`.
@@ -63,17 +68,22 @@ impl<L: AirParameters> AirBuilder<L> {
         time: &Time<L::Field>,
         multiplicity: Option<ElementRegister>,
     ) -> Slice<V> {
-        let raw_slice = RawSlice::new(self);
-        let slice = Slice::new(raw_slice);
+        let slice = self.uninit_slice();
 
         for (i, value) in values.value_iter().enumerate() {
             let value = value.borrow();
             let ptr = slice.get(i);
             let digest = value.compress(self, ptr.raw, time);
             self.input_to_memory_bus(digest, multiplicity);
-            self.unsafe_raw_write(&ptr, *value, true);
+            self.unsafe_raw_write(&ptr, *value, multiplicity, true);
         }
         slice
+    }
+
+    #[inline]
+    pub(crate) fn uninit_slice<V: MemoryValue>(&mut self) -> Slice<V> {
+        let raw_slice = RawSlice::new(self);
+        Slice::new(raw_slice)
     }
 
     fn input_to_memory_bus(
@@ -118,19 +128,26 @@ impl<L: AirParameters> AirBuilder<L> {
     fn unsafe_raw_read<V: MemoryValue>(&mut self, ptr: &Pointer<V>) -> V {
         let value = self.alloc::<V>();
         let instr = MemoryInstruction::Get(GetInstruction::new(ptr.raw, *value.register()));
-        self.register_air_instruction_internal(AirInstruction::mem(instr))
-            .unwrap();
+        self.register_air_instruction_internal(AirInstruction::mem(instr));
         value
     }
 
-    fn unsafe_raw_write<V: MemoryValue>(&mut self, ptr: &Pointer<V>, value: V, global: bool) {
-        let instr = MemoryInstruction::Set(SetInstruction::new(ptr.raw, *value.register()));
+    fn unsafe_raw_write<V: MemoryValue>(
+        &mut self,
+        ptr: &Pointer<V>,
+        value: V,
+        multiplicity: Option<ElementRegister>,
+        global: bool,
+    ) {
+        let instr = MemoryInstruction::Set(SetInstruction::new(
+            ptr.raw,
+            *value.register(),
+            multiplicity,
+        ));
         if global {
             self.register_global_air_instruction_internal(AirInstruction::mem(instr))
-                .unwrap();
         } else {
             self.register_air_instruction_internal(AirInstruction::mem(instr))
-                .unwrap();
         }
     }
 
@@ -147,8 +164,13 @@ impl<L: AirParameters> AirBuilder<L> {
         write_ts: &Time<L::Field>,
         multiplicity: Option<ElementRegister>,
     ) {
+        if value.is_trace() {
+            if let Some(mult) = multiplicity {
+                assert!(mult.is_trace());
+            }
+        }
         let write_digest = value.compress(self, ptr.raw, write_ts);
         self.input_to_memory_bus(write_digest, multiplicity);
-        self.unsafe_raw_write(ptr, value, !write_digest.is_trace())
+        self.unsafe_raw_write(ptr, value, multiplicity, !write_digest.is_trace())
     }
 }

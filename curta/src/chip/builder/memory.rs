@@ -49,7 +49,7 @@ impl<L: AirParameters> AirBuilder<L> {
             CellType::Bit => {
                 let reg = self.get_local_memory(T::size_of());
                 let constraint = AirInstruction::bits(&reg);
-                self.register_air_instruction_internal(constraint).unwrap();
+                self.register_air_instruction_internal(constraint);
                 reg
             }
         };
@@ -65,7 +65,7 @@ impl<L: AirParameters> AirBuilder<L> {
             CellType::Bit => {
                 let reg = self.get_extended_memory(T::size_of());
                 let constraint = AirInstruction::bits(&reg);
-                self.register_air_instruction_internal(constraint).unwrap();
+                self.register_air_instruction_internal(constraint);
                 reg
             }
         };
@@ -80,7 +80,7 @@ impl<L: AirParameters> AirBuilder<L> {
             CellType::Bit => {
                 let reg = self.get_local_memory(size_of);
                 let constraint = AirInstruction::bits(&reg);
-                self.register_air_instruction_internal(constraint).unwrap();
+                self.register_air_instruction_internal(constraint);
                 reg
             }
         };
@@ -95,7 +95,7 @@ impl<L: AirParameters> AirBuilder<L> {
             CellType::Bit => {
                 let reg = self.get_extended_memory(size_of);
                 let constraint = AirInstruction::bits(&reg);
-                self.register_air_instruction_internal(constraint).unwrap();
+                self.register_air_instruction_internal(constraint);
                 reg
             }
         };

@@ -7,6 +7,7 @@ use plonky2::iop::witness::WitnessWrite;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
+use serde::{Deserialize, Serialize};
 
 use super::air::ByteParameters;
 use super::proof::{
@@ -28,10 +29,12 @@ use crate::plonky2::stark::Starky;
 use crate::plonky2::Plonky2Air;
 use crate::trace::AirTrace;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct ByteStark<L: AirParameters, C, const D: usize> {
-    pub(crate) config: StarkyConfig<C, D>,
-    pub(crate) stark: Starky<Chip<L>>,
-    pub(crate) air_data: AirTraceData<L>,
+    pub config: StarkyConfig<C, D>,
+    pub stark: Starky<Chip<L>>,
+    pub air_data: AirTraceData<L>,
     pub(crate) multiplicity_data: ByteMultiplicityData,
     pub(crate) lookup_config: StarkyConfig<C, D>,
     pub(crate) lookup_stark: Starky<Chip<ByteParameters<L::Field, L::CubicParams>>>,
@@ -45,6 +48,22 @@ where
     C: CurtaConfig<D, F = L::Field, FE = <L::Field as Extendable<D>>::Extension>,
     Chip<L>: Plonky2Air<L::Field, D>,
 {
+    pub const fn stark(&self) -> &Starky<Chip<L>> {
+        &self.stark
+    }
+
+    pub const fn config(&self) -> &StarkyConfig<C, D> {
+        &self.config
+    }
+
+    pub const fn lookup_stark(&self) -> &Starky<Chip<ByteParameters<L::Field, L::CubicParams>>> {
+        &self.lookup_stark
+    }
+
+    pub const fn lookup_config(&self) -> &StarkyConfig<C, D> {
+        &self.lookup_config
+    }
+
     fn generate_execution_traces(
         &self,
         execution_trace: &AirTrace<L::Field>,
@@ -626,16 +645,16 @@ mod tests {
 
         let clk = Time::from_element(builder.clk);
 
-        let a = builder.get(&a_ptr, &clk);
+        let a = builder.load(&a_ptr, &clk);
         let b = builder.alloc::<U32Register>();
         let c = builder.and(&a, &b);
-        builder.set(&a_ptr, c, &clk.advance(), None);
+        builder.store(&a_ptr, c, &clk.advance(), None);
 
         let a_final = builder.alloc_public::<U32Register>();
 
         let num_rows = 1 << 5;
 
-        builder.free(&a_ptr, a_final, &Time::constant(num_rows as u32));
+        builder.free(&a_ptr, a_final, &Time::constant(num_rows));
         builder.set_to_expression_last_row(&a_final, c.expr());
 
         let stark = builder.build::<C, 2>(num_rows);
@@ -721,7 +740,7 @@ mod tests {
         );
 
         let clk = Time::from_element(builder.clk);
-        let zero = builder.api.alloc_public::<ElementRegister>();
+        let zero = builder.constant::<ElementRegister>(&GoldilocksField::ZERO);
 
         let a_0 = a_ptr.get_at(zero);
         let zero_trace = builder.api.alloc::<ElementRegister>();
@@ -729,16 +748,14 @@ mod tests {
             .api
             .set_to_expression(&zero_trace, GoldilocksField::ZERO.into());
         let a_0_trace = a_ptr.get_at(zero_trace);
-        let a = builder.get(&a_0_trace, &clk);
-        let b = builder.get(&a_ptr.get(1), &Time::zero());
+        let a = builder.load(&a_0_trace, &clk);
+        let b = builder.load(&a_ptr.get(1), &Time::zero());
         let c = builder.and(&a, &b);
-        builder.set(&a_0_trace, c, &clk.advance(), None);
+        builder.store(&a_0_trace, c, &clk.advance(), None);
 
         let a_final = builder.api.alloc_public::<U32Register>();
 
-        builder
-            .api
-            .free(&a_0, a_final, &Time::constant(num_rows as u32));
+        builder.api.free(&a_0, a_final, &Time::constant(num_rows));
         builder.api.set_to_expression_last_row(&a_final, c.expr());
 
         for (i, a) in a_init.iter().enumerate().skip(1) {
@@ -754,10 +771,8 @@ mod tests {
         let a_val = (0..a_init.len())
             .map(|_| u32_to_le_field_bytes(rng.gen::<u32>()))
             .collect::<Vec<_>>();
-        writer.write(&zero, &GoldilocksField::ZERO, 0);
         writer.write_array(&a_init, a_val, 0);
         writer.write_global_instructions(&stark.air_data);
-        writer.write(&zero, &GoldilocksField::ZERO, 0);
         for i in 0..num_rows {
             writer.write_row_instructions(&stark.air_data, i);
         }

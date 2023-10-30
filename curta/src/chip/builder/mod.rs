@@ -5,13 +5,12 @@ pub mod shared_memory;
 
 use core::cmp::Ordering;
 
-use anyhow::Result;
-
 use self::shared_memory::SharedMemory;
 use super::arithmetic::expression::ArithmeticExpression;
 use super::constraint::Constraint;
 use super::instruction::set::AirInstruction;
 use super::memory::pointer::accumulate::PointerAccumulator;
+use super::register::array::ArrayRegister;
 use super::register::cubic::CubicRegister;
 use super::register::element::ElementRegister;
 use super::register::{Register, RegisterSerializable};
@@ -92,6 +91,22 @@ impl<L: AirParameters> AirBuilder<L> {
         register
     }
 
+    pub(crate) fn constant_array<T: Register>(
+        &mut self,
+        values: &[T::Value<L::Field>],
+    ) -> ArrayRegister<T> {
+        let array = self.alloc_array_public::<T>(values.len());
+
+        for (register, value) in array.iter().zip(values.iter()) {
+            self.set_to_expression_public(
+                &register,
+                ArithmeticExpression::from_constant_vec(T::align(value).to_vec()),
+            );
+        }
+
+        array
+    }
+
     /// Registers an custom instruction with the builder.
     pub fn register_instruction<I>(&mut self, instruction: I)
     where
@@ -99,7 +114,6 @@ impl<L: AirParameters> AirBuilder<L> {
     {
         let instr = L::Instruction::from(instruction);
         self.register_air_instruction_internal(AirInstruction::from(instr))
-            .unwrap();
     }
 
     /// Registers an custom instruction with the builder.
@@ -109,7 +123,6 @@ impl<L: AirParameters> AirBuilder<L> {
     {
         let instr = L::Instruction::from(instruction);
         self.register_global_air_instruction_internal(AirInstruction::from(instr))
-            .unwrap();
     }
 
     /// Registers an custom instruction with the builder.
@@ -124,35 +137,30 @@ impl<L: AirParameters> AirBuilder<L> {
         let filtered_instr = instr.as_filtered(filter);
 
         self.register_air_instruction_internal(filtered_instr)
-            .unwrap();
     }
 
     /// Register an instruction into the builder.
     pub(crate) fn register_air_instruction_internal(
         &mut self,
         instruction: AirInstruction<L::Field, L::Instruction>,
-    ) -> Result<()> {
+    ) {
         // Add the instruction to the list
         self.instructions.push(instruction.clone());
         // Add the constraints
         self.constraints
             .push(Constraint::from_instruction_set(instruction));
-
-        Ok(())
     }
 
     /// Register a global instruction into the builder.
     pub(crate) fn register_global_air_instruction_internal(
         &mut self,
         instruction: AirInstruction<L::Field, L::Instruction>,
-    ) -> Result<()> {
+    ) {
         // Add the instruction to the list
         self.global_instructions.push(instruction.clone());
         // Add the constraints
         self.global_constraints
             .push(Constraint::from_instruction_set(instruction));
-
-        Ok(())
     }
 
     pub(crate) fn register_constraint<I>(&mut self, constraint: I)
