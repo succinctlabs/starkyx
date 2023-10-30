@@ -1,14 +1,19 @@
 use core::fmt::Debug;
 
 use plonky2::field::extension::{Extendable, FieldExtension};
+use plonky2::field::polynomial::PolynomialValues;
+use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::fri::reduction_strategies::FriReductionStrategy;
 use plonky2::fri::{FriConfig, FriParams};
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, PoseidonGoldilocksConfig};
 use plonky2::util::log2_strict;
+use plonky2::util::timing::TimingTree;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+use crate::maybe_rayon::*;
+use crate::trace::AirTrace;
 use crate::utils::serde::{deserialize_fri_config, serialize_fri_config};
 
 pub trait CurtaConfig<const D: usize>:
@@ -17,7 +22,14 @@ pub trait CurtaConfig<const D: usize>:
     type F: RichField + Extendable<D>;
     type FE: FieldExtension<D, BaseField = Self::F>;
     type Hasher: AlgebraicHasher<Self::F>;
-    type GenericConfig: GenericConfig<D, F = Self::F, FE = Self::FE, Hasher = Self::Hasher>;
+    type InnerHasher: AlgebraicHasher<Self::F>;
+    type GenericConfig: GenericConfig<
+        D,
+        F = Self::F,
+        FE = Self::FE,
+        Hasher = Self::Hasher,
+        InnerHasher = Self::InnerHasher,
+    >;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,6 +75,24 @@ impl<C: CurtaConfig<D>, const D: usize> StarkyConfig<C, D> {
     pub fn fri_params(&self) -> FriParams {
         self.fri_config.fri_params(self.degree_bits, false)
     }
+
+    pub fn commit(
+        &self,
+        trace: &AirTrace<C::F>,
+        timing: &mut TimingTree,
+    ) -> PolynomialBatch<C::F, C::GenericConfig, D> {
+        let trace_cols = trace
+            .as_columns()
+            .into_par_iter()
+            .map(PolynomialValues::from)
+            .collect::<Vec<_>>();
+
+        let rate_bits = self.fri_config.rate_bits;
+        let cap_height = self.fri_config.cap_height;
+        PolynomialBatch::<C::F, C::GenericConfig, D>::from_values(
+            trace_cols, rate_bits, false, cap_height, timing, None,
+        )
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -72,6 +102,7 @@ impl CurtaConfig<2> for CurtaPoseidonGoldilocksConfig {
     type F = <PoseidonGoldilocksConfig as GenericConfig<2>>::F;
     type FE = <PoseidonGoldilocksConfig as GenericConfig<2>>::FE;
     type Hasher = <PoseidonGoldilocksConfig as GenericConfig<2>>::Hasher;
+    type InnerHasher = <PoseidonGoldilocksConfig as GenericConfig<2>>::InnerHasher;
     type GenericConfig = PoseidonGoldilocksConfig;
 }
 

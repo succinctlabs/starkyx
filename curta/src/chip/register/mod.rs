@@ -36,6 +36,11 @@ where
     fn next(&self) -> Self {
         Self::from_register_unsafe(self.register().next())
     }
+
+    /// Returns `true` if the register is a trace register.
+    fn is_trace(&self) -> bool {
+        self.register().is_trace()
+    }
 }
 
 /// Ensures that the register has a fixed size.

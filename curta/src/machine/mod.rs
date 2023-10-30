@@ -1,3 +1,4 @@
+pub mod builder;
 pub mod bytes;
-pub mod chip;
+pub mod hash;
 pub mod range;
