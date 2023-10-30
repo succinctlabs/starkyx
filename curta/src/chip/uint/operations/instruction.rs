@@ -3,110 +3,72 @@ use serde::{Deserialize, Serialize};
 use super::add::ByteArrayAdd;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
-use crate::chip::bool::SelectInstruction;
 use crate::chip::instruction::Instruction;
-use crate::chip::register::bit::BitRegister;
-use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::decode::ByteDecodeInstruction;
 use crate::chip::uint::bytes::lookup_table::{ByteInstructionSet, ByteInstructions};
 use crate::chip::uint::bytes::operations::instruction::ByteOperationInstruction;
 use crate::chip::uint::bytes::operations::value::ByteOperationDigestConstraint;
-use crate::chip::uint::register::U64Register;
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum U32Instruction {
+pub enum UintInstruction {
     Bit(ByteInstructionSet),
     Add(ByteArrayAdd<4>),
-    Select(SelectInstruction<U64Register>),
 }
 
-pub trait U32Instructions:
-    ByteInstructions
-    + From<U32Instruction>
-    + From<ByteArrayAdd<4>>
-    + From<SelectInstruction<U64Register>>
+pub trait UintInstructions:
+    ByteInstructions + From<UintInstruction> + From<ByteArrayAdd<4>>
 {
 }
 
-impl ByteInstructions for U32Instruction {}
+impl ByteInstructions for UintInstruction {}
 
-impl U32Instructions for U32Instruction {}
+impl UintInstructions for UintInstruction {}
 
-impl<AP: AirParser> AirConstraint<AP> for U32Instruction {
+impl<AP: AirParser> AirConstraint<AP> for UintInstruction {
     fn eval(&self, parser: &mut AP) {
         match self {
             Self::Bit(op) => op.eval(parser),
             Self::Add(op) => op.eval(parser),
-            Self::Select(op) => op.eval(parser),
         }
     }
 }
 
-impl<F: PrimeField64> Instruction<F> for U32Instruction {
-    fn inputs(&self) -> Vec<MemorySlice> {
-        match self {
-            Self::Bit(op) => Instruction::<F>::inputs(op),
-            Self::Add(op) => Instruction::<F>::inputs(op),
-            Self::Select(op) => Instruction::<F>::inputs(op),
-        }
-    }
-
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        match self {
-            Self::Bit(op) => Instruction::<F>::trace_layout(op),
-            Self::Add(op) => Instruction::<F>::trace_layout(op),
-            Self::Select(op) => Instruction::<F>::trace_layout(op),
-        }
-    }
-
+impl<F: PrimeField64> Instruction<F> for UintInstruction {
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         match self {
             Self::Bit(op) => Instruction::<F>::write(op, writer, row_index),
             Self::Add(op) => Instruction::<F>::write(op, writer, row_index),
-            Self::Select(op) => Instruction::<F>::write(op, writer, row_index),
         }
     }
 }
 
-impl From<ByteInstructionSet> for U32Instruction {
+impl From<ByteInstructionSet> for UintInstruction {
     fn from(op: ByteInstructionSet) -> Self {
         Self::Bit(op)
     }
 }
 
-impl From<ByteArrayAdd<4>> for U32Instruction {
+impl From<ByteArrayAdd<4>> for UintInstruction {
     fn from(op: ByteArrayAdd<4>) -> Self {
         Self::Add(op)
     }
 }
 
-impl From<ByteOperationInstruction> for U32Instruction {
+impl From<ByteOperationInstruction> for UintInstruction {
     fn from(op: ByteOperationInstruction) -> Self {
         Self::Bit(op.into())
     }
 }
 
-impl From<SelectInstruction<BitRegister>> for U32Instruction {
-    fn from(op: SelectInstruction<BitRegister>) -> Self {
-        Self::Bit(op.into())
-    }
-}
-
-impl From<ByteDecodeInstruction> for U32Instruction {
+impl From<ByteDecodeInstruction> for UintInstruction {
     fn from(op: ByteDecodeInstruction) -> Self {
         Self::Bit(op.into())
     }
 }
 
-impl From<SelectInstruction<U64Register>> for U32Instruction {
-    fn from(op: SelectInstruction<U64Register>) -> Self {
-        Self::Select(op)
-    }
-}
-
-impl From<ByteOperationDigestConstraint> for U32Instruction {
+impl From<ByteOperationDigestConstraint> for UintInstruction {
     fn from(op: ByteOperationDigestConstraint) -> Self {
         Self::Bit(op.into())
     }
@@ -119,6 +81,7 @@ mod tests {
     use super::*;
     pub use crate::chip::builder::tests::*;
     use crate::chip::builder::AirBuilder;
+    use crate::chip::register::bit::BitRegister;
     use crate::chip::uint::register::ByteArrayRegister;
     use crate::chip::AirParameters;
     use crate::math::field::Field;
@@ -130,7 +93,7 @@ mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        type Instruction = U32Instruction;
+        type Instruction = UintInstruction;
 
         const NUM_FREE_COLUMNS: usize = 1600;
         const EXTENDED_COLUMNS: usize = 500;
@@ -144,9 +107,9 @@ mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        type Instruction = U32Instruction;
+        type Instruction = UintInstruction;
 
-        const NUM_FREE_COLUMNS: usize = 2800;
+        const NUM_FREE_COLUMNS: usize = 2814;
         const EXTENDED_COLUMNS: usize = 900;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
     }
@@ -160,7 +123,7 @@ mod tests {
 
         let mut builder = AirBuilder::<L>::new();
 
-        let (mut operations, table) = builder.byte_operations();
+        let mut operations = builder.byte_operations();
 
         let a = builder.alloc::<ByteArrayRegister<N>>();
         let b = builder.alloc::<ByteArrayRegister<N>>();
@@ -213,7 +176,9 @@ mod tests {
             builder.set_bit_rotate_right(&a, shift, &a_rot_second, &mut operations);
         }
 
-        builder.register_byte_lookup(operations, &table);
+        let mut byte_table = builder.new_byte_lookup_table();
+        let byte_data = builder.register_byte_lookup(&mut byte_table, operations);
+        builder.constraint_byte_lookup_table(&byte_table);
 
         let (air, trace_data) = builder.build();
 
@@ -222,10 +187,9 @@ mod tests {
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 
-        table.write_table_entries(&writer);
-
         let to_field = |a: u32| a.to_le_bytes().map(F::from_canonical_u8);
 
+        byte_table.write_table_entries(&writer);
         let mut rng = thread_rng();
         for i in 0..num_rows {
             let a_val = rng.gen::<u32>();
@@ -258,6 +222,8 @@ mod tests {
 
             writer.write_row_instructions(&generator.air_data, i);
         }
+        let multiplicities = byte_data.get_multiplicities(&writer);
+        writer.write_lookup_multiplicities(byte_table.multiplicities(), &[multiplicities]);
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
@@ -278,7 +244,7 @@ mod tests {
 
         let mut builder = AirBuilder::<L>::new();
 
-        let (mut operations, table) = builder.byte_operations();
+        let mut operations = builder.byte_operations();
 
         let a = builder.alloc::<ByteArrayRegister<N>>();
         let b = builder.alloc::<ByteArrayRegister<N>>();
@@ -335,7 +301,9 @@ mod tests {
             builder.set_bit_rotate_right(&a, shift, &a_rot_second, &mut operations);
         }
 
-        builder.register_byte_lookup(operations, &table);
+        let mut byte_table = builder.new_byte_lookup_table();
+        let byte_data = builder.register_byte_lookup(&mut byte_table, operations);
+        builder.constraint_byte_lookup_table(&byte_table);
 
         let (air, trace_data) = builder.build();
 
@@ -344,10 +312,9 @@ mod tests {
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
 
-        table.write_table_entries(&writer);
-
         let to_field = |a: u64| a.to_le_bytes().map(F::from_canonical_u8);
 
+        byte_table.write_table_entries(&writer);
         let mut rng = thread_rng();
         for i in 0..num_rows {
             let a_val = rng.gen::<u64>();
@@ -380,6 +347,8 @@ mod tests {
 
             writer.write_row_instructions(&generator.air_data, i);
         }
+        let multiplicities = byte_data.get_multiplicities(&writer);
+        writer.write_lookup_multiplicities(byte_table.multiplicities(), &[multiplicities]);
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);

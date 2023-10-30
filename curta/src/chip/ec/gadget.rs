@@ -15,8 +15,6 @@ pub trait EllipticCurveGadget<E: EllipticCurve> {
 
     fn alloc_local_ec_point(&mut self) -> AffinePointRegister<E>;
 
-    fn alloc_next_ec_point(&mut self) -> AffinePointRegister<E>;
-
     fn alloc_ec_point(&mut self) -> AffinePointRegister<E> {
         self.alloc_local_ec_point()
     }
@@ -52,12 +50,6 @@ impl<L: AirParameters, E: EllipticCurve> EllipticCurveGadget<E> for AirBuilder<L
     fn alloc_local_ec_point(&mut self) -> AffinePointRegister<E> {
         let x = self.alloc::<FieldRegister<E::BaseField>>();
         let y = self.alloc::<FieldRegister<E::BaseField>>();
-        AffinePointRegister::new(x, y)
-    }
-
-    fn alloc_next_ec_point(&mut self) -> AffinePointRegister<E> {
-        let x = self.alloc_next::<FieldRegister<E::BaseField>>();
-        let y = self.alloc_next::<FieldRegister<E::BaseField>>();
         AffinePointRegister::new(x, y)
     }
 
