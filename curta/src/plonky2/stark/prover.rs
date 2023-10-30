@@ -12,21 +12,29 @@ use plonky2::field::types::Field;
 use plonky2::field::zero_poly_coset::ZeroPolyOnCoset;
 use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::hash::hash_types::RichField;
+use plonky2::iop::challenger::Challenger;
 use plonky2::util::timing::TimingTree;
 use plonky2::util::{log2_ceil, transpose};
 
 use super::config::{CurtaConfig, StarkyConfig};
 use super::Starky;
 use crate::maybe_rayon::*;
-use crate::plonky2::challenger::Plonky2Challenger;
 use crate::plonky2::parser::consumer::ConstraintConsumer;
 use crate::plonky2::parser::StarkParser;
-use crate::plonky2::stark::proof::{StarkOpeningSet, StarkProof};
+use crate::plonky2::stark::proof::{AirProof, StarkOpeningSet, StarkProof};
 use crate::plonky2::StarkyAir;
 use crate::trace::generator::TraceGenerator;
 
 #[derive(Debug, Clone)]
 pub struct StarkyProver<F, C, const D: usize>(core::marker::PhantomData<(F, C)>);
+
+#[derive(Debug)]
+pub struct AirCommitment<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> {
+    pub trace_commitments: Vec<PolynomialBatch<F, C::GenericConfig, D>>,
+    pub public_inputs: Vec<F>,
+    pub global_values: Vec<F>,
+    pub challenges: Vec<F>,
+}
 
 type P<F> = <F as Packable>::Packing;
 
@@ -39,31 +47,29 @@ where
         Self(core::marker::PhantomData)
     }
 
-    pub fn prove<A, T>(
+    pub fn generate_trace<A, T>(
         config: &StarkyConfig<C, D>,
         stark: &Starky<A>,
-        trace_generator: &T,
         public_inputs: &[F],
-    ) -> Result<StarkProof<F, C, D>>
+        trace_generator: &T,
+        challenger: &mut Challenger<F, C::Hasher>,
+        timing: &mut TimingTree,
+    ) -> Result<AirCommitment<F, C, D>>
     where
         A: StarkyAir<F, D>,
         T: TraceGenerator<F, A>,
         T::Error: Into<anyhow::Error>,
     {
-        let mut challenger = Plonky2Challenger::<F, C::Hasher>::new();
+        let mut challenges = vec![];
+        let mut global_values = vec![F::ZERO; stark.air().num_global_values()];
 
         // Oberve public inputs
-        challenger.0.observe_elements(public_inputs);
+        challenger.observe_elements(public_inputs);
 
         let rate_bits = config.fri_config.rate_bits;
         let cap_height = config.fri_config.cap_height;
 
-        let mut challenges = vec![];
-        let mut global_values = vec![F::ZERO; stark.air().num_global_values()];
-
         let mut trace_commitments = Vec::new();
-        let mut timing = TimingTree::default();
-        let mut num_rows = 0;
         for (r, round) in stark.air().round_data().iter().enumerate() {
             let (id_0, id_1) = round.global_values_range;
             let round_trace = trace_generator
@@ -82,29 +88,43 @@ where
                 .map(PolynomialValues::from)
                 .collect::<Vec<_>>();
 
-            if r == 0 {
-                num_rows = trace_cols[0].len();
-            }
-
             let commitment = PolynomialBatch::<F, C::GenericConfig, D>::from_values(
-                trace_cols,
-                rate_bits,
-                false,
-                cap_height,
-                &mut timing,
-                None,
+                trace_cols, rate_bits, false, cap_height, timing, None,
             );
-            challenger.0.observe_elements(&global_values[id_0..id_1]);
+            challenger.observe_elements(&global_values[id_0..id_1]);
             let cap = commitment.merkle_tree.cap.clone();
-            challenger.0.observe_cap(&cap);
+            challenger.observe_cap(&cap);
             trace_commitments.push(commitment);
 
             // Get the challenges for next round
-            let round_challenges = challenger.0.get_n_challenges(round.num_challenges);
+            let round_challenges = challenger.get_n_challenges(round.num_challenges);
             challenges.extend(round_challenges);
         }
 
-        let degree = num_rows;
+        Ok(AirCommitment {
+            trace_commitments,
+            public_inputs: public_inputs.to_vec(),
+            global_values,
+            challenges,
+        })
+    }
+
+    pub fn prove_with_trace<A: StarkyAir<F, D>>(
+        config: &StarkyConfig<C, D>,
+        stark: &Starky<A>,
+        air_commitment: AirCommitment<F, C, D>,
+        challenger: &mut Challenger<F, C::Hasher>,
+        timing: &mut TimingTree,
+    ) -> Result<StarkProof<F, C, D>> {
+        let AirCommitment {
+            trace_commitments,
+            public_inputs,
+            global_values,
+            challenges,
+        } = air_commitment;
+        let rate_bits = config.fri_config.rate_bits;
+        let cap_height = config.fri_config.cap_height;
+        let degree = 1 << trace_commitments[0].degree_log;
         let degree_bits = config.degree_bits;
         let fri_params = config.fri_params();
         assert!(
@@ -112,7 +132,10 @@ where
             "FRI total reduction arity is too large.",
         );
 
-        let challenge_vars = challenges.into_iter().map(P::<F>::from).collect::<Vec<_>>();
+        let challenge_vars = challenges
+            .iter()
+            .map(|x| P::<F>::from(*x))
+            .collect::<Vec<_>>();
         let global_vars = global_values
             .iter()
             .map(|x| P::<F>::from(*x))
@@ -129,7 +152,7 @@ where
             &challenge_vars,
             &global_vars,
             &public_vars,
-            &mut challenger,
+            challenger,
         );
         let quotient_degree_factor = stark.air().quotient_degree_factor();
         let all_quotient_chunks = quotient_polys
@@ -150,14 +173,14 @@ where
             rate_bits,
             false,
             config.fri_config.cap_height,
-            &mut timing,
+            timing,
             None,
         );
 
         let quotient_polys_cap = quotient_commitment.merkle_tree.cap.clone();
-        challenger.0.observe_cap(&quotient_polys_cap);
+        challenger.observe_cap(&quotient_polys_cap);
 
-        let zeta = challenger.0.get_extension_challenge::<D>();
+        let zeta = challenger.get_extension_challenge::<D>();
         // To avoid leaking witness data, we want to ensure that our opening locations, `zeta` and
         // `g * zeta`, are not in our subgroup `H`. It suffices to check `zeta` only, since
         // `(g * zeta)^n = zeta^n`, where `n` is the order of `g`.
@@ -167,7 +190,7 @@ where
             "Opening point is in the subgroup."
         );
         let openings = StarkOpeningSet::new(zeta, g, &trace_commitments, &quotient_commitment);
-        challenger.0.observe_openings(&openings.to_fri_openings());
+        challenger.observe_openings(&openings.to_fri_openings());
 
         let initial_merkle_trees = trace_commitments
             .iter()
@@ -177,9 +200,9 @@ where
         let opening_proof = PolynomialBatch::prove_openings(
             &stark.fri_instance(zeta, g, config),
             &initial_merkle_trees,
-            &mut challenger.0,
+            challenger,
             &fri_params,
-            &mut timing,
+            timing,
         );
 
         let trace_caps = trace_commitments
@@ -191,12 +214,39 @@ where
             "Number of trace commitments does not match"
         );
         Ok(StarkProof {
-            trace_caps,
-            quotient_polys_cap,
+            air_proof: AirProof {
+                trace_caps,
+                quotient_polys_cap,
+                openings,
+                opening_proof,
+            },
             global_values,
-            openings,
-            opening_proof,
         })
+    }
+
+    pub fn prove<A, T>(
+        config: &StarkyConfig<C, D>,
+        stark: &Starky<A>,
+        trace_generator: &T,
+        public_inputs: &[F],
+    ) -> Result<StarkProof<F, C, D>>
+    where
+        A: StarkyAir<F, D>,
+        T: TraceGenerator<F, A>,
+        T::Error: Into<anyhow::Error>,
+    {
+        let mut challenger = Challenger::<F, C::Hasher>::new();
+        let mut timing = TimingTree::default();
+        let air_commitment = Self::generate_trace(
+            config,
+            stark,
+            public_inputs,
+            trace_generator,
+            &mut challenger,
+            &mut timing,
+        )?;
+
+        Self::prove_with_trace(config, stark, air_commitment, &mut challenger, &mut timing)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -208,12 +258,12 @@ where
         challenges_vars: &[P<F>],
         global_vars: &[P<F>],
         public_vars: &[P<F>],
-        challenger: &mut Plonky2Challenger<F, C::Hasher>,
+        challenger: &mut Challenger<F, C::Hasher>,
     ) -> Vec<PolynomialCoeffs<F>>
     where
         A: StarkyAir<F, D>,
     {
-        let alphas = challenger.0.get_n_challenges(config.num_challenges);
+        let alphas = challenger.get_n_challenges(config.num_challenges);
         let degree = 1 << degree_bits;
         let rate_bits = config.fri_config.rate_bits;
 

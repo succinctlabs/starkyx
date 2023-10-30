@@ -2,7 +2,7 @@ use plonky2::field::goldilocks_field::GoldilocksField;
 use serde::{Deserialize, Serialize};
 
 use super::gadget::EdScalarMulGadget;
-use crate::chip::builder::{AirBuilder, AirTraceData};
+use crate::chip::builder::AirBuilder;
 use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField, Ed25519Parameters};
 use crate::chip::ec::gadget::EllipticCurveGadget;
 use crate::chip::ec::point::AffinePointRegister;
@@ -14,6 +14,7 @@ use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::table::evaluation::Digest;
+use crate::chip::trace::data::AirTraceData;
 use crate::chip::{AirParameters, Chip};
 use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
 use crate::math::prelude::*;

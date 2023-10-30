@@ -16,4 +16,5 @@
 pub mod accumulator;
 pub mod bus;
 pub mod evaluation;
+pub mod log_derivative;
 pub mod lookup;

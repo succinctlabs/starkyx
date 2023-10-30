@@ -1,93 +1,91 @@
 pub mod constraint;
-pub mod entry;
 pub mod trace;
 
 use core::marker::PhantomData;
 
 use serde::{Deserialize, Serialize};
 
-use self::entry::Entry;
-use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
-use crate::chip::register::cubic::CubicRegister;
+use crate::chip::register::bit::BitRegister;
+use crate::chip::register::cubic::{CubicRegister, EvalCubic};
+use crate::chip::register::element::ElementRegister;
+use crate::chip::table::log_derivative::entry::LogEntry;
 use crate::chip::AirParameters;
-use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BusChannel<F, E> {
+pub struct BusChannel<T, E> {
     pub out_channel: CubicRegister,
     table_accumulator: CubicRegister,
     challenge: CubicRegister,
-    entries: Vec<Entry<F>>,
-    entry_values: Vec<CubicRegister>,
-    row_acc_product: Vec<CubicRegister>,
+    entries: Vec<LogEntry<T>>,
+    row_accumulators: Vec<CubicRegister>,
     _marker: PhantomData<E>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn input_to_bus(&mut self, channel_idx: usize, register: CubicRegister) {
-        let entry_values = self.alloc_extended();
-        self.bus_channels[channel_idx].input(register);
-        self.bus_channels[channel_idx]
-            .entry_values
-            .push(entry_values);
+    #[inline]
+    fn add_accumulators(&mut self, channel_idx: usize) {
         let length = self.bus_channels[channel_idx].entries.len();
         if length % 2 == 0 {
-            let product = self.alloc_extended::<CubicRegister>();
-            self.bus_channels[channel_idx].row_acc_product.push(product);
+            let acc_sum = self.alloc_extended::<CubicRegister>();
+            self.bus_channels[channel_idx]
+                .row_accumulators
+                .push(acc_sum);
         }
+    }
+
+    pub fn input_to_bus(&mut self, channel_idx: usize, value: CubicRegister) {
+        self.bus_channels[channel_idx].input(value);
+        self.add_accumulators(channel_idx);
     }
 
     pub fn input_to_bus_filtered(
         &mut self,
         channel_idx: usize,
-        register: CubicRegister,
-        filter: ArithmeticExpression<L::Field>,
+        value: CubicRegister,
+        filter: BitRegister,
     ) {
-        let entry_values = self.alloc_extended();
-        let bus = &mut self.bus_channels[channel_idx];
-        bus.input_filtered(register, filter);
-        bus.entry_values.push(entry_values);
-        let len = bus.entries.len();
-        if len % 2 == 0 {
-            let product = self.alloc_extended::<CubicRegister>();
-            self.bus_channels[channel_idx].row_acc_product.push(product);
-        }
+        self.bus_channels[channel_idx].input_filtered(value, filter);
+        self.add_accumulators(channel_idx);
     }
 
-    pub fn output_from_bus(&mut self, channel_idx: usize, register: CubicRegister) {
-        let entry_values = self.alloc_extended();
-        self.bus_channels[channel_idx].output(register);
-        self.bus_channels[channel_idx]
-            .entry_values
-            .push(entry_values);
-        let len = self.bus_channels[channel_idx].entries.len();
-        if len % 2 == 0 {
-            let product = self.alloc_extended::<CubicRegister>();
-            self.bus_channels[channel_idx].row_acc_product.push(product);
-        }
+    pub fn input_to_bus_with_multiplicity(
+        &mut self,
+        channel_idx: usize,
+        value: CubicRegister,
+        multiplicity: ElementRegister,
+    ) {
+        self.bus_channels[channel_idx].input_with_multiplicity(value, multiplicity);
+        self.add_accumulators(channel_idx);
+    }
+
+    pub fn output_from_bus(&mut self, channel_idx: usize, value: CubicRegister) {
+        self.bus_channels[channel_idx].output(value);
+        self.add_accumulators(channel_idx);
     }
 
     pub fn output_from_bus_filtered(
         &mut self,
         channel_idx: usize,
-        register: CubicRegister,
-        filter: ArithmeticExpression<L::Field>,
+        value: CubicRegister,
+        filter: BitRegister,
     ) {
-        let entry_values = self.alloc_extended();
-        self.bus_channels[channel_idx].output_filtered(register, filter);
-        self.bus_channels[channel_idx]
-            .entry_values
-            .push(entry_values);
-        let len = self.bus_channels[channel_idx].entries.len();
-        if len % 2 == 0 {
-            let product = self.alloc_extended::<CubicRegister>();
-            self.bus_channels[channel_idx].row_acc_product.push(product);
-        }
+        self.bus_channels[channel_idx].output_filtered(value, filter);
+        self.add_accumulators(channel_idx);
+    }
+
+    pub fn output_from_bus_with_multiplicity(
+        &mut self,
+        channel_idx: usize,
+        value: CubicRegister,
+        multiplicity: ElementRegister,
+    ) {
+        self.bus_channels[channel_idx].output_with_multiplicity(value, multiplicity);
+        self.add_accumulators(channel_idx);
     }
 }
 
-impl<F: Field, E> BusChannel<F, E> {
+impl<T: EvalCubic, E> BusChannel<T, E> {
     pub fn new(
         challenge: CubicRegister,
         out_channel: CubicRegister,
@@ -98,30 +96,42 @@ impl<F: Field, E> BusChannel<F, E> {
             out_channel,
             table_accumulator,
             entries: Vec::new(),
-            entry_values: Vec::new(),
-            row_acc_product: Vec::new(),
+            row_accumulators: Vec::new(),
             _marker: PhantomData,
         }
     }
 
     #[inline]
-    pub fn input(&mut self, register: CubicRegister) {
-        self.input_filtered(register, ArithmeticExpression::one());
+    pub fn input(&mut self, value: T) {
+        let entry = LogEntry::Input(value);
+        self.entries.push(entry)
     }
 
     #[inline]
-    pub fn input_filtered(&mut self, register: CubicRegister, filter: ArithmeticExpression<F>) {
-        self.entries.push(Entry::Input(register, filter));
+    pub fn input_filtered(&mut self, value: T, filter: BitRegister) {
+        self.input_with_multiplicity(value, filter.as_element())
     }
 
     #[inline]
-    pub fn output(&mut self, register: CubicRegister) {
-        self.output_filtered(register, ArithmeticExpression::one())
+    pub fn input_with_multiplicity(&mut self, value: T, multiplicity: ElementRegister) {
+        self.entries
+            .push(LogEntry::InputMultiplicity(value, multiplicity));
     }
 
     #[inline]
-    pub fn output_filtered(&mut self, register: CubicRegister, filter: ArithmeticExpression<F>) {
-        self.entries.push(Entry::Output(register, filter));
+    pub fn output(&mut self, value: T) {
+        self.entries.push(LogEntry::Output(value))
+    }
+
+    #[inline]
+    pub fn output_filtered(&mut self, value: T, filter: BitRegister) {
+        self.output_with_multiplicity(value, filter.as_element())
+    }
+
+    #[inline]
+    pub fn output_with_multiplicity(&mut self, value: T, multiplicity: ElementRegister) {
+        self.entries
+            .push(LogEntry::OutputMultiplicity(value, multiplicity))
     }
 }
 
@@ -165,18 +175,17 @@ mod tests {
         let out_channel = builder.alloc_global::<CubicRegister>();
         let accumulator = builder.alloc_extended::<CubicRegister>();
         let channel = BusChannel::new(beta, out_channel, accumulator);
-        builder.bus_channels.push(channel.clone());
+        builder.bus_channels.push(channel);
 
         builder.input_to_bus(0, x_1);
         builder.input_to_bus(0, x_3);
         builder.output_from_bus(0, x_2);
         builder.output_from_bus(0, x_4);
 
-        let one = ArithmeticExpression::<F>::one();
         let zero = ArithmeticExpression::<F>::zero();
 
         let [c_0, c_1, c_2] = out_channel.as_base_array();
-        builder.assert_expressions_equal(c_0.expr(), one);
+        builder.assert_expressions_equal(c_0.expr(), zero.clone());
         builder.assert_expressions_equal(c_1.expr(), zero.clone());
         builder.assert_expressions_equal(c_2.expr(), zero);
 

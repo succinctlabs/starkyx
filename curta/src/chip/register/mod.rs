@@ -1,3 +1,5 @@
+use core::fmt::Debug;
+
 use serde::{Deserialize, Serialize};
 
 use self::cell::CellType;
@@ -13,6 +15,7 @@ pub mod cell;
 pub mod cubic;
 pub mod element;
 pub mod memory;
+pub mod slice;
 pub mod u16;
 
 /// Adds serialization and deserialization to a register for converting between the canonical type
@@ -33,6 +36,11 @@ where
     fn next(&self) -> Self {
         Self::from_register_unsafe(self.register().next())
     }
+
+    /// Returns `true` if the register is a trace register.
+    fn is_trace(&self) -> bool {
+        self.register().is_trace()
+    }
 }
 
 /// Ensures that the register has a fixed size.
@@ -49,6 +57,7 @@ pub trait Register:
     RegisterSerializable
     + RegisterSized
     + 'static
+    + Debug
     + Sized
     + Clone
     + Send

@@ -13,7 +13,7 @@ use crate::math::field::Field;
 /// A helper struct for representing an array of registers. In particular, it makes it easier
 /// to access the memory slice as well as converting from a memory slice to the struct.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct ArrayRegister<T: Register> {
+pub struct ArrayRegister<T> {
     register: MemorySlice,
     length: usize,
     _marker: PhantomData<T>,
@@ -37,6 +37,13 @@ impl<T: Register> RegisterSerializable for ArrayRegister<T> {
 }
 
 impl<T: Register> ArrayRegister<T> {
+    pub const fn uninitialized() -> Self {
+        Self {
+            register: MemorySlice::Global(0, 0),
+            length: 0,
+            _marker: PhantomData,
+        }
+    }
     pub fn len(&self) -> usize {
         self.length
     }
@@ -60,6 +67,24 @@ impl<T: Register> ArrayRegister<T> {
             );
         }
         self.get_unchecked(idx)
+    }
+
+    #[inline]
+    pub fn first(&self) -> Option<T> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.get(0))
+        }
+    }
+
+    #[inline]
+    pub fn last(&self) -> Option<T> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.get(self.len() - 1))
+        }
     }
 
     #[inline]
