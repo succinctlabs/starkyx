@@ -1,13 +1,16 @@
 use alloc::sync::Arc;
 use core::borrow::Borrow;
+use core::hash::Hash;
 use core::ops::Deref;
 use std::sync::{LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 
 use super::data::AirTraceData;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::instruction::Instruction;
+use crate::chip::memory::map::MemoryMap;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::EvalCubic;
 use crate::chip::register::memory::MemorySlice;
@@ -19,23 +22,99 @@ use crate::trace::window::TraceWindow;
 use crate::trace::window_parser::TraceWindowParser;
 use crate::trace::AirTrace;
 
+pub mod row;
+pub mod window;
+
 pub trait AirWriter<F: Field> {
-    fn write_slice(&self, memory_slice: &MemorySlice, value: &[F], row_index: usize);
+    fn write_slice(&mut self, memory_slice: &MemorySlice, value: &[F]);
+
+    fn read_slice(&self, memory_slice: &MemorySlice) -> &[F];
+
+    fn read<T: Register>(&self, data: &T) -> T::Value<F> {
+        let slice = self.read_slice(data.register());
+        T::value_from_slice(slice)
+    }
+
+    fn read_vec<R: Register>(&self, array: &ArrayRegister<R>) -> Vec<R::Value<F>> {
+        array
+            .into_iter()
+            .map(|register| self.read(&register))
+            .collect()
+    }
+
+    fn read_array<R: Register, const N: usize>(
+        &self,
+        array: &ArrayRegister<R>,
+    ) -> [R::Value<F>; N] {
+        let elem_fn = |i| self.read(&array.get(i));
+        core::array::from_fn(elem_fn)
+    }
+
+    fn write<T: Register>(&mut self, data: &T, value: &T::Value<F>) {
+        self.write_slice(data.register(), T::align(value))
+    }
+
+    fn write_array<T: Register, I>(&mut self, array: &ArrayRegister<T>, values: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<T::Value<F>>,
+    {
+        for (data, value) in array.into_iter().zip(values) {
+            self.write(&data, value.borrow());
+        }
+    }
+
+    fn read_log_entry<T: EvalCubic>(&self, entry: &LogEntry<T>) -> LogEntryValue<F> {
+        let eval = |value: &T| T::trace_value_as_cubic(self.read(value));
+        match entry {
+            LogEntry::Input(value) => LogEntryValue {
+                value: eval(value),
+                multiplier: F::ONE,
+            },
+            LogEntry::Output(value) => LogEntryValue {
+                value: eval(value),
+                multiplier: -F::ONE,
+            },
+            LogEntry::InputMultiplicity(value, multiplier) => {
+                let multiplier = self.read(multiplier);
+                LogEntryValue {
+                    value: eval(value),
+                    multiplier,
+                }
+            }
+            LogEntry::OutputMultiplicity(value, multiplier) => {
+                let multiplier = self.read(multiplier);
+                LogEntryValue {
+                    value: eval(value),
+                    multiplier: -multiplier,
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct WriterData<T> {
+pub struct WriterData<T: PartialEq + Eq + Hash> {
     pub(crate) trace: RwLock<AirTrace<T>>,
     pub(crate) global: RwLock<Vec<T>>,
     pub(crate) public: RwLock<Vec<T>>,
     pub(crate) challenges: RwLock<Vec<T>>,
+    pub(crate) memory: RwLock<MemoryMap<T>>,
     pub height: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TraceWriter<T>(pub Arc<WriterData<T>>);
+pub struct InnerWriterData<F> {
+    pub trace: AirTrace<F>,
+    pub global: Vec<F>,
+    pub public: Vec<F>,
+    pub challenges: Vec<F>,
+}
 
-impl<T> TraceWriter<T> {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TraceWriter<T: PartialEq + Eq + Hash>(pub Arc<WriterData<T>>);
+
+impl<T: PartialEq + Eq + Hash> TraceWriter<T> {
     #[inline]
     pub fn new<L: AirParameters<Field = T>>(air_data: &AirTraceData<L>, num_rows: usize) -> Self
     where
@@ -50,6 +129,26 @@ impl<T> TraceWriter<T> {
             num_public_inputs,
             num_global_values,
         )
+    }
+
+    pub fn into_inner(self) -> Result<InnerWriterData<T>>
+    where
+        T: 'static + Send + Sync,
+    {
+        let WriterData {
+            trace,
+            global,
+            public,
+            challenges,
+            ..
+        } = Arc::into_inner(self.0).ok_or(anyhow!("Arc unpacking failed"))?;
+
+        Ok(InnerWriterData {
+            trace: RwLock::into_inner(trace)?,
+            global: RwLock::into_inner(global)?,
+            public: RwLock::into_inner(public)?,
+            challenges: RwLock::into_inner(challenges)?,
+        })
     }
 
     #[inline]
@@ -69,6 +168,7 @@ impl<T> TraceWriter<T> {
             global: RwLock::new(vec![value; num_global_values]),
             public: RwLock::new(vec![value; num_public_inputs]),
             challenges: RwLock::new(Vec::new()),
+            memory: RwLock::new(MemoryMap::new()),
             height,
         }))
     }
@@ -103,6 +203,14 @@ impl<T> TraceWriter<T> {
 
     pub fn public(&self) -> LockResult<RwLockReadGuard<'_, Vec<T>>> {
         self.0.public.read()
+    }
+
+    pub fn memory(&self) -> LockResult<RwLockReadGuard<'_, MemoryMap<T>>> {
+        self.0.memory.read()
+    }
+
+    pub fn memory_mut(&self) -> LockResult<RwLockWriteGuard<'_, MemoryMap<T>>> {
+        self.0.memory.write()
     }
 }
 
@@ -359,7 +467,7 @@ impl<F: Field> TraceWriter<F> {
     }
 }
 
-impl<T> Deref for TraceWriter<T> {
+impl<T: PartialEq + Eq + Hash> Deref for TraceWriter<T> {
     type Target = WriterData<T>;
 
     #[inline]

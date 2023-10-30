@@ -5,13 +5,12 @@ use crate::air::AirConstraint;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::bit::BitRegister;
-use crate::chip::register::memory::MemorySlice;
-use crate::chip::register::{Register, RegisterSerializable};
+use crate::chip::register::Register;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
 use crate::chip::uint::bytes::operations::instruction::ByteOperationInstruction;
 use crate::chip::uint::bytes::operations::value::ByteOperation;
-use crate::chip::uint::register::{to_le_limbs, ByteArrayRegister, U32Register, U64Register};
+use crate::chip::uint::register::{ByteArrayRegister, U32Register, U64Register};
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
@@ -107,10 +106,10 @@ impl<L: AirParameters> AirBuilder<L> {
     ) where
         L::Instruction: From<ByteArrayAdd<4>> + From<ByteOperationInstruction>,
     {
-        let result_as_register = to_le_limbs::<8, 4>(result);
+        let result_as_register = result.to_le_limbs::<4>();
 
-        let a_as_register = to_le_limbs::<8, 4>(a);
-        let b_as_register = to_le_limbs::<8, 4>(b);
+        let a_as_register = a.to_le_limbs::<4>();
+        let b_as_register = b.to_le_limbs::<4>();
 
         let lower_carry = self.alloc::<BitRegister>();
 
@@ -202,18 +201,6 @@ impl<AP: AirParser, const N: usize> AirConstraint<AP> for ByteArrayAdd<N> {
 }
 
 impl<F: PrimeField64> Instruction<F> for ByteArrayAdd<4> {
-    fn inputs(&self) -> Vec<MemorySlice> {
-        let mut inputs = vec![*self.a.register(), *self.b.register()];
-        if let Some(carry) = self.in_carry {
-            inputs.push(*carry.register());
-        }
-        inputs
-    }
-
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        vec![*self.result.register(), *self.result_carry.register()]
-    }
-
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let a = writer.read(&self.a, row_index);
         let b = writer.read(&self.b, row_index);

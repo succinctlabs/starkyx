@@ -54,7 +54,7 @@ impl<'a, T> TraceView<'a, T> {
         }
     }
 
-    pub fn windows_iter(&'a self) -> impl Iterator<Item = TraceWindow<'a, T>> {
+    pub fn windows(&'a self) -> impl Iterator<Item = TraceWindow<'a, T>> {
         let last_row = self.height() - 1;
         (0..=last_row).map(|r| self.window(r))
     }

@@ -9,6 +9,7 @@ use super::channel::BusChannel;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::{CubicRegister, EvalCubic};
+use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::table::log_derivative::entry::LogEntry;
 use crate::chip::AirParameters;
@@ -48,12 +49,16 @@ impl<L: AirParameters> AirBuilder<L> {
         }
     }
 
-    pub fn constrain_bus(&mut self, mut bus: Bus<CubicRegister, L::CubicParams>) {
-        let global_accumulators =
-            self.alloc_array_global::<CubicRegister>(bus.global_entries.len() / 2);
-        bus.global_accumulators = global_accumulators;
+    pub fn constrain_bus(&mut self, bus: Bus<CubicRegister, L::CubicParams>) {
         self.buses.push(bus.clone());
-        self.global_constraints.push(bus.into());
+    }
+
+    pub fn register_bus_constraint(&mut self, index: usize) {
+        let global_entries_len = self.buses[index].global_entries.len();
+        let global_accumulators = self.alloc_array_global::<CubicRegister>(global_entries_len / 2);
+        self.buses[index].global_accumulators = global_accumulators;
+        self.global_constraints
+            .push(self.buses[index].clone().into());
     }
 }
 
@@ -78,6 +83,24 @@ impl<T: EvalCubic, E: Clone> Bus<T, E> {
             }
             MemorySlice::Public(..) => {
                 self.global_entries.push(LogEntry::Input(*value));
+            }
+            _ => panic!("Expected public or global register"),
+        }
+    }
+
+    pub fn insert_global_value_with_multiplicity(
+        &mut self,
+        value: &T,
+        multiplicity: ElementRegister,
+    ) {
+        match value.register() {
+            MemorySlice::Global(..) => {
+                self.global_entries
+                    .push(LogEntry::InputMultiplicity(*value, multiplicity));
+            }
+            MemorySlice::Public(..) => {
+                self.global_entries
+                    .push(LogEntry::InputMultiplicity(*value, multiplicity));
             }
             _ => panic!("Expected public or global register"),
         }

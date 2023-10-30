@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::writer::TraceWriter;
 use crate::chip::instruction::set::AirInstruction;
+use crate::chip::memory::pointer::accumulate::PointerAccumulator;
 use crate::chip::register::cubic::CubicRegister;
 use crate::chip::table::accumulator::Accumulator;
 use crate::chip::table::bus::channel::BusChannel;
@@ -20,6 +21,8 @@ pub struct AirTraceData<L: AirParameters> {
     pub instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
+    pub pointer_row_accumulators: Vec<PointerAccumulator<L::Field, L::CubicParams>>,
+    pub pointer_global_accumulators: Vec<PointerAccumulator<L::Field, L::CubicParams>>,
     pub bus_channels: Vec<BusChannel<CubicRegister, L::CubicParams>>,
     pub buses: Vec<Bus<CubicRegister, L::CubicParams>>,
     pub lookup_values: Vec<LookupValues<L::Field, L::CubicParams>>,
@@ -33,6 +36,17 @@ pub struct AirTraceData<L: AirParameters> {
 
 impl<L: AirParameters> AirTraceData<L> {
     pub fn write_extended_trace(&self, writer: &TraceWriter<L::Field>) {
+        let num_rows = writer.read_trace().unwrap().height();
+        // Write pointer accumulations.
+        for acc in self.pointer_global_accumulators.iter() {
+            writer.write_ptr_accumulation(acc, 0);
+        }
+        for i in 0..num_rows {
+            for acc in self.pointer_row_accumulators.iter() {
+                writer.write_ptr_accumulation(acc, i);
+            }
+        }
+
         // Write accumulations.
         for acc in self.accumulators.iter() {
             writer.write_accumulation(acc);

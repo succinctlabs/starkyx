@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::cubic::{CubicRegister, EvalCubic};
+use crate::chip::register::element::ElementRegister;
 use crate::chip::table::log_derivative::entry::LogEntry;
 use crate::chip::AirParameters;
 
@@ -48,6 +49,16 @@ impl<L: AirParameters> AirBuilder<L> {
         self.add_accumulators(channel_idx);
     }
 
+    pub fn input_to_bus_with_multiplicity(
+        &mut self,
+        channel_idx: usize,
+        value: CubicRegister,
+        multiplicity: ElementRegister,
+    ) {
+        self.bus_channels[channel_idx].input_with_multiplicity(value, multiplicity);
+        self.add_accumulators(channel_idx);
+    }
+
     pub fn output_from_bus(&mut self, channel_idx: usize, value: CubicRegister) {
         self.bus_channels[channel_idx].output(value);
         self.add_accumulators(channel_idx);
@@ -60,6 +71,16 @@ impl<L: AirParameters> AirBuilder<L> {
         filter: BitRegister,
     ) {
         self.bus_channels[channel_idx].output_filtered(value, filter);
+        self.add_accumulators(channel_idx);
+    }
+
+    pub fn output_from_bus_with_multiplicity(
+        &mut self,
+        channel_idx: usize,
+        value: CubicRegister,
+        multiplicity: ElementRegister,
+    ) {
+        self.bus_channels[channel_idx].output_with_multiplicity(value, multiplicity);
         self.add_accumulators(channel_idx);
     }
 }
@@ -88,8 +109,13 @@ impl<T: EvalCubic, E> BusChannel<T, E> {
 
     #[inline]
     pub fn input_filtered(&mut self, value: T, filter: BitRegister) {
+        self.input_with_multiplicity(value, filter.as_element())
+    }
+
+    #[inline]
+    pub fn input_with_multiplicity(&mut self, value: T, multiplicity: ElementRegister) {
         self.entries
-            .push(LogEntry::InputMultiplicity(value, filter.as_element()));
+            .push(LogEntry::InputMultiplicity(value, multiplicity));
     }
 
     #[inline]
@@ -99,8 +125,13 @@ impl<T: EvalCubic, E> BusChannel<T, E> {
 
     #[inline]
     pub fn output_filtered(&mut self, value: T, filter: BitRegister) {
+        self.output_with_multiplicity(value, filter.as_element())
+    }
+
+    #[inline]
+    pub fn output_with_multiplicity(&mut self, value: T, multiplicity: ElementRegister) {
         self.entries
-            .push(LogEntry::OutputMultiplicity(value, filter.as_element()))
+            .push(LogEntry::OutputMultiplicity(value, multiplicity))
     }
 }
 

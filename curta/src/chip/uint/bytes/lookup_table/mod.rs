@@ -11,11 +11,8 @@ use super::operations::instruction::ByteOperationInstruction;
 use super::operations::value::ByteOperationDigestConstraint;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
-use crate::chip::bool::SelectInstruction;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
-use crate::chip::register::bit::BitRegister;
-use crate::chip::register::memory::MemorySlice;
 use crate::chip::table::lookup::values::LogLookupValues;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::AirParameters;
@@ -32,7 +29,6 @@ pub enum ByteInstructionSet {
     BitAnd(And<8>),
     BitXor(Xor<8>),
     BitNot(Not<8>),
-    BitSelect(SelectInstruction<BitRegister>),
     Decode(ByteDecodeInstruction),
     Digest(ByteOperationDigestConstraint),
 }
@@ -40,7 +36,6 @@ pub enum ByteInstructionSet {
 pub trait ByteInstructions:
     From<ByteInstructionSet>
     + From<ByteOperationInstruction>
-    + From<SelectInstruction<BitRegister>>
     + From<ByteDecodeInstruction>
     + From<ByteOperationDigestConstraint>
 {
@@ -51,9 +46,7 @@ impl ByteInstructions for ByteInstructionSet {}
 impl<L: AirParameters> AirBuilder<L> {
     pub fn byte_operations(&mut self) -> ByteLookupOperations
     where
-        L::Instruction: From<ByteInstructionSet>
-            + From<SelectInstruction<BitRegister>>
-            + From<ByteDecodeInstruction>,
+        L::Instruction: From<ByteInstructionSet> + From<ByteDecodeInstruction>,
     {
         ByteLookupOperations::new()
     }
@@ -91,7 +84,6 @@ impl<AP: AirParser> AirConstraint<AP> for ByteInstructionSet {
             Self::BitAnd(op) => op.eval(parser),
             Self::BitXor(op) => op.eval(parser),
             Self::BitNot(op) => op.eval(parser),
-            Self::BitSelect(op) => op.eval(parser),
             Self::Decode(instruction) => instruction.eval(parser),
             Self::Digest(instruction) => instruction.eval(parser),
         }
@@ -99,37 +91,12 @@ impl<AP: AirParser> AirConstraint<AP> for ByteInstructionSet {
 }
 
 impl<F: PrimeField64> Instruction<F> for ByteInstructionSet {
-    fn inputs(&self) -> Vec<MemorySlice> {
-        match self {
-            Self::Op(op) => Instruction::<F>::inputs(op),
-            Self::BitAnd(op) => Instruction::<F>::inputs(op),
-            Self::BitXor(op) => Instruction::<F>::inputs(op),
-            Self::BitNot(op) => Instruction::<F>::inputs(op),
-            Self::BitSelect(op) => Instruction::<F>::inputs(op),
-            Self::Decode(instruction) => Instruction::<F>::inputs(instruction),
-            Self::Digest(instruction) => Instruction::<F>::inputs(instruction),
-        }
-    }
-
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        match self {
-            Self::Op(op) => Instruction::<F>::trace_layout(op),
-            Self::BitAnd(op) => Instruction::<F>::trace_layout(op),
-            Self::BitXor(op) => Instruction::<F>::trace_layout(op),
-            Self::BitNot(op) => Instruction::<F>::trace_layout(op),
-            Self::BitSelect(op) => Instruction::<F>::trace_layout(op),
-            Self::Decode(instruction) => Instruction::<F>::trace_layout(instruction),
-            Self::Digest(instruction) => Instruction::<F>::trace_layout(instruction),
-        }
-    }
-
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         match self {
             Self::Op(op) => Instruction::<F>::write(op, writer, row_index),
             Self::BitAnd(op) => Instruction::<F>::write(op, writer, row_index),
             Self::BitXor(op) => Instruction::<F>::write(op, writer, row_index),
             Self::BitNot(op) => Instruction::<F>::write(op, writer, row_index),
-            Self::BitSelect(op) => Instruction::<F>::write(op, writer, row_index),
             Self::Decode(instruction) => Instruction::<F>::write(instruction, writer, row_index),
             Self::Digest(instruction) => Instruction::<F>::write(instruction, writer, row_index),
         }
@@ -157,12 +124,6 @@ impl From<Xor<8>> for ByteInstructionSet {
 impl From<Not<8>> for ByteInstructionSet {
     fn from(op: Not<8>) -> Self {
         Self::BitNot(op)
-    }
-}
-
-impl From<SelectInstruction<BitRegister>> for ByteInstructionSet {
-    fn from(op: SelectInstruction<BitRegister>) -> Self {
-        Self::BitSelect(op)
     }
 }
 
