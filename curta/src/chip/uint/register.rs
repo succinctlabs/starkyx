@@ -1,10 +1,18 @@
 use serde::{Deserialize, Serialize};
 
 use super::bytes::register::ByteRegister;
+use crate::chip::arithmetic::expression::ArithmeticExpression;
+use crate::chip::builder::AirBuilder;
+use crate::chip::memory::pointer::raw::RawPointer;
+use crate::chip::memory::time::Time;
+use crate::chip::memory::value::MemoryValue;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cell::CellType;
+use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
+use crate::math::prelude::cubic::element::CubicElement;
+use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct ByteArrayRegister<const N: usize>(MemorySlice);
@@ -17,6 +25,16 @@ pub type U64Register = ByteArrayRegister<8>;
 impl<const N: usize> ByteArrayRegister<N> {
     pub fn to_le_bytes(&self) -> ArrayRegister<ByteRegister> {
         ArrayRegister::from_register_unsafe(self.0)
+    }
+
+    pub fn to_le_limbs<const M: usize>(&self) -> ArrayRegister<ByteArrayRegister<M>> {
+        assert!(N % M == 0);
+        ArrayRegister::from_register_unsafe(self.0)
+    }
+
+    pub fn from_limbs<const M: usize>(register: &ArrayRegister<ByteArrayRegister<M>>) -> Self {
+        assert!(N % M == 0);
+        Self::from_register_unsafe(*register.register())
     }
 }
 
@@ -51,21 +69,50 @@ impl<const N: usize> Register for ByteArrayRegister<N> {
     }
 }
 
-/// N is the number of bytes in the input register.
-/// M is the number of bytes that the input register is split into.
-pub fn to_le_limbs<const N: usize, const M: usize>(
-    register: &ByteArrayRegister<N>,
-) -> ArrayRegister<ByteArrayRegister<M>> {
-    assert!(N % M == 0);
-    ArrayRegister::from_register_unsafe(register.0)
+impl MemoryValue for U32Register {
+    fn compress<L: crate::chip::AirParameters>(
+        &self,
+        builder: &mut AirBuilder<L>,
+        ptr: RawPointer,
+        time: &Time<L::Field>,
+    ) -> CubicRegister {
+        let bytes = self.to_le_bytes();
+        let mut acc_expression = ArithmeticExpression::zero();
+
+        for (i, byte) in bytes.iter().enumerate() {
+            let two_i = ArithmeticExpression::from(L::Field::from_canonical_u32(1 << (8 * i)));
+            acc_expression = acc_expression + two_i * byte.expr();
+        }
+
+        let two_32 = ArithmeticExpression::from(L::Field::from_canonical_u64(1 << 32));
+        acc_expression = acc_expression + two_32 * time.expr();
+
+        ptr.accumulate(builder, acc_expression)
+    }
 }
 
-pub fn from_limbs<const N: usize, const M: usize>(
-    register: &ArrayRegister<ByteArrayRegister<M>>,
-) -> ByteArrayRegister<N> {
-    assert!(N % M == 0);
+impl MemoryValue for U64Register {
+    fn compress<L: crate::chip::AirParameters>(
+        &self,
+        builder: &mut AirBuilder<L>,
+        ptr: RawPointer,
+        time: &Time<L::Field>,
+    ) -> CubicRegister {
+        let bytes = self.to_le_bytes();
+        let low_bytes = bytes.get_subarray(0..4);
+        let high_bytes = bytes.get_subarray(4..8);
 
-    ByteArrayRegister::<N>::from_register_unsafe(*register.register())
+        let mut acc_low = ArithmeticExpression::zero();
+        let mut acc_high = ArithmeticExpression::zero();
+
+        for (i, (byte_low, byte_high)) in low_bytes.iter().zip(high_bytes).enumerate() {
+            let two_i = ArithmeticExpression::from(L::Field::from_canonical_u32(1 << (8 * i)));
+            acc_low = acc_low + two_i.clone() * byte_low.expr();
+            acc_high = acc_high + two_i * byte_high.expr();
+        }
+        let accumulated_expr = CubicElement([acc_low, acc_high, time.expr()]);
+        ptr.accumulate_cubic(builder, accumulated_expr)
+    }
 }
 
 #[cfg(test)]
@@ -74,7 +121,7 @@ mod tests {
 
     use super::*;
     use crate::chip::builder::AirBuilder;
-    use crate::chip::uint::operations::instruction::U32Instruction;
+    use crate::chip::uint::operations::instruction::UintInstruction;
     use crate::chip::AirParameters;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
 
@@ -85,7 +132,7 @@ mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        type Instruction = U32Instruction;
+        type Instruction = UintInstruction;
 
         const NUM_FREE_COLUMNS: usize = 2;
         const EXTENDED_COLUMNS: usize = 2;
@@ -103,9 +150,9 @@ mod tests {
 
         let a = builder.alloc::<ByteArrayRegister<N>>();
 
-        let a_as_limbs = to_le_limbs::<N, M>(&a);
+        let a_as_limbs = a.to_le_limbs::<M>();
 
-        let b = from_limbs::<N, M>(&a_as_limbs);
+        let b = ByteArrayRegister::<N>::from_limbs(&a_as_limbs);
 
         builder.assert_equal(&a, &b);
     }

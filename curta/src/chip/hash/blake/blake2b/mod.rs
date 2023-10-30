@@ -17,7 +17,7 @@ use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
 use crate::chip::table::bus::global::Bus;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
-use crate::chip::uint::operations::instruction::U32Instructions;
+use crate::chip::uint::operations::instruction::UintInstructions;
 use crate::chip::uint::register::U64Register;
 use crate::chip::uint::util::u64_to_le_field_bytes;
 use crate::chip::AirParameters;
@@ -109,7 +109,7 @@ impl<L: AirParameters> AirBuilder<L> {
         operations: &mut ByteLookupOperations,
     ) -> BLAKE2BGadget
     where
-        L::Instruction: U32Instructions,
+        L::Instruction: UintInstructions,
     {
         let num_rows = MAX_NUM_CHUNKS * NUM_MIX_ROUNDS;
         assert!(num_rows <= (1 << 16));
@@ -249,7 +249,7 @@ impl<L: AirParameters> AirBuilder<L> {
         msg_pad_row: &BitRegister,
         operations: &mut ByteLookupOperations,
     ) where
-        L::Instruction: U32Instructions,
+        L::Instruction: UintInstructions,
     {
         let v_compress_init = self.blake2b_compress_initialize(
             iv_pub,
@@ -455,7 +455,7 @@ impl<L: AirParameters> AirBuilder<L> {
         operations: &mut ByteLookupOperations,
     ) -> [U64Register; WORK_VECTOR_SIZE]
     where
-        L::Instruction: U32Instructions,
+        L::Instruction: UintInstructions,
     {
         // Need to create non public registers for IV and inversion_const.
         // Operations that use both public and private registers causes issues.
@@ -540,7 +540,7 @@ impl<L: AirParameters> AirBuilder<L> {
         v_output: &ArrayRegister<U64Register>,
         operations: &mut ByteLookupOperations,
     ) where
-        L::Instruction: U32Instructions,
+        L::Instruction: UintInstructions,
     {
         self.blake2b_mix(v_0, v_4, v_8, v_12, &m.get(0), &m.get(1), operations);
 
@@ -587,7 +587,7 @@ impl<L: AirParameters> AirBuilder<L> {
         y: &U64Register,
         operations: &mut ByteLookupOperations,
     ) where
-        L::Instruction: U32Instructions,
+        L::Instruction: UintInstructions,
     {
         *v_a = self.add_u64(v_a, v_b, operations);
         *v_a = self.add_u64(v_a, x, operations);
@@ -637,7 +637,7 @@ impl<L: AirParameters> AirBuilder<L> {
         max_chunk_public: &ArrayRegister<BitRegister>,
         hash_state: &ArrayRegister<U64Register>,
     ) where
-        L::Instruction: U32Instructions,
+        L::Instruction: UintInstructions,
     {
         // Get message chunk challenges
         let message_chunk_challenges = self

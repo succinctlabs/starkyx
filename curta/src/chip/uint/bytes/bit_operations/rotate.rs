@@ -4,7 +4,6 @@
 //! a << (b + c) = (a << b) << c
 //! a << (b + 2^i c) = (a << b) << 2^i c = ((a << b) << c) << 2^(i-1) c
 
-use crate::chip::bool::SelectInstruction;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
@@ -16,10 +15,7 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         a: &ArrayRegister<BitRegister>,
         b: &ArrayRegister<BitRegister>,
-    ) -> ArrayRegister<BitRegister>
-    where
-        L::Instruction: From<SelectInstruction<BitRegister>>,
-    {
+    ) -> ArrayRegister<BitRegister> {
         let result = self.alloc_array::<BitRegister>(a.len());
         self.set_rotate_right(a, b, &result);
         result
@@ -30,9 +26,7 @@ impl<L: AirParameters> AirBuilder<L> {
         a: &ArrayRegister<BitRegister>,
         b: &ArrayRegister<BitRegister>,
         result: &ArrayRegister<BitRegister>,
-    ) where
-        L::Instruction: From<SelectInstruction<BitRegister>>,
-    {
+    ) {
         let n = a.len();
         let m = b.len();
         assert!(m <= n, "b must be shorter or eual length to a");
@@ -66,10 +60,7 @@ impl<L: AirParameters> AirBuilder<L> {
         &mut self,
         a: &ArrayRegister<BitRegister>,
         b: &ArrayRegister<BitRegister>,
-    ) -> ArrayRegister<BitRegister>
-    where
-        L::Instruction: From<SelectInstruction<BitRegister>>,
-    {
+    ) -> ArrayRegister<BitRegister> {
         let result = self.alloc_array::<BitRegister>(a.len());
         self.set_rotate_left(a, b, &result);
         result
@@ -80,9 +71,7 @@ impl<L: AirParameters> AirBuilder<L> {
         a: &ArrayRegister<BitRegister>,
         b: &ArrayRegister<BitRegister>,
         result: &ArrayRegister<BitRegister>,
-    ) where
-        L::Instruction: From<SelectInstruction<BitRegister>>,
-    {
+    ) {
         let n = a.len();
         let m = b.len();
         assert!(m <= n, "b must be shorter or eual length to a");
@@ -118,7 +107,6 @@ pub mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::chip::bool::SelectInstruction;
     pub use crate::chip::builder::tests::*;
     use crate::chip::builder::AirBuilder;
     use crate::chip::AirParameters;
@@ -130,7 +118,7 @@ pub mod tests {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        type Instruction = SelectInstruction<BitRegister>;
+        type Instruction = EmptyInstruction<GoldilocksField>;
 
         const NUM_FREE_COLUMNS: usize = 2 * N + M * N + N;
     }
