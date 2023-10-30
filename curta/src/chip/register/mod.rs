@@ -59,7 +59,7 @@ pub trait Register:
 {
     type Value<T>;
 
-    // Determins the layout of Value<T> as a slice that can be assigned to the trace.
+    // Determines the layout of Value<T> as a slice that can be assigned to the trace.
     fn align<T>(value: &Self::Value<T>) -> &[T];
 
     // Gets a new value from a slice.

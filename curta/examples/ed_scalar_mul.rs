@@ -12,7 +12,7 @@
 //! RUST_LOG="debug" cargo run --release --example ed_scalar_mul
 //! ```
 //!
-//! For maximum performence, set the compiler flag to optimize for your CPU architecture:
+//! For maximum performance, set the compiler flag to optimize for your CPU architecture:
 //! ```
 //! RUST_LOG="debug" RUSTFLAGS=-Ctarget-cpu=native cargo run --release --example ed_scalar_mul
 //! ```
@@ -88,7 +88,7 @@ fn main() {
 
     // These results will be allocated automatically into the trace once `points` and
     // `scalars` are written into the trace.
-    // We can compare these results with the expected results by writing these explicitely
+    // We can compare these results with the expected results by writing these explicitly
     // into the trace.
     let expected_results = (0..256)
         .map(|_| {
@@ -103,7 +103,7 @@ fn main() {
         builder.register_public_inputs(&point.y);
     }
 
-    // Compare the results to the expeced results
+    // Compare the results to the expected results
     for (res, expected) in results.iter().zip(expected_results.iter()) {
         builder.connect_affine_point(res, expected);
     }

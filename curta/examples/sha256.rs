@@ -13,7 +13,7 @@
 //! RUST_LOG="debug" cargo run --release --example sha256
 //! ```
 //!
-//! For maximum performence, set the compiler flag to optimize for your CPU architecture:
+//! For maximum performance, set the compiler flag to optimize for your CPU architecture:
 //! ```
 //! RUST_LOG="debug" RUSTFLAGS=-Ctarget-cpu=native cargo run --release --example sha256
 //! ```
