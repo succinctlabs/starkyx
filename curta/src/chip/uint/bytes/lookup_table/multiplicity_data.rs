@@ -23,6 +23,7 @@ pub struct MultiplicityData {
     pub operations_dict: HashMap<usize, Vec<ByteOperation<u8>>>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ByteMultiplicityData {
     data: MultiplicityData,
     trace_values: Vec<LogEntry<ElementRegister>>,

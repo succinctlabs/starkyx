@@ -8,7 +8,6 @@ use crate::air::AirConstraint;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
-use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::u16::U16Register;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::trace::writer::TraceWriter;
@@ -96,19 +95,6 @@ impl<AP: PolynomialParser, P: FieldParameters> AirConstraint<AP> for FpDenInstru
 }
 
 impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpDenInstruction<P> {
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        vec![
-            *self.result.register(),
-            *self.carry.register(),
-            *self.witness_low.register(),
-            *self.witness_high.register(),
-        ]
-    }
-
-    fn inputs(&self) -> Vec<MemorySlice> {
-        vec![*self.a.register(), *self.b.register()]
-    }
-
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let p_a = writer.read(&self.a, row_index);
         let p_b = writer.read(&self.b, row_index);

@@ -57,8 +57,14 @@ impl<F: Field> ArithmeticExpression<F> {
         self.expression.eval(parser)
     }
 
+    /// Returns the registers used in the expression.
     pub fn registers(&self) -> Vec<MemorySlice> {
         self.expression.registers()
+    }
+
+    /// Returns true if any of the registers in the expression is a trace register.
+    pub fn is_trace(&self) -> bool {
+        !self.registers().iter().all(|reg| !reg.is_trace())
     }
 }
 

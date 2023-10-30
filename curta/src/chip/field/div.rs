@@ -8,9 +8,7 @@ use crate::air::AirConstraint;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
-use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::u16::U16Register;
-use crate::chip::register::RegisterSerializable;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::utils::digits_to_biguint;
 use crate::chip::AirParameters;
@@ -107,30 +105,6 @@ impl<AP: PolynomialParser, P: FieldParameters> AirConstraint<AP> for FpDivInstru
 }
 
 impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpDivInstruction<P> {
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        let mut layout = vec![
-            *self.denominator.b.register(),
-            *self.denominator.carry.register(),
-            *self.denominator.witness_low.register(),
-            *self.denominator.witness_high.register(),
-        ];
-        layout.extend_from_slice(&Instruction::<F>::trace_layout(&self.multiplication));
-        layout
-    }
-
-    fn inputs(&self) -> Vec<MemorySlice> {
-        let mut inputs = vec![
-            *self.denominator.a.register(),
-            *self.denominator.result.register(),
-        ];
-        inputs.extend_from_slice(&Instruction::<F>::inputs(&self.multiplication));
-        inputs
-    }
-
-    fn constraint_degree(&self) -> usize {
-        2
-    }
-
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let p_b = writer.read(&self.denominator.a, row_index);
 

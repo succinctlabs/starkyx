@@ -5,8 +5,6 @@ use crate::air::AirConstraint;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
-use crate::chip::register::memory::MemorySlice;
-use crate::chip::register::RegisterSerializable;
 use crate::chip::trace::writer::TraceWriter;
 pub use crate::math::prelude::*;
 
@@ -34,18 +32,6 @@ impl<AP: AirParser, const NUM_BITS: usize> AirConstraint<AP> for And<NUM_BITS> {
 }
 
 impl<F: Field, const NUM_BITS: usize> Instruction<F> for And<NUM_BITS> {
-    fn inputs(&self) -> Vec<MemorySlice> {
-        vec![*self.a.register(), *self.b.register()]
-    }
-
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        vec![*self.result.register()]
-    }
-
-    fn constraint_degree(&self) -> usize {
-        2
-    }
-
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let a = writer.read_array::<_, NUM_BITS>(&self.a, row_index);
         let b = writer.read_array::<_, NUM_BITS>(&self.b, row_index);

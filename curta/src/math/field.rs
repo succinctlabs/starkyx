@@ -138,6 +138,10 @@ pub trait PrimeField64: PrimeField + Serialize + for<'de> Deserialize<'de> {
     // const ORDER_U64: u64;
 
     fn as_canonical_u64(&self) -> u64;
+
+    fn order() -> u64 {
+        (-Self::ONE).as_canonical_u64() + 1
+    }
 }
 
 /// A prime field of order less than `2^32`.

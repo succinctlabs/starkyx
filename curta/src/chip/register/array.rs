@@ -13,7 +13,7 @@ use crate::math::field::Field;
 /// A helper struct for representing an array of registers. In particular, it makes it easier
 /// to access the memory slice as well as converting from a memory slice to the struct.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct ArrayRegister<T: Register> {
+pub struct ArrayRegister<T> {
     register: MemorySlice,
     length: usize,
     _marker: PhantomData<T>,
