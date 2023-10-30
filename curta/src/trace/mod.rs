@@ -11,7 +11,7 @@ use plonky2_maybe_rayon::rayon::slice::{
 use serde::{Deserialize, Serialize};
 
 use self::view::{TraceView, TraceViewMut};
-use self::window::TraceWindow;
+use self::window::{TraceWindow, TraceWindowMut, TraceWindowsMutIter};
 use crate::maybe_rayon::*;
 
 /// A stark trace which is stored as a matrix in row major order
@@ -154,9 +154,53 @@ impl<T> AirTrace<T> {
     }
 
     #[inline]
-    pub fn windows_iter(&self) -> impl Iterator<Item = TraceWindow<'_, T>> {
+    pub fn window_mut(&mut self, row: usize) -> TraceWindowMut<'_, T> {
+        debug_assert!(row < self.height());
+        let last_row = self.height() - 1;
+        // &mut self.values[r * self.width..(r + 1) * self.width];
+        match row {
+            0 => {
+                let (first_row, rest) = self.values.split_at_mut(self.width);
+                TraceWindowMut {
+                    local_slice: first_row,
+                    next_slice: &mut rest[..self.width],
+                    row: 0,
+                    is_first_row: true,
+                    is_last_row: last_row == 0,
+                }
+            }
+            r if r == last_row => {
+                let (first_row, rest) = self.values.split_at_mut(self.width);
+                TraceWindowMut {
+                    local_slice: &mut rest[last_row * self.width..],
+                    next_slice: first_row,
+                    row: r,
+                    is_first_row: false,
+                    is_last_row: true,
+                }
+            }
+            r => {
+                let (first_r_rows, rest) = self.values.split_at_mut((r + 1) * self.width);
+                TraceWindowMut {
+                    local_slice: &mut first_r_rows[r * self.width..],
+                    next_slice: &mut rest[..self.width],
+                    row: r,
+                    is_first_row: false,
+                    is_last_row: false,
+                }
+            }
+        }
+    }
+
+    #[inline]
+    pub fn windows(&self) -> impl Iterator<Item = TraceWindow<'_, T>> {
         let last_row = self.height() - 1;
         (0..=last_row).map(|r| self.window(r))
+    }
+
+    pub fn windows_mut(&mut self) -> TraceWindowsMutIter<'_, T> {
+        let height = self.height();
+        TraceWindowsMutIter::new(&mut self.values, self.width, height)
     }
 
     #[inline]

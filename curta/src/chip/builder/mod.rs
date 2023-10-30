@@ -5,12 +5,12 @@ pub mod shared_memory;
 
 use core::cmp::Ordering;
 
-use anyhow::Result;
-
 use self::shared_memory::SharedMemory;
 use super::arithmetic::expression::ArithmeticExpression;
 use super::constraint::Constraint;
 use super::instruction::set::AirInstruction;
+use super::memory::pointer::accumulate::PointerAccumulator;
+use super::register::array::ArrayRegister;
 use super::register::cubic::CubicRegister;
 use super::register::element::ElementRegister;
 use super::register::{Register, RegisterSerializable};
@@ -29,16 +29,16 @@ use crate::math::prelude::*;
 pub struct AirBuilder<L: AirParameters> {
     local_index: usize,
     local_arithmetic_index: usize,
-    next_arithmetic_index: usize,
-    next_index: usize,
     extended_index: usize,
-    shared_memory: SharedMemory,
+    pub(crate) shared_memory: SharedMemory,
     global_arithmetic: Vec<ElementRegister>,
     pub(crate) instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub(crate) global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub(crate) constraints: Vec<Constraint<L>>,
     pub(crate) global_constraints: Vec<Constraint<L>>,
     pub(crate) accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
+    pub(crate) pointer_row_accumulators: Vec<PointerAccumulator<L::Field, L::CubicParams>>,
+    pub(crate) pointer_global_accumulators: Vec<PointerAccumulator<L::Field, L::CubicParams>>,
     pub(crate) bus_channels: Vec<BusChannel<CubicRegister, L::CubicParams>>,
     pub(crate) buses: Vec<Bus<CubicRegister, L::CubicParams>>,
     pub(crate) lookup_values: Vec<LookupValues<L::Field, L::CubicParams>>,
@@ -62,9 +62,7 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn new_with_shared_memory(shared_memory: SharedMemory) -> Self {
         Self {
             local_index: L::NUM_ARITHMETIC_COLUMNS,
-            next_index: L::NUM_ARITHMETIC_COLUMNS,
             local_arithmetic_index: 0,
-            next_arithmetic_index: 0,
             extended_index: L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS,
             global_arithmetic: Vec::new(),
             shared_memory,
@@ -73,6 +71,8 @@ impl<L: AirParameters> AirBuilder<L> {
             constraints: Vec::new(),
             global_constraints: Vec::new(),
             accumulators: Vec::new(),
+            pointer_row_accumulators: Vec::new(),
+            pointer_global_accumulators: Vec::new(),
             bus_channels: Vec::new(),
             buses: Vec::new(),
             lookup_values: Vec::new(),
@@ -82,12 +82,29 @@ impl<L: AirParameters> AirBuilder<L> {
         }
     }
 
-    /// Adds the ability to write to trace location represented by a data register.
-    ///
-    /// Registers a write instruction into the builder
-    pub fn write_data<T: Register>(&mut self, data: &T) {
-        let instruction = AirInstruction::write(data.register());
-        self.register_air_instruction_internal(instruction).unwrap();
+    pub fn constant<T: Register>(&mut self, value: &T::Value<L::Field>) -> T {
+        let register = self.alloc_public::<T>();
+        self.set_to_expression_public(
+            &register,
+            ArithmeticExpression::from_constant_vec(T::align(value).to_vec()),
+        );
+        register
+    }
+
+    pub(crate) fn constant_array<T: Register>(
+        &mut self,
+        values: &[T::Value<L::Field>],
+    ) -> ArrayRegister<T> {
+        let array = self.alloc_array_public::<T>(values.len());
+
+        for (register, value) in array.iter().zip(values.iter()) {
+            self.set_to_expression_public(
+                &register,
+                ArithmeticExpression::from_constant_vec(T::align(value).to_vec()),
+            );
+        }
+
+        array
     }
 
     /// Registers an custom instruction with the builder.
@@ -97,7 +114,6 @@ impl<L: AirParameters> AirBuilder<L> {
     {
         let instr = L::Instruction::from(instruction);
         self.register_air_instruction_internal(AirInstruction::from(instr))
-            .unwrap();
     }
 
     /// Registers an custom instruction with the builder.
@@ -107,7 +123,6 @@ impl<L: AirParameters> AirBuilder<L> {
     {
         let instr = L::Instruction::from(instruction);
         self.register_global_air_instruction_internal(AirInstruction::from(instr))
-            .unwrap();
     }
 
     /// Registers an custom instruction with the builder.
@@ -122,35 +137,44 @@ impl<L: AirParameters> AirBuilder<L> {
         let filtered_instr = instr.as_filtered(filter);
 
         self.register_air_instruction_internal(filtered_instr)
-            .unwrap();
     }
 
     /// Register an instruction into the builder.
     pub(crate) fn register_air_instruction_internal(
         &mut self,
         instruction: AirInstruction<L::Field, L::Instruction>,
-    ) -> Result<()> {
+    ) {
         // Add the instruction to the list
         self.instructions.push(instruction.clone());
         // Add the constraints
         self.constraints
             .push(Constraint::from_instruction_set(instruction));
-
-        Ok(())
     }
 
     /// Register a global instruction into the builder.
     pub(crate) fn register_global_air_instruction_internal(
         &mut self,
         instruction: AirInstruction<L::Field, L::Instruction>,
-    ) -> Result<()> {
+    ) {
         // Add the instruction to the list
         self.global_instructions.push(instruction.clone());
         // Add the constraints
         self.global_constraints
             .push(Constraint::from_instruction_set(instruction));
+    }
 
-        Ok(())
+    pub(crate) fn register_constraint<I>(&mut self, constraint: I)
+    where
+        Constraint<L>: From<I>,
+    {
+        self.constraints.push(constraint.into());
+    }
+
+    pub(crate) fn register_global_constraint<I>(&mut self, constraint: I)
+    where
+        Constraint<L>: From<I>,
+    {
+        self.global_constraints.push(constraint.into());
     }
 
     pub fn clock(&mut self) -> ElementRegister {
@@ -163,6 +187,10 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 
     pub fn build(mut self) -> (Chip<L>, AirTraceData<L>) {
+        // Register all bus constraints.
+        for i in 0..self.buses.len() {
+            self.register_bus_constraint(i);
+        }
         // constrain all bus channels
         for channel in self.bus_channels.iter() {
             self.constraints.push(channel.clone().into());
@@ -243,6 +271,8 @@ impl<L: AirParameters> AirBuilder<L> {
                 instructions: self.instructions,
                 global_instructions: self.global_instructions,
                 accumulators: self.accumulators,
+                pointer_row_accumulators: self.pointer_row_accumulators,
+                pointer_global_accumulators: self.pointer_global_accumulators,
                 bus_channels: self.bus_channels,
                 buses: self.buses,
                 lookup_values: self.lookup_values,
@@ -326,7 +356,7 @@ pub(crate) mod tests {
         }
         let trace = generator.trace_clone();
 
-        for window in trace.windows_iter() {
+        for window in trace.windows() {
             assert_eq!(window.local_slice.len(), 2);
             let mut window_parser = TraceWindowParser::new(window, &[], &[], &public_inputs);
             assert_eq!(window_parser.local_slice().len(), 2);

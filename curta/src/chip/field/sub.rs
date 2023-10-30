@@ -6,9 +6,7 @@ use super::register::FieldRegister;
 use crate::air::AirConstraint;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
-use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::u16::U16Register;
-use crate::chip::register::RegisterSerializable;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::utils::digits_to_biguint;
 use crate::chip::AirParameters;
@@ -73,23 +71,6 @@ impl<AP: PolynomialParser, P: FieldParameters> AirConstraint<AP> for FpSubInstru
 
 // Instruction trait
 impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpSubInstruction<P> {
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        vec![
-            *self.inner.a.register(),
-            *self.inner.carry.register(),
-            *self.inner.witness_low.register(),
-            *self.inner.witness_high.register(),
-        ]
-    }
-
-    fn inputs(&self) -> Vec<MemorySlice> {
-        vec![*self.inner.b.register(), *self.inner.result.register()]
-    }
-
-    fn constraint_degree(&self) -> usize {
-        2
-    }
-
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let p_b = writer.read(&self.inner.b, row_index);
         let p_a = writer.read(&self.inner.result, row_index);

@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use super::super::operations::NUM_BIT_OPPS;
 use super::multiplicity_data::MultiplicityData;
 use super::ByteInstructionSet;
-use crate::chip::bool::SelectInstruction;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
@@ -44,9 +43,7 @@ pub struct ByteLogLookupTable<F, E> {
 impl<L: AirParameters> AirBuilder<L> {
     pub fn new_byte_lookup_table(&mut self) -> ByteLogLookupTable<L::Field, L::CubicParams>
     where
-        L::Instruction: From<ByteInstructionSet>
-            + From<SelectInstruction<BitRegister>>
-            + From<ByteDecodeInstruction>,
+        L::Instruction: From<ByteInstructionSet> + From<ByteDecodeInstruction>,
     {
         let multiplicities = self.alloc_array::<ElementRegister>(NUM_BIT_OPPS + 1);
 

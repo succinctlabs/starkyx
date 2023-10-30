@@ -68,7 +68,7 @@ impl<F: PrimeField> TraceWriter<F> {
                 let value = entry.value().read_from_slice(row);
                 let (row_index, col_index) = table_index(value);
                 assert!(col_index < num_table_columns);
-                assert!(row_index < self.height);
+                assert!(row_index < num_rows);
                 multiplicities_trace.row_mut(row_index)[col_index] += 1;
             }
         }

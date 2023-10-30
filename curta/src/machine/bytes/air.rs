@@ -1,20 +1,21 @@
-use plonky2::field::goldilocks_field::GoldilocksField;
+use core::marker::PhantomData;
+
 use serde::{Deserialize, Serialize};
 
-use crate::chip::uint::operations::instruction::U32Instruction;
+use crate::chip::uint::operations::instruction::UintInstruction;
 use crate::chip::AirParameters;
-use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
+use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ByteParameters;
+pub struct ByteParameters<F, E>(pub PhantomData<(F, E)>);
 
-impl AirParameters for ByteParameters {
-    type Field = GoldilocksField;
-    type CubicParams = GoldilocksCubicParameters;
+impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for ByteParameters<F, E> {
+    type Field = F;
+    type CubicParams = E;
 
-    type Instruction = U32Instruction;
+    type Instruction = UintInstruction;
 
     const NUM_ARITHMETIC_COLUMNS: usize = 0;
-    const NUM_FREE_COLUMNS: usize = 1;
-    const EXTENDED_COLUMNS: usize = 1;
+    const NUM_FREE_COLUMNS: usize = 107;
+    const EXTENDED_COLUMNS: usize = 21;
 }

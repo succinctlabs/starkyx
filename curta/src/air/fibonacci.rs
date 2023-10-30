@@ -104,7 +104,7 @@ mod tests {
         ];
         let trace = FibonacciAir::generate_trace(F::ZERO, F::ONE, num_rows);
 
-        for window in trace.windows_iter() {
+        for window in trace.windows() {
             assert_eq!(window.local_slice.len(), 2);
             let mut window_parser = TraceWindowParser::new(window, &[], &[], &public_inputs);
             assert_eq!(window_parser.local_slice().len(), 2);

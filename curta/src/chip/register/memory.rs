@@ -29,6 +29,11 @@ impl MemorySlice {
     }
 
     #[inline]
+    pub fn is_trace(&self) -> bool {
+        matches!(self, MemorySlice::Local(_, _) | MemorySlice::Next(_, _))
+    }
+
+    #[inline]
     pub fn next(&self) -> Self {
         match self {
             MemorySlice::Local(index, length) => MemorySlice::Next(*index, *length),

@@ -9,7 +9,6 @@ use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
-use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::AirParameters;
@@ -57,8 +56,7 @@ impl<L: AirParameters> AirBuilder<L> {
             group,
         };
 
-        self.register_air_instruction_internal(AirInstruction::cycle(cycle.clone()))
-            .unwrap();
+        self.register_air_instruction_internal(AirInstruction::cycle(cycle.clone()));
 
         cycle
     }
@@ -154,24 +152,6 @@ impl<AP: AirParser<Field = F>, F: Field> AirConstraint<AP> for Cycle<F> {
 }
 
 impl<F: Field> Instruction<F> for Cycle<F> {
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        vec![
-            *self.start_bit.register(),
-            *self.end_bit.register(),
-            *self.start_bit_witness.register(),
-            *self.end_bit_witness.register(),
-            *self.element.register(),
-        ]
-    }
-
-    fn inputs(&self) -> Vec<MemorySlice> {
-        Vec::new()
-    }
-
-    fn constraint_degree(&self) -> usize {
-        2
-    }
-
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let cycle = row_index % self.group.len();
         let element = self.group[cycle];
@@ -262,7 +242,7 @@ mod tests {
 
         let trace = generator.trace_clone();
 
-        for window in trace.windows_iter() {
+        for window in trace.windows() {
             let mut window_parser = TraceWindowParser::new(window, &[], &[], &[]);
             assert_eq!(window_parser.local_slice().len(), L::num_columns());
             air.eval(&mut window_parser);
