@@ -77,17 +77,17 @@ impl MemoryValue for U32Register {
         time: &Time<L::Field>,
     ) -> CubicRegister {
         let bytes = self.to_le_bytes();
-        let mut acc_expression = ArithmeticExpression::zero();
+        let mut acc = ArithmeticExpression::zero();
 
         for (i, byte) in bytes.iter().enumerate() {
             let two_i = ArithmeticExpression::from(L::Field::from_canonical_u32(1 << (8 * i)));
-            acc_expression = acc_expression + two_i * byte.expr();
+            acc = acc + two_i * byte.expr();
         }
 
-        let two_32 = ArithmeticExpression::from(L::Field::from_canonical_u64(1 << 32));
-        acc_expression = acc_expression + two_32 * time.expr();
+        let zero = ArithmeticExpression::zero();
+        let acc_expression = CubicElement([acc, time.expr(), zero]);
 
-        ptr.accumulate(builder, acc_expression)
+        ptr.accumulate_cubic(builder, acc_expression)
     }
 }
 
