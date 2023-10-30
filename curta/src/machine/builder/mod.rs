@@ -1,6 +1,7 @@
-use self::ops::{Adc, Add, And, Mul, Neg, One, Or, Shl, Shr, Sub, Xor, Zero};
+use self::ops::{Adc, Add, And, Mul, Neg, Not, One, Or, Shl, Shr, Sub, Xor, Zero};
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
+use crate::chip::instruction::cycle::Cycle;
 use crate::chip::memory::pointer::slice::Slice;
 use crate::chip::memory::pointer::Pointer;
 use crate::chip::memory::time::Time;
@@ -13,13 +14,15 @@ use crate::chip::register::slice::RegisterSlice;
 use crate::chip::register::Register;
 use crate::chip::AirParameters;
 use crate::math::field::PrimeField64;
+use crate::math::prelude::CubicParameters;
 
 pub mod ops;
 
 /// A safe interface for an AIR builder.
 pub trait Builder: Sized {
     type Field: PrimeField64;
-    type Parameters: AirParameters<Field = Self::Field>;
+    type CubicParams: CubicParameters<Self::Field>;
+    type Parameters: AirParameters<Field = Self::Field, CubicParams = Self::CubicParams>;
 
     /// Returns the underlying AIR builder.
     fn api(&mut self) -> &mut AirBuilder<Self::Parameters>;
@@ -275,6 +278,10 @@ pub trait Builder: Sized {
         lhs.and(rhs, self)
     }
 
+    fn not<T: Not<Self>>(&mut self, value: T) -> <T as Not<Self>>::Output {
+        value.not(self)
+    }
+
     fn or<Lhs, Rhs>(&mut self, lhs: Lhs, rhs: Rhs) -> <Lhs as ops::Or<Self, Rhs>>::Output
     where
         Lhs: Or<Self, Rhs>,
@@ -324,10 +331,15 @@ pub trait Builder: Sized {
     {
         lhs.rotate_right(rhs, self)
     }
+
+    fn cycle(&mut self, length_log: usize) -> Cycle<Self::Field> {
+        self.api().cycle(length_log)
+    }
 }
 
 impl<L: AirParameters> Builder for AirBuilder<L> {
     type Field = L::Field;
+    type CubicParams = L::CubicParams;
     type Parameters = L;
 
     fn api(&mut self) -> &mut AirBuilder<L> {

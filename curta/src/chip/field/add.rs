@@ -247,10 +247,12 @@ mod tests {
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
 
+        let writer = generator.new_writer();
+        let public = writer.public().unwrap().clone();
         // Generate proof and verify as a stark
-        test_starky(&stark, &config, &generator, &[]);
+        test_starky(&stark, &config, &generator, &public);
 
         // Test the recursive proof.
-        test_recursive_starky(stark, config, generator, &[]);
+        test_recursive_starky(stark, config, generator, &public);
     }
 }
