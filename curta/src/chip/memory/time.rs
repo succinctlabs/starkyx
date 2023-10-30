@@ -12,7 +12,7 @@ pub type Time<F> = TimeStamp<ArithmeticExpression<F>>;
 pub struct TimeStamp<T>(T);
 
 impl<T> TimeStamp<T> {
-    pub fn new(value: T) -> Self {
+    pub(crate) fn new(value: T) -> Self {
         Self(value)
     }
 }
@@ -22,8 +22,8 @@ impl<F: Field> Time<F> {
         Self::new(ArithmeticExpression::zero())
     }
 
-    pub fn constant(value: u32) -> Self {
-        Self::new(ArithmeticExpression::from(F::from_canonical_u32(value)))
+    pub fn constant(value: usize) -> Self {
+        Self::new(ArithmeticExpression::from(F::from_canonical_usize(value)))
     }
 
     pub fn from_element(element: ElementRegister) -> Self {

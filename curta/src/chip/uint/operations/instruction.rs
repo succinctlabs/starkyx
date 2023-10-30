@@ -3,29 +3,22 @@ use serde::{Deserialize, Serialize};
 use super::add::ByteArrayAdd;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
-use crate::chip::bool::SelectInstruction;
 use crate::chip::instruction::Instruction;
-use crate::chip::register::bit::BitRegister;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::decode::ByteDecodeInstruction;
 use crate::chip::uint::bytes::lookup_table::{ByteInstructionSet, ByteInstructions};
 use crate::chip::uint::bytes::operations::instruction::ByteOperationInstruction;
 use crate::chip::uint::bytes::operations::value::ByteOperationDigestConstraint;
-use crate::chip::uint::register::U64Register;
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum UintInstruction {
     Bit(ByteInstructionSet),
     Add(ByteArrayAdd<4>),
-    Select(SelectInstruction<U64Register>),
 }
 
 pub trait UintInstructions:
-    ByteInstructions
-    + From<UintInstruction>
-    + From<ByteArrayAdd<4>>
-    + From<SelectInstruction<U64Register>>
+    ByteInstructions + From<UintInstruction> + From<ByteArrayAdd<4>>
 {
 }
 
@@ -38,7 +31,6 @@ impl<AP: AirParser> AirConstraint<AP> for UintInstruction {
         match self {
             Self::Bit(op) => op.eval(parser),
             Self::Add(op) => op.eval(parser),
-            Self::Select(op) => op.eval(parser),
         }
     }
 }
@@ -48,7 +40,6 @@ impl<F: PrimeField64> Instruction<F> for UintInstruction {
         match self {
             Self::Bit(op) => Instruction::<F>::write(op, writer, row_index),
             Self::Add(op) => Instruction::<F>::write(op, writer, row_index),
-            Self::Select(op) => Instruction::<F>::write(op, writer, row_index),
         }
     }
 }
@@ -71,21 +62,9 @@ impl From<ByteOperationInstruction> for UintInstruction {
     }
 }
 
-impl From<SelectInstruction<BitRegister>> for UintInstruction {
-    fn from(op: SelectInstruction<BitRegister>) -> Self {
-        Self::Bit(op.into())
-    }
-}
-
 impl From<ByteDecodeInstruction> for UintInstruction {
     fn from(op: ByteDecodeInstruction) -> Self {
         Self::Bit(op.into())
-    }
-}
-
-impl From<SelectInstruction<U64Register>> for UintInstruction {
-    fn from(op: SelectInstruction<U64Register>) -> Self {
-        Self::Select(op)
     }
 }
 
@@ -102,6 +81,7 @@ mod tests {
     use super::*;
     pub use crate::chip::builder::tests::*;
     use crate::chip::builder::AirBuilder;
+    use crate::chip::register::bit::BitRegister;
     use crate::chip::uint::register::ByteArrayRegister;
     use crate::chip::AirParameters;
     use crate::math::field::Field;

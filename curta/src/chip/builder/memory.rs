@@ -8,7 +8,7 @@ use crate::chip::register::{Register, RegisterSerializable};
 
 impl<L: AirParameters> AirBuilder<L> {
     /// Allocates `size` cells/columns worth of memory and returns it as a `MemorySlice`.
-    pub fn get_local_memory(&mut self, size: usize) -> MemorySlice {
+    pub(crate) fn get_local_memory(&mut self, size: usize) -> MemorySlice {
         let register = MemorySlice::Local(self.local_index, size);
         self.local_index += size;
         register
@@ -49,7 +49,7 @@ impl<L: AirParameters> AirBuilder<L> {
             CellType::Bit => {
                 let reg = self.get_local_memory(T::size_of());
                 let constraint = AirInstruction::bits(&reg);
-                self.register_air_instruction_internal(constraint).unwrap();
+                self.register_air_instruction_internal(constraint);
                 reg
             }
         };
@@ -58,14 +58,14 @@ impl<L: AirParameters> AirBuilder<L> {
 
     /// Allocates a new local register according to type `T` which implements the Register trait
     /// and returns it.
-    pub fn alloc_extended<T: Register>(&mut self) -> T {
+    pub(crate) fn alloc_extended<T: Register>(&mut self) -> T {
         let register = match T::CELL {
             CellType::Element => self.get_extended_memory(T::size_of()),
             CellType::U16 => unreachable!("Extended U16 not implemented"),
             CellType::Bit => {
                 let reg = self.get_extended_memory(T::size_of());
                 let constraint = AirInstruction::bits(&reg);
-                self.register_air_instruction_internal(constraint).unwrap();
+                self.register_air_instruction_internal(constraint);
                 reg
             }
         };
@@ -80,7 +80,7 @@ impl<L: AirParameters> AirBuilder<L> {
             CellType::Bit => {
                 let reg = self.get_local_memory(size_of);
                 let constraint = AirInstruction::bits(&reg);
-                self.register_air_instruction_internal(constraint).unwrap();
+                self.register_air_instruction_internal(constraint);
                 reg
             }
         };
@@ -95,7 +95,7 @@ impl<L: AirParameters> AirBuilder<L> {
             CellType::Bit => {
                 let reg = self.get_extended_memory(size_of);
                 let constraint = AirInstruction::bits(&reg);
-                self.register_air_instruction_internal(constraint).unwrap();
+                self.register_air_instruction_internal(constraint);
                 reg
             }
         };

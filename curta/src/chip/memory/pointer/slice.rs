@@ -36,11 +36,16 @@ impl<V: MemoryValue> Slice<V> {
         let raw = self.raw.get_at(idx);
         Pointer::new(raw)
     }
+
+    pub fn get_at_shifted(&self, idx: ElementRegister, shift: i32) -> Pointer<V> {
+        let raw = self.raw.get_at_shifted(idx, shift);
+        Pointer::new(raw)
+    }
 }
 
 impl RawSlice {
     pub(crate) fn get(&self, idx: usize) -> RawPointer {
-        RawPointer::new(self.challenge, None, Some(idx as u32))
+        RawPointer::new(self.challenge, None, Some(idx as i32))
     }
 
     pub(crate) fn new<L: AirParameters>(builder: &mut AirBuilder<L>) -> Self {
@@ -51,5 +56,9 @@ impl RawSlice {
 
     pub(crate) fn get_at(&self, idx: ElementRegister) -> RawPointer {
         RawPointer::new(self.challenge, Some(idx), None)
+    }
+
+    pub(crate) fn get_at_shifted(&self, idx: ElementRegister, shift: i32) -> RawPointer {
+        RawPointer::new(self.challenge, Some(idx), Some(shift))
     }
 }

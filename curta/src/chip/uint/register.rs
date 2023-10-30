@@ -11,6 +11,7 @@ use crate::chip::register::cell::CellType;
 use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
+use crate::math::prelude::cubic::element::CubicElement;
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -87,6 +88,30 @@ impl MemoryValue for U32Register {
         acc_expression = acc_expression + two_32 * time.expr();
 
         ptr.accumulate(builder, acc_expression)
+    }
+}
+
+impl MemoryValue for U64Register {
+    fn compress<L: crate::chip::AirParameters>(
+        &self,
+        builder: &mut AirBuilder<L>,
+        ptr: RawPointer,
+        time: &Time<L::Field>,
+    ) -> CubicRegister {
+        let bytes = self.to_le_bytes();
+        let low_bytes = bytes.get_subarray(0..4);
+        let high_bytes = bytes.get_subarray(4..8);
+
+        let mut acc_low = ArithmeticExpression::zero();
+        let mut acc_high = ArithmeticExpression::zero();
+
+        for (i, (byte_low, byte_high)) in low_bytes.iter().zip(high_bytes).enumerate() {
+            let two_i = ArithmeticExpression::from(L::Field::from_canonical_u32(1 << (8 * i)));
+            acc_low = acc_low + two_i.clone() * byte_low.expr();
+            acc_high = acc_high + two_i * byte_high.expr();
+        }
+        let accumulated_expr = CubicElement([acc_low, acc_high, time.expr()]);
+        ptr.accumulate_cubic(builder, accumulated_expr)
     }
 }
 
