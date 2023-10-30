@@ -8,7 +8,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use super::operations::{CubicBuilderOperations, CubicOperation};
 use crate::math::prelude::cubic::element::CubicElement;
 
-pub(crate) trait CubicCircuitBuilder<F: RichField + Extendable<D>, const D: usize> {
+pub trait CubicCircuitBuilder<F: RichField + Extendable<D>, const D: usize> {
     fn zero_cubic(&mut self) -> CubicElement<Target>;
 
     fn one_cubic(&mut self) -> CubicElement<Target>;
