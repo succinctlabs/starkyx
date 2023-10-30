@@ -3,8 +3,8 @@ use alloc::sync::Arc;
 use anyhow::{Error, Result};
 use serde::{Deserialize, Serialize};
 
+use super::data::AirTraceData;
 use super::writer::TraceWriter;
-use crate::chip::builder::AirTraceData;
 use crate::chip::table::log_derivative::entry::LogEntry;
 use crate::chip::table::lookup::table::LookupTable;
 use crate::chip::table::lookup::values::LookupValues;
@@ -137,8 +137,6 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                 })
             }
             1 => {
-                let num_rows = self.num_rows;
-
                 // Insert the challenges into the generator
                 let writer = self.new_writer();
                 let mut challenges_write = writer.challenges.write().unwrap();
@@ -151,7 +149,7 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                 }
 
                 for channel in self.air_data.bus_channels.iter() {
-                    self.writer.write_bus_channel(num_rows, channel);
+                    self.writer.write_bus_channel(channel);
                 }
 
                 for bus in self.air_data.buses.iter() {
@@ -159,16 +157,16 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                 }
 
                 for table in self.air_data.lookup_tables.iter() {
-                    self.writer.write_lookup_table(num_rows, table);
+                    self.writer.write_lookup_table(table);
                 }
 
                 for value_data in self.air_data.lookup_values.iter() {
-                    self.writer.write_lookup_values(num_rows, value_data);
+                    self.writer.write_lookup_values(value_data);
                 }
 
                 // Write evaluation proofs
                 for eval in self.air_data.evaluation_data.iter() {
-                    self.writer.write_evaluation(num_rows, eval);
+                    self.writer.write_evaluation(eval);
                 }
 
                 let trace = self.trace_clone();

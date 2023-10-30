@@ -12,7 +12,6 @@ impl<F: PrimeField> TraceWriter<F> {
     /// Writes the table lookups and accumulate assumes multiplicities have been written
     pub(crate) fn write_log_lookup_table<T: EvalCubic, E: CubicParameters<F>>(
         &self,
-        num_rows: usize,
         table_data: &LogLookupTable<T, F, E>,
     ) -> Vec<CubicExtension<F, E>> {
         let beta = CubicExtension::<F, E>::from(self.read(&table_data.challenge, 0));
@@ -53,22 +52,18 @@ impl<F: PrimeField> TraceWriter<F> {
         }
 
         // Write the digest value
-        self.write(&table_data.digest, &acc.0, num_rows - 1);
+        self.write(&table_data.digest, &acc.0, self.height - 1);
 
         mult_table_log_entries
     }
 
-    pub(crate) fn write_lookup_table<E: CubicParameters<F>>(
-        &self,
-        num_rows: usize,
-        table_data: &LookupTable<F, E>,
-    ) {
+    pub(crate) fn write_lookup_table<E: CubicParameters<F>>(&self, table_data: &LookupTable<F, E>) {
         match table_data {
             LookupTable::Element(table) => {
-                self.write_log_lookup_table(num_rows, table);
+                self.write_log_lookup_table(table);
             }
             LookupTable::Cubic(table) => {
-                self.write_log_lookup_table(num_rows, table);
+                self.write_log_lookup_table(table);
             }
         }
     }

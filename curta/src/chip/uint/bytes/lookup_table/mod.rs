@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use self::builder_operations::ByteLookupOperations;
+use self::multiplicity_data::ByteMultiplicityData;
 use self::table::ByteLogLookupTable;
 use super::bit_operations::and::And;
 use super::bit_operations::not::Not;
@@ -10,11 +11,9 @@ use super::operations::instruction::ByteOperationInstruction;
 use super::operations::value::ByteOperationDigestConstraint;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
-use crate::chip::bool::SelectInstruction;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
-use crate::chip::register::bit::BitRegister;
-use crate::chip::register::memory::MemorySlice;
+use crate::chip::table::lookup::values::LogLookupValues;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::AirParameters;
 
@@ -30,7 +29,6 @@ pub enum ByteInstructionSet {
     BitAnd(And<8>),
     BitXor(Xor<8>),
     BitNot(Not<8>),
-    BitSelect(SelectInstruction<BitRegister>),
     Decode(ByteDecodeInstruction),
     Digest(ByteOperationDigestConstraint),
 }
@@ -38,7 +36,6 @@ pub enum ByteInstructionSet {
 pub trait ByteInstructions:
     From<ByteInstructionSet>
     + From<ByteOperationInstruction>
-    + From<SelectInstruction<BitRegister>>
     + From<ByteDecodeInstruction>
     + From<ByteOperationDigestConstraint>
 {
@@ -47,39 +44,36 @@ pub trait ByteInstructions:
 impl ByteInstructions for ByteInstructionSet {}
 
 impl<L: AirParameters> AirBuilder<L> {
-    pub fn byte_operations(&mut self) -> (ByteLookupOperations, ByteLogLookupTable)
+    pub fn byte_operations(&mut self) -> ByteLookupOperations
     where
-        L::Instruction: From<ByteInstructionSet>
-            + From<SelectInstruction<BitRegister>>
-            + From<ByteDecodeInstruction>,
+        L::Instruction: From<ByteInstructionSet> + From<ByteDecodeInstruction>,
     {
-        let lookup_table = self.new_byte_lookup_table();
-        let operations = ByteLookupOperations::new(lookup_table.multiplicity_data.clone());
-
-        (operations, lookup_table)
+        ByteLookupOperations::new()
     }
 
     pub fn register_byte_lookup(
         &mut self,
-        operation_values: ByteLookupOperations,
-        table: &ByteLogLookupTable,
+        table: &mut ByteLogLookupTable<L::Field, L::CubicParams>,
+        operations: ByteLookupOperations,
+    ) -> ByteMultiplicityData {
+        let lookup_values = table
+            .lookup
+            .register_lookup_values(self, &operations.values);
+
+        let LogLookupValues {
+            trace_values,
+            public_values,
+            ..
+        } = lookup_values;
+
+        ByteMultiplicityData::new(table.multiplicity_data.clone(), trace_values, public_values)
+    }
+
+    pub fn constraint_byte_lookup_table(
+        &mut self,
+        table: &ByteLogLookupTable<L::Field, L::CubicParams>,
     ) {
-        let multiplicities = table.multiplicity_data.multiplicities();
-        let mut byte_lookup = self.new_lookup(&table.digests, multiplicities);
-
-        byte_lookup.register_lookup_values(self, &operation_values.values);
-
-        self.constrain_element_lookup_table(byte_lookup);
-        // let lookup_challenge = self.alloc_challenge::<CubicRegister>();
-
-        // let lookup_table = self.lookup_table_with_multiplicities(
-        //     &lookup_challenge,
-        //     &table.digests,
-        //     multiplicities,
-        // );
-        // let lookup_values = self.lookup_values(&lookup_challenge, &operation_values.values);
-
-        // self.element_lookup_from_table_and_values(lookup_table, lookup_values);
+        self.constrain_element_lookup_table(table.lookup.clone())
     }
 }
 
@@ -90,7 +84,6 @@ impl<AP: AirParser> AirConstraint<AP> for ByteInstructionSet {
             Self::BitAnd(op) => op.eval(parser),
             Self::BitXor(op) => op.eval(parser),
             Self::BitNot(op) => op.eval(parser),
-            Self::BitSelect(op) => op.eval(parser),
             Self::Decode(instruction) => instruction.eval(parser),
             Self::Digest(instruction) => instruction.eval(parser),
         }
@@ -98,37 +91,12 @@ impl<AP: AirParser> AirConstraint<AP> for ByteInstructionSet {
 }
 
 impl<F: PrimeField64> Instruction<F> for ByteInstructionSet {
-    fn inputs(&self) -> Vec<MemorySlice> {
-        match self {
-            Self::Op(op) => Instruction::<F>::inputs(op),
-            Self::BitAnd(op) => Instruction::<F>::inputs(op),
-            Self::BitXor(op) => Instruction::<F>::inputs(op),
-            Self::BitNot(op) => Instruction::<F>::inputs(op),
-            Self::BitSelect(op) => Instruction::<F>::inputs(op),
-            Self::Decode(instruction) => Instruction::<F>::inputs(instruction),
-            Self::Digest(instruction) => Instruction::<F>::inputs(instruction),
-        }
-    }
-
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        match self {
-            Self::Op(op) => Instruction::<F>::trace_layout(op),
-            Self::BitAnd(op) => Instruction::<F>::trace_layout(op),
-            Self::BitXor(op) => Instruction::<F>::trace_layout(op),
-            Self::BitNot(op) => Instruction::<F>::trace_layout(op),
-            Self::BitSelect(op) => Instruction::<F>::trace_layout(op),
-            Self::Decode(instruction) => Instruction::<F>::trace_layout(instruction),
-            Self::Digest(instruction) => Instruction::<F>::trace_layout(instruction),
-        }
-    }
-
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         match self {
             Self::Op(op) => Instruction::<F>::write(op, writer, row_index),
             Self::BitAnd(op) => Instruction::<F>::write(op, writer, row_index),
             Self::BitXor(op) => Instruction::<F>::write(op, writer, row_index),
             Self::BitNot(op) => Instruction::<F>::write(op, writer, row_index),
-            Self::BitSelect(op) => Instruction::<F>::write(op, writer, row_index),
             Self::Decode(instruction) => Instruction::<F>::write(instruction, writer, row_index),
             Self::Digest(instruction) => Instruction::<F>::write(instruction, writer, row_index),
         }
@@ -156,12 +124,6 @@ impl From<Xor<8>> for ByteInstructionSet {
 impl From<Not<8>> for ByteInstructionSet {
     fn from(op: Not<8>) -> Self {
         Self::BitNot(op)
-    }
-}
-
-impl From<SelectInstruction<BitRegister>> for ByteInstructionSet {
-    fn from(op: SelectInstruction<BitRegister>) -> Self {
-        Self::BitSelect(op)
     }
 }
 
@@ -213,7 +175,8 @@ mod tests {
 
         let mut builder = AirBuilder::<L>::new();
 
-        let (mut operations, table) = builder.byte_operations();
+        let mut byte_table = builder.new_byte_lookup_table();
+        let mut operations = builder.byte_operations();
 
         let mut a_vec = Vec::new();
         let mut b_vec = Vec::new();
@@ -311,7 +274,8 @@ mod tests {
         let not = ByteOperation::Not(b_pub, b_not);
         builder.set_public_inputs_byte_operation(&not, &mut operations);
 
-        builder.register_byte_lookup(operations, &table);
+        let byte_mult_data = builder.register_byte_lookup(&mut byte_table, operations);
+        builder.constraint_byte_lookup_table(&byte_table);
 
         let (air, trace_data) = builder.build();
 
@@ -319,8 +283,6 @@ mod tests {
 
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
-
-        table.write_table_entries(&writer);
 
         // Write public inputs
         let mut public_write = writer.public.write().unwrap();
@@ -342,6 +304,7 @@ mod tests {
         b_not.assign_to_raw_slice(&mut public_write, &F::from_canonical_u8(!b_pub_val));
         drop(public_write);
 
+        byte_table.write_table_entries(&writer);
         for i in 0..num_rows {
             let mut rng = thread_rng();
             for k in 0..NUM_VALS {
@@ -377,6 +340,8 @@ mod tests {
             writer.write_row_instructions(&generator.air_data, i);
         }
         writer.write_global_instructions(&generator.air_data);
+        let multiplicities = byte_mult_data.get_multiplicities(&writer);
+        writer.write_lookup_multiplicities(byte_table.multiplicities(), &[multiplicities]);
 
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);

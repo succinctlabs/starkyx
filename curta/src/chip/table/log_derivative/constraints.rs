@@ -51,7 +51,7 @@ impl<AP: CubicParser<E>, E: CubicParameters<AP::Field>> LogConstraints<AP, E> {
 
     /// Computes the constraint for `m/(beta - a) = result`.
     ///
-    /// This rsulting constraint is of degree 2 and assumes that `beta-a` is different from zero.
+    /// The resulting constraint is of degree 2 and assumes that `beta-a` is different from zero.
     ///
     /// Under the assumption that `beta-a` is non-zero, the equation `m/(beta - a) = result` is
     /// equivalent to the degree 2 constraint: `m = result * (beta - a)`.

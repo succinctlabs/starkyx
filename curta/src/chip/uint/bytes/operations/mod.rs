@@ -37,11 +37,9 @@ impl<L: AirParameters> AirBuilder<L> {
     ) where
         L::Instruction: From<ByteOperationInstruction>,
     {
-        let mult_data = lookup_values.multiplicity_data.clone();
-
         let digest = self.alloc::<ElementRegister>();
 
-        let instr = ByteOperationInstruction::new(mult_data, *op, digest, false);
+        let instr = ByteOperationInstruction::new(*op, digest, false);
         lookup_values.values.push(digest);
         self.register_instruction(instr);
     }
@@ -53,12 +51,11 @@ impl<L: AirParameters> AirBuilder<L> {
     ) where
         L::Instruction: From<ByteOperationInstruction>,
     {
-        // TODO: Check that the inputs are public
-        let mult_data = lookup_values.multiplicity_data.clone();
+        // TODO: assert that the inputs are public (for debugging purpuoses)
 
         let digest = self.alloc_public::<ElementRegister>();
 
-        let instr = ByteOperationInstruction::new(mult_data, *op, digest, true);
+        let instr = ByteOperationInstruction::new(*op, digest, true);
         lookup_values.values.push(digest);
         self.register_global_instruction(instr);
     }

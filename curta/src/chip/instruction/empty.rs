@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use super::Instruction;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
-use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 
@@ -14,14 +13,6 @@ pub struct EmptyInstruction<F> {
 }
 
 impl<F: Field> Instruction<F> for EmptyInstruction<F> {
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        Vec::new()
-    }
-
-    fn inputs(&self) -> Vec<MemorySlice> {
-        Vec::new()
-    }
-
     fn write(&self, _writer: &TraceWriter<F>, _row_index: usize) {}
 }
 

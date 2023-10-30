@@ -7,7 +7,6 @@ use crate::math::prelude::*;
 impl<F: PrimeField> TraceWriter<F> {
     pub fn write_bus_channel<T: EvalCubic, E: CubicParameters<F>>(
         &self,
-        num_rows: usize,
         channel: &BusChannel<T, E>,
     ) {
         let beta = CubicExtension::<F, E>::from(self.read(&channel.challenge, 0));
@@ -18,10 +17,13 @@ impl<F: PrimeField> TraceWriter<F> {
             &channel.entries,
             &channel.row_accumulators,
             channel.table_accumulator,
-            num_rows,
         );
 
         // Write the final accumulated value to the output channel
-        self.write(&channel.out_channel, &accumulated_bus_value.0, num_rows - 1);
+        self.write(
+            &channel.out_channel,
+            &accumulated_bus_value.0,
+            self.height - 1,
+        );
     }
 }

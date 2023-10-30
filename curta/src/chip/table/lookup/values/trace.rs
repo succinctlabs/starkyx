@@ -7,7 +7,6 @@ use crate::math::prelude::*;
 impl<F: PrimeField> TraceWriter<F> {
     pub(crate) fn write_log_lookup_values<T: EvalCubic, E: CubicParameters<F>>(
         &self,
-        num_rows: usize,
         values_data: &LogLookupValues<T, F, E>,
     ) {
         let beta = CubicExtension::<F, E>::from(self.read(&values_data.challenge, 0));
@@ -18,7 +17,6 @@ impl<F: PrimeField> TraceWriter<F> {
             &values_data.trace_values,
             &values_data.row_accumulators,
             values_data.local_digest,
-            num_rows,
         );
 
         // Accumulate lookups for public inputs
@@ -36,20 +34,19 @@ impl<F: PrimeField> TraceWriter<F> {
         let value = trace_accumulated_value + global_accumulated_value;
 
         // Write the total digest value
-        self.write(&values_data.digest, &value.0, num_rows - 1);
+        self.write(&values_data.digest, &value.0, self.height - 1);
     }
 
     pub(crate) fn write_lookup_values<E: CubicParameters<F>>(
         &self,
-        num_rows: usize,
         values_data: &LookupValues<F, E>,
     ) {
         match values_data {
             LookupValues::Element(values) => {
-                self.write_log_lookup_values(num_rows, values);
+                self.write_log_lookup_values(values);
             }
             LookupValues::Cubic(values) => {
-                self.write_log_lookup_values(num_rows, values);
+                self.write_log_lookup_values(values);
             }
         }
     }
