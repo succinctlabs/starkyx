@@ -40,11 +40,26 @@ impl Register for SHA512DigestRegister {
 }
 
 impl SHA512DigestRegister {
+    pub fn as_array(&self) -> ArrayRegister<U64Register> {
+        self.0
+    }
+
     pub fn get(&self, index: usize) -> U64Register {
         self.0.get(index)
     }
 
     pub fn iter(&self) -> ArrayIterator<U64Register> {
         self.0.iter()
+    }
+
+    pub fn from_array(array: ArrayRegister<U64Register>) -> Self {
+        assert_eq!(array.len(), 8);
+        Self(array)
+    }
+}
+
+impl From<SHA512DigestRegister> for ArrayRegister<U64Register> {
+    fn from(register: SHA512DigestRegister) -> Self {
+        register.0
     }
 }

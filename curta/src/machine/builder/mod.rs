@@ -14,13 +14,15 @@ use crate::chip::register::slice::RegisterSlice;
 use crate::chip::register::Register;
 use crate::chip::AirParameters;
 use crate::math::field::PrimeField64;
+use crate::math::prelude::CubicParameters;
 
 pub mod ops;
 
 /// A safe interface for an AIR builder.
 pub trait Builder: Sized {
     type Field: PrimeField64;
-    type Parameters: AirParameters<Field = Self::Field>;
+    type CubicParams: CubicParameters<Self::Field>;
+    type Parameters: AirParameters<Field = Self::Field, CubicParams = Self::CubicParams>;
 
     /// Returns the underlying AIR builder.
     fn api(&mut self) -> &mut AirBuilder<Self::Parameters>;
@@ -337,6 +339,7 @@ pub trait Builder: Sized {
 
 impl<L: AirParameters> Builder for AirBuilder<L> {
     type Field = L::Field;
+    type CubicParams = L::CubicParams;
     type Parameters = L;
 
     fn api(&mut self) -> &mut AirBuilder<L> {
