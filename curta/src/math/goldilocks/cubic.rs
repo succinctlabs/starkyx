@@ -1,4 +1,5 @@
 use plonky2::field::goldilocks_field::GoldilocksField;
+use serde::{Deserialize, Serialize};
 
 use crate::math::extension::cubic::element::CubicElement;
 use crate::math::extension::cubic::extension::CubicExtension;
@@ -7,7 +8,7 @@ use crate::math::extension::cubic::parameters::CubicParameters;
 pub type GF3 = CubicExtension<GoldilocksField, GoldilocksCubicParameters>;
 
 /// Galois parameters for the cubic Goldilocks extension field.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GoldilocksCubicParameters;
 
 impl CubicParameters<GoldilocksField> for GoldilocksCubicParameters {
