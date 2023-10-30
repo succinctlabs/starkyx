@@ -69,14 +69,6 @@ impl<F: Field, AP: AirParser<Field = F>> AirConstraint<AP> for AssignInstruction
 }
 
 impl<F: Field> Instruction<F> for AssignInstruction<F> {
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        vec![self.target]
-    }
-
-    fn inputs(&self) -> Vec<MemorySlice> {
-        self.source.registers().into_iter().collect()
-    }
-
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         match self.kind {
             AssignType::First => {

@@ -9,8 +9,13 @@ use crate::chip::AirParameters;
 impl<L: AirParameters> AirBuilder<L> {
     #[inline]
     pub fn assert_expression_zero(&mut self, expression: ArithmeticExpression<L::Field>) {
+        let flag = expression.is_trace();
         let constraint = ArithmeticConstraint::All(expression);
-        self.constraints.push(constraint.into());
+        if flag {
+            self.constraints.push(constraint.into());
+        } else {
+            self.global_constraints.push(constraint.into());
+        }
     }
 
     #[inline]
@@ -101,8 +106,7 @@ impl<L: AirParameters> AirBuilder<L> {
         expression: ArithmeticExpression<L::Field>,
     ) {
         let instr = AssignInstruction::new(expression, *data.register(), AssignType::All);
-        self.register_air_instruction_internal(AirInstruction::Assign(instr))
-            .unwrap();
+        self.register_air_instruction_internal(AirInstruction::Assign(instr));
     }
 
     #[inline]
@@ -113,7 +117,6 @@ impl<L: AirParameters> AirBuilder<L> {
     ) {
         let instr = AssignInstruction::new(expression, *data.register(), AssignType::All);
         self.register_global_air_instruction_internal(AirInstruction::Assign(instr))
-            .unwrap();
     }
 
     #[inline]
@@ -123,8 +126,7 @@ impl<L: AirParameters> AirBuilder<L> {
         expression: ArithmeticExpression<L::Field>,
     ) -> AirInstruction<L::Field, L::Instruction> {
         let instr = AssignInstruction::new(expression, *data.register(), AssignType::First);
-        self.register_air_instruction_internal(AirInstruction::Assign(instr.clone()))
-            .unwrap();
+        self.register_air_instruction_internal(AirInstruction::Assign(instr.clone()));
         AirInstruction::Assign(instr)
     }
 
@@ -135,8 +137,7 @@ impl<L: AirParameters> AirBuilder<L> {
         expression: ArithmeticExpression<L::Field>,
     ) -> AirInstruction<L::Field, L::Instruction> {
         let instr = AssignInstruction::new(expression, *data.register(), AssignType::Last);
-        self.register_air_instruction_internal(AirInstruction::Assign(instr.clone()))
-            .unwrap();
+        self.register_air_instruction_internal(AirInstruction::Assign(instr.clone()));
         AirInstruction::Assign(instr)
     }
 
@@ -151,8 +152,7 @@ impl<L: AirParameters> AirBuilder<L> {
             *data.register(),
             AssignType::Transition,
         ));
-        self.register_air_instruction_internal(instr.clone())
-            .unwrap();
+        self.register_air_instruction_internal(instr.clone());
         instr
     }
 

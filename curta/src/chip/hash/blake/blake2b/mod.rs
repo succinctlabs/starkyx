@@ -17,7 +17,7 @@ use crate::chip::register::{Register, RegisterSerializable, RegisterSized};
 use crate::chip::table::bus::global::Bus;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
-use crate::chip::uint::operations::instruction::U32Instructions;
+use crate::chip::uint::operations::instruction::UintInstructions;
 use crate::chip::uint::register::U64Register;
 use crate::chip::uint::util::u64_to_le_field_bytes;
 use crate::chip::AirParameters;
@@ -104,12 +104,12 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn process_blake2b<const MAX_NUM_CHUNKS: usize>(
         &mut self,
         clk: &ElementRegister,
-        bus: &mut Bus<L::CubicParams>,
+        bus: &mut Bus<CubicRegister, L::CubicParams>,
         bus_channel_idx: usize,
         operations: &mut ByteLookupOperations,
     ) -> BLAKE2BGadget
     where
-        L::Instruction: U32Instructions,
+        L::Instruction: UintInstructions,
     {
         let num_rows = MAX_NUM_CHUNKS * NUM_MIX_ROUNDS;
         assert!(num_rows <= (1 << 16));
@@ -249,7 +249,7 @@ impl<L: AirParameters> AirBuilder<L> {
         msg_pad_row: &BitRegister,
         operations: &mut ByteLookupOperations,
     ) where
-        L::Instruction: U32Instructions,
+        L::Instruction: UintInstructions,
     {
         let v_compress_init = self.blake2b_compress_initialize(
             iv_pub,
@@ -455,7 +455,7 @@ impl<L: AirParameters> AirBuilder<L> {
         operations: &mut ByteLookupOperations,
     ) -> [U64Register; WORK_VECTOR_SIZE]
     where
-        L::Instruction: U32Instructions,
+        L::Instruction: UintInstructions,
     {
         // Need to create non public registers for IV and inversion_const.
         // Operations that use both public and private registers causes issues.
@@ -540,7 +540,7 @@ impl<L: AirParameters> AirBuilder<L> {
         v_output: &ArrayRegister<U64Register>,
         operations: &mut ByteLookupOperations,
     ) where
-        L::Instruction: U32Instructions,
+        L::Instruction: UintInstructions,
     {
         self.blake2b_mix(v_0, v_4, v_8, v_12, &m.get(0), &m.get(1), operations);
 
@@ -587,7 +587,7 @@ impl<L: AirParameters> AirBuilder<L> {
         y: &U64Register,
         operations: &mut ByteLookupOperations,
     ) where
-        L::Instruction: U32Instructions,
+        L::Instruction: UintInstructions,
     {
         *v_a = self.add_u64(v_a, v_b, operations);
         *v_a = self.add_u64(v_a, x, operations);
@@ -616,7 +616,7 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn add_bus_constraints(
         &mut self,
         clk: &ElementRegister,
-        bus: &mut Bus<L::CubicParams>,
+        bus: &mut Bus<CubicRegister, L::CubicParams>,
         bus_channel_idx: usize,
         num_chunks: usize,
         cycle_12_start_bit: &BitRegister,
@@ -637,7 +637,7 @@ impl<L: AirParameters> AirBuilder<L> {
         max_chunk_public: &ArrayRegister<BitRegister>,
         hash_state: &ArrayRegister<U64Register>,
     ) where
-        L::Instruction: U32Instructions,
+        L::Instruction: UintInstructions,
     {
         // Get message chunk challenges
         let message_chunk_challenges = self
@@ -731,12 +731,23 @@ impl<L: AirParameters> AirBuilder<L> {
             }
         }
 
-        let t_digest = self.accumulate_expressions(&t_challenges, &[clk.expr(), t.expr()]);
-        self.input_to_bus_filtered(
-            bus_channel_idx,
-            t_digest,
-            cycle_12_start_bit.expr() * padding_bit.not_expr(),
+        let not_padding = self.alloc::<BitRegister>();
+        self.set_to_expression(&not_padding, padding_bit.not_expr());
+
+        let cycle_12_start_no_padding = self.alloc::<BitRegister>();
+        self.set_to_expression(
+            &cycle_12_start_no_padding,
+            cycle_12_start_bit.expr() * not_padding.expr(),
         );
+
+        let cycle_12_end_no_padding = self.alloc::<BitRegister>();
+        self.set_to_expression(
+            &cycle_12_end_no_padding,
+            cycle_12_end_bit.expr() * not_padding.expr(),
+        );
+
+        let t_digest = self.accumulate_expressions(&t_challenges, &[clk.expr(), t.expr()]);
+        self.input_to_bus_filtered(bus_channel_idx, t_digest, cycle_12_start_no_padding);
         self.assert_expression_zero(
             t.expr() * cycle_12_start_bit.not_expr() * padding_bit.not_expr(),
         );
@@ -745,43 +756,27 @@ impl<L: AirParameters> AirBuilder<L> {
             &state_challenges,
             &[clk.expr(), h_output.get_subarray(0..HASH_ARRAY_SIZE).expr()],
         );
-        self.input_to_bus_filtered(
-            bus_channel_idx,
-            clk_hash_next,
-            cycle_12_end_bit.expr() * padding_bit.not_expr(),
-        );
+        self.input_to_bus_filtered(bus_channel_idx, clk_hash_next, cycle_12_end_no_padding);
 
         let clk_msg_last_chunk_digest = self.accumulate_expressions(
             &msg_last_chunk_challenges,
             &[clk.expr(), msg_last_chunk.expr()],
         );
-        self.input_to_bus_filtered(
-            bus_channel_idx,
-            clk_msg_last_chunk_digest,
-            padding_bit.not_expr(),
-        );
+        self.input_to_bus_filtered(bus_channel_idx, clk_msg_last_chunk_digest, not_padding);
 
         let clk_msg_pad_chunk_digest = self
             .accumulate_expressions(&msg_pad_chunk_challenges, &[clk.expr(), msg_pad_row.expr()]);
-        self.input_to_bus_filtered(
-            bus_channel_idx,
-            clk_msg_pad_chunk_digest,
-            padding_bit.not_expr(),
-        );
+        self.input_to_bus_filtered(bus_channel_idx, clk_msg_pad_chunk_digest, not_padding);
 
         let clk_max_row_digest =
             self.accumulate_expressions(&max_chunk_challenges, &[clk.expr(), max_last_row.expr()]);
-        self.input_to_bus_filtered(
-            bus_channel_idx,
-            clk_max_row_digest,
-            cycle_12_end_bit.expr() * padding_bit.not_expr(),
-        );
+        self.input_to_bus_filtered(bus_channel_idx, clk_max_row_digest, cycle_12_end_no_padding);
 
         let clk_msg_digest = self.accumulate_expressions(
             &message_chunk_challenges,
             &[clk.expr(), m.get_subarray(0..MSG_ARRAY_SIZE).expr()],
         );
-        self.input_to_bus_filtered(bus_channel_idx, clk_msg_digest, padding_bit.not_expr());
+        self.input_to_bus_filtered(bus_channel_idx, clk_msg_digest, not_padding);
     }
 }
 
@@ -1197,7 +1192,7 @@ mod tests {
         let mut builder = AirBuilder::<L>::new();
         let clk = builder.clock();
 
-        let (mut operations, table) = builder.byte_operations();
+        let mut operations = builder.byte_operations();
 
         let mut bus = builder.new_bus();
         let channel_idx = bus.new_channel(&mut builder);
@@ -1205,7 +1200,9 @@ mod tests {
         let blake_gadget =
             builder.process_blake2b::<MAX_NUM_CHUNKS>(&clk, &mut bus, channel_idx, &mut operations);
 
-        builder.register_byte_lookup(operations, &table);
+        let mut byte_table = builder.new_byte_lookup_table();
+        let byte_data = builder.register_byte_lookup(&mut byte_table, operations);
+        builder.constraint_byte_lookup_table(&byte_table);
         builder.constrain_bus(bus);
 
         let (air, trace_data) = builder.build();
@@ -1253,7 +1250,7 @@ mod tests {
         }
 
         timed!(timing, "Write the execusion trace", {
-            table.write_table_entries(&writer);
+            byte_table.write_table_entries(&writer);
             blake_gadget.write(
                 padded_messages,
                 msg_lens.as_slice(),
@@ -1292,6 +1289,8 @@ mod tests {
                     msg_to_check %= msgs.len();
                 }
             }
+            let multiplicities = byte_data.get_multiplicities(&writer);
+            writer.write_lookup_multiplicities(byte_table.multiplicities(), &[multiplicities]);
         });
 
         let public_inputs = writer.0.public.read().unwrap().clone();

@@ -16,6 +16,7 @@ pub mod ec;
 pub mod field;
 pub mod hash;
 pub mod instruction;
+pub mod memory;
 pub mod register;
 pub mod table;
 pub mod trace;
@@ -62,8 +63,8 @@ pub trait AirParameters:
 pub struct Chip<L: AirParameters> {
     constraints: Vec<Constraint<L>>,
     global_constraints: Vec<Constraint<L>>,
-    execution_trace_length: usize,
-    num_challenges: usize,
+    pub execution_trace_length: usize,
+    pub num_challenges: usize,
     pub num_public_values: usize,
     pub num_global_values: usize,
 }

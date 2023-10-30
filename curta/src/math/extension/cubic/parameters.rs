@@ -1,8 +1,13 @@
+use core::fmt::Debug;
+
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+
 use super::element::CubicElement;
 
 /// Parameters for the cubic extension F[X]/(X^3 - X - 1)
 pub trait CubicParameters<F>:
-    'static + Sized + Copy + Clone + Send + Sync + PartialEq + Eq + std::fmt::Debug
+    'static + Sized + Copy + Clone + Send + Sync + PartialEq + Eq + Debug + Serialize + DeserializeOwned
 {
     /// The Galois orbit of the generator.
     ///

@@ -23,9 +23,9 @@ impl<F: PrimeField> TraceWriter<F> {
 
     pub(crate) fn write_evaluation<E: CubicParameters<F>>(
         &self,
-        num_rows: usize,
         evaluation_data: &Evaluation<F, E>,
     ) {
+        let num_rows = self.height;
         let beta = CubicExtension::<F, E>::from(self.read(&evaluation_data.beta, 0));
         let alphas = self.read_vec(&evaluation_data.alphas, 0);
         let filters = (0..num_rows)

@@ -2,11 +2,13 @@ use serde::{Deserialize, Serialize};
 
 use super::arithmetic::ArithmeticConstraint;
 use super::instruction::set::AirInstruction;
+use super::memory::pointer::accumulate::PointerAccumulator;
+use super::register::cubic::CubicRegister;
 use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
 use super::table::bus::global::Bus;
 use super::table::evaluation::Evaluation;
-use super::table::lookup::LookupChipConstraint;
+use super::table::lookup::constraint::LookupChipConstraint;
 use super::AirParameters;
 use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::{AirParser, MulParser};
@@ -17,8 +19,9 @@ pub enum Constraint<L: AirParameters> {
     Instruction(AirInstruction<L::Field, L::Instruction>),
     Arithmetic(ArithmeticConstraint<L::Field>),
     Accumulator(Accumulator<L::Field, L::CubicParams>),
-    BusChannel(BusChannel<L::Field, L::CubicParams>),
-    Bus(Bus<L::CubicParams>),
+    Pointer(PointerAccumulator<L::Field, L::CubicParams>),
+    BusChannel(BusChannel<CubicRegister, L::CubicParams>),
+    Bus(Bus<CubicRegister, L::CubicParams>),
     Lookup(LookupChipConstraint<L::Field, L::CubicParams>),
     Evaluation(Evaluation<L::Field, L::CubicParams>),
 }
@@ -65,6 +68,7 @@ where
             // }
             Constraint::Arithmetic(constraint) => constraint.eval(parser),
             Constraint::Accumulator(accumulator) => accumulator.eval(parser),
+            Constraint::Pointer(accumulator) => accumulator.eval(parser),
             Constraint::BusChannel(bus_channel) => bus_channel.eval(parser),
             Constraint::Bus(bus) => bus.eval(parser),
             Constraint::Lookup(lookup) => lookup.eval(parser),
@@ -85,14 +89,20 @@ impl<L: AirParameters> From<Accumulator<L::Field, L::CubicParams>> for Constrain
     }
 }
 
-impl<L: AirParameters> From<BusChannel<L::Field, L::CubicParams>> for Constraint<L> {
-    fn from(bus_channel: BusChannel<L::Field, L::CubicParams>) -> Self {
+impl<L: AirParameters> From<PointerAccumulator<L::Field, L::CubicParams>> for Constraint<L> {
+    fn from(accumulator: PointerAccumulator<L::Field, L::CubicParams>) -> Self {
+        Self::Pointer(accumulator)
+    }
+}
+
+impl<L: AirParameters> From<BusChannel<CubicRegister, L::CubicParams>> for Constraint<L> {
+    fn from(bus_channel: BusChannel<CubicRegister, L::CubicParams>) -> Self {
         Self::BusChannel(bus_channel)
     }
 }
 
-impl<L: AirParameters> From<Bus<L::CubicParams>> for Constraint<L> {
-    fn from(bus: Bus<L::CubicParams>) -> Self {
+impl<L: AirParameters> From<Bus<CubicRegister, L::CubicParams>> for Constraint<L> {
+    fn from(bus: Bus<CubicRegister, L::CubicParams>) -> Self {
         Self::Bus(bus)
     }
 }

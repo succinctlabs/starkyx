@@ -12,7 +12,6 @@ use crate::air::AirConstraint;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
-use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::u16::U16Register;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::trace::writer::TraceWriter;
@@ -95,23 +94,6 @@ impl<AP: PolynomialParser, P: FieldParameters> AirConstraint<AP> for FpInnerProd
 }
 
 impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpInnerProductInstruction<P> {
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        vec![
-            *self.result.register(),
-            *self.carry.register(),
-            *self.witness_low.register(),
-            *self.witness_high.register(),
-        ]
-    }
-
-    fn inputs(&self) -> Vec<MemorySlice> {
-        self.a
-            .iter()
-            .map(|x| *x.register())
-            .chain(self.b.iter().map(|x| *x.register()))
-            .collect()
-    }
-
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         // Make little endian polynomial limbs.
         let p_a_vec = self

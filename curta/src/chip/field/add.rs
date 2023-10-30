@@ -7,7 +7,6 @@ use crate::air::AirConstraint;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
-use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::u16::U16Register;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::trace::writer::TraceWriter;
@@ -120,23 +119,6 @@ impl<AP: PolynomialParser, P: FieldParameters> AirConstraint<AP> for FpAddInstru
 
 // Instruction trait
 impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpAddInstruction<P> {
-    fn trace_layout(&self) -> Vec<MemorySlice> {
-        vec![
-            *self.result.register(),
-            *self.carry.register(),
-            *self.witness_low.register(),
-            *self.witness_high.register(),
-        ]
-    }
-
-    fn inputs(&self) -> Vec<MemorySlice> {
-        vec![*self.a.register(), *self.b.register()]
-    }
-
-    fn constraint_degree(&self) -> usize {
-        2
-    }
-
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let p_a = writer.read(&self.a, row_index);
         let p_b = writer.read(&self.b, row_index);
@@ -265,10 +247,12 @@ mod tests {
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
 
+        let writer = generator.new_writer();
+        let public = writer.public().unwrap().clone();
         // Generate proof and verify as a stark
-        test_starky(&stark, &config, &generator, &[]);
+        test_starky(&stark, &config, &generator, &public);
 
         // Test the recursive proof.
-        test_recursive_starky(stark, config, generator, &[]);
+        test_recursive_starky(stark, config, generator, &public);
     }
 }

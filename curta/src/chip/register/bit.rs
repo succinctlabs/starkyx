@@ -1,9 +1,17 @@
 use serde::{Deserialize, Serialize};
 
 use super::cell::CellType;
+use super::cubic::CubicRegister;
+use super::element::ElementRegister;
 use super::memory::MemorySlice;
 use super::{Register, RegisterSerializable, RegisterSized};
 use crate::chip::arithmetic::expression::ArithmeticExpression;
+use crate::chip::builder::AirBuilder;
+use crate::chip::memory::pointer::raw::RawPointer;
+use crate::chip::memory::time::Time;
+use crate::chip::memory::value::MemoryValue;
+use crate::machine::builder::ops::{Add, Mul};
+use crate::machine::builder::Builder;
 use crate::math::prelude::*;
 
 /// A register for a single element/column in the trace that is supposed to represent a bit. The
@@ -14,6 +22,11 @@ pub struct BitRegister(MemorySlice);
 impl BitRegister {
     pub fn not_expr<F: Field>(&self) -> ArithmeticExpression<F> {
         ArithmeticExpression::one() - self.expr()
+    }
+
+    #[inline]
+    pub fn as_element(&self) -> ElementRegister {
+        ElementRegister::from_register_unsafe(self.0)
     }
 }
 
@@ -44,5 +57,32 @@ impl Register for BitRegister {
 
     fn align<T>(value: &Self::Value<T>) -> &[T] {
         std::slice::from_ref(value)
+    }
+}
+
+impl MemoryValue for BitRegister {
+    fn compress<L: crate::chip::AirParameters>(
+        &self,
+        builder: &mut AirBuilder<L>,
+        ptr: RawPointer,
+        time: &Time<L::Field>,
+    ) -> CubicRegister {
+        self.as_element().compress(builder, ptr, time)
+    }
+}
+
+impl<B: Builder> Add<B> for BitRegister {
+    type Output = Self;
+
+    fn add(self, rhs: Self, builder: &mut B) -> Self::Output {
+        builder.expression(self.expr() + rhs.expr())
+    }
+}
+
+impl<B: Builder> Mul<B> for BitRegister {
+    type Output = Self;
+
+    fn mul(self, rhs: Self, builder: &mut B) -> Self::Output {
+        builder.expression(self.expr() * rhs.expr())
     }
 }
