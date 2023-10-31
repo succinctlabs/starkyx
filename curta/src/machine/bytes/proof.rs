@@ -9,16 +9,16 @@ use crate::plonky2::stark::proof::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ByteStarkProof<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> {
-    pub(crate) main_proof: AirProof<F, C, D>,
-    pub(crate) lookup_proof: AirProof<F, C, D>,
-    pub(crate) global_values: Vec<F>,
+    pub main_proof: AirProof<F, C, D>,
+    pub lookup_proof: AirProof<F, C, D>,
+    pub global_values: Vec<F>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ByteStarkProofTarget<const D: usize> {
-    pub(crate) main_proof: AirProofTarget<D>,
-    pub(crate) lookup_proof: AirProofTarget<D>,
-    pub(crate) global_values: Vec<Target>,
+    pub main_proof: AirProofTarget<D>,
+    pub lookup_proof: AirProofTarget<D>,
+    pub global_values: Vec<Target>,
 }
 
 pub struct ByteStarkChallenges<F: RichField + Extendable<D>, const D: usize> {

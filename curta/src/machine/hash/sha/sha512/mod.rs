@@ -1,8 +1,11 @@
-pub mod builder;
-pub mod data;
-pub mod parameters;
+use serde::{Deserialize, Serialize};
+
+pub mod air;
+pub mod pure;
 pub mod register;
-pub mod util;
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct SHA512;
 
 pub(crate) const ROUND_CONSTANTS: [u64; 80] = [
     0x428a2f98d728ae22,

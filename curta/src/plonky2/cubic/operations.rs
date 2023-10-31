@@ -14,7 +14,7 @@ use crate::math::prelude::*;
 
 /// Represents an extension arithmetic operation in the circuit. Used to memoize results.
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
-pub(crate) struct CubicOperation<F> {
+pub struct CubicOperation<F> {
     pub const_0: F,
     pub const_1: F,
     pub multiplicand_0: CubicElement<Target>,
