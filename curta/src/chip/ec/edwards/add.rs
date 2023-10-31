@@ -74,7 +74,7 @@ mod tests {
 
     use super::*;
     use crate::chip::builder::tests::*;
-    use crate::chip::ec::edwards::ed25519::{Ed25519, Ed25519BaseField};
+    use crate::chip::ec::edwards::ed25519::params::{Ed25519, Ed25519BaseField};
     use crate::chip::ec::gadget::{EllipticCurveGadget, EllipticCurveWriter};
     use crate::chip::ec::EllipticCurve;
     use crate::chip::field::instruction::FpInstruction;
@@ -100,9 +100,12 @@ mod tests {
 
         let mut builder = AirBuilder::<L>::new();
 
+        let p_pub = builder.alloc_public_ec_point();
+        let q_pub = builder.alloc_public_ec_point();
+        let _gadget_pub = builder.ec_add::<E>(&p_pub, &q_pub);
+
         let p = builder.alloc_ec_point();
         let q = builder.alloc_ec_point();
-
         let _gadget = builder.ec_add::<E>(&p, &q);
 
         let num_rows = 1 << 16;
@@ -119,16 +122,21 @@ mod tests {
         (0..num_rows).into_par_iter().for_each(|i| {
             writer.write_ec_point(&p, &p_int, i);
             writer.write_ec_point(&q, &q_int, i);
+            writer.write_ec_point(&p_pub, &p_int, i);
+            writer.write_ec_point(&q_pub, &q_int, i);
             writer.write_row_instructions(&generator.air_data, i);
         });
 
+        writer.write_global_instructions(&generator.air_data);
+
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
+        let public = writer.public().unwrap().clone();
 
         // Generate proof and verify as a stark
-        test_starky(&stark, &config, &generator, &[]);
+        test_starky(&stark, &config, &generator, &public);
 
         // Test the recursive proof.
-        test_recursive_starky(stark, config, generator, &[]);
+        test_recursive_starky(stark, config, generator, &public);
     }
 }

@@ -8,7 +8,9 @@ use crate::air::AirConstraint;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
+use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::u16::U16Register;
+use crate::chip::register::RegisterSerializable;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::utils::digits_to_biguint;
 use crate::chip::AirParameters;
@@ -38,7 +40,12 @@ impl<L: AirParameters> AirBuilder<L> {
     where
         L::Instruction: From<FpDivInstruction<P>>,
     {
-        let result = self.alloc::<FieldRegister<P>>();
+        let is_trace = a.is_trace() || b.is_trace();
+        let result = if is_trace {
+            self.alloc::<FieldRegister<P>>()
+        } else {
+            self.alloc_public::<FieldRegister<P>>()
+        };
         self.set_fp_div(a, b, &result);
         result
     }
@@ -51,18 +58,33 @@ impl<L: AirParameters> AirBuilder<L> {
     ) where
         L::Instruction: From<FpDivInstruction<P>>,
     {
-        let denom_carry = self.alloc::<FieldRegister<P>>();
-        let denom_witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
-        let denom_witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        let is_trace = a.is_trace() || b.is_trace() || result.is_trace();
 
         let mut one_value = vec![L::Field::ONE];
         one_value.resize(P::NB_LIMBS, L::Field::ZERO);
 
-        // set a register to the constant one.
-        let one = self.alloc::<FieldRegister<P>>();
-        self.set_to_expression(&one, ArithmeticExpression::from_constant_vec(one_value));
+        let denom_carry: FieldRegister<P>;
+        let denom_witness_low: ArrayRegister<U16Register>;
+        let denom_witness_high: ArrayRegister<U16Register>;
+        let one: FieldRegister<P>;
+        let b_inv: FieldRegister<P>;
 
-        let b_inv = self.alloc::<FieldRegister<P>>();
+        if is_trace {
+            denom_carry = self.alloc::<FieldRegister<P>>();
+            denom_witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+            denom_witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+            one = self.alloc::<FieldRegister<P>>();
+            b_inv = self.alloc::<FieldRegister<P>>();
+        } else {
+            denom_carry = self.alloc_public::<FieldRegister<P>>();
+            denom_witness_low = self.alloc_array_public::<U16Register>(P::NB_WITNESS_LIMBS);
+            denom_witness_high = self.alloc_array_public::<U16Register>(P::NB_WITNESS_LIMBS);
+            one = self.alloc_public::<FieldRegister<P>>();
+            b_inv = self.alloc_public::<FieldRegister<P>>();
+        }
+
+        // set a register to the constant one.
+        self.set_to_expression(&one, ArithmeticExpression::from_constant_vec(one_value));
 
         // check that b * b_inv = one.
         let denominator = FpMulInstruction {
@@ -74,9 +96,18 @@ impl<L: AirParameters> AirBuilder<L> {
             witness_high: denom_witness_high,
         };
 
-        let mult_carry = self.alloc::<FieldRegister<P>>();
-        let mult_witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
-        let mult_witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        let mult_carry: FieldRegister<P>;
+        let mult_witness_low: ArrayRegister<U16Register>;
+        let mult_witness_high: ArrayRegister<U16Register>;
+        if is_trace {
+            mult_carry = self.alloc::<FieldRegister<P>>();
+            mult_witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+            mult_witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        } else {
+            mult_carry = self.alloc_public::<FieldRegister<P>>();
+            mult_witness_low = self.alloc_array_public::<U16Register>(P::NB_WITNESS_LIMBS);
+            mult_witness_high = self.alloc_array_public::<U16Register>(P::NB_WITNESS_LIMBS);
+        }
 
         // set the instruction a * b_inv = result.
         let multiplication = FpMulInstruction {
@@ -93,7 +124,11 @@ impl<L: AirParameters> AirBuilder<L> {
             multiplication,
         };
 
-        self.register_instruction(instr);
+        if is_trace {
+            self.register_instruction(instr);
+        } else {
+            self.register_global_instruction(instr);
+        }
     }
 }
 
@@ -165,6 +200,10 @@ mod tests {
 
         let mut builder = AirBuilder::<L>::new();
 
+        let a_pub = builder.alloc_public::<FieldRegister<P>>();
+        let b_pub = builder.alloc_public::<FieldRegister<P>>();
+        let _ = builder.fp_div(&a_pub, &b_pub);
+
         let a = builder.alloc::<FieldRegister<P>>();
         let b = builder.alloc::<FieldRegister<P>>();
         let c = builder.fp_div(&a, &b);
@@ -199,16 +238,24 @@ mod tests {
                 writer.write(&a, &p_a, i);
                 writer.write(&b, &p_b, i);
                 writer.write(&c_expected, &p_c, i);
+
+                writer.write(&a_pub, &p_a, i);
+                writer.write(&b_pub, &p_b, i);
+
                 writer.write_row_instructions(&generator.air_data, i);
             });
 
+        let writer = generator.new_writer();
+        writer.write_global_instructions(&generator.air_data);
+
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
+        let public = writer.public().unwrap().clone();
 
         // Generate proof and verify as a stark
-        test_starky(&stark, &config, &generator, &[]);
+        test_starky(&stark, &config, &generator, &public);
 
         // Test the recursive proof.
-        test_recursive_starky(stark, config, generator, &[]);
+        test_recursive_starky(stark, config, generator, &public);
     }
 }

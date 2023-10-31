@@ -6,7 +6,9 @@ use super::register::FieldRegister;
 use crate::air::AirConstraint;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
+use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::u16::U16Register;
+use crate::chip::register::RegisterSerializable;
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::utils::digits_to_biguint;
 use crate::chip::AirParameters;
@@ -33,7 +35,12 @@ impl<L: AirParameters> AirBuilder<L> {
     where
         L::Instruction: From<FpSubInstruction<P>>,
     {
-        let result = self.alloc::<FieldRegister<P>>();
+        let is_trace = a.is_trace() || b.is_trace();
+        let result = if is_trace {
+            self.alloc::<FieldRegister<P>>()
+        } else {
+            self.alloc_public::<FieldRegister<P>>()
+        };
         self.set_fp_sub(a, b, &result);
         result
     }
@@ -46,9 +53,20 @@ impl<L: AirParameters> AirBuilder<L> {
     ) where
         L::Instruction: From<FpSubInstruction<P>>,
     {
-        let carry = self.alloc::<FieldRegister<P>>();
-        let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
-        let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        let is_trace = a.is_trace() || b.is_trace() || result.is_trace();
+        let carry: FieldRegister<P>;
+        let witness_low: ArrayRegister<U16Register>;
+        let witness_high: ArrayRegister<U16Register>;
+        if is_trace {
+            carry = self.alloc::<FieldRegister<P>>();
+            witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+            witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        } else {
+            carry = self.alloc_public::<FieldRegister<P>>();
+            witness_low = self.alloc_array_public::<U16Register>(P::NB_WITNESS_LIMBS);
+            witness_high = self.alloc_array_public::<U16Register>(P::NB_WITNESS_LIMBS);
+        }
+
         let inner_instr = FpAddInstruction {
             a: *result,
             b: *b,
@@ -59,7 +77,11 @@ impl<L: AirParameters> AirBuilder<L> {
         };
 
         let instr = FpSubInstruction { inner: inner_instr };
-        self.register_instruction(instr);
+        if is_trace {
+            self.register_instruction(instr);
+        } else {
+            self.register_global_instruction(instr);
+        }
     }
 }
 
@@ -136,6 +158,10 @@ mod tests {
 
         let mut builder = AirBuilder::<L>::new();
 
+        let a_pub = builder.alloc_public::<FieldRegister<P>>();
+        let b_pub = builder.alloc_public::<FieldRegister<P>>();
+        let _ = builder.fp_sub(&a_pub, &b_pub);
+
         let a = builder.alloc::<FieldRegister<P>>();
         let b = builder.alloc::<FieldRegister<P>>();
         let c = builder.fp_sub(&a, &b);
@@ -169,16 +195,23 @@ mod tests {
                 writer.write(&a, &p_a, i);
                 writer.write(&b, &p_b, i);
                 writer.write(&c_expected, &p_c, i);
+
+                writer.write(&a_pub, &p_a, i);
+                writer.write(&b_pub, &p_b, i);
                 writer.write_row_instructions(&generator.air_data, i);
             });
 
+        let writer = generator.new_writer();
+        writer.write_global_instructions(&generator.air_data);
+
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
+        let public = writer.public().unwrap().clone();
 
         // Generate proof and verify as a stark
-        test_starky(&stark, &config, &generator, &[]);
+        test_starky(&stark, &config, &generator, &public);
 
         // Test the recursive proof.
-        test_recursive_starky(stark, config, generator, &[]);
+        test_recursive_starky(stark, config, generator, &public);
     }
 }

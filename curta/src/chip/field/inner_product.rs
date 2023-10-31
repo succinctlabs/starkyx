@@ -42,10 +42,24 @@ impl<L: AirParameters> AirBuilder<L> {
         L::Instruction: From<FpInnerProductInstruction<P>>,
     {
         debug_assert!(a.len() == b.len());
-        let result = self.alloc::<FieldRegister<P>>();
-        let carry = self.alloc::<FieldRegister<P>>();
-        let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
-        let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+
+        let is_trace = a.iter().any(|x| x.is_trace()) || b.iter().any(|x| x.is_trace());
+
+        let result: FieldRegister<P>;
+        let carry: FieldRegister<P>;
+        let witness_low: ArrayRegister<U16Register>;
+        let witness_high: ArrayRegister<U16Register>;
+        if is_trace {
+            result = self.alloc::<FieldRegister<P>>();
+            carry = self.alloc::<FieldRegister<P>>();
+            witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+            witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
+        } else {
+            result = self.alloc_public::<FieldRegister<P>>();
+            carry = self.alloc_public::<FieldRegister<P>>();
+            witness_low = self.alloc_array_public::<U16Register>(P::NB_WITNESS_LIMBS);
+            witness_high = self.alloc_array_public::<U16Register>(P::NB_WITNESS_LIMBS);
+        }
 
         let instr = FpInnerProductInstruction {
             a: a.clone(),
@@ -55,7 +69,12 @@ impl<L: AirParameters> AirBuilder<L> {
             witness_low,
             witness_high,
         };
-        self.register_instruction(instr.clone());
+
+        if is_trace {
+            self.register_instruction(instr.clone());
+        } else {
+            self.register_global_instruction(instr.clone());
+        }
         result
     }
 }
@@ -141,23 +160,10 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpInnerProductInstr
         let p_witness = util::compute_root_quotient_and_shift(&p_vanishing, P::WITNESS_OFFSET);
         let (p_witness_low, p_witness_high) = split_u32_limbs_to_u16_limbs(&p_witness);
 
-        // Write the result.
-        let mut values = p_result.coefficients;
-        values.extend_from_slice(p_carry.coefficients());
-        values.extend_from_slice(&p_witness_low);
-        values.extend_from_slice(&p_witness_high);
-
-        // Row must match layout of instruction.
-        writer.write_unsafe_batch_raw(
-            &[
-                *self.result.register(),
-                *self.carry.register(),
-                *self.witness_low.register(),
-                *self.witness_high.register(),
-            ],
-            &values,
-            row_index,
-        );
+        writer.write(&self.result, &p_result, row_index);
+        writer.write(&self.carry, &p_carry, row_index);
+        writer.write_array(&self.witness_low, &p_witness_low, row_index);
+        writer.write_array(&self.witness_high, &p_witness_high, row_index);
     }
 }
 
@@ -196,10 +202,17 @@ mod tests {
 
         let mut builder = AirBuilder::<L>::new();
 
+        let a_pub = builder.alloc_public::<Fp>();
+        let b_pub = builder.alloc_public::<Fp>();
+        let c_pub = builder.alloc_public::<Fp>();
+        let d_pub = builder.alloc_public::<Fp>();
+        let _ = builder.fp_inner_product(&vec![a_pub, b_pub], &vec![c_pub, d_pub]);
+
         let a = builder.alloc::<Fp>();
         let b = builder.alloc::<Fp>();
         let c = builder.alloc::<Fp>();
         let d = builder.alloc::<Fp>();
+        let _ = builder.fp_inner_product(&vec![a, b], &vec![c, d]);
 
         let (air, trace_data) = builder.build();
         let num_rows = 1 << 16;
@@ -222,15 +235,25 @@ mod tests {
             writer.write(&c, &p_c, i);
             writer.write(&d, &p_d, i);
 
+            writer.write(&a_pub, &p_a, i);
+            writer.write(&b_pub, &p_b, i);
+            writer.write(&c_pub, &p_c, i);
+            writer.write(&d_pub, &p_d, i);
+
             writer.write_row_instructions(&generator.air_data, i);
         }
+
+        let writer = generator.new_writer();
+        writer.write_global_instructions(&generator.air_data);
+
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
+        let public = writer.public().unwrap().clone();
 
         // Generate proof and verify as a stark
-        test_starky(&stark, &config, &generator, &[]);
+        test_starky(&stark, &config, &generator, &public);
 
         // Test the recursive proof.
-        test_recursive_starky(stark, config, generator, &[]);
+        test_recursive_starky(stark, config, generator, &public);
     }
 }
