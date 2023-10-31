@@ -725,7 +725,7 @@ mod tests {
 
         let a_init = builder.alloc_array_public::<U32Register>(4);
 
-        let num_rows = 1 << 5;
+        let num_rows = 1 << 20;
 
         let a_ptr = builder.initialize_slice::<U32Register>(&a_init, &Time::zero(), None);
 
