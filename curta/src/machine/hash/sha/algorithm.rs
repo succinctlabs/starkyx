@@ -17,7 +17,7 @@ use crate::machine::builder::Builder;
 use crate::machine::hash::sha::data::{SHAMemory, SHAPublicData, SHATraceData};
 use crate::math::prelude::*;
 
-const DUMMY_INDEX: u32 = (u16::MAX as u32) * 2;
+const DUMMY_INDEX: u64 = i32::MAX as u64;
 
 /// Pure SHA algorithm implementation.
 ///
@@ -136,6 +136,7 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
             num_real_rounds * CYCLE_LENGTH
         );
         let degree_log = log2_ceil(num_real_rounds * CYCLE_LENGTH);
+        assert!(degree_log < 31, "AIR degree is too large");
         debug!("AIR degree after padding: {}", 1 << degree_log);
         let num_dummy_rounds = (1 << degree_log) / CYCLE_LENGTH + 1 - num_real_rounds;
         // Keep track of the last round length to know how many dummy reads to add.
@@ -221,8 +222,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         let dummy_entry =
             builder.constant::<Self::IntRegister>(&Self::int_to_field_value(Self::Integer::zero()));
 
-        assert!((DUMMY_INDEX as u64) < B::Field::order());
-        let dummy_index = builder.constant(&B::Field::from_canonical_u32(DUMMY_INDEX));
+        assert!(DUMMY_INDEX < B::Field::order());
+        let dummy_index = builder.constant(&B::Field::from_canonical_u64(DUMMY_INDEX));
 
         let num_dummy_reads = builder.constant::<ElementRegister>(&B::Field::from_canonical_usize(
             num_real_rounds * (16 * 4 + read_len)

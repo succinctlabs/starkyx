@@ -45,6 +45,7 @@ impl<V: MemoryValue> Slice<V> {
 
 impl RawSlice {
     pub(crate) fn get(&self, idx: usize) -> RawPointer {
+        assert!(idx <= i32::MAX as usize);
         RawPointer::new(self.challenge, None, Some(idx as i32))
     }
 

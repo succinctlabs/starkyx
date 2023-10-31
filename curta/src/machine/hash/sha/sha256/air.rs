@@ -222,7 +222,7 @@ mod tests {
     fn test_sha256_short_message() {
         let msg = b"abc";
         let expected_digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
-        let num_messages = 1;
+        let num_messages = 2048;
         test_sha256(
             iter::repeat(msg).take(num_messages).map(|x| x.as_slice()),
             iter::repeat(expected_digest).take(num_messages),
@@ -231,7 +231,7 @@ mod tests {
 
     #[test]
     fn test_sha256_long_message() {
-        let num_messages = 2000;
+        let num_messages = 1023;
         let msg = hex::decode("243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89452821e638d01377be5466cf34e90c6cc0ac29b7c97c50dd3f84d5b5b5470917").unwrap();
         let expected_digest = "aca16131a2e4c4c49e656d35aac1f0e689b3151bb108fa6cf5bcc3ac08a09bf9";
         test_sha256(
