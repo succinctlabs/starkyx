@@ -199,7 +199,6 @@ mod tests {
     use super::*;
     use crate::chip::builder::tests::*;
     use crate::polynomial::Polynomial;
-    use crate::utils::log::setup_logger;
 
     #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
     struct FpSqrtTest;
@@ -221,8 +220,6 @@ mod tests {
         type L = FpSqrtTest;
         type SC = PoseidonGoldilocksStarkConfig;
         type P = Ed25519BaseField;
-
-        setup_logger();
 
         let p = Ed25519BaseField::modulus();
 
