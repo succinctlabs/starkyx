@@ -54,4 +54,15 @@ impl SHA256DigestRegister {
     pub fn iter(&self) -> ArrayIterator<U32Register> {
         self.0.iter()
     }
+
+    pub fn from_array(array: ArrayRegister<U32Register>) -> Self {
+        assert_eq!(array.len(), 8);
+        Self(array)
+    }
+}
+
+impl From<SHA256DigestRegister> for ArrayRegister<U32Register> {
+    fn from(value: SHA256DigestRegister) -> Self {
+        value.0
+    }
 }
