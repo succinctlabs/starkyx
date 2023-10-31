@@ -204,47 +204,38 @@ mod tests {
         let a_pub = builder.alloc_public::<Fp>();
         let b_pub = builder.alloc_public::<Fp>();
         let sign = false;
-        let den_ins_pub = builder.fp_den(&a_pub, &b_pub, sign);
+        let _ = builder.fp_den(&a_pub, &b_pub, sign);
 
         let a = builder.alloc::<Fp>();
         let b = builder.alloc::<Fp>();
         let sign = false;
-        let den_ins = builder.fp_den(&a, &b, sign);
+        let _ = builder.fp_den(&a, &b, sign);
 
         let (air, trace_data) = builder.build();
         let num_rows = 1 << 16;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
 
-        let (tx, rx) = channel();
+        let writer = generator.new_writer();
         let mut rng = thread_rng();
+        let a_int: BigUint = rng.gen_biguint(256) % &p;
+        let b_int = rng.gen_biguint(256) % &p;
+        let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
+        let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
+        writer.write(&a, &p_a, 0);
+        writer.write(&b, &p_b, 0);
+        writer.write_global_instructions(&generator.air_data);
         for i in 0..num_rows {
-            let writer = generator.new_writer();
-            let handle = tx.clone();
             let a_int: BigUint = rng.gen_biguint(256) % &p;
             let b_int = rng.gen_biguint(256) % &p;
-            rayon::spawn(move || {
-                let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
-                let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
+            let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
+            let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
 
-                writer.write(&a, &p_a, i);
-                writer.write(&b, &p_b, i);
-                writer.write_instruction(&den_ins, i);
+            writer.write(&a, &p_a, i);
+            writer.write(&b, &p_b, i);
 
-                writer.write(&a_pub, &p_a, i);
-                writer.write(&b_pub, &p_b, i);
-                writer.write_instruction(&den_ins_pub, i);
-
-                handle.send(1).unwrap();
-            });
+            writer.write_row_instructions(&generator.air_data, i);
         }
 
-        let writer = generator.new_writer();
-        writer.write_global_instructions(&generator.air_data);
-
-        drop(tx);
-        for msg in rx.iter() {
-            assert!(msg == 1);
-        }
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
         let public = writer.public().unwrap().clone();
