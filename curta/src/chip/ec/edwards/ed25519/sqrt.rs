@@ -11,8 +11,9 @@ use crate::chip::field::parameters::FieldParameters;
 use crate::chip::field::register::FieldRegister;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
+use crate::chip::register::bit::BitRegister;
 use crate::chip::register::u16::U16Register;
-use crate::chip::register::RegisterSerializable;
+use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::trace::writer::TraceWriter;
 use crate::chip::utils::digits_to_biguint;
 use crate::chip::AirParameters;
@@ -28,6 +29,8 @@ use crate::polynomial::to_u16_le_limbs_polynomial;
 pub struct Ed25519FpSqrtInstruction {
     /// a `FpMulInstruction` to compute `a * a = result`.
     square: FpMulInstruction<Ed25519BaseField>,
+    /// Witness the bits of the least significant limb (skipping the first bit).
+    limb_witness: ArrayRegister<BitRegister>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
@@ -61,6 +64,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let square_carry: FieldRegister<Ed25519BaseField>;
         let square_witness_low: ArrayRegister<U16Register>;
         let square_witness_high: ArrayRegister<U16Register>;
+        let limb_witness: ArrayRegister<BitRegister>;
 
         if is_trace {
             square_carry = self.alloc::<FieldRegister<Ed25519BaseField>>();
@@ -68,12 +72,15 @@ impl<L: AirParameters> AirBuilder<L> {
                 self.alloc_array::<U16Register>(Ed25519BaseField::NB_WITNESS_LIMBS);
             square_witness_high =
                 self.alloc_array::<U16Register>(Ed25519BaseField::NB_WITNESS_LIMBS);
+            limb_witness = self.alloc_array::<BitRegister>(Ed25519BaseField::NB_BITS_PER_LIMB - 1);
         } else {
             square_carry = self.alloc_public::<FieldRegister<Ed25519BaseField>>();
             square_witness_low =
                 self.alloc_array_public::<U16Register>(Ed25519BaseField::NB_WITNESS_LIMBS);
             square_witness_high =
                 self.alloc_array_public::<U16Register>(Ed25519BaseField::NB_WITNESS_LIMBS);
+            limb_witness =
+                self.alloc_array_public::<BitRegister>(Ed25519BaseField::NB_BITS_PER_LIMB - 1);
         }
 
         // check that a_sqrt * a_sqrt == a
@@ -86,7 +93,10 @@ impl<L: AirParameters> AirBuilder<L> {
             witness_high: square_witness_high,
         };
 
-        let instr = Ed25519FpSqrtInstruction { square };
+        let instr = Ed25519FpSqrtInstruction {
+            square,
+            limb_witness,
+        };
 
         if is_trace {
             self.register_instruction(instr);
@@ -98,7 +108,20 @@ impl<L: AirParameters> AirBuilder<L> {
 
 impl<AP: PolynomialParser> AirConstraint<AP> for Ed25519FpSqrtInstruction {
     fn eval(&self, parser: &mut AP) {
+        // Assert that result * result == a
         self.square.eval(parser);
+
+        // Assert that the least significant bit of the square root is zero, by witnessing all other
+        // bits of the least significant limb.
+        let mut acc = parser.zero();
+        for (i, bit) in self.limb_witness.iter().enumerate() {
+            let bit = bit.eval(parser);
+            let two_i = parser.constant(AP::Field::from_canonical_u32(1 << (i + 1)));
+            let bit_two_i = parser.mul(two_i, bit);
+            acc = parser.add(acc, bit_two_i);
+        }
+        let limb = self.square.a.eval(parser).coefficients[0];
+        parser.assert_eq(limb, acc);
     }
 }
 
@@ -156,7 +179,13 @@ impl<F: PrimeField64> Instruction<F> for Ed25519FpSqrtInstruction {
         let p_beta = to_u16_le_limbs_polynomial::<F, Ed25519BaseField>(&beta);
         let a = &self.square.a;
 
+        let limb = p_beta.coefficients[0].as_canonical_u64();
+        let limb_bits = (0..Ed25519BaseField::NB_BITS_PER_LIMB)
+            .map(|i| F::from_canonical_u64((limb >> i) & 1))
+            .skip(1);
+
         writer.write(a, &p_beta, row_index);
+        writer.write_array(&self.limb_witness, limb_bits, row_index);
 
         self.square.write(writer, row_index);
     }
@@ -170,6 +199,7 @@ mod tests {
     use super::*;
     use crate::chip::builder::tests::*;
     use crate::polynomial::Polynomial;
+    use crate::utils::log::setup_logger;
 
     #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
     struct FpSqrtTest;
@@ -179,7 +209,7 @@ mod tests {
         type CubicParams = GoldilocksCubicParameters;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 108;
-        const NUM_FREE_COLUMNS: usize = 2;
+        const NUM_FREE_COLUMNS: usize = 17;
         const EXTENDED_COLUMNS: usize = 171;
 
         type Instruction = Ed25519FpSqrtInstruction;
@@ -191,6 +221,8 @@ mod tests {
         type L = FpSqrtTest;
         type SC = PoseidonGoldilocksStarkConfig;
         type P = Ed25519BaseField;
+
+        setup_logger();
 
         let p = Ed25519BaseField::modulus();
 
