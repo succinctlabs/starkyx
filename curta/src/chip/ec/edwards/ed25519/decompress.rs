@@ -1,11 +1,12 @@
 use itertools::Itertools;
 
-use super::instruction::FromEd25519FieldInstruction;
 use super::params::{Ed25519BaseField, Ed25519Parameters};
 use super::point::CompressedPointRegister;
+use super::sqrt::Ed25519FpSqrtInstruction;
 use crate::chip::builder::AirBuilder;
 use crate::chip::ec::edwards::{EdwardsCurve, EdwardsParameters};
 use crate::chip::ec::point::AffinePointRegister;
+use crate::chip::field::instruction::FromFieldInstruction;
 use crate::chip::field::parameters::FieldParameters;
 use crate::chip::field::register::FieldRegister;
 use crate::chip::AirParameters;
@@ -18,7 +19,7 @@ impl<L: AirParameters> AirBuilder<L> {
         compressed_p: &CompressedPointRegister,
     ) -> AffinePointRegister<EdwardsCurve<Ed25519Parameters>>
     where
-        L::Instruction: FromEd25519FieldInstruction,
+        L::Instruction: FromFieldInstruction<Ed25519BaseField> + From<Ed25519FpSqrtInstruction>,
     {
         // Ed25519 Elliptic Curve Decompress Formula
         //

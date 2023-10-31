@@ -7,6 +7,7 @@ use crate::chip::field::add::FpAddInstruction;
 use crate::chip::field::den::FpDenInstruction;
 use crate::chip::field::div::FpDivInstruction;
 use crate::chip::field::inner_product::FpInnerProductInstruction;
+use crate::chip::field::instruction::FromFieldInstruction;
 use crate::chip::field::mul::FpMulInstruction;
 use crate::chip::field::mul_const::FpMulConstInstruction;
 use crate::chip::field::sub::FpSubInstruction;
@@ -28,19 +29,7 @@ pub enum Ed25519FpInstruction {
     Sqrt(Ed25519FpSqrtInstruction),
 }
 
-pub trait FromEd25519FieldInstruction:
-    From<FpAddInstruction<Ed25519BaseField>>
-    + From<FpMulInstruction<Ed25519BaseField>>
-    + From<FpSubInstruction<Ed25519BaseField>>
-    + From<FpDivInstruction<Ed25519BaseField>>
-    + From<FpMulConstInstruction<Ed25519BaseField>>
-    + From<FpInnerProductInstruction<Ed25519BaseField>>
-    + From<FpDenInstruction<Ed25519BaseField>>
-    + From<Ed25519FpSqrtInstruction>
-{
-}
-
-impl FromEd25519FieldInstruction for Ed25519FpInstruction {}
+impl FromFieldInstruction<Ed25519BaseField> for Ed25519FpInstruction {}
 
 impl<AP: PolynomialParser> AirConstraint<AP> for Ed25519FpInstruction {
     fn eval(&self, parser: &mut AP) {
