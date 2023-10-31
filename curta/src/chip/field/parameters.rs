@@ -1,6 +1,8 @@
 use core::fmt::Debug;
 
+use num::bigint::RandBigInt;
 use num::{BigUint, Zero};
+use rand::rngs::OsRng;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
@@ -22,6 +24,14 @@ pub trait FieldParameters:
             modulus += BigUint::from(*limb) << (16 * i);
         }
         modulus
+    }
+
+    fn nb_bits() -> usize {
+        Self::NB_BITS_PER_LIMB * Self::NB_LIMBS
+    }
+
+    fn rand() -> BigUint {
+        OsRng.gen_biguint_below(&Self::modulus())
     }
 }
 
