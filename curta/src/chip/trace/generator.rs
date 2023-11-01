@@ -143,31 +143,7 @@ impl<L: AirParameters> TraceGenerator<L::Field, Chip<L>> for ArithmeticGenerator
                 challenges_write.extend_from_slice(challenges);
                 drop(challenges_write);
 
-                // Write accumulations
-                for acc in self.air_data.accumulators.iter() {
-                    self.writer.write_accumulation(acc);
-                }
-
-                for channel in self.air_data.bus_channels.iter() {
-                    self.writer.write_bus_channel(channel);
-                }
-
-                for bus in self.air_data.buses.iter() {
-                    self.writer.write_global_bus(bus);
-                }
-
-                for table in self.air_data.lookup_tables.iter() {
-                    self.writer.write_lookup_table(table);
-                }
-
-                for value_data in self.air_data.lookup_values.iter() {
-                    self.writer.write_lookup_values(value_data);
-                }
-
-                // Write evaluation proofs
-                for eval in self.air_data.evaluation_data.iter() {
-                    self.writer.write_evaluation(eval);
-                }
+                self.air_data.write_extended_trace(&writer);
 
                 let trace = self.trace_clone();
                 let extended_trace_values = trace

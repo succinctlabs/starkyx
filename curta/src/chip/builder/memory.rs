@@ -107,7 +107,7 @@ impl<L: AirParameters> AirBuilder<L> {
         T::from_register(register)
     }
 
-    pub fn alloc_challenge_array<T: Register>(&mut self, length: usize) -> ArrayRegister<T> {
+    pub fn alloc_array_challenge<T: Register>(&mut self, length: usize) -> ArrayRegister<T> {
         let size_of = T::size_of() * length;
         let register = self.get_challenge_memory(size_of);
         ArrayRegister::<T>::from_register_unsafe(register)
