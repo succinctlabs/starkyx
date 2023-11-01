@@ -641,23 +641,23 @@ impl<L: AirParameters> AirBuilder<L> {
     {
         // Get message chunk challenges
         let message_chunk_challenges = self
-            .alloc_challenge_array::<CubicRegister>(U64Register::size_of() * MSG_ARRAY_SIZE + 1);
+            .alloc_array_challenge::<CubicRegister>(U64Register::size_of() * MSG_ARRAY_SIZE + 1);
 
         // Get hash state challenges
         let state_challenges = self
-            .alloc_challenge_array::<CubicRegister>(U64Register::size_of() * HASH_ARRAY_SIZE + 1);
+            .alloc_array_challenge::<CubicRegister>(U64Register::size_of() * HASH_ARRAY_SIZE + 1);
 
         // Get the msg last chunk callenges
-        let msg_last_chunk_challenges = self.alloc_challenge_array::<CubicRegister>(2);
+        let msg_last_chunk_challenges = self.alloc_array_challenge::<CubicRegister>(2);
 
         // Get the msg pad chunk challenges
-        let msg_pad_chunk_challenges = self.alloc_challenge_array::<CubicRegister>(2);
+        let msg_pad_chunk_challenges = self.alloc_array_challenge::<CubicRegister>(2);
 
         // Get the max chunk challenges
-        let max_chunk_challenges = self.alloc_challenge_array::<CubicRegister>(2);
+        let max_chunk_challenges = self.alloc_array_challenge::<CubicRegister>(2);
 
         // Get the t challenges
-        let t_challenges = self.alloc_challenge_array::<CubicRegister>(U64Register::size_of() + 1);
+        let t_challenges = self.alloc_array_challenge::<CubicRegister>(U64Register::size_of() + 1);
 
         // Put public hash state, end_bits, and all the msg chunk permutations into the bus
         for i in 0..num_chunks {

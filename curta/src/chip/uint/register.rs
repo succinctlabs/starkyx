@@ -17,8 +17,6 @@ use crate::math::prelude::*;
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct ByteArrayRegister<const N: usize>(MemorySlice);
 
-pub type U8Register = ByteArrayRegister<1>;
-pub type U16Register = ByteArrayRegister<2>;
 pub type U32Register = ByteArrayRegister<4>;
 pub type U64Register = ByteArrayRegister<8>;
 

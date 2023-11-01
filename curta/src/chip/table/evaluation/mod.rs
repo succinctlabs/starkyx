@@ -67,7 +67,7 @@ impl<L: AirParameters> AirBuilder<L> {
 
         let num_alphas: usize = values.iter().map(|v| v.register().len()).sum();
         // get the row accumulation challenge
-        let alphas = self.alloc_challenge_array::<CubicRegister>(num_alphas);
+        let alphas = self.alloc_array_challenge::<CubicRegister>(num_alphas);
 
         let mut elem_vals = vec![];
         for val in values {
