@@ -135,47 +135,9 @@ impl<F: PrimeField64> Instruction<F> for Ed25519FpSqrtInstruction {
             .map(|x| x.as_canonical_u64() as u16)
             .collect::<Vec<_>>();
 
-        // Here is a description of how to calculate sqrt in the Curve25519 base field:
-        // https://github.com/succinctlabs/curve25519-dalek/blob/e2d1bd10d6d772af07cac5c8161cd7655016af6d/curve25519-dalek/src/field.rs#L256
         let a = digits_to_biguint(&a_digits);
 
-        let modulus = Ed25519BaseField::modulus();
-        // The exponent is (modulus+3)/8;
-        let mut beta = a.modpow(
-            &BigUint::from_str(
-                "7237005577332262213973186563042994240829374041602535252466099000494570602494",
-            )
-            .unwrap(),
-            &modulus,
-        );
-
-        // The square root of -1 in the field.
-        // Take from here:
-        // https://github.com/succinctlabs/curve25519-dalek/blob/e2d1bd10d6d772af07cac5c8161cd7655016af6d/curve25519-dalek/src/backend/serial/u64/constants.rs#L89
-        let sqrt_m1 = BigUint::from_str(
-            "19681161376707505956807079304988542015446066515923890162744021073123829784752",
-        )
-        .unwrap();
-
-        let beta_squared = &beta * &beta % &modulus;
-        let neg_a = &modulus - &a;
-
-        if beta_squared == neg_a {
-            beta = (&beta * &sqrt_m1) % &modulus;
-        }
-
-        let correct_sign_sqrt = beta_squared == a;
-        let flipped_sign_sqrt = beta_squared == neg_a;
-
-        if !correct_sign_sqrt && !flipped_sign_sqrt {
-            panic!("a is not a square");
-        }
-
-        let beta_bytes = beta.to_bytes_le();
-        if (beta_bytes[0] & 1) == 1 {
-            beta = (&modulus - &beta) % &modulus;
-        }
-
+        let beta = sqrt(a);
         let p_beta = to_u16_le_limbs_polynomial::<F, Ed25519BaseField>(&beta);
         let a = &self.square.a;
 
@@ -189,6 +151,50 @@ impl<F: PrimeField64> Instruction<F> for Ed25519FpSqrtInstruction {
 
         self.square.write(writer, row_index);
     }
+}
+
+pub fn sqrt(a: BigUint) -> BigUint {
+    // Here is a description of how to calculate sqrt in the Curve25519 base field:
+    // https://github.com/succinctlabs/curve25519-dalek/blob/e2d1bd10d6d772af07cac5c8161cd7655016af6d/curve25519-dalek/src/field.rs#L256
+
+    let modulus = Ed25519BaseField::modulus();
+    // The exponent is (modulus+3)/8;
+    let mut beta = a.modpow(
+        &BigUint::from_str(
+            "7237005577332262213973186563042994240829374041602535252466099000494570602494",
+        )
+        .unwrap(),
+        &modulus,
+    );
+
+    // The square root of -1 in the field.
+    // Take from here:
+    // https://github.com/succinctlabs/curve25519-dalek/blob/e2d1bd10d6d772af07cac5c8161cd7655016af6d/curve25519-dalek/src/backend/serial/u64/constants.rs#L89
+    let sqrt_m1 = BigUint::from_str(
+        "19681161376707505956807079304988542015446066515923890162744021073123829784752",
+    )
+    .unwrap();
+
+    let beta_squared = &beta * &beta % &modulus;
+    let neg_a = &modulus - &a;
+
+    if beta_squared == neg_a {
+        beta = (&beta * &sqrt_m1) % &modulus;
+    }
+
+    let correct_sign_sqrt = beta_squared == a;
+    let flipped_sign_sqrt = beta_squared == neg_a;
+
+    if !correct_sign_sqrt && !flipped_sign_sqrt {
+        panic!("a is not a square");
+    }
+
+    let beta_bytes = beta.to_bytes_le();
+    if (beta_bytes[0] & 1) == 1 {
+        beta = (&modulus - &beta) % &modulus;
+    }
+
+    beta
 }
 
 #[cfg(test)]
