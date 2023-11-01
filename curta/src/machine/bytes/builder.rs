@@ -21,6 +21,7 @@ impl<L: AirParameters> Builder for BytesBuilder<L> {
     type Field = L::Field;
     type CubicParams = L::CubicParams;
     type Parameters = L;
+    type Instruction = L::Instruction;
 
     fn api(&mut self) -> &mut AirBuilder<Self::Parameters> {
         &mut self.api

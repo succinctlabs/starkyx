@@ -1,7 +1,8 @@
-use self::ops::{Adc, Add, And, Mul, Neg, Not, One, Or, Shl, Shr, Sub, Xor, Zero};
+use self::ops::{Adc, Add, And, Div, Mul, Neg, Not, One, Or, Shl, Shr, Sub, Xor, Zero};
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::cycle::Cycle;
+use crate::chip::instruction::Instruction;
 use crate::chip::memory::pointer::slice::Slice;
 use crate::chip::memory::pointer::Pointer;
 use crate::chip::memory::time::Time;
@@ -22,7 +23,12 @@ pub mod ops;
 pub trait Builder: Sized {
     type Field: PrimeField64;
     type CubicParams: CubicParameters<Self::Field>;
-    type Parameters: AirParameters<Field = Self::Field, CubicParams = Self::CubicParams>;
+    type Instruction: Instruction<Self::Field>;
+    type Parameters: AirParameters<
+        Field = Self::Field,
+        CubicParams = Self::CubicParams,
+        Instruction = Self::Instruction,
+    >;
 
     /// Returns the underlying AIR builder.
     fn api(&mut self) -> &mut AirBuilder<Self::Parameters>;
@@ -247,6 +253,13 @@ pub trait Builder: Sized {
         lhs.mul(rhs, self)
     }
 
+    fn div<Lhs, Rhs>(&mut self, lhs: Lhs, rhs: Rhs) -> <Lhs as ops::Div<Self, Rhs>>::Output
+    where
+        Lhs: Div<Self, Rhs>,
+    {
+        lhs.div(rhs, self)
+    }
+
     fn zero<T: Zero<Self>>(&mut self) -> <T as Zero<Self>>::Output {
         T::zero(self)
     }
@@ -341,6 +354,7 @@ impl<L: AirParameters> Builder for AirBuilder<L> {
     type Field = L::Field;
     type CubicParams = L::CubicParams;
     type Parameters = L;
+    type Instruction = L::Instruction;
 
     fn api(&mut self) -> &mut AirBuilder<L> {
         self

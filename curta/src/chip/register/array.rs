@@ -44,6 +44,15 @@ impl<T: Register> ArrayRegister<T> {
             _marker: PhantomData,
         }
     }
+
+    pub const fn empty() -> Self {
+        Self {
+            register: MemorySlice::Global(0, 0),
+            length: 0,
+            _marker: PhantomData,
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.length
     }

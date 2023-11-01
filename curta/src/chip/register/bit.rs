@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use super::array::ArrayRegister;
 use super::cell::CellType;
 use super::cubic::CubicRegister;
 use super::element::ElementRegister;
@@ -61,13 +62,18 @@ impl Register for BitRegister {
 }
 
 impl MemoryValue for BitRegister {
+    fn num_challenges() -> usize {
+        0
+    }
+
     fn compress<L: crate::chip::AirParameters>(
         &self,
         builder: &mut AirBuilder<L>,
         ptr: RawPointer,
         time: &Time<L::Field>,
+        challenges: &ArrayRegister<CubicRegister>,
     ) -> CubicRegister {
-        self.as_element().compress(builder, ptr, time)
+        self.as_element().compress(builder, ptr, time, challenges)
     }
 }
 

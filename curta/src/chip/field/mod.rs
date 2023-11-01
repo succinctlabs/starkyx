@@ -35,6 +35,7 @@ pub mod inner_product;
 pub mod instruction;
 pub mod mul;
 pub mod mul_const;
+pub mod ops;
 pub mod parameters;
 pub mod register;
 pub mod sub;
