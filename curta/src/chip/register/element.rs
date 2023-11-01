@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use super::array::ArrayRegister;
 use super::cell::CellType;
 use super::cubic::CubicRegister;
 use super::memory::MemorySlice;
@@ -48,11 +49,16 @@ impl Register for ElementRegister {
 }
 
 impl MemoryValue for ElementRegister {
+    fn num_challenges() -> usize {
+        0
+    }
+
     fn compress<L: crate::chip::AirParameters>(
         &self,
         builder: &mut AirBuilder<L>,
         ptr: RawPointer,
         time: &Time<L::Field>,
+        _: &ArrayRegister<CubicRegister>,
     ) -> CubicRegister {
         let value = CubicElement([time.expr(), self.expr(), L::Field::ZERO.into()]);
         ptr.accumulate_cubic(builder, value)

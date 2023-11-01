@@ -37,7 +37,7 @@ impl<L: AirParameters> AirBuilder<L> {
             panic!("Cannot initialize a trace register");
         }
         let ptr = self.uninit();
-        let digest = value.compress(self, ptr.raw, time);
+        let digest = value.compress(self, ptr.raw, time, &ptr.challenges);
         self.input_to_memory_bus(digest, multiplicity);
         self.unsafe_raw_write(&ptr, *value, multiplicity, true);
 
@@ -46,8 +46,9 @@ impl<L: AirParameters> AirBuilder<L> {
 
     #[inline]
     pub(crate) fn uninit<V: MemoryValue>(&mut self) -> Pointer<V> {
-        let challenge = self.alloc_challenge();
-        Pointer::from_challenge(challenge)
+        let ptr_challenge = self.alloc_challenge();
+        let compression_challenges = self.alloc_array::<CubicRegister>(V::num_challenges());
+        Pointer::from_challenges(ptr_challenge, compression_challenges)
     }
 
     /// Frees the memory at location `ptr` with value `value` and write time given by `time`.
@@ -57,7 +58,7 @@ impl<L: AirParameters> AirBuilder<L> {
         value: V,
         last_write: &Time<L::Field>,
     ) {
-        let digest = value.compress(self, ptr.raw, last_write);
+        let digest = value.compress(self, ptr.raw, last_write, &ptr.challenges);
         self.output_from_memory_bus(digest)
     }
 
@@ -73,7 +74,7 @@ impl<L: AirParameters> AirBuilder<L> {
         for (i, value) in values.value_iter().enumerate() {
             let value = value.borrow();
             let ptr = slice.get(i);
-            let digest = value.compress(self, ptr.raw, time);
+            let digest = value.compress(self, ptr.raw, time, &ptr.challenges);
             self.input_to_memory_bus(digest, multiplicity);
             self.unsafe_raw_write(&ptr, *value, multiplicity, true);
         }
@@ -83,7 +84,8 @@ impl<L: AirParameters> AirBuilder<L> {
     #[inline]
     pub(crate) fn uninit_slice<V: MemoryValue>(&mut self) -> Slice<V> {
         let raw_slice = RawSlice::new(self);
-        Slice::new(raw_slice)
+        let compression_challenges = self.alloc_array::<CubicRegister>(V::num_challenges());
+        Slice::new(raw_slice, compression_challenges)
     }
 
     fn input_to_memory_bus(
@@ -120,7 +122,7 @@ impl<L: AirParameters> AirBuilder<L> {
     /// Reads the value from the memory at location `ptr`.
     pub fn get<V: MemoryValue>(&mut self, ptr: &Pointer<V>, last_write_ts: &Time<L::Field>) -> V {
         let value = self.unsafe_raw_read(ptr);
-        let read_digest = value.compress(self, ptr.raw, last_write_ts);
+        let read_digest = value.compress(self, ptr.raw, last_write_ts, &ptr.challenges);
         self.output_from_memory_bus(read_digest);
         value
     }
@@ -169,7 +171,7 @@ impl<L: AirParameters> AirBuilder<L> {
                 assert!(mult.is_trace());
             }
         }
-        let write_digest = value.compress(self, ptr.raw, write_ts);
+        let write_digest = value.compress(self, ptr.raw, write_ts, &ptr.challenges);
         self.input_to_memory_bus(write_digest, multiplicity);
         self.unsafe_raw_write(ptr, value, multiplicity, !write_digest.is_trace())
     }

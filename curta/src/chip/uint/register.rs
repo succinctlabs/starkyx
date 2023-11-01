@@ -70,11 +70,16 @@ impl<const N: usize> Register for ByteArrayRegister<N> {
 }
 
 impl MemoryValue for U32Register {
+    fn num_challenges() -> usize {
+        0
+    }
+
     fn compress<L: crate::chip::AirParameters>(
         &self,
         builder: &mut AirBuilder<L>,
         ptr: RawPointer,
         time: &Time<L::Field>,
+        _: &ArrayRegister<CubicRegister>,
     ) -> CubicRegister {
         let bytes = self.to_le_bytes();
         let mut acc = ArithmeticExpression::zero();
@@ -92,11 +97,16 @@ impl MemoryValue for U32Register {
 }
 
 impl MemoryValue for U64Register {
+    fn num_challenges() -> usize {
+        0
+    }
+
     fn compress<L: crate::chip::AirParameters>(
         &self,
         builder: &mut AirBuilder<L>,
         ptr: RawPointer,
         time: &Time<L::Field>,
+        _: &ArrayRegister<CubicRegister>,
     ) -> CubicRegister {
         let bytes = self.to_le_bytes();
         let low_bytes = bytes.get_subarray(0..4);

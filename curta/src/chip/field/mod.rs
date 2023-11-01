@@ -33,6 +33,7 @@ pub mod den;
 pub mod div;
 pub mod inner_product;
 pub mod instruction;
+pub mod memory;
 pub mod mul;
 pub mod mul_const;
 pub mod ops;
