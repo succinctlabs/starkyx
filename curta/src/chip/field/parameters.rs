@@ -10,7 +10,7 @@ pub const MAX_NB_LIMBS: usize = 32;
 pub const LIMB: u32 = 2u32.pow(16);
 
 pub trait FieldParameters:
-    Send + Sync + Copy + 'static + Debug + Serialize + DeserializeOwned
+    Send + Sync + Copy + 'static + Debug + Serialize + DeserializeOwned + Default
 {
     const NB_BITS_PER_LIMB: usize;
     const NB_LIMBS: usize;
@@ -42,7 +42,7 @@ pub mod tests {
 
     use super::*;
 
-    #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+    #[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
     pub struct Fp25519;
 
     impl FieldParameters for Fp25519 {

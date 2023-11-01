@@ -11,7 +11,7 @@ pub struct Bn254Parameters;
 
 pub type Bn254 = SWCurve<Bn254Parameters>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
 /// Bn254 base field parameter
 pub struct Bn254BaseField;
 
