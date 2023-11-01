@@ -1,7 +1,6 @@
 use core::iter::once;
 use core::marker::PhantomData;
 
-use log::debug;
 use serde::{Deserialize, Serialize};
 
 use super::parameters::FieldParameters;
