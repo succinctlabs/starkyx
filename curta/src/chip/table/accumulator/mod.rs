@@ -141,11 +141,11 @@ pub mod tests {
         let expr_2 = x_1.expr() - x_2.expr() + F::ONE;
         let expr_3 = ArithmeticExpression::from_constant(F::from_canonical_u32(42));
 
-        let challenges = builder.alloc_challenge_array(2);
+        let challenges = builder.alloc_array_challenge(2);
 
         let digest = builder.accumulate(&challenges, &[x_1, x_2]);
 
-        let challenges_expr = builder.alloc_challenge_array(4);
+        let challenges_expr = builder.alloc_array_challenge(4);
 
         let digest_expr = builder.accumulate_expressions(
             &challenges_expr,
@@ -228,7 +228,7 @@ pub mod tests {
         let expr_2 = x_1.expr() - x_2.expr() + F::ONE;
         let expr_3 = ArithmeticExpression::from_constant(F::from_canonical_u32(42));
 
-        let challenges_expr = builder.alloc_challenge_array(4);
+        let challenges_expr = builder.alloc_array_challenge(4);
 
         let digest_expr = builder.accumulate_public_expressions(
             &challenges_expr,

@@ -37,19 +37,20 @@ pub struct AirTraceData<L: AirParameters> {
 impl<L: AirParameters> AirTraceData<L> {
     pub fn write_extended_trace(&self, writer: &TraceWriter<L::Field>) {
         let num_rows = writer.read_trace().unwrap().height();
+        // Write accumulations.
+        for acc in self.accumulators.iter() {
+            writer.write_accumulation(acc);
+        }
+
         // Write pointer accumulations.
         for acc in self.pointer_global_accumulators.iter() {
             writer.write_ptr_accumulation(acc, 0);
         }
+
         for i in 0..num_rows {
             for acc in self.pointer_row_accumulators.iter() {
                 writer.write_ptr_accumulation(acc, i);
             }
-        }
-
-        // Write accumulations.
-        for acc in self.accumulators.iter() {
-            writer.write_accumulation(acc);
         }
 
         // Write bus channels.

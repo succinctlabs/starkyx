@@ -28,6 +28,15 @@ pub trait Mul<B: Builder, Rhs = Self> {
     fn mul(self, rhs: Rhs, builder: &mut B) -> Self::Output;
 }
 
+/// The division operation.
+///
+/// Types implementing this trait can be used within the `builder.div(lhs, rhs)` method.
+pub trait Div<B: Builder, Rhs = Self> {
+    type Output;
+
+    fn div(self, rhs: Rhs, builder: &mut B) -> Self::Output;
+}
+
 /// The negation operation.
 ///
 /// Types implementing this trait can be used within the `builder.neg(value)` method.
