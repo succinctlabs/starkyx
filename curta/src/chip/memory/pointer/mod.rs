@@ -4,4 +4,4 @@ pub mod raw;
 pub mod slice;
 mod typed;
 
-pub use typed::Pointer;
+pub use typed::RegisterPointer;

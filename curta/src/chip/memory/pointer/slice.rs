@@ -2,7 +2,7 @@ use core::marker::PhantomData;
 
 use super::super::value::MemoryValue;
 use super::raw::RawPointer;
-use super::Pointer;
+use super::RegisterPointer;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::CubicRegister;
@@ -30,19 +30,19 @@ impl<V: MemoryValue> Slice<V> {
         }
     }
 
-    pub fn get(&self, idx: usize) -> Pointer<V> {
+    pub fn get(&self, idx: usize) -> RegisterPointer<V> {
         let raw = self.raw.get(idx);
-        Pointer::new(raw, self.challenges)
+        RegisterPointer::new(raw, self.challenges)
     }
 
-    pub fn get_at(&self, idx: ElementRegister) -> Pointer<V> {
+    pub fn get_at(&self, idx: ElementRegister) -> RegisterPointer<V> {
         let raw = self.raw.get_at(idx);
-        Pointer::new(raw, self.challenges)
+        RegisterPointer::new(raw, self.challenges)
     }
 
-    pub fn get_at_shifted(&self, idx: ElementRegister, shift: i32) -> Pointer<V> {
+    pub fn get_at_shifted(&self, idx: ElementRegister, shift: i32) -> RegisterPointer<V> {
         let raw = self.raw.get_at_shifted(idx, shift);
-        Pointer::new(raw, self.challenges)
+        RegisterPointer::new(raw, self.challenges)
     }
 }
 

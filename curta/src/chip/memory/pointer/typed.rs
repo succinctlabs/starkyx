@@ -6,13 +6,13 @@ use crate::chip::register::cubic::CubicRegister;
 
 /// A pointer emulating a mutable reference to a data of register type `T`.
 #[derive(Debug, Clone, Copy)]
-pub struct Pointer<T> {
+pub struct RegisterPointer<T> {
     pub raw: RawPointer,
     pub challenges: ArrayRegister<CubicRegister>,
     _marker: PhantomData<T>,
 }
 
-impl<T> Pointer<T> {
+impl<T> RegisterPointer<T> {
     pub fn new(raw_ptr: RawPointer, challenges: ArrayRegister<CubicRegister>) -> Self {
         Self {
             raw: raw_ptr,

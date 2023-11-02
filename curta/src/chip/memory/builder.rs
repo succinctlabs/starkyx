@@ -3,7 +3,7 @@ use core::borrow::Borrow;
 use super::get::GetInstruction;
 use super::instruction::MemoryInstruction;
 use super::pointer::slice::{RawSlice, Slice};
-use super::pointer::Pointer;
+use super::pointer::RegisterPointer;
 use super::set::SetInstruction;
 use super::time::Time;
 use super::value::MemoryValue;
@@ -32,7 +32,7 @@ impl<L: AirParameters> AirBuilder<L> {
         value: &V,
         time: &Time<L::Field>,
         multiplicity: Option<ElementRegister>,
-    ) -> Pointer<V> {
+    ) -> RegisterPointer<V> {
         if value.register().is_trace() {
             panic!("Cannot initialize a trace register");
         }
@@ -45,17 +45,17 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 
     #[inline]
-    pub(crate) fn uninit<V: MemoryValue>(&mut self) -> Pointer<V> {
+    pub(crate) fn uninit<V: MemoryValue>(&mut self) -> RegisterPointer<V> {
         let ptr_challenge = self.alloc_challenge();
         let compression_challenges =
             self.alloc_array_challenge::<CubicRegister>(V::num_challenges());
-        Pointer::from_challenges(ptr_challenge, compression_challenges)
+        RegisterPointer::from_challenges(ptr_challenge, compression_challenges)
     }
 
     /// Frees the memory at location `ptr` with value `value` and write time given by `time`.
     pub fn free<V: MemoryValue>(
         &mut self,
-        ptr: &Pointer<V>,
+        ptr: &RegisterPointer<V>,
         value: V,
         last_write: &Time<L::Field>,
     ) {
@@ -122,14 +122,18 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 
     /// Reads the value from the memory at location `ptr`.
-    pub fn get<V: MemoryValue>(&mut self, ptr: &Pointer<V>, last_write_ts: &Time<L::Field>) -> V {
+    pub fn get<V: MemoryValue>(
+        &mut self,
+        ptr: &RegisterPointer<V>,
+        last_write_ts: &Time<L::Field>,
+    ) -> V {
         let value = self.unsafe_raw_read(ptr);
         let read_digest = value.compress(self, ptr.raw, last_write_ts, &ptr.challenges);
         self.output_from_memory_bus(read_digest);
         value
     }
 
-    fn unsafe_raw_read<V: MemoryValue>(&mut self, ptr: &Pointer<V>) -> V {
+    fn unsafe_raw_read<V: MemoryValue>(&mut self, ptr: &RegisterPointer<V>) -> V {
         let value = self.alloc::<V>();
         let instr = MemoryInstruction::Get(GetInstruction::new(ptr.raw, *value.register()));
         self.register_air_instruction_internal(AirInstruction::mem(instr));
@@ -138,7 +142,7 @@ impl<L: AirParameters> AirBuilder<L> {
 
     fn unsafe_raw_write<V: MemoryValue>(
         &mut self,
-        ptr: &Pointer<V>,
+        ptr: &RegisterPointer<V>,
         value: V,
         multiplicity: Option<ElementRegister>,
         global: bool,
@@ -163,7 +167,7 @@ impl<L: AirParameters> AirBuilder<L> {
     /// to the memory bus with multiplicity given by the value of `m`, allowing `m` reads.
     pub fn set<V: MemoryValue>(
         &mut self,
-        ptr: &Pointer<V>,
+        ptr: &RegisterPointer<V>,
         value: V,
         write_ts: &Time<L::Field>,
         multiplicity: Option<ElementRegister>,

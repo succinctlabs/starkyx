@@ -4,7 +4,7 @@ use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::cycle::Cycle;
 use crate::chip::instruction::Instruction;
 use crate::chip::memory::pointer::slice::Slice;
-use crate::chip::memory::pointer::Pointer;
+use crate::chip::memory::pointer::RegisterPointer;
 use crate::chip::memory::time::Time;
 use crate::chip::memory::value::MemoryValue;
 use crate::chip::register::array::ArrayRegister;
@@ -71,12 +71,12 @@ pub trait Builder: Sized {
         value: &V,
         time: &Time<Self::Field>,
         multiplicity: Option<ElementRegister>,
-    ) -> Pointer<V> {
+    ) -> RegisterPointer<V> {
         self.api().initialize(value, time, multiplicity)
     }
 
     /// Creates a pointer which is not initialized to any value.
-    fn uninit<V: MemoryValue>(&mut self) -> Pointer<V> {
+    fn uninit<V: MemoryValue>(&mut self) -> RegisterPointer<V> {
         self.api().uninit()
     }
 
@@ -96,7 +96,11 @@ pub trait Builder: Sized {
     }
 
     /// Reads the memory at location `ptr` with last write time given by `last_write_ts`.
-    fn load<V: MemoryValue>(&mut self, ptr: &Pointer<V>, last_write_ts: &Time<Self::Field>) -> V {
+    fn load<V: MemoryValue>(
+        &mut self,
+        ptr: &RegisterPointer<V>,
+        last_write_ts: &Time<Self::Field>,
+    ) -> V {
         self.api().get(ptr, last_write_ts)
     }
 
@@ -108,7 +112,7 @@ pub trait Builder: Sized {
     /// to the memory bus with multiplicity given by the value of `m`, allowing `m` reads.
     fn store<V: MemoryValue>(
         &mut self,
-        ptr: &Pointer<V>,
+        ptr: &RegisterPointer<V>,
         value: V,
         write_ts: &Time<Self::Field>,
         multiplicity: Option<ElementRegister>,
@@ -117,7 +121,12 @@ pub trait Builder: Sized {
     }
 
     /// Frees the memory at location `ptr` with last write time given by `last_write_ts`.
-    fn free<V: MemoryValue>(&mut self, ptr: &Pointer<V>, value: V, last_write: &Time<Self::Field>) {
+    fn free<V: MemoryValue>(
+        &mut self,
+        ptr: &RegisterPointer<V>,
+        value: V,
+        last_write: &Time<Self::Field>,
+    ) {
         self.api().free(ptr, value, last_write)
     }
 
