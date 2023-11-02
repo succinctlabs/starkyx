@@ -10,6 +10,15 @@ pub trait Add<B: Builder, Rhs = Self> {
     fn add(self, rhs: Rhs, builder: &mut B) -> Self::Output;
 }
 
+/// The doubling operation.
+///
+/// Types implementing this trait can be used within the `builder.double(value)` method.
+pub trait Double<B: Builder> {
+    type Output;
+
+    fn double(self, builder: &mut B) -> Self::Output;
+}
+
 /// The subtraction operation.
 ///
 /// Types implementing this trait can be used within the `builder.sub(lhs, rhs)` method.

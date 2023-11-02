@@ -4,6 +4,7 @@ use self::point::{AffinePoint, AffinePointRegister};
 use super::builder::AirBuilder;
 use super::field::parameters::FieldParameters;
 use super::AirParameters;
+use crate::machine::builder::ops::{Add, Double};
 
 pub mod edwards;
 pub mod gadget;
@@ -74,5 +75,57 @@ impl<L: AirParameters> AirBuilder<L> {
 
     pub fn ec_generator<E: EllipticCurveAir<L>>(&mut self) -> AffinePointRegister<E> {
         E::ec_generator_air(self)
+    }
+}
+
+impl<L: AirParameters, E: EllipticCurveAir<L>> Add<AirBuilder<L>> for AffinePointRegister<E> {
+    type Output = AffinePointRegister<E>;
+
+    fn add(self, rhs: Self, builder: &mut AirBuilder<L>) -> Self::Output {
+        builder.ec_add(&self, &rhs)
+    }
+}
+
+impl<L: AirParameters, E: EllipticCurveAir<L>> Add<AirBuilder<L>, &AffinePointRegister<E>>
+    for AffinePointRegister<E>
+{
+    type Output = AffinePointRegister<E>;
+
+    fn add(self, rhs: &Self, builder: &mut AirBuilder<L>) -> Self::Output {
+        builder.ec_add(&self, rhs)
+    }
+}
+
+impl<L: AirParameters, E: EllipticCurveAir<L>> Add<AirBuilder<L>, AffinePointRegister<E>>
+    for &AffinePointRegister<E>
+{
+    type Output = AffinePointRegister<E>;
+
+    fn add(self, rhs: AffinePointRegister<E>, builder: &mut AirBuilder<L>) -> Self::Output {
+        builder.ec_add(self, &rhs)
+    }
+}
+
+impl<L: AirParameters, E: EllipticCurveAir<L>> Add<AirBuilder<L>> for &AffinePointRegister<E> {
+    type Output = AffinePointRegister<E>;
+
+    fn add(self, rhs: Self, builder: &mut AirBuilder<L>) -> Self::Output {
+        builder.ec_add(self, rhs)
+    }
+}
+
+impl<L: AirParameters, E: EllipticCurveAir<L>> Double<AirBuilder<L>> for AffinePointRegister<E> {
+    type Output = AffinePointRegister<E>;
+
+    fn double(self, builder: &mut AirBuilder<L>) -> Self::Output {
+        builder.ec_double(&self)
+    }
+}
+
+impl<L: AirParameters, E: EllipticCurveAir<L>> Double<AirBuilder<L>> for &AffinePointRegister<E> {
+    type Output = AffinePointRegister<E>;
+
+    fn double(self, builder: &mut AirBuilder<L>) -> Self::Output {
+        builder.ec_double(self)
     }
 }

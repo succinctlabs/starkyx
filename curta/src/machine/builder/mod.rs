@@ -1,4 +1,4 @@
-use self::ops::{Adc, Add, And, Div, Mul, Neg, Not, One, Or, Shl, Shr, Sub, Xor, Zero};
+use self::ops::{Adc, Add, And, Div, Double, Mul, Neg, Not, One, Or, Shl, Shr, Sub, Xor, Zero};
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::cycle::Cycle;
@@ -237,6 +237,10 @@ pub trait Builder: Sized {
         Lhs: Add<Self, Rhs>,
     {
         lhs.add(rhs, self)
+    }
+
+    fn double<T: Double<Self>>(&mut self, value: T) -> <T as Double<Self>>::Output {
+        value.double(self)
     }
 
     fn sub<Lhs, Rhs>(&mut self, lhs: Lhs, rhs: Rhs) -> <Lhs as ops::Sub<Self, Rhs>>::Output
