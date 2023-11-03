@@ -11,7 +11,6 @@ pub mod add;
 pub mod assert_valid;
 pub mod bigint_operations;
 pub mod ed25519;
-pub mod scalar_mul;
 
 pub trait EdwardsParameters: EllipticCurveParameters {
     const D: [u16; MAX_NB_LIMBS];
