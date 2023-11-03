@@ -99,10 +99,10 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
             results.push(result);
         }
         // Load the elliptic curve point.
-        let process_id = self.process_id(cycle.end_bit);
+        let process_id = cycle.process_id;
 
         // Load the scalar limbs.
-        let process_id_u32 = self.process_id(cycle_32.end_bit);
+        let process_id_u32 = cycle_32.process_id;
         let limb = self.load(&limb_ptr.get_at(process_id_u32), &zero);
 
         // Decompose the limbs to bits.
@@ -290,19 +290,19 @@ mod tests {
 
         let public_inputs = writer.public.read().unwrap().clone();
 
-        // Generate proof and verify as a stark
-        timed!(
-            timing,
-            "Stark proof and verify",
-            test_starky(&stark, &config, &generator, &public_inputs)
-        );
-
-        // // Generate recursive proof
+        // // Generate proof and verify as a stark
         // timed!(
         //     timing,
-        //     "Recursive proof generation and verification",
-        //     test_recursive_starky(stark, config, generator, &public_inputs)
+        //     "Stark proof and verify",
+        //     test_starky(&stark, &config, &generator, &public_inputs)
         // );
+
+        // Generate recursive proof
+        timed!(
+            timing,
+            "Recursive proof generation and verification",
+            test_recursive_starky(stark, config, generator, &public_inputs)
+        );
 
         timing.print();
     }
