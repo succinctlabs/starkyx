@@ -5,7 +5,7 @@ use super::{SWCurve, WeierstrassParameters};
 use crate::chip::ec::EllipticCurveParameters;
 use crate::chip::field::parameters::FieldParameters;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 /// Bn254 curve parameter
 pub struct Bn254Parameters;
 

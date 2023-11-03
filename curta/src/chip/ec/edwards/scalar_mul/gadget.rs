@@ -9,9 +9,10 @@ use crate::chip::instruction::cycle::Cycle;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::AirParameters;
+use crate::math::field::Field;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)]
+#[serde(bound = "")]
 pub struct EdDoubleAndAddGadget<E: EdwardsParameters> {
     pub bit: BitRegister,
     pub result: AffinePointRegister<EdwardsCurve<E>>,
@@ -21,14 +22,14 @@ pub struct EdDoubleAndAddGadget<E: EdwardsParameters> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)]
-pub struct EdScalarMulGadget<F, E: EdwardsParameters> {
+#[serde(bound = "")]
+pub struct EdScalarMulGadget<F: Field, E: EdwardsParameters> {
     pub cycle: Cycle<F>,
     pub double_and_add_gadget: EdDoubleAndAddGadget<E>,
 }
 
 #[allow(clippy::misnamed_getters)]
-impl<F, E: EdwardsParameters> EdScalarMulGadget<F, E> {
+impl<F: Field, E: EdwardsParameters> EdScalarMulGadget<F, E> {
     pub fn result(&self) -> AffinePointRegister<EdwardsCurve<E>> {
         self.double_and_add_gadget.result_next
     }
@@ -139,7 +140,6 @@ mod tests {
     use crate::chip::ec::EllipticCurve;
     use crate::chip::field::instruction::FpInstruction;
     use crate::chip::utils::biguint_to_bits_le;
-    use crate::math::prelude::*;
 
     #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
     pub struct Ed25519ScalarMulTest;

@@ -1,4 +1,5 @@
 use num::{BigUint, Zero};
+use serde::{Deserialize, Serialize};
 
 use super::point::{AffinePoint, AffinePointRegister};
 use super::{EllipticCurve, EllipticCurveAir, EllipticCurveParameters};
@@ -32,7 +33,8 @@ pub trait EdwardsParameters: EllipticCurveParameters {
     }
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct EdwardsCurve<E: EdwardsParameters>(pub E);
 
 impl<E: EdwardsParameters> EllipticCurveParameters for EdwardsCurve<E> {

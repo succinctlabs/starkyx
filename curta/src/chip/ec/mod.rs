@@ -1,5 +1,8 @@
 use core::fmt::Debug;
 
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+
 use self::point::{AffinePoint, AffinePointRegister};
 use super::builder::AirBuilder;
 use super::field::parameters::FieldParameters;
@@ -9,10 +12,13 @@ use crate::machine::builder::ops::{Add, Double};
 pub mod edwards;
 pub mod gadget;
 pub mod point;
+pub mod scalar;
 pub mod scalar_mul;
 pub mod weierstrass;
 
-pub trait EllipticCurveParameters: Debug + Send + Sync + Copy + 'static {
+pub trait EllipticCurveParameters:
+    Debug + Send + Sync + Copy + Serialize + DeserializeOwned + 'static
+{
     type BaseField: FieldParameters;
 }
 
