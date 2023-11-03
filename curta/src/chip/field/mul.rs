@@ -117,7 +117,7 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpMulInstruction<P>
         let a = digits_to_biguint(&a_digits);
         let b = digits_to_biguint(&b_digits);
 
-        // Compute field addition in the integers.
+        // Compute field multiplication in the integers.
         let modulus = P::modulus();
         let result = (&a * &b) % &modulus;
         let carry = (&a * &b - &result) / &modulus;

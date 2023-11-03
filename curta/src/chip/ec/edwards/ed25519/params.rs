@@ -10,7 +10,7 @@ pub type Ed25519 = EdwardsCurve<Ed25519Parameters>;
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Ed25519Parameters;
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Ed25519BaseField;
 
 impl FieldParameters for Ed25519BaseField {
@@ -28,7 +28,7 @@ impl FieldParameters for Ed25519BaseField {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Ed25519ScalarField;
 
 impl FieldParameters for Ed25519ScalarField {
