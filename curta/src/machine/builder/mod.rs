@@ -1,6 +1,7 @@
 use self::ops::{Adc, Add, And, Div, Double, Mul, Neg, Not, One, Or, Shl, Shr, Sub, Xor, Zero};
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
+use crate::chip::ec::scalar::LimbBitInstruction;
 use crate::chip::instruction::cycle::Cycle;
 use crate::chip::instruction::Instruction;
 use crate::chip::memory::pointer::slice::Slice;
@@ -12,10 +13,10 @@ use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::slice::RegisterSlice;
-use crate::chip::register::Register;
+use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::AirParameters;
 use crate::math::field::PrimeField64;
-use crate::math::prelude::CubicParameters;
+use crate::math::prelude::{CubicParameters, *};
 
 pub mod ops;
 
@@ -186,6 +187,19 @@ pub trait Builder: Sized {
         self.api().select(&flag, true_value, false_value)
     }
 
+    fn select_next<T: Register>(
+        &mut self,
+        flag: BitRegister,
+        true_value: &T,
+        false_value: &T,
+        result: &T,
+    ) {
+        self.set_to_expression_transition(
+            &result.next(),
+            flag.expr() * true_value.expr() + flag.not_expr() * false_value.expr(),
+        );
+    }
+
     fn set_to_expression_first_row<T: Register>(
         &mut self,
         register: &T,
@@ -351,6 +365,27 @@ pub trait Builder: Sized {
 
     fn cycle(&mut self, length_log: usize) -> Cycle<Self::Field> {
         self.api().cycle(length_log)
+    }
+
+    /// `process_id` is a register is computed by counting the number of cycles. We do this by
+    /// setting `process_id` to be the cumulative sum of the `end_bit` of each cycle.
+    fn process_id(&mut self, end_bit: BitRegister) -> ElementRegister {
+        let process_id = self.alloc::<ElementRegister>();
+        self.set_to_expression_first_row(&process_id, Self::Field::ZERO.into());
+        self.set_to_expression_transition(&process_id.next(), process_id.expr() + end_bit.expr());
+        process_id
+    }
+
+    fn bit_decomposition(
+        &mut self,
+        limb: ElementRegister,
+        start_bit: BitRegister,
+        end_bit: BitRegister,
+    ) -> BitRegister
+    where
+        Self::Instruction: From<LimbBitInstruction>,
+    {
+        self.api().bit_decomposition(limb, start_bit, end_bit)
     }
 }
 

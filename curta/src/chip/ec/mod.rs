@@ -8,13 +8,17 @@ use super::builder::AirBuilder;
 use super::field::parameters::FieldParameters;
 use super::AirParameters;
 use crate::machine::builder::ops::{Add, Double};
+use crate::machine::builder::Builder;
 
 pub mod edwards;
 pub mod gadget;
+mod instruction_set;
 pub mod point;
 pub mod scalar;
 pub mod scalar_mul;
 pub mod weierstrass;
+
+pub use instruction_set::{ECInstruction, ECInstructions};
 
 pub trait EllipticCurveParameters:
     Debug + Send + Sync + Copy + Serialize + DeserializeOwned + 'static
@@ -84,54 +88,62 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 }
 
-impl<L: AirParameters, E: EllipticCurveAir<L>> Add<AirBuilder<L>> for AffinePointRegister<E> {
-    type Output = AffinePointRegister<E>;
-
-    fn add(self, rhs: Self, builder: &mut AirBuilder<L>) -> Self::Output {
-        builder.ec_add(&self, &rhs)
-    }
-}
-
-impl<L: AirParameters, E: EllipticCurveAir<L>> Add<AirBuilder<L>, &AffinePointRegister<E>>
+impl<L: AirParameters, E: EllipticCurveAir<L>, B: Builder<Parameters = L>> Add<B>
     for AffinePointRegister<E>
 {
     type Output = AffinePointRegister<E>;
 
-    fn add(self, rhs: &Self, builder: &mut AirBuilder<L>) -> Self::Output {
-        builder.ec_add(&self, rhs)
+    fn add(self, rhs: Self, builder: &mut B) -> Self::Output {
+        builder.api().ec_add(&self, &rhs)
     }
 }
 
-impl<L: AirParameters, E: EllipticCurveAir<L>> Add<AirBuilder<L>, AffinePointRegister<E>>
+impl<L: AirParameters, E: EllipticCurveAir<L>, B: Builder<Parameters = L>>
+    Add<B, &AffinePointRegister<E>> for AffinePointRegister<E>
+{
+    type Output = AffinePointRegister<E>;
+
+    fn add(self, rhs: &Self, builder: &mut B) -> Self::Output {
+        builder.api().ec_add(&self, rhs)
+    }
+}
+
+impl<L: AirParameters, E: EllipticCurveAir<L>, B: Builder<Parameters = L>>
+    Add<B, AffinePointRegister<E>> for &AffinePointRegister<E>
+{
+    type Output = AffinePointRegister<E>;
+
+    fn add(self, rhs: AffinePointRegister<E>, builder: &mut B) -> Self::Output {
+        builder.api().ec_add(self, &rhs)
+    }
+}
+
+impl<L: AirParameters, E: EllipticCurveAir<L>, B: Builder<Parameters = L>> Add<B>
     for &AffinePointRegister<E>
 {
     type Output = AffinePointRegister<E>;
 
-    fn add(self, rhs: AffinePointRegister<E>, builder: &mut AirBuilder<L>) -> Self::Output {
-        builder.ec_add(self, &rhs)
+    fn add(self, rhs: Self, builder: &mut B) -> Self::Output {
+        builder.api().ec_add(self, rhs)
     }
 }
 
-impl<L: AirParameters, E: EllipticCurveAir<L>> Add<AirBuilder<L>> for &AffinePointRegister<E> {
+impl<L: AirParameters, E: EllipticCurveAir<L>, B: Builder<Parameters = L>> Double<B>
+    for AffinePointRegister<E>
+{
     type Output = AffinePointRegister<E>;
 
-    fn add(self, rhs: Self, builder: &mut AirBuilder<L>) -> Self::Output {
-        builder.ec_add(self, rhs)
+    fn double(self, builder: &mut B) -> Self::Output {
+        builder.api().ec_double(&self)
     }
 }
 
-impl<L: AirParameters, E: EllipticCurveAir<L>> Double<AirBuilder<L>> for AffinePointRegister<E> {
+impl<L: AirParameters, E: EllipticCurveAir<L>, B: Builder<Parameters = L>> Double<B>
+    for &AffinePointRegister<E>
+{
     type Output = AffinePointRegister<E>;
 
-    fn double(self, builder: &mut AirBuilder<L>) -> Self::Output {
-        builder.ec_double(&self)
-    }
-}
-
-impl<L: AirParameters, E: EllipticCurveAir<L>> Double<AirBuilder<L>> for &AffinePointRegister<E> {
-    type Output = AffinePointRegister<E>;
-
-    fn double(self, builder: &mut AirBuilder<L>) -> Self::Output {
-        builder.ec_double(self)
+    fn double(self, builder: &mut B) -> Self::Output {
+        builder.api().ec_double(self)
     }
 }
