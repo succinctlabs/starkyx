@@ -13,10 +13,10 @@ use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::slice::RegisterSlice;
-use crate::chip::register::{Register, RegisterSerializable};
+use crate::chip::register::Register;
 use crate::chip::AirParameters;
 use crate::math::field::PrimeField64;
-use crate::math::prelude::{CubicParameters, *};
+use crate::math::prelude::CubicParameters;
 
 pub mod ops;
 
@@ -369,11 +369,8 @@ pub trait Builder: Sized {
 
     /// `process_id` is a register is computed by counting the number of cycles. We do this by
     /// setting `process_id` to be the cumulative sum of the `end_bit` of each cycle.
-    fn process_id(&mut self, end_bit: BitRegister) -> ElementRegister {
-        let process_id = self.alloc::<ElementRegister>();
-        self.set_to_expression_first_row(&process_id, Self::Field::ZERO.into());
-        self.set_to_expression_transition(&process_id.next(), process_id.expr() + end_bit.expr());
-        process_id
+    fn process_id(&mut self, size: usize, end_bit: BitRegister) -> ElementRegister {
+        self.api().process_id(size, end_bit)
     }
 
     fn bit_decomposition(

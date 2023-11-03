@@ -18,11 +18,17 @@ use crate::math::prelude::*;
 pub struct Cycle<F> {
     pub start_bit: BitRegister,
     pub end_bit: BitRegister,
-    pub process_id: ElementRegister,
     start_bit_witness: ElementRegister,
     end_bit_witness: ElementRegister,
     element: ElementRegister,
     group: Vec<F>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProcessIdInstruction {
+    process_id: ElementRegister,
+    size: usize,
+    end_bit: BitRegister,
 }
 
 pub struct Loop {
@@ -44,13 +50,11 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn cycle(&mut self, length_log: usize) -> Cycle<L::Field> {
         let start_bit = self.alloc::<BitRegister>();
         let end_bit = self.alloc::<BitRegister>();
-        let process_id = self.alloc::<ElementRegister>();
         let element = self.alloc::<ElementRegister>();
         let start_bit_witness = self.alloc::<ElementRegister>();
         let end_bit_witness = self.alloc::<ElementRegister>();
         let group = L::Field::two_adic_subgroup(length_log);
         let cycle = Cycle {
-            process_id,
             start_bit,
             end_bit,
             element,
@@ -62,6 +66,18 @@ impl<L: AirParameters> AirBuilder<L> {
         self.register_air_instruction_internal(AirInstruction::cycle(cycle.clone()));
 
         cycle
+    }
+
+    pub(crate) fn process_id(&mut self, size: usize, end_bit: BitRegister) -> ElementRegister {
+        let process_id = self.alloc::<ElementRegister>();
+        let instruction = ProcessIdInstruction {
+            process_id,
+            size,
+            end_bit,
+        };
+
+        self.register_air_instruction_internal(AirInstruction::ProcessId(instruction));
+        process_id
     }
 
     pub fn loop_instr(&mut self, num_iterations: usize) -> Loop {
@@ -151,14 +167,6 @@ impl<AP: AirParser<Field = F>, F: Field> AirConstraint<AP> for Cycle<F> {
             parser.mul(elem_minus_gen_inv_minus_end_bit, end_bit_witness);
         end_bit_witness_constraint = parser.sub_const(end_bit_witness_constraint, F::ONE);
         parser.constraint(end_bit_witness_constraint);
-
-        // Impose that `process_id` is the cumulative sum of end_bits.
-        let process_id = self.process_id.eval(parser);
-        parser.constraint_first_row(process_id);
-        let mut process_id_constraint = self.process_id.next().eval(parser);
-        process_id_constraint = parser.sub(process_id_constraint, process_id);
-        process_id_constraint = parser.sub(process_id_constraint, end_bit);
-        parser.constraint_transition(process_id_constraint);
     }
 }
 
@@ -167,8 +175,6 @@ impl<F: Field> Instruction<F> for Cycle<F> {
         let cycle = row_index % self.group.len();
         let element = self.group[cycle];
         let gen_inverse = *self.group.last().unwrap();
-        let process_id = F::from_canonical_usize(row_index / self.group.len());
-        writer.write(&self.process_id, &process_id, row_index);
         writer.write(&self.element, &element, row_index);
         if cycle == 0 {
             writer.write(&self.start_bit, &F::ONE, row_index);
@@ -205,6 +211,26 @@ impl<F: Field> Instruction<F> for Cycle<F> {
     }
 }
 
+impl<AP: AirParser<Field = F>, F: Field> AirConstraint<AP> for ProcessIdInstruction {
+    fn eval(&self, parser: &mut AP) {
+        // Impose that `process_id` is the cumulative sum of end_bits.
+        let process_id = self.process_id.eval(parser);
+        let end_bit = self.end_bit.eval(parser);
+        parser.constraint_first_row(process_id);
+        let mut process_id_constraint = self.process_id.next().eval(parser);
+        process_id_constraint = parser.sub(process_id_constraint, process_id);
+        process_id_constraint = parser.sub(process_id_constraint, end_bit);
+        parser.constraint_transition(process_id_constraint);
+    }
+}
+
+impl<F: Field> Instruction<F> for ProcessIdInstruction {
+    fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
+        let process_id = F::from_canonical_usize(row_index / self.size);
+        writer.write(&self.process_id, &process_id, row_index);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField;
@@ -232,8 +258,7 @@ mod tests {
         type SC = PoseidonGoldilocksStarkConfig;
 
         let mut builder = AirBuilder::<L>::new();
-        let cycle = builder.cycle(4);
-        let size = 1 << 4;
+        builder.cycle(4);
 
         let (air, trace_data) = builder.build();
 
@@ -242,9 +267,6 @@ mod tests {
         let writer = generator.new_writer();
         (0..num_rows).into_par_iter().for_each(|i| {
             writer.write_row_instructions(&generator.air_data, i);
-            let process_id_expected = GoldilocksField::from_canonical_usize(i / size);
-            let process_id = writer.read(&cycle.process_id, i);
-            assert_eq!(process_id, process_id_expected);
         });
 
         let trace = generator.trace_clone();

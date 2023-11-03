@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::assign::AssignInstruction;
 use super::bit::BitConstraint;
-use super::cycle::Cycle;
+use super::cycle::{Cycle, ProcessIdInstruction};
 use super::Instruction;
 use crate::air::parser::{AirParser, MulParser};
 use crate::air::AirConstraint;
@@ -22,6 +22,7 @@ pub enum AirInstruction<F, I> {
     Assign(AssignInstruction<F>),
     Select(SelectInstruction),
     Cycle(Cycle<F>),
+    ProcessId(ProcessIdInstruction),
     Filtered(ArithmeticExpression<F>, Arc<Self>),
     Mem(MemoryInstruction),
 }
@@ -37,6 +38,7 @@ where
             AirInstruction::Assign(i) => AirConstraint::<AP>::eval(i, parser),
             AirInstruction::Select(i) => AirConstraint::<AP>::eval(i, parser),
             AirInstruction::Cycle(i) => AirConstraint::<AP>::eval(i, parser),
+            AirInstruction::ProcessId(i) => AirConstraint::<AP>::eval(i, parser),
             AirInstruction::Filtered(expression, instr) => {
                 assert_eq!(
                     expression.size, 1,
@@ -65,6 +67,7 @@ impl<F: Field, I: Instruction<F>> Instruction<F> for AirInstruction<F, I> {
             AirInstruction::Select(i) => Instruction::<F>::write(i, writer, row_index),
             AirInstruction::Assign(i) => Instruction::<F>::write(i, writer, row_index),
             AirInstruction::Cycle(i) => Instruction::<F>::write(i, writer, row_index),
+            AirInstruction::ProcessId(i) => Instruction::<F>::write(i, writer, row_index),
             AirInstruction::Filtered(expression, i) => {
                 let filter = writer.read_expression(expression, row_index)[0];
                 if filter == F::ONE {
