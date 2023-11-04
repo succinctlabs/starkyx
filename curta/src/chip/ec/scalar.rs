@@ -15,7 +15,7 @@ use crate::chip::trace::writer::TraceWriter;
 use crate::chip::AirParameters;
 use crate::math::field::{Field, PrimeField64};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct ECScalarRegister<E> {
     pub limbs: ArrayRegister<ElementRegister>,
     _marker: PhantomData<E>,
