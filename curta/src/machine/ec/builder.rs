@@ -52,12 +52,14 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
         self.select_next(flag, &true_value.y, &false_value.y, &result.y);
     }
 
-    fn scalar_mul_batch<I, J>(&mut self, points: I, scalars: J) -> Vec<AffinePointRegister<E>>
+    fn scalar_mul_batch<I, J, K>(&mut self, points: I, scalars: J, results: K)
     where
         I: IntoIterator,
         J: IntoIterator,
+        K: IntoIterator,
         I::Item: Borrow<AffinePointRegister<E>>,
         J::Item: Borrow<ECScalarRegister<E>>,
+        K::Item: Borrow<AffinePointRegister<E>>,
         Self::Instruction: ECInstructions<E>,
     {
         let nb_bits_log = E::nb_scalar_bits().ilog2();
@@ -71,16 +73,21 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
         let cycle = self.cycle(nb_bits_log as usize);
         let cycle_32 = self.cycle(5);
 
-        let mut results = Vec::new();
         let temp_x_ptr = self.uninit_slice::<FieldRegister<E::BaseField>>();
         let temp_y_ptr = self.uninit_slice::<FieldRegister<E::BaseField>>();
         let x_ptr = self.uninit_slice::<FieldRegister<E::BaseField>>();
         let y_ptr = self.uninit_slice::<FieldRegister<E::BaseField>>();
         let limb_ptr = self.uninit_slice::<ElementRegister>();
         let zero = Time::zero();
-        for (i, (point, scalar)) in points.into_iter().zip_eq(scalars).enumerate() {
+        for (i, ((point, scalar), result)) in points
+            .into_iter()
+            .zip_eq(scalars)
+            .zip_eq(results)
+            .enumerate()
+        {
             let point = point.borrow();
             let scalar = scalar.borrow();
+            let result = result.borrow();
 
             // Store the EC point.
             let time = Time::constant(256 * i);
@@ -92,11 +99,8 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
                 self.store(&limb_ptr.get(i * 8 + j), limb, &zero, Some(cycle_32_size));
             }
 
-            let result = self.alloc_public_ec_point();
             self.free(&x_ptr.get(i), result.x, &zero);
             self.free(&y_ptr.get(i), result.y, &zero);
-
-            results.push(result);
         }
         // Load the elliptic curve point.
         let process_id = self.process_id(256, cycle.end_bit);
@@ -123,8 +127,6 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
         let end_flag = Some(cycle.end_bit.as_element());
         self.store(&x_ptr.get_at(process_id), result_next.x, &zero, end_flag);
         self.store(&y_ptr.get_at(process_id), result_next.y, &zero, end_flag);
-
-        results
     }
 
     fn double_and_add(&mut self, data: &DoubleAddData<E>) -> AffinePointRegister<E>
@@ -237,7 +239,11 @@ mod tests {
             .map(ECScalarRegister::<E>::new)
             .collect::<Vec<_>>();
 
-        let results = builder.scalar_mul_batch(&points, &scalars);
+        let results = (0..256)
+            .map(|_| builder.alloc_public_ec_point())
+            .collect::<Vec<_>>();
+
+        builder.scalar_mul_batch(&points, &scalars, &results);
 
         let (air, trace_data) = builder.build();
         let num_rows = 1 << 16;
