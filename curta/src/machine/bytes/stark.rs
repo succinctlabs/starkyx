@@ -706,7 +706,6 @@ mod tests {
 
         type Instruction = UintInstruction;
 
-        const NUM_ARITHMETIC_COLUMNS: usize = 0;
         const NUM_FREE_COLUMNS: usize = 18;
         const EXTENDED_COLUMNS: usize = 24;
     }
@@ -729,10 +728,10 @@ mod tests {
 
         let a_ptr = builder.initialize_slice::<U32Register>(&a_init, &Time::zero(), None);
 
-        let num_rows_reg = builder
-            .api
-            .constant::<ElementRegister>(&GoldilocksField::from_canonical_usize(num_rows));
-        builder.api.set(
+        let num_rows_reg =
+            builder.constant::<ElementRegister>(&GoldilocksField::from_canonical_usize(num_rows));
+
+        builder.store(
             &a_ptr.get(1),
             a_init.get(1),
             &Time::zero(),
@@ -743,20 +742,18 @@ mod tests {
         let zero = builder.constant::<ElementRegister>(&GoldilocksField::ZERO);
 
         let a_0 = a_ptr.get_at(zero);
-        let zero_trace = builder.api.alloc::<ElementRegister>();
-        builder
-            .api
-            .set_to_expression(&zero_trace, GoldilocksField::ZERO.into());
+        let zero_trace = builder.alloc::<ElementRegister>();
+        builder.set_to_expression(&zero_trace, GoldilocksField::ZERO.into());
         let a_0_trace = a_ptr.get_at(zero_trace);
         let a = builder.load(&a_0_trace, &clk);
         let b = builder.load(&a_ptr.get(1), &Time::zero());
         let c = builder.and(&a, &b);
         builder.store(&a_0_trace, c, &clk.advance(), None);
 
-        let a_final = builder.api.alloc_public::<U32Register>();
+        let a_final = builder.alloc_public::<U32Register>();
 
-        builder.api.free(&a_0, a_final, &Time::constant(num_rows));
-        builder.api.set_to_expression_last_row(&a_final, c.expr());
+        builder.free(&a_0, a_final, &Time::constant(num_rows));
+        builder.set_to_expression_last_row(&a_final, c.expr());
 
         for (i, a) in a_init.iter().enumerate().skip(1) {
             builder.api.free(&a_ptr.get(i), a, &Time::zero());
