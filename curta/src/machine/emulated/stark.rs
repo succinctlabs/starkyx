@@ -111,10 +111,9 @@ where
             lookup_writer.write_row_instructions(&self.lookup_air_data, i);
         }
         // Write multiplicities
-        let num_rows = execution_trace.height();
         let multiplicities = main_writer.get_multiplicities_from_fn(
             1,
-            num_rows,
+            NUM_LOOKUP_ROWS,
             &self.lookup_values.trace_values,
             &self.lookup_values.public_values,
             Self::range_fn,
@@ -535,284 +534,97 @@ where
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use plonky2::field::goldilocks_field::GoldilocksField;
-//     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
-//     use plonky2::plonk::circuit_data::CircuitConfig;
-//     use rand::Rng;
-//     use serde::{Deserialize, Serialize};
-
-//     use super::*;
-//     use crate::chip::memory::time::Time;
-//     use crate::chip::register::element::ElementRegister;
-//     use crate::chip::register::Register;
-//     use crate::chip::trace::writer::InnerWriterData;
-//     use crate::chip::uint::operations::instruction::UintInstruction;
-//     use crate::chip::uint::register::U32Register;
-//     use crate::chip::uint::util::u32_to_le_field_bytes;
-//     use crate::machine::builder::Builder;
-//     use crate::machine::bytes::builder::BytesBuilder;
-//     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
-//     use crate::plonky2::stark::config::CurtaPoseidonGoldilocksConfig;
-
-//     #[derive(Debug, Clone, Serialize, Deserialize)]
-//     pub struct RangeTest;
-
-//     impl AirParameters for RangeTest {
-//         type Field = GoldilocksField;
-//         type CubicParams = GoldilocksCubicParameters;
-
-//         type Instruction = UintInstruction;
-
-//         const NUM_ARITHMETIC_COLUMNS: usize = 0;
-//         const NUM_FREE_COLUMNS: usize = 17;
-//         const EXTENDED_COLUMNS: usize = 12;
-//     }
-
-//     #[test]
-//     fn test_byte_multi_stark() {
-//         type L = RangeTest;
-//         type C = CurtaPoseidonGoldilocksConfig;
-//         type Config = <C as CurtaConfig<2>>::GenericConfig;
-
-//         let _ = env_logger::builder().is_test(true).try_init();
-
-//         let mut timing = TimingTree::new("test_byte_multi_stark", log::Level::Debug);
-
-//         let mut builder = BytesBuilder::<L>::new();
-
-//         let a = builder.alloc::<U32Register>();
-//         let b = builder.alloc::<U32Register>();
-
-//         let num_ops = 1;
-//         for _ in 0..num_ops {
-//             let _ = builder.and(&a, &b);
-//         }
-
-//         let num_rows = 1 << 5;
-//         let stark = builder.build::<C, 2>(num_rows);
-
-//         let writer = TraceWriter::new(&stark.air_data, num_rows);
-
-//         let mut rng = rand::thread_rng();
-//         for i in 0..num_rows {
-//             let a_val = rng.gen::<u32>();
-//             let b_val = rng.gen::<u32>();
-//             writer.write(&a, &u32_to_le_field_bytes(a_val), i);
-//             writer.write(&b, &u32_to_le_field_bytes(b_val), i);
-//             writer.write_row_instructions(&stark.air_data, i);
-//         }
-
-//         let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
-//         let proof = stark.prove(&trace, &public, &mut timing).unwrap();
-
-//         stark.verify(proof.clone(), &public).unwrap();
-
-//         let config_rec = CircuitConfig::standard_recursion_config();
-//         let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
-
-//         let (proof_target, public_input) =
-//             stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
-//         stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
-
-//         let data = recursive_builder.build::<Config>();
-
-//         let mut pw = PartialWitness::new();
-
-//         pw.set_target_arr(&public_input, &public);
-//         stark.set_proof_target(&mut pw, &proof_target, proof);
-
-//         let rec_proof = data.prove(pw).unwrap();
-//         data.verify(rec_proof).unwrap();
-
-//         timing.print();
-//     }
-
-//     #[derive(Debug, Clone, Serialize, Deserialize)]
-//     pub struct ByteMemTest;
-
-//     impl AirParameters for ByteMemTest {
-//         type Field = GoldilocksField;
-//         type CubicParams = GoldilocksCubicParameters;
-
-//         type Instruction = UintInstruction;
-
-//         const NUM_FREE_COLUMNS: usize = 17;
-//         const EXTENDED_COLUMNS: usize = 21;
-//     }
-
-//     #[test]
-//     fn test_byte_memory_multi_stark() {
-//         type L = ByteMemTest;
-//         type C = CurtaPoseidonGoldilocksConfig;
-//         type Config = <C as CurtaConfig<2>>::GenericConfig;
-
-//         let _ = env_logger::builder().is_test(true).try_init();
-
-//         let mut timing = TimingTree::new("test_byte_multi_stark", log::Level::Debug);
-
-//         let mut builder = BytesBuilder::<L>::new();
-
-//         let a_initial_value = builder.api.alloc_public::<U32Register>();
-
-//         let a_ptr = builder
-//             .api
-//             .initialize::<U32Register>(&a_initial_value, &Time::zero(), None);
-
-//         let clk = Time::from_element(builder.clk);
-
-//         let a = builder.load(&a_ptr, &clk);
-//         let b = builder.alloc::<U32Register>();
-//         let c = builder.and(&a, &b);
-//         builder.store(&a_ptr, c, &clk.advance(), None);
-
-//         let a_final = builder.alloc_public::<U32Register>();
-
-//         let num_rows = 1 << 5;
-
-//         builder.free(&a_ptr, a_final, &Time::constant(num_rows));
-//         builder.set_to_expression_last_row(&a_final, c.expr());
-
-//         let stark = builder.build::<C, 2>(num_rows);
-
-//         let writer = TraceWriter::new(&stark.air_data, num_rows);
-
-//         let mut rng = rand::thread_rng();
-
-//         let a_val = u32_to_le_field_bytes(rng.gen::<u32>());
-//         writer.write(&a_initial_value, &a_val, 0);
-//         writer.write_global_instructions(&stark.air_data);
-//         for i in 0..num_rows {
-//             let b_val = rng.gen::<u32>();
-//             writer.write(&b, &u32_to_le_field_bytes(b_val), i);
-//             writer.write_row_instructions(&stark.air_data, i);
-//         }
-
-//         let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
-//         let proof = stark.prove(&trace, &public, &mut timing).unwrap();
-
-//         stark.verify(proof.clone(), &public).unwrap();
-
-//         let config_rec = CircuitConfig::standard_recursion_config();
-//         let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
-
-//         let (proof_target, public_input) =
-//             stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
-//         stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
-
-//         let data = recursive_builder.build::<Config>();
-
-//         let mut pw = PartialWitness::new();
-
-//         pw.set_target_arr(&public_input, &public);
-//         stark.set_proof_target(&mut pw, &proof_target, proof);
-
-//         let rec_proof = data.prove(pw).unwrap();
-//         data.verify(rec_proof).unwrap();
-
-//         timing.print();
-//     }
-
-//     #[derive(Debug, Clone, Serialize, Deserialize)]
-//     pub struct ByteSliceMemTest;
-
-//     impl AirParameters for ByteSliceMemTest {
-//         type Field = GoldilocksField;
-//         type CubicParams = GoldilocksCubicParameters;
-
-//         type Instruction = UintInstruction;
-
-//         const NUM_FREE_COLUMNS: usize = 18;
-//         const EXTENDED_COLUMNS: usize = 24;
-//     }
-
-//     #[test]
-//     fn test_byte_slice_memory_multi_stark() {
-//         type L = ByteSliceMemTest;
-//         type C = CurtaPoseidonGoldilocksConfig;
-//         type Config = <C as CurtaConfig<2>>::GenericConfig;
-
-//         let _ = env_logger::builder().is_test(true).try_init();
-
-//         let mut timing = TimingTree::new("test_byte_multi_stark", log::Level::Debug);
-
-//         let mut builder = BytesBuilder::<L>::new();
-
-//         let a_init = builder.alloc_array_public::<U32Register>(4);
-
-//         let num_rows = 1 << 20;
-
-//         let a_ptr = builder.initialize_slice::<U32Register>(&a_init, &Time::zero(), None);
-
-//         let num_rows_reg =
-//             builder.constant::<ElementRegister>(&GoldilocksField::from_canonical_usize(num_rows));
-
-//         builder.store(
-//             &a_ptr.get(1),
-//             a_init.get(1),
-//             &Time::zero(),
-//             Some(num_rows_reg),
-//         );
-
-//         let clk = Time::from_element(builder.clk);
-//         let zero = builder.constant::<ElementRegister>(&GoldilocksField::ZERO);
-
-//         let a_0 = a_ptr.get_at(zero);
-//         let zero_trace = builder.alloc::<ElementRegister>();
-//         builder.set_to_expression(&zero_trace, GoldilocksField::ZERO.into());
-//         let a_0_trace = a_ptr.get_at(zero_trace);
-//         let a = builder.load(&a_0_trace, &clk);
-//         let b = builder.load(&a_ptr.get(1), &Time::zero());
-//         let c = builder.and(&a, &b);
-//         builder.store(&a_0_trace, c, &clk.advance(), None);
-
-//         let a_final = builder.alloc_public::<U32Register>();
-
-//         builder.free(&a_0, a_final, &Time::constant(num_rows));
-//         builder.set_to_expression_last_row(&a_final, c.expr());
-
-//         for (i, a) in a_init.iter().enumerate().skip(1) {
-//             builder.api.free(&a_ptr.get(i), a, &Time::zero());
-//         }
-
-//         let stark = builder.build::<C, 2>(num_rows);
-
-//         let writer = TraceWriter::new(&stark.air_data, num_rows);
-
-//         let mut rng = rand::thread_rng();
-
-//         let a_val = (0..a_init.len())
-//             .map(|_| u32_to_le_field_bytes(rng.gen::<u32>()))
-//             .collect::<Vec<_>>();
-//         writer.write_array(&a_init, a_val, 0);
-//         writer.write_global_instructions(&stark.air_data);
-//         for i in 0..num_rows {
-//             writer.write_row_instructions(&stark.air_data, i);
-//         }
-
-//         let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
-//         let proof = stark.prove(&trace, &public, &mut timing).unwrap();
-
-//         stark.verify(proof.clone(), &public).unwrap();
-
-//         let config_rec = CircuitConfig::standard_recursion_config();
-//         let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
-
-//         let (proof_target, public_input) =
-//             stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
-//         stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
-
-//         let data = recursive_builder.build::<Config>();
-
-//         let mut pw = PartialWitness::new();
-
-//         pw.set_target_arr(&public_input, &public);
-//         stark.set_proof_target(&mut pw, &proof_target, proof);
-
-//         let rec_proof = data.prove(pw).unwrap();
-//         data.verify(rec_proof).unwrap();
-
-//         timing.print();
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use num::bigint::RandBigInt;
+    use plonky2::field::goldilocks_field::GoldilocksField;
+    use plonky2::iop::witness::{PartialWitness, WitnessWrite};
+    use plonky2::plonk::circuit_data::CircuitConfig;
+    use serde::{Deserialize, Serialize};
+
+    use super::*;
+    use crate::chip::field::instruction::FpInstruction;
+    use crate::chip::field::parameters::tests::Fp25519;
+    use crate::chip::field::parameters::FieldParameters;
+    use crate::chip::field::register::FieldRegister;
+    use crate::chip::trace::writer::InnerWriterData;
+    use crate::machine::builder::Builder;
+    use crate::machine::emulated::builder::EmulatedBuilder;
+    use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
+    use crate::plonky2::stark::config::CurtaPoseidonGoldilocksConfig;
+    use crate::polynomial::Polynomial;
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct RangeTest;
+
+    impl AirParameters for RangeTest {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
+
+        type Instruction = FpInstruction<Fp25519>;
+
+        const NUM_ARITHMETIC_COLUMNS: usize = 124;
+        const NUM_FREE_COLUMNS: usize = 1;
+        const EXTENDED_COLUMNS: usize = 192;
+    }
+
+    #[test]
+    fn test_fp_multi_stark() {
+        type L = RangeTest;
+        type F = GoldilocksField;
+        type C = CurtaPoseidonGoldilocksConfig;
+        type Config = <C as CurtaConfig<2>>::GenericConfig;
+
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let mut timing = TimingTree::new("test_byte_multi_stark", log::Level::Debug);
+
+        let mut builder = EmulatedBuilder::<L>::new();
+
+        let a = builder.alloc::<FieldRegister<Fp25519>>();
+        let b = builder.alloc::<FieldRegister<Fp25519>>();
+        let _ = builder.add(a, b);
+
+        let num_rows = 1 << 5;
+        let stark = builder.build::<C, 2>(num_rows);
+
+        let writer = TraceWriter::new(&stark.air_data, num_rows);
+
+        let mut rng = rand::thread_rng();
+        let p = Fp25519::modulus();
+        writer.write_global_instructions(&stark.air_data);
+        for i in 0..num_rows {
+            let a_int = rng.gen_biguint(256) % &p;
+            let b_int = rng.gen_biguint(256) % &p;
+            let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
+            let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
+            writer.write(&a, &p_a, i);
+            writer.write(&b, &p_b, i);
+            writer.write_row_instructions(&stark.air_data, i);
+        }
+
+        let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
+        let proof = stark.prove(&trace, &public, &mut timing).unwrap();
+
+        stark.verify(proof.clone(), &public).unwrap();
+
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
+
+        let (proof_target, public_input) =
+            stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
+        stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
+
+        let data = recursive_builder.build::<Config>();
+
+        let mut pw = PartialWitness::new();
+
+        pw.set_target_arr(&public_input, &public);
+        stark.set_proof_target(&mut pw, &proof_target, proof);
+
+        let rec_proof = data.prove(pw).unwrap();
+        data.verify(rec_proof).unwrap();
+
+        timing.print();
+    }
+}

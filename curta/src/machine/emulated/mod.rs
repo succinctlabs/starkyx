@@ -21,5 +21,5 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for RangeParameters<F
 
     const NUM_ARITHMETIC_COLUMNS: usize = 0;
     const NUM_FREE_COLUMNS: usize = 2;
-    const EXTENDED_COLUMNS: usize = 21;
+    const EXTENDED_COLUMNS: usize = 6;
 }
