@@ -29,8 +29,9 @@ pub struct AirBuilder<L: AirParameters> {
     local_index: usize,
     local_arithmetic_index: usize,
     extended_index: usize,
+    pub(crate) internal_range_check: bool,
     pub(crate) shared_memory: SharedMemory,
-    global_arithmetic: Vec<ElementRegister>,
+    pub(crate) global_arithmetic: Vec<ElementRegister>,
     pub(crate) instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub(crate) global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub(crate) constraints: Vec<Constraint<L>>,
@@ -64,6 +65,7 @@ impl<L: AirParameters> AirBuilder<L> {
             extended_index: L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS,
             global_arithmetic: Vec::new(),
             shared_memory,
+            internal_range_check: true,
             instructions: Vec::new(),
             global_instructions: Vec::new(),
             constraints: Vec::new(),
@@ -194,7 +196,9 @@ impl<L: AirParameters> AirBuilder<L> {
         }
 
         // Add the range checks
-        if L::NUM_ARITHMETIC_COLUMNS > 0 || !self.global_arithmetic.is_empty() {
+        if (L::NUM_ARITHMETIC_COLUMNS > 0 || !self.global_arithmetic.is_empty())
+            && self.internal_range_check
+        {
             self.arithmetic_range_checks();
         }
 

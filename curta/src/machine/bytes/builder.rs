@@ -58,6 +58,7 @@ where
 
         let mut lookup_table = lookup_builder.new_byte_lookup_table();
         let multiplicity_data = api.register_byte_lookup(&mut lookup_table, operations);
+        lookup_builder.constraint_byte_lookup_table(&lookup_table);
 
         let config = StarkyConfig::<C, D>::standard_fast_config(num_rows);
         let (air, trace_data) = api.build();
