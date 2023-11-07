@@ -1,6 +1,8 @@
 use core::borrow::Borrow;
 
 use itertools::Itertools;
+use log::debug;
+use plonky2::util::log2_ceil;
 
 use super::scalar_mul::DoubleAddData;
 use crate::chip::ec::point::AffinePointRegister;
@@ -27,6 +29,10 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
         let y = self.alloc_public();
 
         AffinePointRegister::new(x, y)
+    }
+
+    fn generator(&mut self) -> AffinePointRegister<E> {
+        self.api().ec_generator()
     }
 
     fn select_ec_point(
@@ -62,12 +68,14 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
         K::Item: Borrow<AffinePointRegister<E>>,
         Self::Instruction: ECInstructions<E>,
     {
-        let nb_bits_log = E::nb_scalar_bits().ilog2();
+        let nb_scalar_bits = E::nb_scalar_bits();
+        let nb_bits_log = nb_scalar_bits.ilog2();
         assert_eq!(
             E::nb_scalar_bits(),
-            1 << nb_bits_log,
+            nb_scalar_bits,
             "Scalar size must be a power of 2"
         );
+        assert!(nb_bits_log > 5, "Scalar size must be at least 32 bits");
 
         let cycle_32_size = self.constant(&Self::Field::from_canonical_u32(32));
         let cycle = self.cycle(nb_bits_log as usize);
@@ -79,31 +87,58 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
         let y_ptr = self.uninit_slice::<FieldRegister<E::BaseField>>();
         let limb_ptr = self.uninit_slice::<ElementRegister>();
         let zero = Time::zero();
-        for (i, ((point, scalar), result)) in points
+        let num_ops = points
             .into_iter()
             .zip_eq(scalars)
             .zip_eq(results)
             .enumerate()
-        {
-            let point = point.borrow();
-            let scalar = scalar.borrow();
-            let result = result.borrow();
+            .map(|(i, ((point, scalar), result))| {
+                let point = point.borrow();
+                let scalar = scalar.borrow();
+                let result = result.borrow();
 
-            // Store the EC point.
+                // Store the EC point.
+                let time = Time::constant(256 * i);
+                self.store(&temp_x_ptr.get(i), point.x, &time, None);
+                self.store(&temp_y_ptr.get(i), point.y, &time, None);
+
+                // Store and the scalar limbs.
+                for (j, limb) in scalar.limbs.iter().enumerate() {
+                    self.store(&limb_ptr.get(i * 8 + j), limb, &zero, Some(cycle_32_size));
+                }
+
+                self.free(&x_ptr.get(i), result.x, &zero);
+                self.free(&y_ptr.get(i), result.y, &zero);
+            })
+            .count();
+
+        debug!("AIR degree before padding: {}", num_ops * nb_scalar_bits);
+        let degree_log = log2_ceil(num_ops * nb_scalar_bits);
+        assert!(degree_log < 31, "AIR degree is too large");
+        debug!("AIR degree after padding: {}", 1 << degree_log);
+        let num_dummy_ops = (1 << degree_log) / nb_scalar_bits - num_ops;
+
+        // Insert dummy entries where necessary.
+        let generator = self.generator();
+        let mut one_scalar_limbs = vec![Self::Field::ONE];
+        one_scalar_limbs.resize(nb_scalar_bits / 32, Self::Field::ZERO);
+        let one_limbs = self.constant_array::<ElementRegister>(&one_scalar_limbs);
+        for i in num_ops..(num_ops + num_dummy_ops) {
             let time = Time::constant(256 * i);
-            self.store(&temp_x_ptr.get(i), point.x, &time, None);
-            self.store(&temp_y_ptr.get(i), point.y, &time, None);
+            self.store(&temp_x_ptr.get(i), generator.x, &time, None);
+            self.store(&temp_y_ptr.get(i), generator.y, &time, None);
 
             // Store and the scalar limbs.
-            for (j, limb) in scalar.limbs.iter().enumerate() {
+            for (j, limb) in one_limbs.iter().enumerate() {
                 self.store(&limb_ptr.get(i * 8 + j), limb, &zero, Some(cycle_32_size));
             }
 
-            self.free(&x_ptr.get(i), result.x, &zero);
-            self.free(&y_ptr.get(i), result.y, &zero);
+            self.free(&x_ptr.get(i), generator.x, &zero);
+            self.free(&y_ptr.get(i), generator.y, &zero);
         }
+
         // Load the elliptic curve point.
-        let process_id = self.process_id(256, cycle.end_bit);
+        let process_id = self.process_id(nb_scalar_bits, cycle.end_bit);
 
         // Load the scalar limbs.
         let process_id_u32 = self.process_id(32, cycle_32.end_bit);
@@ -184,23 +219,24 @@ mod tests {
     use log::debug;
     use num::bigint::RandBigInt;
     use plonky2::field::goldilocks_field::GoldilocksField;
+    use plonky2::iop::witness::{PartialWitness, WitnessWrite};
+    use plonky2::plonk::circuit_builder::CircuitBuilder;
+    use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::timed;
     use plonky2::util::timing::TimingTree;
     use rand::thread_rng;
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::chip::builder::tests::ArithmeticGenerator;
-    use crate::chip::builder::AirBuilder;
     use crate::chip::ec::edwards::ed25519::params::Ed25519;
     use crate::chip::ec::gadget::EllipticCurveWriter;
     use crate::chip::ec::{ECInstruction, EllipticCurve};
+    use crate::chip::trace::writer::{InnerWriterData, TraceWriter};
     use crate::chip::AirParameters;
+    use crate::machine::emulated::builder::EmulatedBuilder;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
     use crate::maybe_rayon::*;
-    use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
-    use crate::plonky2::stark::tests::{test_recursive_starky, test_starky};
-    use crate::plonky2::stark::Starky;
+    use crate::plonky2::stark::config::{CurtaConfig, CurtaPoseidonGoldilocksConfig};
 
     #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
     struct Ed25519ScalarMulTest;
@@ -212,43 +248,46 @@ mod tests {
         type Instruction = ECInstruction<Ed25519>;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 1632;
-        const NUM_FREE_COLUMNS: usize = 21;
-        const EXTENDED_COLUMNS: usize = 2508;
+        const NUM_FREE_COLUMNS: usize = 20;
+        const EXTENDED_COLUMNS: usize = 2502;
     }
 
     #[test]
     fn test_ec_scalar_mul() {
         type F = GoldilocksField;
         type L = Ed25519ScalarMulTest;
-        type SC = PoseidonGoldilocksStarkConfig;
+        type C = CurtaPoseidonGoldilocksConfig;
+        type Config = <C as CurtaConfig<2>>::GenericConfig;
         type E = Ed25519;
 
         let _ = env_logger::builder().is_test(true).try_init();
 
         let mut timing = TimingTree::new("Ed25519 Scalar mul", log::Level::Debug);
 
-        let mut builder = AirBuilder::<L>::new();
-        builder.init_local_memory();
+        let mut builder = EmulatedBuilder::<L>::new();
 
-        let points = (0..256)
+        let num_ops = 3;
+
+        let points = (0..num_ops)
             .map(|_| builder.alloc_public_ec_point())
             .collect::<Vec<_>>();
 
-        let scalars = (0..256)
+        let scalars = (0..num_ops)
             .map(|_| builder.alloc_array_public::<ElementRegister>(8))
             .map(ECScalarRegister::<E>::new)
             .collect::<Vec<_>>();
 
-        let results = (0..256)
+        let results = (0..num_ops)
             .map(|_| builder.alloc_public_ec_point())
             .collect::<Vec<_>>();
 
         builder.scalar_mul_batch(&points, &scalars, &results);
 
-        let (air, trace_data) = builder.build();
-        let num_rows = 1 << 16;
-        let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
-        let writer = generator.new_writer();
+        let degree_log = log2_ceil(num_ops * 256);
+        let num_rows = 1 << degree_log;
+        let stark = builder.build::<C, 2>(1 << degree_log);
+
+        let writer = TraceWriter::new(&stark.air_data, num_rows);
 
         let order = E::prime_group_order();
 
@@ -279,36 +318,35 @@ mod tests {
         );
         debug!("Wrote input values to public inputs");
 
-        writer.write_global_instructions(&generator.air_data);
         timed!(timing, "generate trace", {
-            (0..256usize).for_each(|k| {
-                let starting_row = 256 * k;
-                for j in 0..256 {
-                    let row_index = starting_row + j;
-                    writer.write_row_instructions(&generator.air_data, row_index);
-                }
-            });
+            writer.write_global_instructions(&stark.air_data);
+            for i in 0..num_rows {
+                writer.write_row_instructions(&stark.air_data, i);
+            }
         });
         debug!("Generated execution trace");
 
-        let stark = Starky::new(air);
-        let config = SC::standard_fast_config(num_rows);
+        let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
+        let proof = stark.prove(&trace, &public, &mut timing).unwrap();
 
-        let public_inputs = writer.public.read().unwrap().clone();
+        stark.verify(proof.clone(), &public).unwrap();
 
-        // Generate proof and verify as a stark
-        timed!(
-            timing,
-            "Stark proof and verify",
-            test_starky(&stark, &config, &generator, &public_inputs)
-        );
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
 
-        // Generate recursive proof
-        timed!(
-            timing,
-            "Recursive proof generation and verification",
-            test_recursive_starky(stark, config, generator, &public_inputs)
-        );
+        let (proof_target, public_input) =
+            stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
+        stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
+
+        let data = recursive_builder.build::<Config>();
+
+        let mut pw = PartialWitness::new();
+
+        pw.set_target_arr(&public_input, &public);
+        stark.set_proof_target(&mut pw, &proof_target, proof);
+
+        let rec_proof = data.prove(pw).unwrap();
+        data.verify(rec_proof).unwrap();
 
         timing.print();
     }

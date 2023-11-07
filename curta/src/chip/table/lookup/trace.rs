@@ -73,13 +73,13 @@ impl<F: PrimeField> TraceWriter<F> {
             }
         }
 
-        // Count the multiplicities in the trace
+        // Count the multiplicities in public inputs
         let public_slice = self.public.read().unwrap();
         for entry in public_entries.iter() {
             let value = entry.value().read_from_slice(&public_slice);
             let (row_index, col_index) = table_index(value);
             assert!(col_index < num_table_columns);
-            assert!(row_index < self.height);
+            assert!(row_index < num_rows);
             multiplicities_trace.row_mut(row_index)[col_index] += 1;
         }
 
