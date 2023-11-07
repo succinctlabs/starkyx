@@ -151,7 +151,6 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
             process_id,
             temp_x_ptr,
             temp_y_ptr,
-            result: self.alloc_ec_point(),
             bit: scalar_bit,
             start_bit: cycle.start_bit,
             end_bit: cycle.end_bit,
@@ -196,17 +195,25 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
         self.store(&temp_x_ptr, temp_next.x, &clk.advance(), Some(not_end_bit));
         self.store(&temp_y_ptr, temp_next.y, &clk.advance(), Some(not_end_bit));
 
+        // Allocate the intermeddiate result.
+        let result = self.alloc_ec_point();
+
         // Calculate res_next = res + temp if scalar_bit is 1, otherwise res_next = res.
-        let addend = self.select_ec_point(is_res_unit, &temp_next, &data.result);
+        let addend = self.select_ec_point(is_res_unit, &temp_next, &result);
         let sum = self.add(&temp, &addend);
 
         let res_plus_temp = self.select_ec_point(is_res_unit, &temp, &sum);
-        let result_next = self.select_ec_point(scalar_bit, &res_plus_temp, &data.result);
+        let result_next = self.select_ec_point(scalar_bit, &res_plus_temp, &result);
 
         let zero_field = self.zero::<FieldRegister<E::BaseField>>();
         let dummy_point = AffinePointRegister::new(zero_field, zero_field);
 
-        self.select_next_ec_point(end_bit, &dummy_point, &result_next, &data.result);
+        // Constrain the intermediate result to be (0, 0) in the first row, and at each transition
+        // constrain the result to be equal to `result_next` during each scalar-mul cycle and back
+        // to the dummy point (0, 0) at the beginning of each cycle.
+        self.set_to_expression_first_row(&result.x, zero_field.expr());
+        self.set_to_expression_first_row(&result.y, zero_field.expr());
+        self.select_next_ec_point(end_bit, &dummy_point, &result_next, &result);
 
         result_next
     }
