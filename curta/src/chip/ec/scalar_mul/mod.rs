@@ -7,7 +7,7 @@ use super::EllipticCurve;
 use crate::chip::utils::biguint_to_bits_le;
 
 impl<E: EllipticCurve> AffinePoint<E> {
-    fn scalar_mul(&self, scalar: &BigUint) -> Self {
+    pub fn scalar_mul(&self, scalar: &BigUint) -> Self {
         let power_two_modulus = BigUint::one() << E::nb_scalar_bits();
         let scalar = scalar % &power_two_modulus;
         let mut result = E::ec_neutral();

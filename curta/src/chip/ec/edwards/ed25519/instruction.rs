@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-use super::params::Ed25519BaseField;
+use super::params::{Ed25519, Ed25519BaseField};
 use super::sqrt::Ed25519FpSqrtInstruction;
 use crate::air::AirConstraint;
+use crate::chip::ec::scalar::LimbBitInstruction;
+use crate::chip::ec::ECInstruction;
 use crate::chip::field::add::FpAddInstruction;
 use crate::chip::field::den::FpDenInstruction;
 use crate::chip::field::div::FpDivInstruction;
@@ -19,42 +21,22 @@ use crate::polynomial::parser::PolynomialParser;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum Ed25519FpInstruction {
-    Add(FpAddInstruction<Ed25519BaseField>),
-    Mul(FpMulInstruction<Ed25519BaseField>),
-    MulConst(FpMulConstInstruction<Ed25519BaseField>),
-    Inner(FpInnerProductInstruction<Ed25519BaseField>),
-    Den(FpDenInstruction<Ed25519BaseField>),
-    Sub(FpSubInstruction<Ed25519BaseField>),
-    Div(FpDivInstruction<Ed25519BaseField>),
+    EC(ECInstruction<Ed25519>),
     Sqrt(Ed25519FpSqrtInstruction),
 }
 
 impl FromFieldInstruction<Ed25519BaseField> for Ed25519FpInstruction {}
 
+impl From<Ed25519FpSqrtInstruction> for Ed25519FpInstruction {
+    fn from(i: Ed25519FpSqrtInstruction) -> Self {
+        Self::Sqrt(i)
+    }
+}
+
 impl<AP: PolynomialParser> AirConstraint<AP> for Ed25519FpInstruction {
     fn eval(&self, parser: &mut AP) {
         match self {
-            Ed25519FpInstruction::Add(instruction) => {
-                AirConstraint::<AP>::eval(instruction, parser)
-            }
-            Ed25519FpInstruction::Mul(instruction) => {
-                AirConstraint::<AP>::eval(instruction, parser)
-            }
-            Ed25519FpInstruction::MulConst(instruction) => {
-                AirConstraint::<AP>::eval(instruction, parser)
-            }
-            Ed25519FpInstruction::Inner(instruction) => {
-                AirConstraint::<AP>::eval(instruction, parser)
-            }
-            Ed25519FpInstruction::Den(instruction) => {
-                AirConstraint::<AP>::eval(instruction, parser)
-            }
-            Ed25519FpInstruction::Sub(instruction) => {
-                AirConstraint::<AP>::eval(instruction, parser)
-            }
-            Ed25519FpInstruction::Div(instruction) => {
-                AirConstraint::<AP>::eval(instruction, parser)
-            }
+            Ed25519FpInstruction::EC(instruction) => AirConstraint::<AP>::eval(instruction, parser),
             Ed25519FpInstruction::Sqrt(instruction) => {
                 AirConstraint::<AP>::eval(instruction, parser)
             }
@@ -65,25 +47,7 @@ impl<AP: PolynomialParser> AirConstraint<AP> for Ed25519FpInstruction {
 impl<F: PrimeField64> Instruction<F> for Ed25519FpInstruction {
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         match self {
-            Ed25519FpInstruction::Add(instruction) => {
-                Instruction::<F>::write(instruction, writer, row_index)
-            }
-            Ed25519FpInstruction::Mul(instruction) => {
-                Instruction::<F>::write(instruction, writer, row_index)
-            }
-            Ed25519FpInstruction::MulConst(instruction) => {
-                Instruction::<F>::write(instruction, writer, row_index)
-            }
-            Ed25519FpInstruction::Inner(instruction) => {
-                Instruction::<F>::write(instruction, writer, row_index)
-            }
-            Ed25519FpInstruction::Den(instruction) => {
-                Instruction::<F>::write(instruction, writer, row_index)
-            }
-            Ed25519FpInstruction::Sub(instruction) => {
-                Instruction::<F>::write(instruction, writer, row_index)
-            }
-            Ed25519FpInstruction::Div(instruction) => {
+            Ed25519FpInstruction::EC(instruction) => {
                 Instruction::<F>::write(instruction, writer, row_index)
             }
             Ed25519FpInstruction::Sqrt(instruction) => {
@@ -93,50 +57,50 @@ impl<F: PrimeField64> Instruction<F> for Ed25519FpInstruction {
     }
 }
 
+impl From<LimbBitInstruction> for Ed25519FpInstruction {
+    fn from(i: LimbBitInstruction) -> Self {
+        Self::EC(i.into())
+    }
+}
+
 impl From<FpAddInstruction<Ed25519BaseField>> for Ed25519FpInstruction {
-    fn from(instr: FpAddInstruction<Ed25519BaseField>) -> Self {
-        Ed25519FpInstruction::Add(instr)
+    fn from(i: FpAddInstruction<Ed25519BaseField>) -> Self {
+        Self::EC(i.into())
     }
 }
 
 impl From<FpMulInstruction<Ed25519BaseField>> for Ed25519FpInstruction {
-    fn from(instr: FpMulInstruction<Ed25519BaseField>) -> Self {
-        Ed25519FpInstruction::Mul(instr)
-    }
-}
-
-impl From<FpMulConstInstruction<Ed25519BaseField>> for Ed25519FpInstruction {
-    fn from(instr: FpMulConstInstruction<Ed25519BaseField>) -> Self {
-        Ed25519FpInstruction::MulConst(instr)
-    }
-}
-
-impl From<FpInnerProductInstruction<Ed25519BaseField>> for Ed25519FpInstruction {
-    fn from(instr: FpInnerProductInstruction<Ed25519BaseField>) -> Self {
-        Ed25519FpInstruction::Inner(instr)
-    }
-}
-
-impl From<FpDenInstruction<Ed25519BaseField>> for Ed25519FpInstruction {
-    fn from(instr: FpDenInstruction<Ed25519BaseField>) -> Self {
-        Ed25519FpInstruction::Den(instr)
+    fn from(i: FpMulInstruction<Ed25519BaseField>) -> Self {
+        Self::EC(i.into())
     }
 }
 
 impl From<FpSubInstruction<Ed25519BaseField>> for Ed25519FpInstruction {
-    fn from(instr: FpSubInstruction<Ed25519BaseField>) -> Self {
-        Ed25519FpInstruction::Sub(instr)
+    fn from(i: FpSubInstruction<Ed25519BaseField>) -> Self {
+        Self::EC(i.into())
     }
 }
 
 impl From<FpDivInstruction<Ed25519BaseField>> for Ed25519FpInstruction {
-    fn from(instr: FpDivInstruction<Ed25519BaseField>) -> Self {
-        Ed25519FpInstruction::Div(instr)
+    fn from(i: FpDivInstruction<Ed25519BaseField>) -> Self {
+        Self::EC(i.into())
     }
 }
 
-impl From<Ed25519FpSqrtInstruction> for Ed25519FpInstruction {
-    fn from(instr: Ed25519FpSqrtInstruction) -> Self {
-        Ed25519FpInstruction::Sqrt(instr)
+impl From<FpDenInstruction<Ed25519BaseField>> for Ed25519FpInstruction {
+    fn from(i: FpDenInstruction<Ed25519BaseField>) -> Self {
+        Self::EC(i.into())
+    }
+}
+
+impl From<FpInnerProductInstruction<Ed25519BaseField>> for Ed25519FpInstruction {
+    fn from(i: FpInnerProductInstruction<Ed25519BaseField>) -> Self {
+        Self::EC(i.into())
+    }
+}
+
+impl From<FpMulConstInstruction<Ed25519BaseField>> for Ed25519FpInstruction {
+    fn from(i: FpMulConstInstruction<Ed25519BaseField>) -> Self {
+        Self::EC(i.into())
     }
 }

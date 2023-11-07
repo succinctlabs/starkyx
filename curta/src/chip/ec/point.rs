@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::EllipticCurve;
 use crate::chip::field::register::FieldRegister;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AffinePoint<E> {
     pub x: BigUint,
@@ -24,7 +25,6 @@ impl<E> AffinePoint<E> {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[allow(non_snake_case)]
 pub struct AffinePointRegister<E: EllipticCurve> {
     pub x: FieldRegister<E::BaseField>,
     pub y: FieldRegister<E::BaseField>,

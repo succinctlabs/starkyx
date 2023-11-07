@@ -248,12 +248,7 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
 
         // `process_id` is a register is computed by counting the number of cycles. We do this by
         // setting `process_id` to be the cumulative sum of the `end_bit` of each cycle.
-        let process_id = builder.alloc::<ElementRegister>();
-        builder.set_to_expression_first_row(&process_id, B::Field::ZERO.into());
-        builder.set_to_expression_transition(
-            &process_id.next(),
-            process_id.expr() + cycle_end_bit.expr(),
-        );
+        let process_id = builder.process_id(CYCLE_LENGTH, cycle_end_bit);
         // The array index register can be computed as `clock - process_id * CYCLE_LENGTH`.
         let clk = Self::clk(builder);
         let index = builder.expression(

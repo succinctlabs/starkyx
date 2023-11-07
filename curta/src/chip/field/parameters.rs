@@ -1,6 +1,8 @@
 use core::fmt::Debug;
 
+use num::bigint::RandBigInt;
 use num::{BigUint, Zero};
+use rand::rngs::OsRng;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
@@ -8,7 +10,7 @@ pub const MAX_NB_LIMBS: usize = 32;
 pub const LIMB: u32 = 2u32.pow(16);
 
 pub trait FieldParameters:
-    Send + Sync + Copy + 'static + Debug + Serialize + DeserializeOwned
+    Send + Sync + Copy + 'static + Debug + Serialize + DeserializeOwned + Default
 {
     const NB_BITS_PER_LIMB: usize;
     const NB_LIMBS: usize;
@@ -23,6 +25,14 @@ pub trait FieldParameters:
         }
         modulus
     }
+
+    fn nb_bits() -> usize {
+        Self::NB_BITS_PER_LIMB * Self::NB_LIMBS
+    }
+
+    fn rand() -> BigUint {
+        OsRng.gen_biguint_below(&Self::modulus())
+    }
 }
 
 #[cfg(test)]
@@ -32,7 +42,7 @@ pub mod tests {
 
     use super::*;
 
-    #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+    #[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
     pub struct Fp25519;
 
     impl FieldParameters for Fp25519 {

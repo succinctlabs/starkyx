@@ -7,7 +7,6 @@ use super::register::cubic::CubicRegister;
 use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
 use super::table::bus::global::Bus;
-use super::table::evaluation::Evaluation;
 use super::table::lookup::constraint::LookupChipConstraint;
 use super::AirParameters;
 use crate::air::extension::cubic::CubicParser;
@@ -23,7 +22,6 @@ pub enum Constraint<L: AirParameters> {
     BusChannel(BusChannel<CubicRegister, L::CubicParams>),
     Bus(Bus<CubicRegister, L::CubicParams>),
     Lookup(LookupChipConstraint<L::Field, L::CubicParams>),
-    Evaluation(Evaluation<L::Field, L::CubicParams>),
 }
 
 impl<L: AirParameters> Constraint<L> {
@@ -42,10 +40,6 @@ impl<L: AirParameters> Constraint<L> {
 
     pub fn lookup(lookup: LookupChipConstraint<L::Field, L::CubicParams>) -> Self {
         Self::Lookup(lookup)
-    }
-
-    pub fn evaluation(evalutaion: Evaluation<L::Field, L::CubicParams>) -> Self {
-        Self::Evaluation(evalutaion)
     }
 }
 
@@ -72,7 +66,6 @@ where
             Constraint::BusChannel(bus_channel) => bus_channel.eval(parser),
             Constraint::Bus(bus) => bus.eval(parser),
             Constraint::Lookup(lookup) => lookup.eval(parser),
-            Constraint::Evaluation(evaluation) => evaluation.eval(parser),
         }
     }
 }

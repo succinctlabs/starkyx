@@ -24,6 +24,13 @@ pub struct Cycle<F> {
     group: Vec<F>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProcessIdInstruction {
+    process_id: ElementRegister,
+    size: usize,
+    end_bit: BitRegister,
+}
+
 pub struct Loop {
     num_iterations: usize,
     iterations_registers: ArrayRegister<BitRegister>,
@@ -59,6 +66,18 @@ impl<L: AirParameters> AirBuilder<L> {
         self.register_air_instruction_internal(AirInstruction::cycle(cycle.clone()));
 
         cycle
+    }
+
+    pub(crate) fn process_id(&mut self, size: usize, end_bit: BitRegister) -> ElementRegister {
+        let process_id = self.alloc::<ElementRegister>();
+        let instruction = ProcessIdInstruction {
+            process_id,
+            size,
+            end_bit,
+        };
+
+        self.register_air_instruction_internal(AirInstruction::ProcessId(instruction));
+        process_id
     }
 
     pub fn loop_instr(&mut self, num_iterations: usize) -> Loop {
@@ -192,6 +211,26 @@ impl<F: Field> Instruction<F> for Cycle<F> {
     }
 }
 
+impl<AP: AirParser<Field = F>, F: Field> AirConstraint<AP> for ProcessIdInstruction {
+    fn eval(&self, parser: &mut AP) {
+        // Impose that `process_id` is the cumulative sum of end_bits.
+        let process_id = self.process_id.eval(parser);
+        let end_bit = self.end_bit.eval(parser);
+        parser.constraint_first_row(process_id);
+        let mut process_id_constraint = self.process_id.next().eval(parser);
+        process_id_constraint = parser.sub(process_id_constraint, process_id);
+        process_id_constraint = parser.sub(process_id_constraint, end_bit);
+        parser.constraint_transition(process_id_constraint);
+    }
+}
+
+impl<F: Field> Instruction<F> for ProcessIdInstruction {
+    fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
+        let process_id = F::from_canonical_usize(row_index / self.size);
+        writer.write(&self.process_id, &process_id, row_index);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField;
@@ -210,7 +249,7 @@ mod tests {
         type Instruction = EmptyInstruction<GoldilocksField>;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
-        const NUM_FREE_COLUMNS: usize = 5;
+        const NUM_FREE_COLUMNS: usize = 6;
     }
 
     #[test]
@@ -219,26 +258,16 @@ mod tests {
         type SC = PoseidonGoldilocksStarkConfig;
 
         let mut builder = AirBuilder::<L>::new();
-        let cycle = builder.cycle(4);
+        builder.cycle(4);
 
         let (air, trace_data) = builder.build();
 
         let num_rows = 1 << 8;
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
-        let (tx, rx) = channel();
-        for i in 0..num_rows {
-            let writer = generator.new_writer();
-            let handle = tx.clone();
-            let cycle = cycle.clone();
-            rayon::spawn(move || {
-                writer.write_instruction(&cycle, i);
-                handle.send(1).unwrap();
-            });
-        }
-        drop(tx);
-        for msg in rx.iter() {
-            assert!(msg == 1);
-        }
+        let writer = generator.new_writer();
+        (0..num_rows).into_par_iter().for_each(|i| {
+            writer.write_row_instructions(&generator.air_data, i);
+        });
 
         let trace = generator.trace_clone();
 

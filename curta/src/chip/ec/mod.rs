@@ -1,17 +1,28 @@
 use core::fmt::Debug;
 
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+
 use self::point::{AffinePoint, AffinePointRegister};
 use super::builder::AirBuilder;
 use super::field::parameters::FieldParameters;
 use super::AirParameters;
+use crate::machine::builder::ops::{Add, Double};
+use crate::machine::builder::Builder;
 
 pub mod edwards;
 pub mod gadget;
+mod instruction_set;
 pub mod point;
+pub mod scalar;
 pub mod scalar_mul;
 pub mod weierstrass;
 
-pub trait EllipticCurveParameters: Debug + Send + Sync + Copy + 'static {
+pub use instruction_set::{ECInstruction, ECInstructions};
+
+pub trait EllipticCurveParameters:
+    Debug + Send + Sync + Copy + Serialize + DeserializeOwned + 'static
+{
     type BaseField: FieldParameters;
 }
 
@@ -74,5 +85,65 @@ impl<L: AirParameters> AirBuilder<L> {
 
     pub fn ec_generator<E: EllipticCurveAir<L>>(&mut self) -> AffinePointRegister<E> {
         E::ec_generator_air(self)
+    }
+}
+
+impl<L: AirParameters, E: EllipticCurveAir<L>, B: Builder<Parameters = L>> Add<B>
+    for AffinePointRegister<E>
+{
+    type Output = AffinePointRegister<E>;
+
+    fn add(self, rhs: Self, builder: &mut B) -> Self::Output {
+        builder.api().ec_add(&self, &rhs)
+    }
+}
+
+impl<L: AirParameters, E: EllipticCurveAir<L>, B: Builder<Parameters = L>>
+    Add<B, &AffinePointRegister<E>> for AffinePointRegister<E>
+{
+    type Output = AffinePointRegister<E>;
+
+    fn add(self, rhs: &Self, builder: &mut B) -> Self::Output {
+        builder.api().ec_add(&self, rhs)
+    }
+}
+
+impl<L: AirParameters, E: EllipticCurveAir<L>, B: Builder<Parameters = L>>
+    Add<B, AffinePointRegister<E>> for &AffinePointRegister<E>
+{
+    type Output = AffinePointRegister<E>;
+
+    fn add(self, rhs: AffinePointRegister<E>, builder: &mut B) -> Self::Output {
+        builder.api().ec_add(self, &rhs)
+    }
+}
+
+impl<L: AirParameters, E: EllipticCurveAir<L>, B: Builder<Parameters = L>> Add<B>
+    for &AffinePointRegister<E>
+{
+    type Output = AffinePointRegister<E>;
+
+    fn add(self, rhs: Self, builder: &mut B) -> Self::Output {
+        builder.api().ec_add(self, rhs)
+    }
+}
+
+impl<L: AirParameters, E: EllipticCurveAir<L>, B: Builder<Parameters = L>> Double<B>
+    for AffinePointRegister<E>
+{
+    type Output = AffinePointRegister<E>;
+
+    fn double(self, builder: &mut B) -> Self::Output {
+        builder.api().ec_double(&self)
+    }
+}
+
+impl<L: AirParameters, E: EllipticCurveAir<L>, B: Builder<Parameters = L>> Double<B>
+    for &AffinePointRegister<E>
+{
+    type Output = AffinePointRegister<E>;
+
+    fn double(self, builder: &mut B) -> Self::Output {
+        builder.api().ec_double(self)
     }
 }

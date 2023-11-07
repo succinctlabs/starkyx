@@ -1,11 +1,13 @@
+use curve25519_dalek::edwards::CompressedEdwardsY;
 use itertools::Itertools;
+use num::{BigUint, One};
 
-use super::params::{Ed25519BaseField, Ed25519Parameters};
+use super::params::{Ed25519, Ed25519BaseField, Ed25519Parameters};
 use super::point::CompressedPointRegister;
-use super::sqrt::Ed25519FpSqrtInstruction;
+use super::sqrt::{sqrt, Ed25519FpSqrtInstruction};
 use crate::chip::builder::AirBuilder;
 use crate::chip::ec::edwards::{EdwardsCurve, EdwardsParameters};
-use crate::chip::ec::point::AffinePointRegister;
+use crate::chip::ec::point::{AffinePoint, AffinePointRegister};
 use crate::chip::field::instruction::FromFieldInstruction;
 use crate::chip::field::parameters::FieldParameters;
 use crate::chip::field::register::FieldRegister;
@@ -66,6 +68,32 @@ impl<L: AirParameters> AirBuilder<L> {
 
         AffinePointRegister::<EdwardsCurve<Ed25519Parameters>>::new(x, compressed_p.y)
     }
+}
+
+pub fn decompress(compressed_point: &CompressedEdwardsY) -> AffinePoint<Ed25519> {
+    let mut point_bytes = *compressed_point.as_bytes();
+    let sign = point_bytes[31] >> 7 == 1;
+    // mask out the sign bit
+    point_bytes[31] &= 0b0111_1111;
+    let modulus = &Ed25519BaseField::modulus();
+
+    let y = &BigUint::from_bytes_le(&point_bytes);
+    let yy = &((y * y) % modulus);
+    let u = (yy - BigUint::one()) % modulus; // u =  y²-1
+    let v = &((yy * &Ed25519Parameters::d_biguint()) + &BigUint::one()) % modulus; // v = dy²+1
+
+    let v_inv = v.modpow(&(modulus - BigUint::from(2u64)), modulus);
+    let u_div_v = (u * &v_inv) % modulus;
+
+    let mut x = sqrt(u_div_v);
+
+    // sqrt always returns the nonnegative square root,
+    // so we negate according to the supplied sign bit.
+    if sign {
+        x = modulus - &x;
+    }
+
+    AffinePoint::new(x, y.clone())
 }
 
 #[cfg(test)]
@@ -259,7 +287,7 @@ mod tests {
     ];
 
     #[test]
-    fn test_ed25519_decompress() {
+    fn test_ed25519_decompress_stark() {
         type L = Ed25519DecompressTest;
         type SC = PoseidonGoldilocksStarkConfig;
 
@@ -303,5 +331,23 @@ mod tests {
 
         // Test the recursive proof.
         test_recursive_starky(stark, config, generator, &public);
+    }
+
+    #[test]
+    fn test_ed25519_decompress() {
+        for i in 0..NUM_TEST_CASES {
+            let compressed_p_bytes = hex::decode(COMPRESSED_P[i]).unwrap();
+            let compressed_p = CompressedEdwardsY(compressed_p_bytes.try_into().unwrap());
+
+            let affine_p_x = BigUint::from_str(X_VALUES[i]).unwrap();
+            let affine_p_y = BigUint::from_str(Y_VALUES[i]).unwrap();
+            let affine_p = AffinePoint::<EdwardsCurve<Ed25519Parameters>>::new(
+                affine_p_x.clone(),
+                affine_p_y.clone(),
+            );
+
+            let decompressed_p = decompress(&compressed_p);
+            assert_eq!(decompressed_p, affine_p);
+        }
     }
 }

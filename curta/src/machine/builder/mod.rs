@@ -1,6 +1,7 @@
-use self::ops::{Adc, Add, And, Div, Mul, Neg, Not, One, Or, Shl, Shr, Sub, Xor, Zero};
+use self::ops::{Adc, Add, And, Div, Double, Mul, Neg, Not, One, Or, Shl, Shr, Sub, Xor, Zero};
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
+use crate::chip::ec::scalar::LimbBitInstruction;
 use crate::chip::instruction::cycle::Cycle;
 use crate::chip::instruction::Instruction;
 use crate::chip::memory::pointer::slice::Slice;
@@ -186,6 +187,19 @@ pub trait Builder: Sized {
         self.api().select(&flag, true_value, false_value)
     }
 
+    fn select_next<T: Register>(
+        &mut self,
+        flag: BitRegister,
+        true_value: &T,
+        false_value: &T,
+        result: &T,
+    ) {
+        self.set_to_expression_transition(
+            &result.next(),
+            flag.expr() * true_value.expr() + flag.not_expr() * false_value.expr(),
+        );
+    }
+
     fn set_to_expression_first_row<T: Register>(
         &mut self,
         register: &T,
@@ -237,6 +251,10 @@ pub trait Builder: Sized {
         Lhs: Add<Self, Rhs>,
     {
         lhs.add(rhs, self)
+    }
+
+    fn double<T: Double<Self>>(&mut self, value: T) -> <T as Double<Self>>::Output {
+        value.double(self)
     }
 
     fn sub<Lhs, Rhs>(&mut self, lhs: Lhs, rhs: Rhs) -> <Lhs as ops::Sub<Self, Rhs>>::Output
@@ -347,6 +365,24 @@ pub trait Builder: Sized {
 
     fn cycle(&mut self, length_log: usize) -> Cycle<Self::Field> {
         self.api().cycle(length_log)
+    }
+
+    /// `process_id` is a register is computed by counting the number of cycles. We do this by
+    /// setting `process_id` to be the cumulative sum of the `end_bit` of each cycle.
+    fn process_id(&mut self, size: usize, end_bit: BitRegister) -> ElementRegister {
+        self.api().process_id(size, end_bit)
+    }
+
+    fn bit_decomposition(
+        &mut self,
+        limb: ElementRegister,
+        start_bit: BitRegister,
+        end_bit: BitRegister,
+    ) -> BitRegister
+    where
+        Self::Instruction: From<LimbBitInstruction>,
+    {
+        self.api().bit_decomposition(limb, start_bit, end_bit)
     }
 }
 

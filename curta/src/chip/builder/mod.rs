@@ -17,7 +17,6 @@ use super::register::{Register, RegisterSerializable};
 use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
 use super::table::bus::global::Bus;
-use super::table::evaluation::Evaluation;
 use super::table::lookup::table::LookupTable;
 use super::table::lookup::values::LookupValues;
 use super::trace::data::AirTraceData;
@@ -30,8 +29,9 @@ pub struct AirBuilder<L: AirParameters> {
     local_index: usize,
     local_arithmetic_index: usize,
     extended_index: usize,
+    pub(crate) internal_range_check: bool,
     pub(crate) shared_memory: SharedMemory,
-    global_arithmetic: Vec<ElementRegister>,
+    pub(crate) global_arithmetic: Vec<ElementRegister>,
     pub(crate) instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub(crate) global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub(crate) constraints: Vec<Constraint<L>>,
@@ -43,7 +43,6 @@ pub struct AirBuilder<L: AirParameters> {
     pub(crate) buses: Vec<Bus<CubicRegister, L::CubicParams>>,
     pub(crate) lookup_values: Vec<LookupValues<L::Field, L::CubicParams>>,
     pub(crate) lookup_tables: Vec<LookupTable<L::Field, L::CubicParams>>,
-    pub(crate) evaluation_data: Vec<Evaluation<L::Field, L::CubicParams>>,
     range_data: Option<(
         LookupTable<L::Field, L::CubicParams>,
         LookupValues<L::Field, L::CubicParams>,
@@ -66,6 +65,7 @@ impl<L: AirParameters> AirBuilder<L> {
             extended_index: L::NUM_ARITHMETIC_COLUMNS + L::NUM_FREE_COLUMNS,
             global_arithmetic: Vec::new(),
             shared_memory,
+            internal_range_check: true,
             instructions: Vec::new(),
             global_instructions: Vec::new(),
             constraints: Vec::new(),
@@ -77,7 +77,6 @@ impl<L: AirParameters> AirBuilder<L> {
             buses: Vec::new(),
             lookup_values: Vec::new(),
             lookup_tables: Vec::new(),
-            evaluation_data: Vec::new(),
             range_data: None,
         }
     }
@@ -197,7 +196,9 @@ impl<L: AirParameters> AirBuilder<L> {
         }
 
         // Add the range checks
-        if L::NUM_ARITHMETIC_COLUMNS > 0 || !self.global_arithmetic.is_empty() {
+        if (L::NUM_ARITHMETIC_COLUMNS > 0 || !self.global_arithmetic.is_empty())
+            && self.internal_range_check
+        {
             self.arithmetic_range_checks();
         }
 
@@ -277,7 +278,6 @@ impl<L: AirParameters> AirBuilder<L> {
                 buses: self.buses,
                 lookup_values: self.lookup_values,
                 lookup_tables: self.lookup_tables,
-                evaluation_data: self.evaluation_data,
                 range_data: self.range_data,
             },
         )

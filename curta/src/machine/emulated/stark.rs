@@ -9,16 +9,19 @@ use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use serde::{Deserialize, Serialize};
 
-use super::air::ByteParameters;
+use super::builder::NUM_LOOKUP_ROWS;
 use super::proof::{
-    ByteStarkChallenges, ByteStarkChallengesTarget, ByteStarkProof, ByteStarkProofTarget,
+    EmulatedStarkChallenges, EmulatedStarkChallengesTarget, EmulatedStarkProof,
+    EmulatedStarkProofTarget,
 };
+use super::RangeParameters;
+use crate::chip::register::array::ArrayRegister;
+use crate::chip::register::element::ElementRegister;
+use crate::chip::table::lookup::values::LogLookupValues;
 use crate::chip::trace::data::AirTraceData;
 use crate::chip::trace::writer::{InnerWriterData, TraceWriter};
-use crate::chip::uint::bytes::lookup_table::multiplicity_data::ByteMultiplicityData;
-use crate::chip::uint::bytes::lookup_table::table::ByteLogLookupTable;
 use crate::chip::{AirParameters, Chip};
-use crate::machine::bytes::builder::NUM_LOOKUP_ROWS;
+use crate::math::prelude::*;
 use crate::maybe_rayon::*;
 use crate::plonky2::stark::config::{CurtaConfig, StarkyConfig};
 use crate::plonky2::stark::prover::{AirCommitment, StarkyProver};
@@ -31,18 +34,19 @@ use crate::trace::AirTrace;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
-pub struct ByteStark<L: AirParameters, C, const D: usize> {
+pub struct EmulatedStark<L: AirParameters, C, const D: usize> {
     pub config: StarkyConfig<C, D>,
     pub stark: Starky<Chip<L>>,
     pub air_data: AirTraceData<L>,
-    pub(crate) multiplicity_data: ByteMultiplicityData,
     pub(crate) lookup_config: StarkyConfig<C, D>,
-    pub(crate) lookup_stark: Starky<Chip<ByteParameters<L::Field, L::CubicParams>>>,
-    pub(crate) lookup_air_data: AirTraceData<ByteParameters<L::Field, L::CubicParams>>,
-    pub(crate) lookup_table: ByteLogLookupTable<L::Field, L::CubicParams>,
+    pub(crate) lookup_stark: Starky<Chip<RangeParameters<L::Field, L::CubicParams>>>,
+    pub(crate) lookup_air_data: AirTraceData<RangeParameters<L::Field, L::CubicParams>>,
+    pub(crate) lookup_values: LogLookupValues<ElementRegister, L::Field, L::CubicParams>,
+    pub(crate) lookup_table: ElementRegister,
+    pub(crate) multiplicity: ArrayRegister<ElementRegister>,
 }
 
-impl<L: AirParameters, C, const D: usize> ByteStark<L, C, D>
+impl<L: AirParameters, C, const D: usize> EmulatedStark<L, C, D>
 where
     L::Field: RichField + Extendable<D>,
     C: CurtaConfig<D, F = L::Field, FE = <L::Field as Extendable<D>>::Extension>,
@@ -56,12 +60,17 @@ where
         &self.config
     }
 
-    pub const fn lookup_stark(&self) -> &Starky<Chip<ByteParameters<L::Field, L::CubicParams>>> {
+    pub const fn lookup_stark(&self) -> &Starky<Chip<RangeParameters<L::Field, L::CubicParams>>> {
         &self.lookup_stark
     }
 
     pub const fn lookup_config(&self) -> &StarkyConfig<C, D> {
         &self.lookup_config
+    }
+
+    #[inline]
+    pub fn range_fn(element: L::Field) -> (usize, usize) {
+        (element.as_canonical_u64() as usize, 0)
     }
 
     fn generate_execution_traces(
@@ -95,14 +104,22 @@ where
             .copy_from_slice(public_values);
 
         // Write lookup table values
-        self.lookup_table.write_table_entries(&lookup_writer);
+        for i in 0..NUM_LOOKUP_ROWS {
+            lookup_writer.write(&self.lookup_table, &L::Field::from_canonical_usize(i), i);
+        }
         for i in 0..NUM_LOOKUP_ROWS {
             lookup_writer.write_row_instructions(&self.lookup_air_data, i);
         }
         // Write multiplicities
-        let multiplicities = self.multiplicity_data.get_multiplicities(&main_writer);
-        lookup_writer
-            .write_lookup_multiplicities(self.lookup_table.multiplicities(), &[multiplicities]);
+        let multiplicities = main_writer.get_multiplicities_from_fn(
+            1,
+            NUM_LOOKUP_ROWS,
+            &self.lookup_values.trace_values,
+            &self.lookup_values.public_values,
+            Self::range_fn,
+        );
+
+        lookup_writer.write_lookup_multiplicities(self.multiplicity, &[multiplicities]);
 
         (main_writer, lookup_writer)
     }
@@ -239,7 +256,7 @@ where
             .collect::<Vec<_>>();
         let lookup_extended_trace = AirTrace {
             values: lookup_extended_trace_values,
-            width: ByteParameters::<L::Field, L::CubicParams>::num_columns()
+            width: RangeParameters::<L::Field, L::CubicParams>::num_columns()
                 - self.lookup_stark.air.execution_trace_length,
         };
         let lookup_extended_commitment = timed!(
@@ -276,7 +293,7 @@ where
         execution_trace: &AirTrace<L::Field>,
         public_values: &[L::Field],
         timing: &mut TimingTree,
-    ) -> Result<ByteStarkProof<L::Field, C, D>> {
+    ) -> Result<EmulatedStarkProof<L::Field, C, D>> {
         // Initialize challenger.
         let mut challenger = Challenger::new();
 
@@ -313,7 +330,7 @@ where
         );
 
         // Return the proof.
-        Ok(ByteStarkProof {
+        Ok(EmulatedStarkProof {
             main_proof: main_proof.air_proof,
             lookup_proof: lookup_proof.air_proof,
             global_values: lookup_proof.global_values,
@@ -322,9 +339,9 @@ where
 
     pub fn get_challenges(
         &self,
-        proof: &ByteStarkProof<L::Field, C, D>,
+        proof: &EmulatedStarkProof<L::Field, C, D>,
         public_values: &[L::Field],
-    ) -> ByteStarkChallenges<L::Field, D> {
+    ) -> EmulatedStarkChallenges<L::Field, D> {
         // Initialize challenger.
         let mut challenger = Challenger::<L::Field, C::Hasher>::new();
 
@@ -358,7 +375,7 @@ where
             &mut challenger,
         );
 
-        ByteStarkChallenges {
+        EmulatedStarkChallenges {
             main_challenges,
             lookup_challenges,
         }
@@ -366,15 +383,15 @@ where
 
     pub fn verify(
         &self,
-        proof: ByteStarkProof<L::Field, C, D>,
+        proof: EmulatedStarkProof<L::Field, C, D>,
         public_values: &[L::Field],
     ) -> Result<()> {
-        let ByteStarkChallenges {
+        let EmulatedStarkChallenges {
             main_challenges,
             lookup_challenges,
         } = self.get_challenges(&proof, public_values);
 
-        let ByteStarkProof {
+        let EmulatedStarkProof {
             main_proof,
             lookup_proof,
             global_values,
@@ -401,7 +418,7 @@ where
     pub fn add_virtual_proof_with_pis_target(
         &self,
         builder: &mut CircuitBuilder<L::Field, D>,
-    ) -> (ByteStarkProofTarget<D>, Vec<Target>) {
+    ) -> (EmulatedStarkProofTarget<D>, Vec<Target>) {
         let main_proof = add_virtual_air_proof(builder, &self.stark, &self.config);
         let lookup_proof = add_virtual_air_proof(builder, &self.lookup_stark, &self.lookup_config);
 
@@ -410,7 +427,7 @@ where
         let public_inputs = builder.add_virtual_targets(self.stark.air.num_public_values);
 
         (
-            ByteStarkProofTarget {
+            EmulatedStarkProofTarget {
                 main_proof,
                 lookup_proof,
                 global_values,
@@ -422,9 +439,9 @@ where
     pub fn get_challenges_target(
         &self,
         builder: &mut CircuitBuilder<L::Field, D>,
-        proof: &ByteStarkProofTarget<D>,
+        proof: &EmulatedStarkProofTarget<D>,
         public_values: &[Target],
-    ) -> ByteStarkChallengesTarget<D> {
+    ) -> EmulatedStarkChallengesTarget<D> {
         // Initialize challenger.
         let mut challenger = RecursiveChallenger::<L::Field, C::InnerHasher, D>::new(builder);
 
@@ -458,7 +475,7 @@ where
             &mut challenger,
         );
 
-        ByteStarkChallengesTarget {
+        EmulatedStarkChallengesTarget {
             main_challenges,
             lookup_challenges,
         }
@@ -467,11 +484,11 @@ where
     pub fn verify_circuit(
         &self,
         builder: &mut CircuitBuilder<L::Field, D>,
-        proof: &ByteStarkProofTarget<D>,
+        proof: &EmulatedStarkProofTarget<D>,
         public_values: &[Target],
     ) {
         let challenges = self.get_challenges_target(builder, proof, public_values);
-        let ByteStarkProofTarget {
+        let EmulatedStarkProofTarget {
             main_proof,
             lookup_proof,
             global_values,
@@ -501,10 +518,10 @@ where
     pub fn set_proof_target<W: WitnessWrite<L::Field>>(
         &self,
         witness: &mut W,
-        proof_tagret: &ByteStarkProofTarget<D>,
-        proof: ByteStarkProof<L::Field, C, D>,
+        proof_tagret: &EmulatedStarkProofTarget<D>,
+        proof: EmulatedStarkProof<L::Field, C, D>,
     ) {
-        let ByteStarkProofTarget {
+        let EmulatedStarkProofTarget {
             main_proof,
             lookup_proof,
             global_values,
@@ -519,43 +536,42 @@ where
 
 #[cfg(test)]
 mod tests {
+    use num::bigint::RandBigInt;
     use plonky2::field::goldilocks_field::GoldilocksField;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_data::CircuitConfig;
-    use rand::Rng;
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::chip::memory::time::Time;
-    use crate::chip::register::element::ElementRegister;
-    use crate::chip::register::Register;
+    use crate::chip::field::instruction::FpInstruction;
+    use crate::chip::field::parameters::tests::Fp25519;
+    use crate::chip::field::parameters::FieldParameters;
+    use crate::chip::field::register::FieldRegister;
     use crate::chip::trace::writer::InnerWriterData;
-    use crate::chip::uint::operations::instruction::UintInstruction;
-    use crate::chip::uint::register::U32Register;
-    use crate::chip::uint::util::u32_to_le_field_bytes;
     use crate::machine::builder::Builder;
-    use crate::machine::bytes::builder::BytesBuilder;
+    use crate::machine::emulated::builder::EmulatedBuilder;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
-    use crate::math::prelude::*;
     use crate::plonky2::stark::config::CurtaPoseidonGoldilocksConfig;
+    use crate::polynomial::Polynomial;
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
-    pub struct ByteTest;
+    pub struct RangeTest;
 
-    impl AirParameters for ByteTest {
+    impl AirParameters for RangeTest {
         type Field = GoldilocksField;
         type CubicParams = GoldilocksCubicParameters;
 
-        type Instruction = UintInstruction;
+        type Instruction = FpInstruction<Fp25519>;
 
-        const NUM_ARITHMETIC_COLUMNS: usize = 0;
-        const NUM_FREE_COLUMNS: usize = 17;
-        const EXTENDED_COLUMNS: usize = 12;
+        const NUM_ARITHMETIC_COLUMNS: usize = 124;
+        const NUM_FREE_COLUMNS: usize = 1;
+        const EXTENDED_COLUMNS: usize = 192;
     }
 
     #[test]
-    fn test_byte_multi_stark() {
-        type L = ByteTest;
+    fn test_fp_multi_stark() {
+        type L = RangeTest;
+        type F = GoldilocksField;
         type C = CurtaPoseidonGoldilocksConfig;
         type Config = <C as CurtaConfig<2>>::GenericConfig;
 
@@ -563,15 +579,11 @@ mod tests {
 
         let mut timing = TimingTree::new("test_byte_multi_stark", log::Level::Debug);
 
-        let mut builder = BytesBuilder::<L>::new();
+        let mut builder = EmulatedBuilder::<L>::new();
 
-        let a = builder.alloc::<U32Register>();
-        let b = builder.alloc::<U32Register>();
-
-        let num_ops = 1;
-        for _ in 0..num_ops {
-            let _ = builder.and(&a, &b);
-        }
+        let a = builder.alloc::<FieldRegister<Fp25519>>();
+        let b = builder.alloc::<FieldRegister<Fp25519>>();
+        let _ = builder.add(a, b);
 
         let num_rows = 1 << 5;
         let stark = builder.build::<C, 2>(num_rows);
@@ -579,198 +591,15 @@ mod tests {
         let writer = TraceWriter::new(&stark.air_data, num_rows);
 
         let mut rng = rand::thread_rng();
-        for i in 0..num_rows {
-            let a_val = rng.gen::<u32>();
-            let b_val = rng.gen::<u32>();
-            writer.write(&a, &u32_to_le_field_bytes(a_val), i);
-            writer.write(&b, &u32_to_le_field_bytes(b_val), i);
-            writer.write_row_instructions(&stark.air_data, i);
-        }
-
-        let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
-        let proof = stark.prove(&trace, &public, &mut timing).unwrap();
-
-        stark.verify(proof.clone(), &public).unwrap();
-
-        let config_rec = CircuitConfig::standard_recursion_config();
-        let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
-
-        let (proof_target, public_input) =
-            stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
-        stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
-
-        let data = recursive_builder.build::<Config>();
-
-        let mut pw = PartialWitness::new();
-
-        pw.set_target_arr(&public_input, &public);
-        stark.set_proof_target(&mut pw, &proof_target, proof);
-
-        let rec_proof = data.prove(pw).unwrap();
-        data.verify(rec_proof).unwrap();
-
-        timing.print();
-    }
-
-    #[derive(Debug, Clone, Serialize, Deserialize)]
-    pub struct ByteMemTest;
-
-    impl AirParameters for ByteMemTest {
-        type Field = GoldilocksField;
-        type CubicParams = GoldilocksCubicParameters;
-
-        type Instruction = UintInstruction;
-
-        const NUM_FREE_COLUMNS: usize = 17;
-        const EXTENDED_COLUMNS: usize = 21;
-    }
-
-    #[test]
-    fn test_byte_memory_multi_stark() {
-        type L = ByteMemTest;
-        type C = CurtaPoseidonGoldilocksConfig;
-        type Config = <C as CurtaConfig<2>>::GenericConfig;
-
-        let _ = env_logger::builder().is_test(true).try_init();
-
-        let mut timing = TimingTree::new("test_byte_multi_stark", log::Level::Debug);
-
-        let mut builder = BytesBuilder::<L>::new();
-
-        let a_initial_value = builder.api.alloc_public::<U32Register>();
-
-        let a_ptr = builder
-            .api
-            .initialize::<U32Register>(&a_initial_value, &Time::zero(), None);
-
-        let clk = Time::from_element(builder.clk);
-
-        let a = builder.load(&a_ptr, &clk);
-        let b = builder.alloc::<U32Register>();
-        let c = builder.and(&a, &b);
-        builder.store(&a_ptr, c, &clk.advance(), None);
-
-        let a_final = builder.alloc_public::<U32Register>();
-
-        let num_rows = 1 << 5;
-
-        builder.free(&a_ptr, a_final, &Time::constant(num_rows));
-        builder.set_to_expression_last_row(&a_final, c.expr());
-
-        let stark = builder.build::<C, 2>(num_rows);
-
-        let writer = TraceWriter::new(&stark.air_data, num_rows);
-
-        let mut rng = rand::thread_rng();
-
-        let a_val = u32_to_le_field_bytes(rng.gen::<u32>());
-        writer.write(&a_initial_value, &a_val, 0);
+        let p = Fp25519::modulus();
         writer.write_global_instructions(&stark.air_data);
         for i in 0..num_rows {
-            let b_val = rng.gen::<u32>();
-            writer.write(&b, &u32_to_le_field_bytes(b_val), i);
-            writer.write_row_instructions(&stark.air_data, i);
-        }
-
-        let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
-        let proof = stark.prove(&trace, &public, &mut timing).unwrap();
-
-        stark.verify(proof.clone(), &public).unwrap();
-
-        let config_rec = CircuitConfig::standard_recursion_config();
-        let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
-
-        let (proof_target, public_input) =
-            stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
-        stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
-
-        let data = recursive_builder.build::<Config>();
-
-        let mut pw = PartialWitness::new();
-
-        pw.set_target_arr(&public_input, &public);
-        stark.set_proof_target(&mut pw, &proof_target, proof);
-
-        let rec_proof = data.prove(pw).unwrap();
-        data.verify(rec_proof).unwrap();
-
-        timing.print();
-    }
-
-    #[derive(Debug, Clone, Serialize, Deserialize)]
-    pub struct ByteSliceMemTest;
-
-    impl AirParameters for ByteSliceMemTest {
-        type Field = GoldilocksField;
-        type CubicParams = GoldilocksCubicParameters;
-
-        type Instruction = UintInstruction;
-
-        const NUM_FREE_COLUMNS: usize = 18;
-        const EXTENDED_COLUMNS: usize = 24;
-    }
-
-    #[test]
-    fn test_byte_slice_memory_multi_stark() {
-        type L = ByteSliceMemTest;
-        type C = CurtaPoseidonGoldilocksConfig;
-        type Config = <C as CurtaConfig<2>>::GenericConfig;
-
-        let _ = env_logger::builder().is_test(true).try_init();
-
-        let mut timing = TimingTree::new("test_byte_multi_stark", log::Level::Debug);
-
-        let mut builder = BytesBuilder::<L>::new();
-
-        let a_init = builder.alloc_array_public::<U32Register>(4);
-
-        let num_rows = 1 << 20;
-
-        let a_ptr = builder.initialize_slice::<U32Register>(&a_init, &Time::zero(), None);
-
-        let num_rows_reg =
-            builder.constant::<ElementRegister>(&GoldilocksField::from_canonical_usize(num_rows));
-
-        builder.store(
-            &a_ptr.get(1),
-            a_init.get(1),
-            &Time::zero(),
-            Some(num_rows_reg),
-        );
-
-        let clk = Time::from_element(builder.clk);
-        let zero = builder.constant::<ElementRegister>(&GoldilocksField::ZERO);
-
-        let a_0 = a_ptr.get_at(zero);
-        let zero_trace = builder.alloc::<ElementRegister>();
-        builder.set_to_expression(&zero_trace, GoldilocksField::ZERO.into());
-        let a_0_trace = a_ptr.get_at(zero_trace);
-        let a = builder.load(&a_0_trace, &clk);
-        let b = builder.load(&a_ptr.get(1), &Time::zero());
-        let c = builder.and(&a, &b);
-        builder.store(&a_0_trace, c, &clk.advance(), None);
-
-        let a_final = builder.alloc_public::<U32Register>();
-
-        builder.free(&a_0, a_final, &Time::constant(num_rows));
-        builder.set_to_expression_last_row(&a_final, c.expr());
-
-        for (i, a) in a_init.iter().enumerate().skip(1) {
-            builder.api.free(&a_ptr.get(i), a, &Time::zero());
-        }
-
-        let stark = builder.build::<C, 2>(num_rows);
-
-        let writer = TraceWriter::new(&stark.air_data, num_rows);
-
-        let mut rng = rand::thread_rng();
-
-        let a_val = (0..a_init.len())
-            .map(|_| u32_to_le_field_bytes(rng.gen::<u32>()))
-            .collect::<Vec<_>>();
-        writer.write_array(&a_init, a_val, 0);
-        writer.write_global_instructions(&stark.air_data);
-        for i in 0..num_rows {
+            let a_int = rng.gen_biguint(256) % &p;
+            let b_int = rng.gen_biguint(256) % &p;
+            let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
+            let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
+            writer.write(&a, &p_a, i);
+            writer.write(&b, &p_b, i);
             writer.write_row_instructions(&stark.air_data, i);
         }
 
