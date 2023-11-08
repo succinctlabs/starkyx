@@ -332,6 +332,7 @@ dependencies = [
  "seq-macro",
  "serde",
  "subtle-encoding",
+ "tiny-keccak",
 ]
 
 [[package]]

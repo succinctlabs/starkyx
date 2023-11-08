@@ -511,3 +511,7 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         hash_state_public
     }
 }
+
+// calculate state_next
+// builder.store(&state_next_ptr, state_next, clk.advance(), None);
+// builder.load(&state_next_ptr, clk)
