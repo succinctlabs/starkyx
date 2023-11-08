@@ -8,11 +8,13 @@ use core::slice::{ChunksExact, ChunksExactMut};
 use plonky2_maybe_rayon::rayon::slice::{
     ChunksExact as ParChunksExact, ChunksExactMut as ParChunksExactMut,
 };
+use plonky2_maybe_rayon::{
+    IndexedParallelIterator, MaybeIntoParIter, MaybeParChunks, MaybeParChunksMut, ParallelIterator,
+};
 use serde::{Deserialize, Serialize};
 
 use self::view::{TraceView, TraceViewMut};
 use self::window::{TraceWindow, TraceWindowMut, TraceWindowsMutIter};
-use crate::maybe_rayon::*;
 
 /// A stark trace which is stored as a matrix in row major order
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -125,6 +127,59 @@ impl<T> AirTrace<T> {
     }
 
     #[inline]
+    pub fn chunks(&self, chunk_size: usize) -> impl Iterator<Item = TraceView<'_, T>> {
+        let width = self.width;
+        self.values
+            .chunks_exact(chunk_size * width)
+            .map(move |chunk| TraceView {
+                values: chunk,
+                width,
+            })
+    }
+
+    #[inline]
+    pub fn chunks_mut(&mut self, chunk_size: usize) -> impl Iterator<Item = TraceViewMut<'_, T>> {
+        let width = self.width;
+        self.values
+            .chunks_exact_mut(chunk_size * width)
+            .map(move |chunk| TraceViewMut {
+                values: chunk,
+                width,
+            })
+    }
+
+    #[inline]
+    pub fn chunks_par(&self, chunk_size: usize) -> impl ParallelIterator<Item = TraceView<'_, T>>
+    where
+        T: Send + Sync,
+    {
+        let width = self.width;
+        self.values
+            .par_chunks_exact(chunk_size * width)
+            .map(move |chunk| TraceView {
+                values: chunk,
+                width,
+            })
+    }
+
+    #[inline]
+    pub fn chunks_par_mut(
+        &mut self,
+        chunk_size: usize,
+    ) -> impl IndexedParallelIterator<Item = TraceViewMut<'_, T>>
+    where
+        T: Send + Sync,
+    {
+        let width = self.width;
+        self.values
+            .par_chunks_exact_mut(chunk_size * width)
+            .map(move |chunk| TraceViewMut {
+                values: chunk,
+                width,
+            })
+    }
+
+    #[inline]
     pub fn window(&self, row: usize) -> TraceWindow<'_, T> {
         debug_assert!(row < self.height());
         let last_row = self.height() - 1;
@@ -198,6 +253,7 @@ impl<T> AirTrace<T> {
         (0..=last_row).map(|r| self.window(r))
     }
 
+    #[inline]
     pub fn windows_mut(&mut self) -> TraceWindowsMutIter<'_, T> {
         let height = self.height();
         TraceWindowsMutIter::new(&mut self.values, self.width, height)

@@ -1,4 +1,4 @@
-use super::window::TraceWindow;
+use super::window::{TraceWindow, TraceWindowsMutIter};
 use crate::maybe_rayon::*;
 
 #[derive(Debug, Clone)]
@@ -81,5 +81,11 @@ impl<'a, T> TraceViewMut<'a, T> {
     pub fn row_mut(&mut self, r: usize) -> &mut [T] {
         debug_assert!(r < self.height());
         &mut self.values[r * self.width..(r + 1) * self.width]
+    }
+
+    #[inline]
+    pub fn windows_mut(&mut self) -> TraceWindowsMutIter<'_, T> {
+        let height = self.height();
+        TraceWindowsMutIter::new(self.values, self.width, height)
     }
 }
