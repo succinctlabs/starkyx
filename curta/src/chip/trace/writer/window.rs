@@ -1,29 +1,28 @@
+use core::hash::Hash;
+
 use super::AirWriter;
+use crate::chip::memory::map::MemoryMap;
 use crate::chip::register::memory::MemorySlice;
 use crate::math::prelude::*;
 use crate::trace::window::TraceWindowMut;
-use crate::trace::AirTrace;
 
-pub struct WindowWriter<'a, F> {
+pub struct WindowWriter<'a, F: PartialEq + Eq + Hash> {
     window: TraceWindowMut<'a, F>,
     public_values: &'a [F],
+    memory: &'a mut MemoryMap<F>,
 }
 
 impl<'a, F: Field> WindowWriter<'a, F> {
-    pub fn new(window: TraceWindowMut<'a, F>, public_values: &'a [F]) -> Self {
+    pub fn new(
+        window: TraceWindowMut<'a, F>,
+        public_values: &'a [F],
+        memory: &'a mut MemoryMap<F>,
+    ) -> Self {
         Self {
             window,
             public_values,
+            memory,
         }
-    }
-
-    pub fn iter(
-        trace: &'a mut AirTrace<F>,
-        public_values: &'a [F],
-    ) -> impl Iterator<Item = WindowWriter<'a, F>> + 'a {
-        trace
-            .windows_mut()
-            .map(move |window| Self::new(window, public_values))
     }
 }
 
@@ -47,5 +46,13 @@ impl<'a, F: Field> AirWriter<F> for WindowWriter<'a, F> {
             }
             _ => panic!("Window writer cannot write to non trace values"),
         }
+    }
+
+    fn memory(&self) -> &MemoryMap<F> {
+        self.memory
+    }
+
+    fn memory_mut(&mut self) -> &mut MemoryMap<F> {
+        self.memory
     }
 }
