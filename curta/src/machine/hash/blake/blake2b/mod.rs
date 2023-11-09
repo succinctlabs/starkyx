@@ -3,7 +3,7 @@ pub mod data;
 
 const HASH_ARRAY_SIZE: usize = 8;
 
-const INITIAL_HASH: [u64; HASH_ARRAY_SIZE] = [
+const IV: [u64; HASH_ARRAY_SIZE] = [
     0x6a09e667f2bdc928,
     0xbb67ae8584caa73b,
     0x3c6ef372fe94f82b,
@@ -18,7 +18,7 @@ const INITIAL_HASH: [u64; HASH_ARRAY_SIZE] = [
 // we assume that the output is 32 bytes
 // So that means the initial hash entry to be
 // 0x6a09e667f3bcc908 xor 0x01010020
-const INITIAL_HASH_COMPRESS: [u64; HASH_ARRAY_SIZE] = [
+const COMPRESS_IV: [u64; HASH_ARRAY_SIZE] = [
     0x6a09e667f3bcc908,
     0xbb67ae8584caa73b,
     0x3c6ef372fe94f82b,
@@ -29,10 +29,31 @@ const INITIAL_HASH_COMPRESS: [u64; HASH_ARRAY_SIZE] = [
     0x5be0cd19137e2179,
 ];
 
-const PERMUTATION_SIZE: usize = 16;
-const NUM_PERMUTATIONS: usize = 12;
+const COMPRESS_INITIALIZE_INDICES: [[u8; 2]; 4] = [[0, 4], [1, 5], [2, 6], [3, 7]];
 
-const SIGMA_PERMUTATIONS: [[u8; PERMUTATION_SIZE]; NUM_PERMUTATIONS] = [
+const V_INDICES: [[u8; 4]; 8] = [
+    [0, 4, 8, 12],
+    [1, 5, 9, 13],
+    [2, 6, 10, 14],
+    [3, 7, 11, 15],
+    [0, 5, 10, 15],
+    [1, 6, 11, 12],
+    [2, 7, 8, 13],
+    [3, 4, 9, 14],
+];
+
+const V_LAST_WRITE_AGES: [[u8; 4]; 8] = [
+    [4, 1, 2, 3],
+    [4, 5, 2, 3],
+    [4, 5, 6, 3],
+    [4, 5, 6, 7],
+    [4, 3, 2, 1],
+    [4, 3, 2, 5],
+    [4, 3, 6, 5],
+    [4, 7, 6, 5],
+];
+
+const SIGMA_PERMUTATIONS: [[u8; 16]; 12] = [
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     [14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3],
     [11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4],
@@ -45,15 +66,4 @@ const SIGMA_PERMUTATIONS: [[u8; PERMUTATION_SIZE]; NUM_PERMUTATIONS] = [
     [10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0],
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     [14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3],
-];
-
-const STATE_INDICES: [[u8; 4]; 8] = [
-    [0, 4, 8, 12],
-    [1, 5, 9, 13],
-    [2, 6, 10, 14],
-    [3, 7, 11, 15],
-    [0, 5, 10, 15],
-    [1, 6, 11, 12],
-    [2, 7, 8, 13],
-    [3, 4, 9, 14],
 ];

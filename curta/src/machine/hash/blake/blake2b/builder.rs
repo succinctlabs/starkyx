@@ -1,44 +1,34 @@
-use super::data::{BLAKE2BData, SHA256Data, SHA256Memory, SHA256PublicData, SHA256TraceData};
-use super::register::SHA256DigestRegister;
-use super::{INITIAL_HASH, ROUND_CONSTANTS};
+use itertools::Itertools;
+
+use super::data::{BLAKE2BConsts, BLAKE2BData};
+use super::IV;
 use crate::chip::memory::time::Time;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
-use crate::chip::uint::bytes::register::ByteRegister;
 use crate::chip::uint::operations::instruction::UintInstructions;
 use crate::chip::uint::register::{ByteArrayRegister, U32Register, U64Register};
-use crate::chip::uint::util::{u32_to_le_field_bytes, u64_to_le_field_bytes};
+use crate::chip::uint::util::u64_to_le_field_bytes;
 use crate::chip::AirParameters;
 use crate::machine::builder::Builder;
 use crate::machine::bytes::builder::BytesBuilder;
-use crate::machine::hash::blake::blake2b::data::BLAKE2BTraceData;
+use crate::machine::hash::blake::blake2b::data::{
+    BLAKE2BMemory, BLAKE2BPublicData, BLAKE2BTraceData, MemoryArray,
+};
 use crate::machine::hash::blake::blake2b::{
-    NUM_PERMUTATIONS, PERMUTATION_SIZE, SIGMA_PERMUTATIONS,
+    COMPRESS_INITIALIZE_INDICES, COMPRESS_IV, SIGMA_PERMUTATIONS, V_INDICES, V_LAST_WRITE_AGES,
 };
 use crate::math::prelude::*;
 
-// Note that for this blake2b implementation, we don't support a key input and
-// we assume that the output is 32 bytes
-// So that means the initial hash entry to be
-// 0x6a09e667f3bcc908 xor 0x01010020
-const INITIAL_HASH_COMPRESS: [u64; HASH_ARRAY_SIZE] = [
-    0x6a09e667f3bcc908,
-    0xbb67ae8584caa73b,
-    0x3c6ef372fe94f82b,
-    0xa54ff53a5f1d36f1,
-    0x510e527fade682d1,
-    0x9b05688c2b3e6c1f,
-    0x1f83d9abfb41bd6b,
-    0x5be0cd19137e2179,
-];
+const DUMMY_INDEX: u64 = i32::MAX as u64;
 
 impl<L: AirParameters> BytesBuilder<L>
 where
     L::Instruction: UintInstructions,
 {
-    fn cycles_end_bits(builder: &mut BytesBuilder<L>) -> (BitRegister, BitRegister) {
+    fn cycles_end_bits(builder: &mut BytesBuilder<L>) -> (BitRegister, BitRegister, BitRegister) {
+        let cycle_4 = builder.cycle(2);
         let cycle_8 = builder.cycle(3);
         let loop_3 = builder.api.loop_instr(3);
 
@@ -47,7 +37,7 @@ where
             builder.mul(loop_3.get_iteration_reg(2), cycle_32.end_bit)
         };
 
-        (cycle_8.end_bit, cycle_96_end_bit)
+        (cycle_4.end_bit, cycle_8.end_bit, cycle_96_end_bit)
     }
 
     pub fn blake2b(
@@ -67,11 +57,35 @@ where
         );
 
         let h = self.alloc_array::<U64Register>(8);
+        let v = self.alloc_array::<U64Register>(8);
         for (h_i, initial_hash_i) in h.iter().zip(data.public.initial_hash.iter()) {
             self.set_to_expression_first_row(&h_i, initial_hash_i.expr());
         }
 
         self.blake2b_compress(h, &data)
+    }
+
+    pub fn blake2b_consts(&mut self) -> BLAKE2BConsts {
+        BLAKE2BConsts {
+            const_0: self.constant(&L::Field::from_canonical_u8(0)),
+            const_1: self.constant(&L::Field::from_canonical_u8(1)),
+            const_2: self.constant(&L::Field::from_canonical_u8(2)),
+            const_3: self.constant(&L::Field::from_canonical_u8(3)),
+            const_4: self.constant(&L::Field::from_canonical_u8(4)),
+            const_5: self.constant(&L::Field::from_canonical_u8(5)),
+            const_6: self.constant(&L::Field::from_canonical_u8(6)),
+            const_7: self.constant(&L::Field::from_canonical_u8(7)),
+            const_8: self.constant(&L::Field::from_canonical_u8(8)),
+            const_9: self.constant(&L::Field::from_canonical_u8(9)),
+            const_10: self.constant(&L::Field::from_canonical_u8(10)),
+            const_11: self.constant(&L::Field::from_canonical_u8(11)),
+            const_12: self.constant(&L::Field::from_canonical_u8(12)),
+            const_13: self.constant(&L::Field::from_canonical_u8(13)),
+            const_14: self.constant(&L::Field::from_canonical_u8(14)),
+            const_15: self.constant(&L::Field::from_canonical_u8(15)),
+            const_92: self.constant(&L::Field::from_canonical_u8(92)),
+            const_96: self.constant(&L::Field::from_canonical_u8(96)),
+        }
     }
 
     pub fn blake2b_data(
@@ -81,41 +95,60 @@ where
         end_bits: &ArrayRegister<BitRegister>,
         initial_hash: &ArrayRegister<ByteArrayRegister<8>>,
         initial_hash_compress: &ArrayRegister<ByteArrayRegister<8>>,
-    ) -> SHA256Data {
+    ) -> BLAKE2BData<L> {
+        // First create the consts
+        let consts = self.blake2b_consts();
+
         assert_eq!(padded_chunks.len(), end_bits.len());
         let num_rounds = padded_chunks.len();
         // Convert the number of rounds to a field element.
-        let num_round_element = self.constant(&L::Field::from_canonical_usize(num_rounds));
-
-        let double_num_round_element = self.add(num_round_element, num_round_element);
+        let num_rounds_element = self.constant(&L::Field::from_canonical_usize(num_rounds));
 
         // Initialize the initial hash and set it to the constant value.
-        let initial_hash =
-            self.constant_array::<ByteArrayRegister<8>>(&INITIAL_HASH.map(u64_to_le_field_bytes));
+        let iv = self.constant_array::<ByteArrayRegister<8>>(&IV.map(u64_to_le_field_bytes));
 
-        // Initialize the initial hash compress and set it to the constant value.
-        let initial_hash_compress =
-            self.constant_array::<ByteArrayRegister<8>>(&INITIAL_HASH.map(u64_to_le_field_bytes));
-
-        // Initialize the permutation constants memory
-        let mut permutation_values = Vec::new();
-        for permuation_const in SIGMA_PERMUTATIONS {
-            permutation_values.push(self.constant_array::<ElementRegister>(
-                &permuation_const.map(L::Field::from_canonical_u8),
-            ));
-        }
-
-        // Store the round constants in a slice to be able to load them in the trace.
-        // The first two sigma permutations will be accessed twice per round.
-        // All the othes will be accessed only once.
-        let mut permutations = Vec::new();
-        for (i, permuation_value) in permutation_values.iter().enumerate() {
-            permutations.push(self.initialize_slice(
-                permuation_value,
+        let compress_iv_values =
+            self.constant_array::<U64Register>(&COMPRESS_IV.map(u64_to_le_field_bytes));
+        let compress_iv = self.uninit_slice();
+        for (i, value) in COMPRESS_IV.iter().enumerate() {
+            self.store(
+                &compress_iv.get(i),
+                compress_iv_values.get(i),
                 &Time::zero(),
-                Some(num_round_element),
-            ));
+                Some(num_rounds_element),
+            );
         }
+
+        let compress_initial_indices = MemoryArray::<L, 4, 2>::new(self);
+        for (i, indices) in COMPRESS_INITIALIZE_INDICES.iter().enumerate() {
+            compress_initial_indices.store_row(self, i, indices, num_rounds_element);
+        }
+
+        let v_indices = MemoryArray::<L, 8, 4>::new(self);
+        for (i, indices) in V_INDICES.iter().enumerate() {
+            v_indices.store_row(self, i, indices);
+        }
+
+        let v_last_write_ages = MemoryArray::<L, 8, 4>::new(self);
+        for (i, ages) in V_LAST_WRITE_AGES.iter().enumerate() {
+            v_last_write_ages.store_row(self, i, ages);
+        }
+
+        let permutations = MemoryArray::<L, 12, 16>::new(self);
+        for (i, permutation) in SIGMA_PERMUTATIONS.iter().enumerate() {
+            permutations.store_row(self, i, permutation);
+        }
+
+        // Initialize the v memory
+        let v = self.uninit_slice();
+        let dummy_entry =
+            self.constant::<Self::IntRegister>(&Self::int_to_field_value(Self::Integer::zero()));
+
+        // Initialize the v final memory
+        let v_final = self.uninit_slice();
+
+        assert!(DUMMY_INDEX < L::Field::order());
+        let dummy_index = self.constant(&L::Field::from_canonical_u64(DUMMY_INDEX));
 
         // Initialize the m memory
         let m = self.uninit_slice();
@@ -126,15 +159,15 @@ where
             }
         }
 
-        let (cycle_8_end_bit, cycle_96_end_bit) = Self::cycles_end_bits(self);
+        let (cycle_4_end_bit, cycle_8_end_bit, cycle_96_end_bit) = Self::cycles_end_bits(self);
 
-        // `process_id` is a register is computed by counting the number of cycles. We do this by
+        // `compress_id` is a register is computed by counting the number of cycles. We do this by
         // setting `process_id` to be the cumulative sum of the `end_bit` of each cycle.
-        let process_id: ElementRegister = self.alloc::<ElementRegister>();
-        self.set_to_expression_first_row(&process_id, L::Field::ZERO.into());
+        let compress_id: ElementRegister = self.alloc::<ElementRegister>();
+        self.set_to_expression_first_row(&compress_id, L::Field::ZERO.into());
         self.set_to_expression_transition(
-            &process_id.next(),
-            process_id.expr() + cycle_96_end_bit.expr(),
+            &compress_id.next(),
+            compress_id.expr() + cycle_96_end_bit.expr(),
         );
 
         let mix_iteration: ElementRegister = self.alloc::<ElementRegister>();
@@ -157,120 +190,243 @@ where
 
         // The array index register can be computed as `clock - process_id * CYCLE_LENGTH`.
         let clk = Self::clk(self);
-        let index =
-            self.expression(clk.expr() - process_id.expr() * L::Field::from_canonical_usize(96));
+        let compress_index =
+            self.expression(clk.expr() - compress_id.expr() * L::Field::from_canonical_usize(96));
 
         let is_compress_initialize = self.alloc::<BitRegister>();
         self.set_to_expression_first_row(&is_compress_initialize, L::Field::ONE.into());
-        self.set_to_expression_transition(&is_compress_initialize.next(), cycle_96_end_bit.expr());
+        self.set_to_expression_transition(
+            &is_compress_initialize.next(),
+            (cycle_96_end_bit.expr() * self.one())
+                + (cycle_96_end_bit.not_expr()
+                    * (cycle_4_end_bit.expr() * self.zero()
+                        + cycle_4_end_bit.not_expr() * is_compress_initialize.expr())),
+        );
+
+        let save_h = self.alloc::<BitRegister>();
+        let save_h = self.div(compress_index, consts.const_92);
 
         // Allocate end_bits for public input.
-        let reg_96 = self.constant(&L::Field::from_canonical_u8(96));
         let end_bit = self.uninit_slice();
         for (i, end_bit_val) in end_bits.iter().enumerate() {
-            self.store(&end_bit.get(i), end_bit_val, &Time::zero(), Some(reg_96));
+            self.store(
+                &end_bit.get(i),
+                end_bit_val,
+                &Time::zero(),
+                Some(consts.const_96),
+            );
         }
 
-        let public = Blake2bPublicData {
-            initial_hash,
-            initial_hash_compress,
+        let public = BLAKE2BPublicData {
+            iv,
             padded_chunks: padded_chunks.to_vec(),
             end_bits: *end_bits,
         };
 
         let trace = BLAKE2BTraceData {
             is_compress_initialize,
-            process_id,
+            compress_id,
             cycle_8_end_bit,
             cycle_96_end_bit,
+            compress_index,
             mix_iteration,
             mix_index,
         };
 
-        let memory = Blake2bMemory {
+        let memory = BLAKE2BMemory {
+            compress_initial_indices,
+            compress_iv,
+            v_indices,
+            v_last_write_ages,
             permutations,
+            v,
+            v_final,
             m,
             end_bit,
+            dummy_index,
         };
-        Blake2bData {
+
+        BLAKE2BData {
             public,
             trace,
             memory,
-            num_chunks: num_rounds,
+            consts,
         }
     }
 
+    /// This function will retrieve the v values that will be inputted into the mix function
     pub fn blake2b_compress_initialize(
         &mut self,
-        v: ArrayRegister<U64Register>,
         h: ArrayRegister<U64Register>,
-        data: &BLAKE2BData,
-    ) {
+        v: ArrayRegister<U64Register>,
+        data: &BLAKE2BData<L>,
+    ) -> ([ElementRegister; 4], [U64Register; 4]) {
         let is_compress_initialize = data.trace.is_compress_initialize;
 
-        for i in 0..16 {
-            let v_i_read = self.load(&data.memory.v.get_at(i), &Time::zero());
-            let v_i_save = if i < 8 {
-                self.select(is_compress_initialize, h.get_at(i), v_i_read)
-            } else {
-                self.select(
-                    is_compress_initialize,
-                    data.public.compress_initial_hash.get_at(i - 8),
-                    v_i_read,
-                )
-            };
+        // Get the v values if we are within the initialization section of compress (the first four
+        // cycles of compress).
+        let compress_index = self.select(
+            is_compress_initialize,
+            &data.trace.compress_index,
+            &data.memory.dummy_index,
+        );
 
-            self.store(data.memory.v.get_at(i), v_i_save, &Time::zero());
-        }
+        let init_idx_1 =
+            &data
+                .memory
+                .compress_initial_indices
+                .get_at(self, compress_index, self.one());
+
+        let init_idx_2 = self.load(
+            &data
+                .memory
+                .compress_initial_indices
+                .get_at(self, compress_index, self.two()),
+            &Time::zero(),
+        );
+
+        let h_value_1 = self.load(data.memory.h.get_at(init_idx_1), &Time::zero());
+        let h_value_2 = self.load(data.memory.h.get_at(init_idx_2), &Time::zero());
+        let iv_value_1 = self.load(data.memory.compress_iv.get_at(init_idx_1), &Time::zero());
+        let iv_value_2 = self.load(data.memory.compress_iv.get_at(init_idx_2), &Time::zero());
+
+        // For all the other cycles of compress, read the v values from the v memory. Will need to
+        // specify the age of the last write to the v memory entry.
+        let v_indices = data.memory.v_indices;
+        let v1_idx = v_indices.get_at(self, data.trace.mix_index, data.consts.const_0);
+        let v2_idx = v_indices.get_at(self, data.trace.mix_index, data.consts.const_1);
+        let v3_idx = v_indices.get_at(self, data.trace.mix_index, data.consts.const_2);
+        let v4_idx = v_indices.get_at(self, data.trace.mix_index, data.consts.const_3);
+
+        let v_last_write_ages = data.memory.v_last_write_ages;
+        let v1_last_write_age =
+            v_last_write_ages.get_at(self, data.trace.mix_index, data.consts.const_0);
+        let v2_last_write_age =
+            v_last_write_ages.get_at(self, data.trace.mix_index, data.consts.const_1);
+        let v3_last_write_age =
+            v_last_write_ages.get_at(self, data.trace.mix_index, data.consts.const_2);
+        let v4_last_write_age =
+            v_last_write_ages.get_at(self, data.trace.mix_index, data.consts.const_3);
+
+        let v1_last_write_ts = self.sub(self.clk, v1_last_write_age);
+        let v2_last_write_ts = self.sub(self.clk, v2_last_write_age);
+        let v3_last_write_ts = self.sub(self.clk, v3_last_write_age);
+        let v4_last_write_ts = self.sub(self.clk, v4_last_write_age);
+
+        let mut v1_value = self.load(&data.memory.v.get_at(v1_idx), Some(v1_last_write_ts));
+        let mut v2_value = self.load(&data.memory.v.get_at(v2_idx), Some(v2_last_write_ts));
+        let mut v3_value = self.load(&data.memory.v.get_at(v3_idx), Some(v3_last_write_ts));
+        let mut v4_value = self.load(&data.memory.v.get_at(v4_idx), Some(v4_last_write_ts));
+
+        let v1_value = self.select(is_compress_initialize, h_value_1, &v1_value);
+        let v2_value = self.select(is_compress_initialize, h_value_2, &v2_value);
+        let v3_value = self.select(is_compress_initialize, iv_value_1, &v3_value);
+        let v4_value = self.select(is_compress_initialize, iv_value_2, &v4_value);
+
+        (
+            [v1_idx, v2_idx, v3_idx, v4_idx],
+            [v1_value, v2_value, v3_value, v4_value],
+        )
     }
 
     /// The processing step of a SHA256 round.
     pub fn blake2b_processing(
         &mut self,
         h: &ArrayRegister<U64Register>,
-        data: &BLAKE2BData,
+        v_indices: &[ElementRegister; 4],
+        v_values: &[U64Register; 4],
+        data: &BLAKE2BData<L>,
     ) -> Vec<SHA256DigestRegister> {
-        let v = self.alloc_array::<U64Register>(16);
+        let m_idx_1 =
+            data.memory
+                .permutations
+                .get_at(self, data.trace.compress_index, data.trace.mix_index);
 
-        for (v_i, h_i) in v.iter().take(8).zip(h.iter()) {
-            self.set_to_expression_first_row(&v_i, h_i.expr());
+        let m_idx_2 = data.memory.permutations.get_at(
+            self,
+            data.trace.compress_index,
+            self.add(data.trace.mix_index, self.one()),
+        );
+
+        let m_1 = self.load(&data.memory.m.get_at(m_idx_1), &Time::zero());
+        let m_2 = self.load(&data.memory.m.get_at(m_idx_2), &Time::zero());
+
+        self.blake2b_mix(
+            &mut v_values[0],
+            &mut v_values[1],
+            &mut v_values[2],
+            &mut v_values[3],
+            &m_1,
+            &m_2,
+        );
+
+        let write_ts = self.select(data.trace.save_h, data.trace.compress_id, DUMMY_TS);
+        let const_values = vec![
+            data.consts.const_0,
+            data.consts.const_1,
+            data.consts.const_2,
+            data.consts.const_3,
+        ];
+        for (i, value) in v_values.iter().enumerate() {
+            self.store(
+                data.memory.v.get_at(v_indices[i]),
+                value,
+                Some(self.clk),
+                Some(data.consts.const_2),
+            );
+
+            // Save to v_final if at the last 4 cycles of the round
+            let v_final_value = self.select(data.trace.save_h, value, data.consts.const_0);
+            self.store(
+                &data.memory.v_final.get_at(v_indices[i]),
+                v_final_value,
+                Some(write_ts),
+                Some(data.trace.save_h),
+            );
         }
 
-        for (v_i, public_input_i) in v
-            .iter()
-            .skip(8)
-            .zip(data.public.initial_hash_compress.iter())
-        {
-            self.set_to_expression_first_row(&v_i, public_input_i.expr());
+        // If we are at the last cycle of the round, then compute and save the h value.
+
+        // First load the previous round's h value.
+        let previous_compress_id = self.sub(data.trace.compress_id, data.consts.const_1);
+        let h_workspace_1 = self.alloc_array::<U64Register>(8);
+        let consts = vec![
+            data.consts.const_0,
+            data.consts.const_1,
+            data.consts.const_2,
+            data.consts.const_3,
+            data.consts.const_4,
+            data.consts.const_5,
+            data.consts.const_6,
+            data.consts.const_7,
+        ];
+        for (i, const_i) in consts.iter().enumerate() {
+            h_workspace_1[i] = self.load(data.memory.h.get_at(const_i), Some(previous_compress_id));
         }
 
-        let permutation = self.load(
-            &data.memory.permutations.get_at(data.trace.mix_iteration),
-            &Time::zero(),
-        );
-        let state_indices = self.load(
-            &data.memory.state_indices.get_at(data.trace.mix_index),
-            &Time::zero(),
-        );
-        let index_1 = state_indices.get(0);
-        let index_2 = state_indices.get(1);
-        let index_3 = state_indices.get(2);
-        let index_4 = state_indices.get(3);
+        // Xor the first 8 final v values
+        let h_workspace_2 = self.alloc_array::<U64Register>(8);
+        for (i, const_i) in consts.iter().enumerate() {
+            let v_i = self.load(&data.memory.v_final.get_at(const_i), Some(write_ts));
+            h_workspace_2[i] = self.xor(h_workspace_1[i], v_i);
+        }
 
-        let state_1 = v.from_element(index_1);
-
-        let state_1 = self.load(data.memory.v.get_at(index_1), &Time::zero());
-        let state_2 = self.load(data.memory.v.get_at(index_2), &Time::zero());
-        let state_3 = self.load(data.memory.v.get_at(index_3), &Time::zero());
-        let state_4 = self.load(data.memory.v.get_at(index_4), &Time::zero());
-
-        let m_index_1 = self.mul(data.trace.mix_index, L::Field::from_canonical_usize(2));
-        let m_index_2 = self.add(m_index_1, L::Field::ONE.into());
-
-        let m_1 = self.load(data.memory.m.get_at(m_index_1), &Time::zero());
-        let m_2 = self.load(data.memory.m.get_at(m_index_2), &Time::zero());
-
-        self.blake2b_mix(state_1, state_2, state_3, state_4, m_1, m_2);
+        // Xor the second 8 final v values
+        let consts = vec![
+            data.consts.const_8,
+            data.consts.const_9,
+            data.consts.const_10,
+            data.consts.const_11,
+            data.consts.const_12,
+            data.consts.const_13,
+            data.consts.const_14,
+            data.consts.const_15,
+        ];
+        for (i, const_i) in consts.iter().enumerate() {
+            let mut v_i = self.load(&data.memory.v_final.get_at(const_i), Some(write_ts));
+            v_i = self.xor(h_workspace_2, v_i);
+            self.store(data.memory.h.get_at(i), v_i, write_ts, Some(2));
+        }
     }
 
     pub fn blake2b_mix(
@@ -504,7 +660,7 @@ mod tests {
             writer.write_array(register, padded_msg, 0);
 
             let pre_processed = SHA256Gadget::process_inputs(&message);
-            let state = SHA256Gadget::compress_round(INITIAL_HASH, &pre_processed, ROUND_CONSTANTS)
+            let state = SHA256Gadget::compress_round(IV, &pre_processed, ROUND_CONSTANTS)
                 .map(u32_to_le_field_bytes);
             writer.write_slice(h_arr, &state.concat(), 0);
         }
