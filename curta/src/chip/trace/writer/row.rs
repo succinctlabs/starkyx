@@ -10,6 +10,7 @@ pub struct RowWriter<'a, F: PartialEq + Eq + Hash> {
     public_values: &'a [F],
     memory: &'a mut MemoryMap<F>,
     row_index: usize,
+    height: usize,
 }
 
 impl<'a, F: PartialEq + Eq + Hash> RowWriter<'a, F> {
@@ -18,17 +19,21 @@ impl<'a, F: PartialEq + Eq + Hash> RowWriter<'a, F> {
         public_values: &'a [F],
         memory: &'a mut MemoryMap<F>,
         row_index: usize,
+        height: usize,
     ) -> Self {
         Self {
             row,
             public_values,
             memory,
             row_index,
+            height,
         }
     }
 }
 
-impl<'a, F: Field> AirWriter<F> for RowWriter<'a, F> {
+impl<'a, F: Field> AirWriter for RowWriter<'a, F> {
+    type Field = F;
+
     fn read_slice(&self, memory_slice: &MemorySlice) -> &[F] {
         match memory_slice {
             MemorySlice::Local(index, length) => &self.row[*index..*index + *length],
@@ -56,5 +61,9 @@ impl<'a, F: Field> AirWriter<F> for RowWriter<'a, F> {
 
     fn row_index(&self) -> Option<usize> {
         Some(self.row_index)
+    }
+
+    fn height(&self) -> usize {
+        self.height
     }
 }

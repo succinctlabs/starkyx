@@ -210,7 +210,7 @@ impl<F: Field> Instruction<F> for Cycle<F> {
         }
     }
 
-    fn write_to_air(&self, writer: &mut impl AirWriter<F>) {
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
         let cycle = writer.row_index().unwrap() % self.group.len();
         let element = self.group[cycle];
         let gen_inverse = *self.group.last().unwrap();
@@ -253,7 +253,7 @@ impl<F: Field> Instruction<F> for ProcessIdInstruction {
         writer.write(&self.process_id, &process_id, row_index);
     }
 
-    fn write_to_air(&self, writer: &mut impl AirWriter<F>) {
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
         let row_index = writer.row_index().unwrap();
         let process_id = F::from_canonical_usize(row_index / self.size);
         writer.write(&self.process_id, &process_id);
@@ -262,7 +262,6 @@ impl<F: Field> Instruction<F> for ProcessIdInstruction {
 
 #[cfg(test)]
 mod tests {
-    use log::debug;
     use plonky2::field::goldilocks_field::GoldilocksField;
 
     use super::*;
@@ -329,7 +328,7 @@ mod tests {
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &[]);
 
-        // // Test the recursive proof.
-        // test_recursive_starky(stark, config, generator, &[]);
+        // Test the recursive proof.
+        test_recursive_starky(stark, config, generator, &[]);
     }
 }

@@ -1,5 +1,4 @@
 use curve25519_dalek::edwards::CompressedEdwardsY;
-use itertools::Itertools;
 use num::{BigUint, One};
 
 use super::params::{Ed25519, Ed25519BaseField, Ed25519Parameters};

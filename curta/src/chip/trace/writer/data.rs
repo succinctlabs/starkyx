@@ -38,7 +38,7 @@ impl<T: PartialEq + Eq + Hash> AirWriterData<T> {
         let num_public_inputs = air_data.num_public_inputs;
         Self::new_with_value(
             L::Field::ZERO,
-            L::num_columns(),
+            air_data.execution_trace_length,
             num_rows,
             num_public_inputs,
         )
@@ -60,11 +60,34 @@ impl<T: PartialEq + Eq + Hash> AirWriterData<T> {
 
     #[inline]
     pub fn public_writer(&mut self) -> PublicWriter<'_, T> {
-        PublicWriter::new(&mut self.public, &mut self.memory)
+        PublicWriter::new(&mut self.public, &mut self.memory, self.height)
     }
 
     #[inline]
     pub fn chunks(
+        &mut self,
+        chunk_size: usize,
+    ) -> impl Iterator<Item = AirWriterChunkMut<'_, T>> + '_
+    where
+        T: Clone + Send + Sync,
+    {
+        assert_eq!(self.height, self.trace.height());
+        assert_eq!(self.height % chunk_size, 0);
+        let num_chunks = self.height / chunk_size;
+        self.trace
+            .chunks_mut(chunk_size)
+            .zip((0..num_chunks).map(move |i| (i, chunk_size)))
+            .map(|(chunk, (i, size))| AirWriterChunkMut {
+                trace: chunk,
+                public: &self.public,
+                memory: self.memory.clone(),
+                height: size,
+                initial_row: i * size,
+            })
+    }
+
+    #[inline]
+    pub fn par_chunks(
         &mut self,
         chunk_size: usize,
     ) -> impl ParallelIterator<Item = AirWriterChunkMut<'_, T>> + '_
@@ -99,6 +122,7 @@ impl<'a, T: PartialEq + Eq + Hash> AirWriterChunkMut<'a, T> {
             self.public,
             &mut self.memory,
             row_index + self.initial_row,
+            self.height,
         )
     }
 
@@ -109,6 +133,7 @@ impl<'a, T: PartialEq + Eq + Hash> AirWriterChunkMut<'a, T> {
             self.public,
             &mut self.memory,
             row_index + self.initial_row,
+            self.height,
         )
     }
 }

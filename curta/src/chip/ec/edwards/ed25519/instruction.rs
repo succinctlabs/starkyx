@@ -14,7 +14,7 @@ use crate::chip::field::mul::FpMulInstruction;
 use crate::chip::field::mul_const::FpMulConstInstruction;
 use crate::chip::field::sub::FpSubInstruction;
 use crate::chip::instruction::Instruction;
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::math::field::PrimeField64;
 use crate::polynomial::parser::PolynomialParser;
 
@@ -52,6 +52,17 @@ impl<F: PrimeField64> Instruction<F> for Ed25519FpInstruction {
             }
             Ed25519FpInstruction::Sqrt(instruction) => {
                 Instruction::<F>::write(instruction, writer, row_index)
+            }
+        }
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        match self {
+            Ed25519FpInstruction::EC(instruction) => {
+                Instruction::<F>::write_to_air(instruction, writer)
+            }
+            Ed25519FpInstruction::Sqrt(instruction) => {
+                Instruction::<F>::write_to_air(instruction, writer)
             }
         }
     }

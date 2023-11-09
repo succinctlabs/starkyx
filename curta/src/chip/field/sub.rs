@@ -9,7 +9,7 @@ use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::u16::U16Register;
 use crate::chip::register::RegisterSerializable;
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::chip::utils::digits_to_biguint;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
@@ -119,6 +119,34 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpSubInstruction<P>
         writer.write(&self.inner.a, &p_c, row_index);
 
         self.inner.write(writer, row_index);
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        let p_b = writer.read(&self.inner.b);
+        let p_a = writer.read(&self.inner.result);
+
+        let b_digits = p_b
+            .coefficients
+            .iter()
+            .map(|x| x.as_canonical_u64() as u16)
+            .collect::<Vec<_>>();
+
+        let a_digits = p_a
+            .coefficients
+            .iter()
+            .map(|x| x.as_canonical_u64() as u16)
+            .collect::<Vec<_>>();
+
+        let b = digits_to_biguint(&b_digits);
+        let a = digits_to_biguint(&a_digits);
+
+        let modulus = P::modulus();
+        let c = (&modulus + &a - &b) % &modulus;
+        let p_c = to_u16_le_limbs_polynomial::<F, P>(&c);
+
+        writer.write(&self.inner.a, &p_c);
+
+        self.inner.write_to_air(writer);
     }
 }
 

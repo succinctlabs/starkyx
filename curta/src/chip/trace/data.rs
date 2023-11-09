@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::writer::TraceWriter;
+use super::writer::{AirWriter, TraceWriter};
 use crate::chip::instruction::set::AirInstruction;
 use crate::chip::memory::pointer::accumulate::PointerAccumulator;
 use crate::chip::register::cubic::CubicRegister;
@@ -17,6 +17,7 @@ pub struct AirTraceData<L: AirParameters> {
     pub num_challenges: usize,
     pub num_public_inputs: usize,
     pub num_global_values: usize,
+    pub execution_trace_length: usize,
     pub instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
@@ -33,6 +34,20 @@ pub struct AirTraceData<L: AirParameters> {
 }
 
 impl<L: AirParameters> AirTraceData<L> {
+    #[inline]
+    pub fn write_trace_instructions(&self, writer: &mut impl AirWriter<Field = L::Field>) {
+        for instruction in self.instructions.iter() {
+            writer.write_instruction(instruction);
+        }
+    }
+
+    #[inline]
+    pub fn write_global_instructions(&self, writer: &mut impl AirWriter<Field = L::Field>) {
+        for instruction in self.global_instructions.iter() {
+            writer.write_instruction(instruction);
+        }
+    }
+
     pub fn write_extended_trace(&self, writer: &TraceWriter<L::Field>) {
         let num_rows = writer.read_trace().unwrap().height();
         // Write accumulations.

@@ -10,7 +10,7 @@ use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::u16::U16Register;
 use crate::chip::register::{Register, RegisterSerializable};
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::chip::utils::{digits_to_biguint, split_u32_limbs_to_u16_limbs};
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
@@ -144,6 +144,49 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpMulConstInstructi
         writer.write(&self.carry, &p_carry, row_index);
         writer.write_array(&self.witness_low, &p_witness_low, row_index);
         writer.write_array(&self.witness_high, &p_witness_high, row_index);
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        let p_a = writer.read(&self.a);
+        let mut c = BigUint::zero();
+        for (i, limb) in self.c.iter().enumerate() {
+            c += BigUint::from(*limb) << (16 * i);
+        }
+
+        let a_digits = p_a
+            .coefficients
+            .iter()
+            .map(|x| x.as_canonical_u64() as u16)
+            .collect::<Vec<_>>();
+
+        let a = digits_to_biguint(&a_digits);
+
+        // Compute field addition in the integers.
+        let modulus = P::modulus();
+        let result = (&a * &c) % &modulus;
+        let carry = (&a * &c - &result) / &modulus;
+        debug_assert!(result < modulus);
+        debug_assert!(carry < modulus);
+        debug_assert_eq!(&carry * &modulus, a * &c - &result);
+
+        // Make little endian polynomial limbs.
+        let p_c = to_u16_le_limbs_polynomial::<F, P>(&c);
+        let p_modulus = to_u16_le_limbs_polynomial::<F, P>(&modulus);
+        let p_result = to_u16_le_limbs_polynomial::<F, P>(&result);
+        let p_carry = to_u16_le_limbs_polynomial::<F, P>(&carry);
+
+        // Compute the vanishing polynomial.
+        let p_vanishing = &p_a * &p_c - &p_result - &p_carry * &p_modulus;
+        debug_assert_eq!(p_vanishing.degree(), P::NB_WITNESS_LIMBS);
+
+        // Compute the witness.
+        let p_witness = util::compute_root_quotient_and_shift(&p_vanishing, P::WITNESS_OFFSET);
+        let (p_witness_low, p_witness_high) = split_u32_limbs_to_u16_limbs(&p_witness);
+
+        writer.write(&self.result, &p_result);
+        writer.write(&self.carry, &p_carry);
+        writer.write_array(&self.witness_low, &p_witness_low);
+        writer.write_array(&self.witness_high, &p_witness_high);
     }
 }
 

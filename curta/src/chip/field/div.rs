@@ -162,6 +162,29 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpDivInstruction<P>
         self.denominator.write(writer, row_index);
         self.multiplication.write(writer, row_index);
     }
+
+    fn write_to_air(&self, writer: &mut impl crate::chip::trace::writer::AirWriter<Field = F>) {
+        let p_b = writer.read(&self.denominator.a);
+
+        let b_digits = p_b
+            .coefficients
+            .iter()
+            .map(|x| x.as_canonical_u64() as u16)
+            .collect::<Vec<_>>();
+
+        let b = digits_to_biguint(&b_digits);
+
+        let modulus = P::modulus();
+        let b_inv_int = b.modpow(&(&modulus - BigUint::from(2u64)), &modulus);
+        let p_b_inv = to_u16_le_limbs_polynomial::<F, P>(&b_inv_int);
+
+        let b_inv = &self.denominator.b;
+
+        writer.write(b_inv, &p_b_inv);
+
+        self.denominator.write_to_air(writer);
+        self.multiplication.write_to_air(writer);
+    }
 }
 
 #[cfg(test)]

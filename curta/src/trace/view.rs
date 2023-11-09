@@ -1,7 +1,5 @@
 use core::slice::ChunksExactMut;
 
-use log::debug;
-
 use super::window::{TraceWindow, TraceWindowsMutIter};
 use crate::maybe_rayon::*;
 use crate::trace::window::TraceWindowMut;

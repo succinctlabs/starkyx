@@ -8,12 +8,13 @@ use core::cmp::Ordering;
 use self::shared_memory::SharedMemory;
 use super::arithmetic::expression::ArithmeticExpression;
 use super::constraint::Constraint;
+use super::instruction::clock::ClockInstruction;
 use super::instruction::set::AirInstruction;
 use super::memory::pointer::accumulate::PointerAccumulator;
 use super::register::array::ArrayRegister;
 use super::register::cubic::CubicRegister;
 use super::register::element::ElementRegister;
-use super::register::{Register, RegisterSerializable};
+use super::register::Register;
 use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
 use super::table::bus::global::Bus;
@@ -21,7 +22,6 @@ use super::table::lookup::table::LookupTable;
 use super::table::lookup::values::LookupValues;
 use super::trace::data::AirTraceData;
 use super::{AirParameters, Chip};
-use crate::math::prelude::*;
 
 #[derive(Debug, Clone)]
 #[allow(clippy::type_complexity)]
@@ -179,9 +179,8 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn clock(&mut self) -> ElementRegister {
         let clk = self.alloc::<ElementRegister>();
 
-        self.set_to_expression_first_row(&clk, ArithmeticExpression::zero());
-        self.set_to_expression_transition(&clk.next(), clk.expr() + L::Field::ONE);
-
+        let instruction = AirInstruction::clock(ClockInstruction { clk });
+        self.register_air_instruction_internal(instruction);
         clk
     }
 
@@ -269,6 +268,7 @@ impl<L: AirParameters> AirBuilder<L> {
                 num_challenges: self.shared_memory.challenge_index(),
                 num_public_inputs: self.shared_memory.public_index(),
                 num_global_values: self.shared_memory.global_index(),
+                execution_trace_length,
                 instructions: self.instructions,
                 global_instructions: self.global_instructions,
                 accumulators: self.accumulators,
@@ -301,6 +301,7 @@ pub(crate) mod tests {
     pub use crate::chip::register::RegisterSerializable;
     pub use crate::chip::trace::generator::ArithmeticGenerator;
     pub use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
+    use crate::math::prelude::*;
     pub use crate::maybe_rayon::*;
     pub use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
     pub(crate) use crate::plonky2::stark::tests::{test_recursive_starky, test_starky};

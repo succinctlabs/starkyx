@@ -11,6 +11,7 @@ pub struct WindowWriter<'a, F: PartialEq + Eq + Hash> {
     public_values: &'a [F],
     memory: &'a mut MemoryMap<F>,
     current_row: usize,
+    height: usize,
 }
 
 impl<'a, F: PartialEq + Eq + Hash> WindowWriter<'a, F> {
@@ -19,17 +20,20 @@ impl<'a, F: PartialEq + Eq + Hash> WindowWriter<'a, F> {
         public_values: &'a [F],
         memory: &'a mut MemoryMap<F>,
         current_row: usize,
+        height: usize,
     ) -> Self {
         Self {
             window,
             public_values,
             memory,
             current_row,
+            height,
         }
     }
 }
+impl<'a, F: Field> AirWriter for WindowWriter<'a, F> {
+    type Field = F;
 
-impl<'a, F: Field> AirWriter<F> for WindowWriter<'a, F> {
     fn read_slice(&self, memory_slice: &MemorySlice) -> &[F] {
         match memory_slice {
             MemorySlice::Local(index, length) => &self.window.local_slice[*index..*index + *length],
@@ -63,5 +67,9 @@ impl<'a, F: Field> AirWriter<F> for WindowWriter<'a, F> {
 
     fn row_index(&self) -> Option<usize> {
         Some(self.current_row)
+    }
+
+    fn height(&self) -> usize {
+        self.height
     }
 }

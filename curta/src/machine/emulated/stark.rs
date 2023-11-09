@@ -547,7 +547,8 @@ mod tests {
     use crate::chip::field::parameters::tests::Fp25519;
     use crate::chip::field::parameters::FieldParameters;
     use crate::chip::field::register::FieldRegister;
-    use crate::chip::trace::writer::InnerWriterData;
+    use crate::chip::trace::writer::data::AirWriterData;
+    use crate::chip::trace::writer::AirWriter;
     use crate::machine::builder::Builder;
     use crate::machine::emulated::builder::EmulatedBuilder;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
@@ -588,22 +589,39 @@ mod tests {
         let num_rows = 1 << 5;
         let stark = builder.build::<C, 2>(num_rows);
 
-        let writer = TraceWriter::new(&stark.air_data, num_rows);
+        let mut writer_data = AirWriterData::new(&stark.air_data, num_rows);
 
-        let mut rng = rand::thread_rng();
         let p = Fp25519::modulus();
-        writer.write_global_instructions(&stark.air_data);
-        for i in 0..num_rows {
-            let a_int = rng.gen_biguint(256) % &p;
-            let b_int = rng.gen_biguint(256) % &p;
-            let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
-            let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
-            writer.write(&a, &p_a, i);
-            writer.write(&b, &p_b, i);
-            writer.write_row_instructions(&stark.air_data, i);
-        }
+        let air_data = &stark.air_data;
+        air_data.write_global_instructions(&mut writer_data.public_writer());
 
-        let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
+        let k = 1 << 0;
+        writer_data.chunks(k).for_each(|mut chunk| {
+            let mut rng = rand::thread_rng();
+            for i in 0..k {
+                let mut writer = chunk.row_writer(i);
+                let a_int = rng.gen_biguint(256) % &p;
+                let b_int = rng.gen_biguint(256) % &p;
+                let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
+                let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
+                writer.write(&a, &p_a);
+                writer.write(&b, &p_b);
+                air_data.write_trace_instructions(&mut writer);
+            }
+            // for i in 0..k {
+            //     let mut writer = chunk.window_writer(i);
+            //     let a_int = rng.gen_biguint(256) % &p;
+            //     let b_int = rng.gen_biguint(256) % &p;
+            //     let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
+            //     let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
+            //     writer.write(&a, &p_a);
+            //     writer.write(&b, &p_b);
+            //     air_data.write_trace_instructions(&mut writer);
+            // }
+        });
+
+        let (trace, public) = (writer_data.trace, writer_data.public);
+
         let proof = stark.prove(&trace, &public, &mut timing).unwrap();
 
         stark.verify(proof.clone(), &public).unwrap();
