@@ -3,7 +3,7 @@ use crate::chip::register::bit::BitRegister;
 use crate::chip::uint::operations::instruction::UintInstructions;
 use crate::chip::uint::register::{ByteArrayRegister, U32Register, U64Register};
 use crate::chip::AirParameters;
-use crate::machine::builder::ops::{Adc, Add, And, Not, RotateRight, Shr, Xor};
+use crate::machine::builder::ops::{Adc, Add, And, Not, RotateLeft, RotateRight, Shr, Xor};
 use crate::machine::builder::Builder;
 
 impl<L: AirParameters, const N: usize> And<BytesBuilder<L>> for &ByteArrayRegister<N>
@@ -115,6 +115,17 @@ where
 
     fn rotate_right(self, rhs: usize, builder: &mut BytesBuilder<L>) -> Self::Output {
         builder.rotate_right(&self, rhs)
+    }
+}
+
+impl<L: AirParameters, const N: usize> RotateLeft<BytesBuilder<L>, usize> for ByteArrayRegister<N>
+where
+    L::Instruction: UintInstructions,
+{
+    type Output = ByteArrayRegister<N>;
+
+    fn rotate_left(self, rhs: usize, builder: &mut BytesBuilder<L>) -> Self::Output {
+        builder.rotate_right(self, 8 * N - rhs)
     }
 }
 

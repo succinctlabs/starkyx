@@ -122,7 +122,7 @@ pub trait KeccakPure<const CYCLE_LENGTH: usize>:
 /// Keccak algorithm AIR implementation.
 ///
 /// An interface for the Keccak algorithm as an AIR.
-pub trait KeccakAir<L: AirParameters>
+pub trait KeccakAir2<L: AirParameters>
 where
     L::Instruction: UintInstructions,
 {
@@ -635,7 +635,7 @@ mod tests {
         let hash_state_public = (0..num_digests)
             .map(|_| {
                 let r = builder.alloc_public::<U64Register>();
-                builder.set_to_expression(&r, Field::ZERO.into());
+                // builder.set_to_expression(&r, Field::ZERO.into());
             })
             .collect::<Vec<_>>();
 
