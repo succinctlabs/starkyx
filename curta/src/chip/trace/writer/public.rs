@@ -10,7 +10,7 @@ pub struct PublicWriter<'a, F: PartialEq + Eq + Hash> {
     memory: &'a mut MemoryMap<F>,
 }
 
-impl<'a, F: Field> PublicWriter<'a, F> {
+impl<'a, F: PartialEq + Eq + Hash> PublicWriter<'a, F> {
     pub fn new(public_values: &'a mut [F], memory: &'a mut MemoryMap<F>) -> Self {
         Self {
             public_values,
@@ -42,5 +42,9 @@ impl<'a, F: Field> AirWriter<F> for PublicWriter<'a, F> {
 
     fn memory_mut(&mut self) -> &mut MemoryMap<F> {
         self.memory
+    }
+
+    fn row_index(&self) -> Option<usize> {
+        None
     }
 }

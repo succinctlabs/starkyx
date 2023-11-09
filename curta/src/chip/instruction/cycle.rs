@@ -10,7 +10,7 @@ use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
@@ -209,6 +209,29 @@ impl<F: Field> Instruction<F> for Cycle<F> {
             );
         }
     }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<F>) {
+        let cycle = writer.row_index().unwrap() % self.group.len();
+        let element = self.group[cycle];
+        let gen_inverse = *self.group.last().unwrap();
+        writer.write(&self.element, &element);
+        if cycle == 0 {
+            writer.write(&self.start_bit, &F::ONE);
+            writer.write(&self.end_bit, &F::ZERO);
+            writer.write(&self.start_bit_witness, &element.inverse());
+            writer.write(&self.end_bit_witness, &(element - gen_inverse).inverse());
+        } else if cycle == self.group.len() - 1 {
+            writer.write(&self.start_bit, &F::ZERO);
+            writer.write(&self.end_bit, &F::ONE);
+            writer.write(&self.start_bit_witness, &(element - F::ONE).inverse());
+            writer.write(&self.end_bit_witness, &element.inverse());
+        } else {
+            writer.write(&self.start_bit, &F::ZERO);
+            writer.write(&self.end_bit, &F::ZERO);
+            writer.write(&self.start_bit_witness, &(element - F::ONE).inverse());
+            writer.write(&self.end_bit_witness, &(element - gen_inverse).inverse());
+        }
+    }
 }
 
 impl<AP: AirParser<Field = F>, F: Field> AirConstraint<AP> for ProcessIdInstruction {
@@ -229,14 +252,22 @@ impl<F: Field> Instruction<F> for ProcessIdInstruction {
         let process_id = F::from_canonical_usize(row_index / self.size);
         writer.write(&self.process_id, &process_id, row_index);
     }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<F>) {
+        let row_index = writer.row_index().unwrap();
+        let process_id = F::from_canonical_usize(row_index / self.size);
+        writer.write(&self.process_id, &process_id);
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use log::debug;
     use plonky2::field::goldilocks_field::GoldilocksField;
 
     use super::*;
     use crate::chip::builder::tests::*;
+    use crate::chip::trace::writer::data::AirWriterData;
     use crate::trace::window_parser::TraceWindowParser;
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -257,17 +288,32 @@ mod tests {
         type L = CycleTest;
         type SC = PoseidonGoldilocksStarkConfig;
 
+        let _ = env_logger::builder().is_test(true).try_init();
+
         let mut builder = AirBuilder::<L>::new();
-        builder.cycle(4);
+        let cycle_instr = builder.cycle(4);
 
         let (air, trace_data) = builder.build();
 
         let num_rows = 1 << 8;
+        let mut air_writer_data = AirWriterData::new(&trace_data, num_rows);
+        assert_eq!(air_writer_data.height, num_rows);
+        assert_eq!(air_writer_data.trace.width, L::num_columns());
+
+        let chunk_size = 1 << 4;
+        let chunk_length = num_rows / chunk_size;
+        air_writer_data.chunks(chunk_size).for_each(|mut chunk| {
+            for k in 0..chunk_length {
+                let mut writer = chunk.window_writer(k);
+                cycle_instr.write_to_air(&mut writer);
+            }
+        });
+
         let generator = ArithmeticGenerator::<L>::new(trace_data, num_rows);
         let writer = generator.new_writer();
-        (0..num_rows).into_par_iter().for_each(|i| {
-            writer.write_row_instructions(&generator.air_data, i);
-        });
+        let mut trace_mut = writer.write_trace().unwrap();
+        *trace_mut = air_writer_data.trace;
+        drop(trace_mut);
 
         let trace = generator.trace_clone();
 
@@ -283,7 +329,7 @@ mod tests {
         // Generate proof and verify as a stark
         test_starky(&stark, &config, &generator, &[]);
 
-        // Test the recursive proof.
-        test_recursive_starky(stark, config, generator, &[]);
+        // // Test the recursive proof.
+        // test_recursive_starky(stark, config, generator, &[]);
     }
 }

@@ -9,14 +9,21 @@ pub struct RowWriter<'a, F: PartialEq + Eq + Hash> {
     row: &'a mut [F],
     public_values: &'a [F],
     memory: &'a mut MemoryMap<F>,
+    row_index: usize,
 }
 
-impl<'a, F: Field> RowWriter<'a, F> {
-    pub fn new(row: &'a mut [F], public_values: &'a [F], memory: &'a mut MemoryMap<F>) -> Self {
+impl<'a, F: PartialEq + Eq + Hash> RowWriter<'a, F> {
+    pub fn new(
+        row: &'a mut [F],
+        public_values: &'a [F],
+        memory: &'a mut MemoryMap<F>,
+        row_index: usize,
+    ) -> Self {
         Self {
             row,
             public_values,
             memory,
+            row_index,
         }
     }
 }
@@ -45,5 +52,9 @@ impl<'a, F: Field> AirWriter<F> for RowWriter<'a, F> {
 
     fn memory_mut(&mut self) -> &mut MemoryMap<F> {
         self.memory
+    }
+
+    fn row_index(&self) -> Option<usize> {
+        Some(self.row_index)
     }
 }

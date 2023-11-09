@@ -2,6 +2,7 @@ use core::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
+use super::trace::writer::AirWriter;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 
@@ -17,6 +18,12 @@ pub trait Instruction<F: Field>:
 {
     /// Writes the instruction to the trace.
     fn write(&self, writer: &TraceWriter<F>, row_index: usize);
+
+    #[allow(unused_variables)]
+    // Writes the instruction to a general AirWriter.
+    fn write_to_air(&self, writer: &mut impl AirWriter<F>) {
+        unimplemented!("write_to_air not implemented for this instruction")
+    }
 }
 
 /// An instruction that only consists of constraints

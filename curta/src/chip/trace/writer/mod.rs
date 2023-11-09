@@ -22,6 +22,7 @@ use crate::trace::window::TraceWindow;
 use crate::trace::window_parser::TraceWindowParser;
 use crate::trace::AirTrace;
 
+pub mod data;
 pub mod public;
 pub mod row;
 pub mod window;
@@ -34,6 +35,8 @@ pub trait AirWriter<F: Field> {
     fn memory(&self) -> &MemoryMap<F>;
 
     fn memory_mut(&mut self) -> &mut MemoryMap<F>;
+
+    fn row_index(&self) -> Option<usize>;
 
     fn read<T: Register>(&self, data: &T) -> T::Value<F> {
         let slice = self.read_slice(data.register());

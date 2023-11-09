@@ -166,7 +166,7 @@ impl<T> AirTrace<T> {
     pub fn chunks_par_mut(
         &mut self,
         chunk_size: usize,
-    ) -> impl IndexedParallelIterator<Item = TraceViewMut<'_, T>>
+    ) -> impl IndexedParallelIterator<Item = TraceViewMut<'_, T>> + '_
     where
         T: Send + Sync,
     {
@@ -212,7 +212,6 @@ impl<T> AirTrace<T> {
     pub fn window_mut(&mut self, row: usize) -> TraceWindowMut<'_, T> {
         debug_assert!(row < self.height());
         let last_row = self.height() - 1;
-        // &mut self.values[r * self.width..(r + 1) * self.width];
         match row {
             0 => {
                 let (first_row, rest) = self.values.split_at_mut(self.width);
@@ -248,7 +247,7 @@ impl<T> AirTrace<T> {
     }
 
     #[inline]
-    pub fn windows(&self) -> impl Iterator<Item = TraceWindow<'_, T>> {
+    pub fn windows(&self) -> impl Iterator<Item = TraceWindow<'_, T>> + '_ {
         let last_row = self.height() - 1;
         (0..=last_row).map(|r| self.window(r))
     }
@@ -260,7 +259,7 @@ impl<T> AirTrace<T> {
     }
 
     #[inline]
-    pub fn windows_par_iter(&self) -> impl ParallelIterator<Item = TraceWindow<'_, T>>
+    pub fn windows_par_iter(&self) -> impl ParallelIterator<Item = TraceWindow<'_, T>> + '_
     where
         T: Sync,
     {

@@ -7,21 +7,24 @@ use crate::math::prelude::*;
 use crate::trace::window::TraceWindowMut;
 
 pub struct WindowWriter<'a, F: PartialEq + Eq + Hash> {
-    window: TraceWindowMut<'a, F>,
+    pub(crate) window: TraceWindowMut<'a, F>,
     public_values: &'a [F],
     memory: &'a mut MemoryMap<F>,
+    current_row: usize,
 }
 
-impl<'a, F: Field> WindowWriter<'a, F> {
+impl<'a, F: PartialEq + Eq + Hash> WindowWriter<'a, F> {
     pub fn new(
         window: TraceWindowMut<'a, F>,
         public_values: &'a [F],
         memory: &'a mut MemoryMap<F>,
+        current_row: usize,
     ) -> Self {
         Self {
             window,
             public_values,
             memory,
+            current_row,
         }
     }
 }
@@ -42,7 +45,9 @@ impl<'a, F: Field> AirWriter<F> for WindowWriter<'a, F> {
                 self.window.local_slice[*index..*index + *length].copy_from_slice(value);
             }
             MemorySlice::Next(index, length) => {
-                self.window.next_slice[*index..*index + *length].copy_from_slice(value);
+                if !self.window.is_last_row {
+                    self.window.next_slice[*index..*index + *length].copy_from_slice(value);
+                }
             }
             _ => panic!("Window writer cannot write to non trace values"),
         }
@@ -54,5 +59,9 @@ impl<'a, F: Field> AirWriter<F> for WindowWriter<'a, F> {
 
     fn memory_mut(&mut self) -> &mut MemoryMap<F> {
         self.memory
+    }
+
+    fn row_index(&self) -> Option<usize> {
+        Some(self.current_row)
     }
 }
