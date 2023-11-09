@@ -1,3 +1,4 @@
+use curve25519_dalek::constants::RISTRETTO_BASEPOINT_COMPRESSED;
 use itertools::Itertools;
 
 use super::data::{BLAKE2BConsts, BLAKE2BData};
@@ -27,17 +28,23 @@ impl<L: AirParameters> BytesBuilder<L>
 where
     L::Instruction: UintInstructions,
 {
-    fn cycles_end_bits(builder: &mut BytesBuilder<L>) -> (BitRegister, BitRegister, BitRegister) {
+    fn cycles_end_bits(
+        builder: &mut BytesBuilder<L>,
+    ) -> (BitRegister, BitRegister, BitRegister, BitRegister) {
         let cycle_4 = builder.cycle(2);
         let cycle_8 = builder.cycle(3);
         let loop_3 = builder.api.loop_instr(3);
-
         let cycle_96_end_bit = {
             let cycle_32 = builder.cycle(5);
             builder.mul(loop_3.get_iteration_reg(2), cycle_32.end_bit)
         };
 
-        (cycle_4.end_bit, cycle_8.end_bit, cycle_96_end_bit)
+        (
+            loop_3.get_iteration_reg(2),
+            cycle_4.end_bit,
+            cycle_8.end_bit,
+            cycle_96_end_bit,
+        )
     }
 
     pub fn blake2b(
@@ -80,6 +87,8 @@ where
             const_15: self.constant(&L::Field::from_canonical_u8(15)),
             const_92: self.constant(&L::Field::from_canonical_u8(92)),
             const_96: self.constant(&L::Field::from_canonical_u8(96)),
+            const_ffffffffffffffff: self
+                .constant::<U64Register>(&u64_to_le_field_bytes::<L::Field>(0xFFFFFFFFFFFFFFFF)),
         }
     }
 
@@ -99,16 +108,19 @@ where
         // Convert the number of rounds to a field element.
         let num_rounds_element = self.constant(&L::Field::from_canonical_usize(num_rounds));
 
-        // Initialize the initial hash and set it to the constant value.
-        let iv = self.constant_array::<ByteArrayRegister<8>>(&IV.map(u64_to_le_field_bytes));
+        let iv_values = self.constant_array::<U64Register>(&IV.map(u64_to_le_field_bytes));
+        let iv = self.uninit_slice();
+        for (i, value) in iv_values.iter().enumerate() {
+            self.store(&iv.get(i), value, &Time::zero(), Some(num_rounds_element));
+        }
 
         let compress_iv_values =
             self.constant_array::<U64Register>(&COMPRESS_IV.map(u64_to_le_field_bytes));
         let compress_iv = self.uninit_slice();
-        for (i, value) in COMPRESS_IV.iter().enumerate() {
+        for (i, value) in compress_iv_values.iter().enumerate() {
             self.store(
                 &compress_iv.get(i),
-                compress_iv_values.get(i),
+                value,
                 &Time::zero(),
                 Some(num_rounds_element),
             );
@@ -157,7 +169,8 @@ where
             }
         }
 
-        let (cycle_4_end_bit, cycle_8_end_bit, cycle_96_end_bit) = Self::cycles_end_bits(self);
+        let (cycle_3_end_bit, cycle_4_end_bit, cycle_8_end_bit, cycle_96_end_bit) =
+            Self::cycles_end_bits(self);
 
         // `compress_id` is a register is computed by counting the number of cycles. We do this by
         // setting `process_id` to be the cumulative sum of the `end_bit` of each cycle.
@@ -191,6 +204,20 @@ where
         let compress_index =
             self.expression(clk.expr() - compress_id.expr() * consts.const_96.expr());
 
+        // Flag if we are within the first four rows of a hash invocation.  In these rows, we will
+        // need to use the IV values.
+        let is_hash_initialize = self.alloc::<BitRegister>();
+        self.set_to_expression_first_row(&is_hash_initialize, L::Field::ZERO.into());
+        self.set_to_expression_transition(
+            &is_hash_initialize.next(),
+            (end_bit.expr() * one())
+                + (cycle_96_end_bit.not_expr()
+                    * (cycle_4_end_bit.expr() * self.zero()
+                        + cycle_4_end_bit.not_expr() * is_hash_initialize.expr())),
+        );
+
+        // Flag if we are within the first four rows of a compress.  In these rows, we will need to
+        // use the COMPRESS_IV values.
         let is_compress_initialize = self.alloc::<BitRegister>();
         self.set_to_expression_first_row(&is_compress_initialize, L::Field::ONE.into());
         self.set_to_expression_transition(
@@ -201,10 +228,21 @@ where
                         + cycle_4_end_bit.not_expr() * is_compress_initialize.expr())),
         );
 
+        // Flag if we are in the first row of a hash.  In that case, we will need to do an
+        // xor for the v_12 value.
+        let is_compress_first_row = self.alloc::<BitRegister>();
+        self.set_to_expression_first_row(&is_compress_first_row, L::Field::ONE.into());
+        self.set_to_expression_transition(&is_compress_first_row.next(), cycle_96_end_bit.expr());
+
+        // Flag if we are in the 3rd row of a hash.  In that case, we will need to do a xor on
+        // the v_14 value.
+        let is_compress_third_row =
+            self.expression(is_compress_initialize.expr() * cycle_3_end_bit.expr());
+
         let save_h = self.alloc::<BitRegister>();
         let save_h = self.div(compress_index, consts.const_92);
 
-        // Allocate end_bits for public input.
+        // Allocate end_bits from public input.
         let end_bit = self.uninit_slice();
         for (i, end_bit_val) in end_bits.iter().enumerate() {
             self.store(
@@ -216,14 +254,16 @@ where
         }
 
         let public = BLAKE2BPublicData {
-            iv,
             padded_chunks: padded_chunks.to_vec(),
             end_bits: *end_bits,
         };
 
         let trace = BLAKE2BTraceData {
             clk,
+            is_hash_initialize,
             is_compress_initialize,
+            is_compress_first_row,
+            is_compress_third_row,
             compress_id,
             cycle_8_end_bit,
             cycle_96_end_bit,
@@ -234,6 +274,7 @@ where
 
         let memory = BLAKE2BMemory {
             compress_initial_indices,
+            iv,
             compress_iv,
             v_indices,
             v_last_write_ages,
@@ -281,10 +322,25 @@ where
                 .compress_initial_indices
                 .get_at(self, compress_index, data.consts.const_2);
 
-        let h_value_1 = self.load(&data.memory.h.get_at(*init_idx_1), &Time::zero());
-        let h_value_2 = self.load(&data.memory.h.get_at(*init_idx_2), &Time::zero());
-        let iv_value_1 = self.load(&data.memory.compress_iv.get_at(*init_idx_1), &Time::zero());
-        let iv_value_2 = self.load(&data.memory.compress_iv.get_at(*init_idx_2), &Time::zero());
+        let previous_compress_id =
+            self.expression(data.trace.compress_id.expr() - data.consts.const_1.expr());
+
+        let h_value_1 = self.load(
+            &data.memory.h.get_at(*init_idx_1),
+            &Time::from_element(previous_compress_id),
+        );
+        let h_value_2 = self.load(
+            &data.memory.h.get_at(*init_idx_2),
+            &Time::from_element(previous_compress_id),
+        );
+
+        let iv_value_1 = self.load(&data.memory.iv.get_at(*init_idx_1), &Time::zero());
+        let iv_value_2 = self.load(&data.memory.iv.get_at(*init_idx_2), &Time::zero());
+
+        let compress_iv_value_1 =
+            self.load(&data.memory.compress_iv.get_at(*init_idx_1), &Time::zero());
+        let compress_iv_value_2 =
+            self.load(&data.memory.compress_iv.get_at(*init_idx_2), &Time::zero());
 
         // For all the other cycles of compress, read the v values from the v memory. Will need to
         // specify the age of the last write to the v memory entry.
@@ -326,10 +382,40 @@ where
             &Time::from_element(v4_last_write_ts),
         );
 
-        let v1_value = self.select(is_compress_initialize, &h_value_1, &v1_value);
-        let v2_value = self.select(is_compress_initialize, &h_value_2, &v2_value);
-        let v3_value = self.select(is_compress_initialize, &iv_value_1, &v3_value);
-        let v4_value = self.select(is_compress_initialize, &iv_value_2, &v4_value);
+        let v1_value = self.expression(
+            data.trace.is_hash_initialize.expr() * iv_value_1.expr()
+                + (data.trace.is_hash_initialize.not_expr()
+                    * (data.trace.is_compress_initialize.expr() * compress_iv_value_1.expr()
+                        + data.trace.is_compress_initialize.not_expr() * v1_value.expr())),
+        );
+
+        let v2_value = self.expression(
+            data.trace.is_hash_initialize.expr() * iv_value_2.expr()
+                + (data.trace.is_hash_initialize.not_expr()
+                    * (data.trace.is_compress_initialize.expr() * compress_iv_value_2.expr()
+                        + data.trace.is_compress_initialize.not_expr() * v2_value.expr())),
+        );
+
+        let v3_value = self.expression(
+            data.trace.is_compress_initialize.expr() * compress_iv_value_1.expr()
+                + data.trace.is_compress_initialize.not_expr() * v3_value.expr(),
+        );
+
+        let mut v4_value = self.expression(
+            data.trace.is_compress_initialize.expr() * compress_iv_value_2.expr()
+                + data.trace.is_compress_initialize.not_expr() * v4_value.expr(),
+        );
+
+        // If we are at the first compress row, then will need to xor v4 with t
+        // todo!();
+
+        // If we are at the third compress row, then will need to xor v4 with 0xFFFFFFFFFFFFFFFF
+        let inverse_v4_value = self.xor(&v4_value, &data.consts.const_ffffffffffffffff);
+        v4_value = self.select(
+            data.trace.is_compress_third_row,
+            &inverse_v4_value,
+            &v4_value,
+        );
 
         (
             [v1_idx, v2_idx, v3_idx, v4_idx],

@@ -17,14 +17,16 @@ pub struct BLAKE2BData<L: AirParameters> {
 }
 
 pub struct BLAKE2BPublicData {
-    pub iv: ArrayRegister<U64Register>,
     pub padded_chunks: Vec<ArrayRegister<U64Register>>,
     pub end_bits: ArrayRegister<BitRegister>,
 }
 
 pub struct BLAKE2BTraceData {
     pub(crate) clk: ElementRegister,
+    pub(crate) is_hash_initialize: BitRegister,
     pub(crate) is_compress_initialize: BitRegister,
+    pub(crate) is_compress_first_row: BitRegister,
+    pub(crate) is_compress_third_row: BitRegister,
     pub(crate) cycle_8_end_bit: BitRegister, // Used for each mix iteration
     pub(crate) cycle_96_end_bit: BitRegister, // Used for each compress round
     pub(crate) compress_id: ElementRegister,
@@ -35,6 +37,7 @@ pub struct BLAKE2BTraceData {
 
 pub struct BLAKE2BMemory<L: AirParameters> {
     pub(crate) compress_initial_indices: MemoryArray<L, 4, 2>,
+    pub(crate) iv: Slice<U64Register>,
     pub(crate) compress_iv: Slice<U64Register>,
     pub(crate) v_indices: MemoryArray<L, 8, 4>,
     pub(crate) v_last_write_ages: MemoryArray<L, 8, 4>,
@@ -66,6 +69,7 @@ pub struct BLAKE2BConsts {
     pub(crate) const_15: ElementRegister,
     pub(crate) const_92: ElementRegister,
     pub(crate) const_96: ElementRegister,
+    pub(crate) const_ffffffffffffffff: U64Register,
 }
 
 pub(crate) struct MemoryArray<L: AirParameters, const R: usize, const C: usize> {
