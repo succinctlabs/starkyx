@@ -23,6 +23,7 @@ pub struct BLAKE2BPublicData {
 }
 
 pub struct BLAKE2BTraceData {
+    pub(crate) clk: ElementRegister,
     pub(crate) is_compress_initialize: BitRegister,
     pub(crate) cycle_8_end_bit: BitRegister, // Used for each mix iteration
     pub(crate) cycle_96_end_bit: BitRegister, // Used for each compress round
@@ -38,6 +39,7 @@ pub struct BLAKE2BMemory<L: AirParameters> {
     pub(crate) v_indices: MemoryArray<L, 8, 4>,
     pub(crate) v_last_write_ages: MemoryArray<L, 8, 4>,
     pub(crate) permutations: MemoryArray<L, 12, 16>,
+    pub(crate) h: Slice<U64Register>,
     pub(crate) v: Slice<U64Register>,
     pub(crate) v_final: Slice<U64Register>,
     pub(crate) m: Slice<U64Register>,

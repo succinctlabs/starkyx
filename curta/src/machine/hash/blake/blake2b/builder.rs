@@ -42,7 +42,7 @@ where
 
     pub fn blake2b(
         &mut self,
-        padded_chunks: &[ArrayRegister<U32Register>],
+        padded_chunks: &[ArrayRegister<U64Register>],
         msg_lens: &[ArrayRegister<U64Register>],
         end_bits: &ArrayRegister<BitRegister>,
         initial_hash: &ArrayRegister<ByteArrayRegister<8>>,
@@ -56,13 +56,8 @@ where
             initial_hash_compress,
         );
 
-        let h = self.alloc_array::<U64Register>(8);
-        let v = self.alloc_array::<U64Register>(8);
-        for (h_i, initial_hash_i) in h.iter().zip(data.public.initial_hash.iter()) {
-            self.set_to_expression_first_row(&h_i, initial_hash_i.expr());
-        }
-
-        self.blake2b_compress(h, &data)
+        let (v_indices, v_values) = self.blake2b_compress_initialize(&data);
+        self.blake2b_compress(self, &v_indices, &v_values, &data)
     }
 
     pub fn blake2b_consts(&mut self) -> BLAKE2BConsts {
@@ -139,6 +134,9 @@ where
             permutations.store_row(self, i, permutation);
         }
 
+        // Initialize the h memory
+        let h = self.uninit_slice();
+
         // Initialize the v memory
         let v = self.uninit_slice();
         let dummy_entry =
@@ -189,9 +187,9 @@ where
         );
 
         // The array index register can be computed as `clock - process_id * CYCLE_LENGTH`.
-        let clk = Self::clk(self);
+        let clk = self.clk;
         let compress_index =
-            self.expression(clk.expr() - compress_id.expr() * L::Field::from_canonical_usize(96));
+            self.expression(clk.expr() - compress_id.expr() * consts.const_96.expr());
 
         let is_compress_initialize = self.alloc::<BitRegister>();
         self.set_to_expression_first_row(&is_compress_initialize, L::Field::ONE.into());
@@ -224,6 +222,7 @@ where
         };
 
         let trace = BLAKE2BTraceData {
+            clk,
             is_compress_initialize,
             compress_id,
             cycle_8_end_bit,
@@ -239,6 +238,7 @@ where
             v_indices,
             v_last_write_ages,
             permutations,
+            h,
             v,
             v_final,
             m,
@@ -257,8 +257,6 @@ where
     /// This function will retrieve the v values that will be inputted into the mix function
     pub fn blake2b_compress_initialize(
         &mut self,
-        h: ArrayRegister<U64Register>,
-        v: ArrayRegister<U64Register>,
         data: &BLAKE2BData<L>,
     ) -> ([ElementRegister; 4], [U64Register; 4]) {
         let is_compress_initialize = data.trace.is_compress_initialize;
@@ -275,20 +273,18 @@ where
             &data
                 .memory
                 .compress_initial_indices
-                .get_at(self, compress_index, self.one());
+                .get_at(self, compress_index, data.consts.const_1);
 
-        let init_idx_2 = self.load(
+        let init_idx_2 =
             &data
                 .memory
                 .compress_initial_indices
-                .get_at(self, compress_index, self.two()),
-            &Time::zero(),
-        );
+                .get_at(self, compress_index, data.consts.const_2);
 
-        let h_value_1 = self.load(data.memory.h.get_at(init_idx_1), &Time::zero());
-        let h_value_2 = self.load(data.memory.h.get_at(init_idx_2), &Time::zero());
-        let iv_value_1 = self.load(data.memory.compress_iv.get_at(init_idx_1), &Time::zero());
-        let iv_value_2 = self.load(data.memory.compress_iv.get_at(init_idx_2), &Time::zero());
+        let h_value_1 = self.load(&data.memory.h.get_at(*init_idx_1), &Time::zero());
+        let h_value_2 = self.load(&data.memory.h.get_at(*init_idx_2), &Time::zero());
+        let iv_value_1 = self.load(&data.memory.compress_iv.get_at(*init_idx_1), &Time::zero());
+        let iv_value_2 = self.load(&data.memory.compress_iv.get_at(*init_idx_2), &Time::zero());
 
         // For all the other cycles of compress, read the v values from the v memory. Will need to
         // specify the age of the last write to the v memory entry.
@@ -308,20 +304,32 @@ where
         let v4_last_write_age =
             v_last_write_ages.get_at(self, data.trace.mix_index, data.consts.const_3);
 
-        let v1_last_write_ts = self.sub(self.clk, v1_last_write_age);
-        let v2_last_write_ts = self.sub(self.clk, v2_last_write_age);
-        let v3_last_write_ts = self.sub(self.clk, v3_last_write_age);
-        let v4_last_write_ts = self.sub(self.clk, v4_last_write_age);
+        let v1_last_write_ts = self.expression(data.trace.clk.expr() - v1_last_write_age.expr());
+        let v2_last_write_ts = self.expression(data.trace.clk.expr() - v2_last_write_age.expr());
+        let v3_last_write_ts = self.expression(data.trace.clk.expr() - v3_last_write_age.expr());
+        let v4_last_write_ts = self.expression(data.trace.clk.expr() - v4_last_write_age.expr());
 
-        let mut v1_value = self.load(&data.memory.v.get_at(v1_idx), Some(v1_last_write_ts));
-        let mut v2_value = self.load(&data.memory.v.get_at(v2_idx), Some(v2_last_write_ts));
-        let mut v3_value = self.load(&data.memory.v.get_at(v3_idx), Some(v3_last_write_ts));
-        let mut v4_value = self.load(&data.memory.v.get_at(v4_idx), Some(v4_last_write_ts));
+        let mut v1_value = self.load(
+            &data.memory.v.get_at(v1_idx),
+            &Time::from_element(v1_last_write_ts),
+        );
+        let mut v2_value = self.load(
+            &data.memory.v.get_at(v2_idx),
+            &Time::from_element(v2_last_write_ts),
+        );
+        let mut v3_value = self.load(
+            &data.memory.v.get_at(v3_idx),
+            &Time::from_element(v3_last_write_ts),
+        );
+        let mut v4_value = self.load(
+            &data.memory.v.get_at(v4_idx),
+            &Time::from_element(v4_last_write_ts),
+        );
 
-        let v1_value = self.select(is_compress_initialize, h_value_1, &v1_value);
-        let v2_value = self.select(is_compress_initialize, h_value_2, &v2_value);
-        let v3_value = self.select(is_compress_initialize, iv_value_1, &v3_value);
-        let v4_value = self.select(is_compress_initialize, iv_value_2, &v4_value);
+        let v1_value = self.select(is_compress_initialize, &h_value_1, &v1_value);
+        let v2_value = self.select(is_compress_initialize, &h_value_2, &v2_value);
+        let v3_value = self.select(is_compress_initialize, &iv_value_1, &v3_value);
+        let v4_value = self.select(is_compress_initialize, &iv_value_2, &v4_value);
 
         (
             [v1_idx, v2_idx, v3_idx, v4_idx],
@@ -330,7 +338,7 @@ where
     }
 
     /// The processing step of a SHA256 round.
-    pub fn blake2b_processing(
+    pub fn blake2b_compress(
         &mut self,
         h: &ArrayRegister<U64Register>,
         v_indices: &[ElementRegister; 4],
