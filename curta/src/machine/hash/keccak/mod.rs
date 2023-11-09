@@ -30,7 +30,7 @@ where
         state: ArrayRegister<U64Register>,
     ) -> ArrayRegister<U64Register>;
 
-    fn hash(Builder: &mut BytesBuilder<L>, input: &[u8]) -> [u8; 32];
+    fn hash(builder: &mut BytesBuilder<L>, input: &[u8]) -> [u8; 32];
 }
 
 impl<L: AirParameters> KeccakAir<L> for Keccak256
@@ -78,51 +78,9 @@ where
             0x8000000080008008u64,
         ];
 
-        // let mut rc_reg: Vec<U64Register> = Vec::new();
-        // let round_constant_values = builder
-        //     .constant_array::<U64Register>(&RC.map(|i: u64| [L::Field::from_canonical_u64(i); 8]));
-
-        // // let round_constants = builder.alloc_array::<U64Register>(24);
-        // // builder.set_to_expression(&round_constants, round_constant_values.expr());
-        // // let round_constants = builder.uninit_slice();
-
-        // for i in 0..24 {
-        //     let rc_val = builder.constant::<U64Register>(&[L::Field::from_canonical_u64(RC[i]); 8]);
-        //     let reg = builder.alloc::<U64Register>();
-        //     builder.set_to_expression(&reg, rc_val.expr());
-        //     rc_reg.push(reg);
-
-        //     // builder.store(
-        //     //     &round_constants.get(i),
-        //     //     round_constant_values.get(i),
-        //     //     &Time::zero(),
-        //     //     None,
-        //     // );
-        //     // rc_reg.push(builder.constant::<U64Register>(&[L::Field::from_canonical_u64(RC[i]); 8]));
-        // }
-
-        const ROUNDS: usize = 24;
-
-        let num_round_element: ElementRegister =
-            builder.constant(&L::Field::from_canonical_usize(ROUNDS));
-
         // Initialize the round constants and set them to the constant value.
         let round_constant_values =
             builder.constant_array::<U64Register>(&RC.map(u64_to_le_field_bytes));
-
-        // Store the round constants in a slice to be able to load them in the trace.
-        // let round_constants = builder.uninit_slice();
-        // let mut round_reg: Vec<ElementRegister> = Vec::new();
-
-        // for i in 0..ROUNDS {
-        //     builder.store(
-        //         &round_constants.get(i),
-        //         round_constant_values.get(i),
-        //         &Time::zero(),
-        //         None,
-        //     );
-        //     round_reg.push(builder.constant(&L::Field::from_canonical_usize(i)));
-        // }
 
         let num_words = 25;
         let mut state_temp: Vec<U64Register> = Vec::with_capacity(25);
@@ -213,24 +171,17 @@ where
             // ############################################
 
             // A[0,0] = A[0,0] xor RC
-            // let rc_reg = builder.load(&round_constants.get(round), &Time::zero());
-            // state_temp[0] = builder.xor(&state_temp[0], &rc_reg);
             state_temp[0] = builder.xor(&state_temp[0], &round_constant_values.get(round));
-            // state_temp[0] = builder.xor(&state_temp[0], &rc_reg[round]);
-            // state_temp[0] = builder.xor(
-            //     &state_temp[0],
-            //     builder.load(&round_constants.get(round), &Time::zero()),
-            // );
         }
 
-        // let new_state = builder.alloc_array::<U64Register>(num_words);
+        let new_state = builder.alloc_array::<U64Register>(num_words);
 
-        // for i in 0..num_words {
-        //     builder.set_to_expression(&new_state.get(i), state_temp[i].expr());
-        // }
+        for i in 0..num_words {
+            builder.set_to_expression(&new_state.get(i), state_temp[i].expr());
+        }
 
-        // new_state
-        state
+        new_state
+        // state
     }
 
     fn hash(builder: &mut BytesBuilder<L>, input: &[u8]) -> [u8; 32] {
@@ -363,7 +314,7 @@ mod tests {
             );
         }
 
-        let _new_state = Keccak256::keccak_p(&mut builder, state);
+        let new_state = Keccak256::keccak_p(&mut builder, state);
 
         let num_rows = 1 << 6;
         let stark = builder.build::<C, 2>(num_rows);
@@ -373,7 +324,7 @@ mod tests {
         writer.write_global_instructions(&stark.air_data);
         for i in 0..num_rows {
             writer.write_row_instructions(&stark.air_data, i);
-            // println!("{:?}", writer.read_array::<U64Register, 25>(&new_state, i));
+            println!("{:?}", writer.read_array::<U64Register, 25>(&new_state, i));
         }
 
         let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
