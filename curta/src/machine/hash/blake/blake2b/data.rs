@@ -27,6 +27,7 @@ pub struct BLAKE2BTraceData {
     pub(crate) is_compress_initialize: BitRegister,
     pub(crate) is_compress_first_row: BitRegister,
     pub(crate) is_compress_third_row: BitRegister,
+    pub(crate) save_h: Slice<BitRegister>,
     pub(crate) cycle_8_end_bit: BitRegister, // Used for each mix iteration
     pub(crate) cycle_96_end_bit: BitRegister, // Used for each compress round
     pub(crate) compress_id: ElementRegister,

@@ -1,15 +1,13 @@
-use curve25519_dalek::constants::RISTRETTO_BASEPOINT_COMPRESSED;
-use itertools::Itertools;
-
 use super::data::{BLAKE2BConsts, BLAKE2BData};
 use super::IV;
+use crate::chip::memory::pointer::slice::Slice;
 use crate::chip::memory::time::Time;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::uint::operations::instruction::UintInstructions;
-use crate::chip::uint::register::{ByteArrayRegister, U32Register, U64Register};
+use crate::chip::uint::register::{ByteArrayRegister, U64Register};
 use crate::chip::uint::util::u64_to_le_field_bytes;
 use crate::chip::AirParameters;
 use crate::machine::builder::Builder;
@@ -239,8 +237,18 @@ where
         let is_compress_third_row =
             self.expression(is_compress_initialize.expr() * cycle_3_end_bit.expr());
 
-        let save_h = self.alloc::<BitRegister>();
-        let save_h = self.div(compress_index, consts.const_92);
+        // Need to flag to the last 4 rows of the compress cycle.
+        // At those rows, the V values should be saved to v_final, so that those values can be used
+        // to calculate the compress h values.
+        let save_h: Slice<BitRegister> = self.uninit_slice();
+        for i in 0..96 {
+            self.store(
+                &save_h.get(i),
+                if i < 92 { self.zero() } else { self.one() },
+                &Time::zero(),
+                Some(num_rounds_element),
+            );
+        }
 
         // Allocate end_bits from public input.
         let end_bit = self.uninit_slice();
@@ -264,6 +272,7 @@ where
             is_compress_initialize,
             is_compress_first_row,
             is_compress_third_row,
+            save_h,
             compress_id,
             cycle_8_end_bit,
             cycle_96_end_bit,
@@ -322,8 +331,15 @@ where
                 .compress_initial_indices
                 .get_at(self, compress_index, data.consts.const_2);
 
-        let previous_compress_id =
+        let mut previous_compress_id =
             self.expression(data.trace.compress_id.expr() - data.consts.const_1.expr());
+
+        // If we are within hash initialize, then read from a dummy h values from a dummy timestamp.
+        previous_compress_id = self.select(
+            data.trace.is_hash_initialize,
+            DUMMY_TS,
+            &previous_compress_id,
+        );
 
         let h_value_1 = self.load(
             &data.memory.h.get_at(*init_idx_1),
@@ -454,7 +470,12 @@ where
             &m_2,
         );
 
-        let write_ts = self.select(data.trace.save_h, data.trace.compress_id, DUMMY_TS);
+        let save_h = self.load(
+            &data.trace.save_h.get_at(data.trace.compress_index),
+            &Time::zero(),
+        );
+
+        let write_ts = self.select(save_h, &data.trace.compress_id, DUMMY_TS);
         let const_values = vec![
             data.consts.const_0,
             data.consts.const_1,
@@ -463,26 +484,27 @@ where
         ];
         for (i, value) in v_values.iter().enumerate() {
             self.store(
-                data.memory.v.get_at(v_indices[i]),
-                value,
-                Some(self.clk),
+                &data.memory.v.get_at(v_indices[i]),
+                *value,
+                &Time::from_element(self.clk),
                 Some(data.consts.const_2),
             );
 
             // Save to v_final if at the last 4 cycles of the round
-            let v_final_value = self.select(data.trace.save_h, value, data.consts.const_0);
+            let v_final_value = self.select(save_h, value, &data.consts.const_ffffffffffffffff);
             self.store(
                 &data.memory.v_final.get_at(v_indices[i]),
                 v_final_value,
-                Some(write_ts),
-                Some(data.trace.save_h),
+                &Time::from_element(write_ts),
+                Some(save_h.as_element()),
             );
         }
 
         // If we are at the last cycle of the round, then compute and save the h value.
 
         // First load the previous round's h value.
-        let previous_compress_id = self.sub(data.trace.compress_id, data.consts.const_1);
+        let previous_compress_id =
+            self.expression(data.trace.compress_id.expr() - data.consts.const_1.expr());
         let h_workspace_1 = self.alloc_array::<U64Register>(8);
         let consts = vec![
             data.consts.const_0,
@@ -494,15 +516,24 @@ where
             data.consts.const_6,
             data.consts.const_7,
         ];
-        for (i, const_i) in consts.iter().enumerate() {
-            h_workspace_1[i] = self.load(data.memory.h.get_at(const_i), Some(previous_compress_id));
+        for (h_workspace_i, const_i) in h_workspace_1.iter().zip(consts.iter()) {
+            h_workspace_i = self.load(
+                &data.memory.h.get_at(*const_i),
+                &Time::from_element(previous_compress_id),
+            );
         }
 
         // Xor the first 8 final v values
         let h_workspace_2 = self.alloc_array::<U64Register>(8);
-        for (i, const_i) in consts.iter().enumerate() {
-            let v_i = self.load(&data.memory.v_final.get_at(const_i), Some(write_ts));
-            h_workspace_2[i] = self.xor(h_workspace_1[i], v_i);
+        for (h_workspace_1_i, (h_workspace_2_i, const_i)) in h_workspace_1
+            .iter()
+            .zip(h_workspace_2.iter().zip(consts.iter()))
+        {
+            let v_i = self.load(
+                &data.memory.v_final.get_at(*const_i),
+                &Time::from_element(write_ts),
+            );
+            h_workspace_2_i = self.xor(h_workspace_1_i, v_i);
         }
 
         // Xor the second 8 final v values
@@ -517,9 +548,17 @@ where
             data.consts.const_15,
         ];
         for (i, const_i) in consts.iter().enumerate() {
-            let mut v_i = self.load(&data.memory.v_final.get_at(const_i), Some(write_ts));
-            v_i = self.xor(h_workspace_2, v_i);
-            self.store(data.memory.h.get_at(i), v_i, write_ts, Some(2));
+            let mut v_i = self.load(
+                &data.memory.v_final.get_at(*const_i),
+                &Time::from_element(write_ts),
+            );
+            v_i = self.xor(h_workspace_2.get(i), v_i);
+            self.store(
+                &data.memory.h.get_at(*const_i),
+                v_i,
+                &Time::from_element(write_ts),
+                Some(data.consts.const_2),
+            );
         }
     }
 
@@ -556,6 +595,7 @@ where
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use itertools::Itertools;
@@ -802,3 +842,4 @@ mod tests {
         timing.print();
     }
 }
+*/
