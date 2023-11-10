@@ -296,7 +296,7 @@ mod tests {
 
         let num_rows = 1 << 8;
         let mut air_writer_data = AirWriterData::new(&trace_data, num_rows);
-        assert_eq!(air_writer_data.height, num_rows);
+        assert_eq!(air_writer_data.trace.height(), num_rows);
         assert_eq!(air_writer_data.trace.width, L::num_columns());
 
         let chunk_size = 1 << 4;

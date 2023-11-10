@@ -33,7 +33,7 @@ impl<'a, F: Field> AirWriter for PublicWriter<'a, F> {
 
     fn write_slice(&mut self, memory_slice: &MemorySlice, value: &[F]) {
         match memory_slice {
-            MemorySlice::Local(index, length) => {
+            MemorySlice::Public(index, length) => {
                 self.public_values[*index..*index + *length].copy_from_slice(value);
             }
             _ => panic!("Can only write to public memory with public writer"),

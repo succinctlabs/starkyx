@@ -17,7 +17,6 @@ pub struct AirWriterData<T: PartialEq + Eq + Hash> {
     pub trace: AirTrace<T>,
     pub public: Vec<T>,
     pub(crate) memory: MemoryMap<T>,
-    pub height: usize,
 }
 
 #[derive(Debug)]
@@ -49,18 +48,16 @@ impl<T: PartialEq + Eq + Hash> AirWriterData<T> {
     where
         T: Copy,
     {
-        let height = num_rows;
         Self {
             trace: AirTrace::new_with_value(width, num_rows, value),
             public: vec![value; num_public_inputs],
             memory: MemoryMap::new(),
-            height,
         }
     }
 
     #[inline]
     pub fn public_writer(&mut self) -> PublicWriter<'_, T> {
-        PublicWriter::new(&mut self.public, &mut self.memory, self.height)
+        PublicWriter::new(&mut self.public, &mut self.memory, self.trace.height())
     }
 
     #[inline]
@@ -71,44 +68,44 @@ impl<T: PartialEq + Eq + Hash> AirWriterData<T> {
     where
         T: Clone + Send + Sync,
     {
-        assert_eq!(self.height, self.trace.height());
-        assert_eq!(self.height % chunk_size, 0);
-        let num_chunks = self.height / chunk_size;
+        let height = self.trace.height();
+        assert_eq!(height % chunk_size, 0);
+        let num_chunks = height / chunk_size;
         self.trace
             .chunks_mut(chunk_size)
-            .zip((0..num_chunks).map(move |i| (i, chunk_size)))
-            .map(|(chunk, (i, size))| AirWriterChunkMut {
+            .zip((0..num_chunks).map(move |i| (i, chunk_size, height)))
+            .map(|(chunk, (i, size, height))| AirWriterChunkMut {
                 trace: chunk,
                 public: &self.public,
                 memory: self.memory.clone(),
-                height: size,
+                height,
                 initial_row: i * size,
             })
     }
 
     #[inline]
-    pub fn par_chunks(
+    pub fn chunks_par(
         &mut self,
         chunk_size: usize,
     ) -> impl ParallelIterator<Item = AirWriterChunkMut<'_, T>> + '_
     where
         T: Clone + Send + Sync,
     {
-        assert_eq!(self.height, self.trace.height());
-        assert_eq!(self.height % chunk_size, 0);
-        let num_chunks = self.height / chunk_size;
+        let height = self.trace.height();
+        assert_eq!(height % chunk_size, 0);
+        let num_chunks = height / chunk_size;
         self.trace
             .chunks_par_mut(chunk_size)
             .zip_eq(
                 (0..num_chunks)
                     .into_par_iter()
-                    .map(move |i| (i, chunk_size)),
+                    .map(move |i| (i, chunk_size, height)),
             )
-            .map(|(chunk, (i, size))| AirWriterChunkMut {
+            .map(|(chunk, (i, size, height))| AirWriterChunkMut {
                 trace: chunk,
                 public: &self.public,
                 memory: self.memory.clone(),
-                height: size,
+                height,
                 initial_row: i * size,
             })
     }

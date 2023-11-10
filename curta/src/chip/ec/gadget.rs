@@ -4,7 +4,7 @@ use crate::chip::builder::AirBuilder;
 use crate::chip::field::parameters::FieldParameters;
 use crate::chip::field::register::FieldRegister;
 use crate::chip::register::Register;
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::chip::utils::field_limbs_to_biguint;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
@@ -34,6 +34,30 @@ pub trait EllipticCurveWriter<E: EllipticCurve> {
         row_index: usize,
     );
 }
+
+pub trait EllipticCurveAirWriter<E: EllipticCurve>: AirWriter {
+    fn read_ec_point(&self, data: &AffinePointRegister<E>) -> AffinePoint<E>
+    where
+        Self::Field: PrimeField64,
+    {
+        let p_x = self.read(&data.x);
+        let p_y = self.read(&data.y);
+
+        let x = field_limbs_to_biguint(p_x.coefficients());
+        let y = field_limbs_to_biguint(p_y.coefficients());
+
+        AffinePoint::<E>::new(x, y)
+    }
+
+    fn write_ec_point(&mut self, data: &AffinePointRegister<E>, value: &AffinePoint<E>) {
+        let value_x = to_u16_le_limbs_polynomial::<Self::Field, E::BaseField>(&value.x);
+        let value_y = to_u16_le_limbs_polynomial::<Self::Field, E::BaseField>(&value.y);
+        self.write(&data.x, &value_x);
+        self.write(&data.y, &value_y);
+    }
+}
+
+impl<W: AirWriter, E: EllipticCurve> EllipticCurveAirWriter<E> for W {}
 
 impl<L: AirParameters, E: EllipticCurve> EllipticCurveGadget<E> for AirBuilder<L> {
     /// Allocates registers for a next affine elliptic curve point without range-checking.

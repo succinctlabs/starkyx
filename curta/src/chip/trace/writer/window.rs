@@ -37,9 +37,8 @@ impl<'a, F: Field> AirWriter for WindowWriter<'a, F> {
     fn read_slice(&self, memory_slice: &MemorySlice) -> &[F] {
         match memory_slice {
             MemorySlice::Local(index, length) => &self.window.local_slice[*index..*index + *length],
-            MemorySlice::Next(index, length) => &self.window.next_slice[*index..*index + *length],
             MemorySlice::Public(index, length) => &self.public_values[*index..*index + *length],
-            _ => panic!("Cannot read from challenges in window writer"),
+            _ => panic!("Can only read from local and public registers using window writer"),
         }
     }
 
