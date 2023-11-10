@@ -4,7 +4,9 @@
 
 
 ## Introduction
+Curta is a library for writing AIR constraints with composable and typed constraints.  
 
+Stark proofs and verification are implemented via [Starky](https://github.com/0xPolygonZero/plonky2/tree/main/starky). This repository contains a modified fork of Starky to enable the support a 1-round AIR with random challenges and using the Curta AIR constraints. All the cryptographic primitives are imported from the [Plonky2](https://github.com/mir-protocol/plonky2) proving system.  
 
 ## Building
 Curta requires the use of the nightly Rust toolchain. To use it by default, run the following command:

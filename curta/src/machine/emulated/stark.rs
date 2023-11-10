@@ -608,16 +608,6 @@ mod tests {
                 writer.write(&b, &p_b);
                 air_data.write_trace_instructions(&mut writer);
             }
-            // for i in 0..k {
-            //     let mut writer = chunk.window_writer(i);
-            //     let a_int = rng.gen_biguint(256) % &p;
-            //     let b_int = rng.gen_biguint(256) % &p;
-            //     let p_a = Polynomial::<F>::from_biguint_field(&a_int, 16, 16);
-            //     let p_b = Polynomial::<F>::from_biguint_field(&b_int, 16, 16);
-            //     writer.write(&a, &p_a);
-            //     writer.write(&b, &p_b);
-            //     air_data.write_trace_instructions(&mut writer);
-            // }
         });
 
         let (trace, public) = (writer_data.trace, writer_data.public);
