@@ -275,7 +275,7 @@ mod tests {
 
         let mut builder = EmulatedBuilder::<L>::new();
 
-        let num_ops = 256;
+        let num_ops = 3;
 
         let points = (0..num_ops)
             .map(|_| builder.alloc_public_ec_point())

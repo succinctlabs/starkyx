@@ -90,26 +90,6 @@ impl<L: AirParameters> AirBuilder<L> {
             self.register_global_instruction(instr);
         }
     }
-
-    pub fn alloc_fp_add_instruction<P: FieldParameters>(
-        &mut self,
-        a: &FieldRegister<P>,
-        b: &FieldRegister<P>,
-    ) -> FpAddInstruction<P> {
-        let result = self.alloc::<FieldRegister<P>>();
-        let carry = self.alloc::<FieldRegister<P>>();
-        let witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
-        let witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
-
-        FpAddInstruction {
-            a: *a,
-            b: *b,
-            result,
-            carry,
-            witness_low,
-            witness_high,
-        }
-    }
 }
 
 // Constraints for FpAddInstruction
