@@ -541,6 +541,16 @@ mod tests {
     use crate::plonky2::stark::config::{CurtaConfig, CurtaPoseidonGoldilocksConfig};
 
     #[test]
+    fn test_permutation() {
+        let mut input = [0; 25];
+        keccak_p(&mut input);
+        println!("output {:?}", input[0]);
+        println!(
+            "output Field {:?}",
+            GoldilocksField::from_canonical_u64(input[0])
+        );
+    }
+    #[test]
     fn test_keccak_p() {
         let input = (0..32).collect::<Vec<u8>>();
 

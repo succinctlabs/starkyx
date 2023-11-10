@@ -1,3 +1,5 @@
+use itertools::Itertools;
+pub mod keccak256;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::memory::time::Time;
 use crate::chip::register::array::ArrayRegister;
@@ -83,31 +85,77 @@ where
             builder.constant_array::<U64Register>(&RC.map(u64_to_le_field_bytes));
 
         let num_words = 25;
-        let mut state_temp: Vec<U64Register> = Vec::with_capacity(25);
+
+        // let mut state_temp: Vec<U64Register> = Vec::with_capacity(25);
+        let mut state_temp: Vec<U64Register> = (0..num_words).map(|i| state.get(i)).collect();
+        // let mut b: Vec<U64Register> = Vec::with_capacity(5);
+        // for i in 0..num_words {
+        //     state_temp.push(state.get(i));
+        //     // b.push(builder.constant(&[L::Field::ZERO; 8]));
+        // }
+
+        // let mut c: Vec<U64Register> = Vec::with_capacity(5);
+        // let mut d: Vec<U64Register> = Vec::with_capacity(5);
+        // let mut c: Vec<U64Register> = vec![0; 5]
+        //     .iter()
+        //     .map(|_| builder.constant(&[L::Field::ZERO; 8]))
+        //     .collect();
+        // let mut d: Vec<U64Register> = vec![0; 5]
+        //     .iter()
+        //     .map(|_| builder.constant(&[L::Field::ZERO; 8]))
+        //     .collect();
+        // for _i in 0..5 {
+        //     c.push(builder.constant(&[L::Field::ZERO; 8]));
+        //     d.push(builder.constant(&[L::Field::ZERO; 8]));
+        // }
 
         for round in 0..24 {
-            let mut c: Vec<U64Register> = Vec::new();
-            let mut d: Vec<U64Register> = Vec::new();
-            let mut b: Vec<U64Register> = Vec::new();
+            // let mut c = [0; 5];
+            // let mut d = [0; 5];
+            let mut c: Vec<U64Register> = (0..5)
+                .map(|_| builder.constant(&u64_to_le_field_bytes(0)))
+                .collect();
+            let mut d: Vec<U64Register> = (0..5)
+                .map(|_| builder.constant(&u64_to_le_field_bytes(0)))
+                .collect();
+
+            // let mut c: Vec<U64Register> = Vec::new();
+            // let mut d: Vec<U64Register> = Vec::new();
+            // let mut b: Vec<U64Register> = Vec::new();
+            // for i in 0..5 {
+            //     c[i] = builder.constant(&[L::Field::ZERO; 8]);
+            //     d[i] = builder.constant(&[L::Field::ZERO; 8]);
+            // }
 
             // C[x] = A[x,0] xor A[x,1] xor A[x,2] xor A[x,3] xor A[x,4], for x in 0…4
-            for x in 0..5 {
-                let mut c_temp = builder.xor(&state.get(x), &state.get(x + 5));
-                c_temp = builder.xor(&c_temp, &state.get(x + 10));
-                c_temp = builder.xor(&c_temp, &state.get(x + 15));
-                c.push(builder.xor(&c_temp, &state.get(x + 20)));
+            // for x in 0..5 {
+            //     let mut c_temp = builder.xor(&c[x], &state_temp[x]);
+            //     c_temp = builder.xor(&c_temp, &state_temp[x + 5]);
+            //     c_temp = builder.xor(&c_temp, &state_temp[x + 10]);
+            //     c_temp = builder.xor(&c_temp, &state_temp[x + 15]);
+            //     c[x] = builder.xor(&c_temp, &state_temp[x + 20]);
+            // }
+            for y in 0..5 {
+                for x in 0..5 {
+                    // c[x] ^= state[x + y * 5];
+                    c[x] = builder.xor(&c[x], &state_temp[x + y * 5]);
+                }
             }
 
             // D[x] = C[x-1] xor rot(C[x+1],1), for x in 0…4
             for x in 0..5 {
-                let d_temp = builder.xor(&c[(x + 4) % 5], &c[(x + 1) % 5]);
-                d.push(builder.rotate_right(d_temp, 1));
+                // d[x] = c[(x + 4) % 5] ^ c[(x + 1) % 5].rotate_left(1);
+                let d_temp = builder.rotate_left(c[(x + 1) % 5], 1);
+                // d[x] = builder.rotate_left::<U64Register, usize>(d_temp, 1);
+                // let d_temp = builder.xor(&c[(x + 4) % 5], &c[(x + 1) % 5]);
+                d[x] = builder.xor(&c[(x + 4) % 5], &d_temp);
             }
 
             // A[x,y] = A[x,y] xor D[x], for (x,y) in (0…4,0…4)
             for y in 0..5 {
                 for x in 0..5 {
-                    state_temp.push(builder.xor(&state.get(x + y * 5), &d[x]));
+                    // state[x + y * 5] ^= d[x];
+                    state_temp[x + y * 5] = builder.xor(&state_temp[x + y * 5], &d[x]);
                 }
             }
 
@@ -129,9 +177,16 @@ where
 
             for _ in 0..24 {
                 // Rotate each lane by an offset
+                //
+                // let index = rho_x + 5 * rho_y;
+                // state[index] = state[index].rotate_left(RHO_OFFSETS[rho_y][rho_x] % 64);
+                // let rho_x_prev = rho_x;
+                // rho_x = rho_y;
+                // rho_y = (2 * rho_x_prev + 3 * rho_y) % 5;
+                //
                 let index = rho_x + 5 * rho_y;
                 state_temp[index] =
-                    builder.rotate_right(state_temp[index], RHO_OFFSETS[rho_y][rho_x] % 64);
+                    builder.rotate_left(state_temp[index], RHO_OFFSETS[rho_y][rho_x] % 64);
                 let rho_x_prev = rho_x;
                 rho_x = rho_y;
                 rho_y = (2 * rho_x_prev + 3 * rho_y) % 5;
@@ -141,13 +196,14 @@ where
             // Pi
             // ############################################
 
+            let state_cloned = state_temp.clone();
             // B[y,2*x+3*y] = rot(A[x,y], r[x,y]), for (x,y) in (0…4,0…4)
             for y in 0..5 {
                 for x in 0..5 {
+                    // let index = ((x + 3 * y) % 5) + x * 5;
+                    // state[x + y * 5] = state_cloned[index];
                     let index = ((x + 3 * y) % 5) + x * 5;
-                    let temp = builder.alloc::<U64Register>();
-                    builder.set_to_expression(&temp, state_temp[index].expr());
-                    b.push(temp);
+                    state_temp[x + y * 5] = state_cloned[index];
                 }
             }
 
@@ -155,14 +211,17 @@ where
             // Chi
             // ############################################
 
+            let state_cloned = state_temp.clone();
             // A[x,y] = B[x,y] xor ((not B[x+1,y]) and B[x+2,y]), for (x,y) in (0…4,0…4)
             for y in 0..5 {
                 for x in 0..5 {
+                    // let index = x + y * 5;
+                    // state[index] = state_cloned[index]
+                    //     ^ (!state_cloned[(x + 1) % 5 + y * 5]) & state_cloned[(x + 2) % 5 + y * 5];
                     let index = x + y * 5;
-
-                    let mut temp = builder.not(&b[(x + 1) % 5 + y * 5]);
-                    temp = builder.and(&temp, &b[(x + 2) % 5 + y * 5]);
-                    state_temp[index] = builder.xor(&b[index], &temp);
+                    let mut temp = builder.not(state_cloned[(x + 1) % 5 + y * 5]);
+                    temp = builder.and(&temp, &state_cloned[(x + 2) % 5 + y * 5]);
+                    state_temp[index] = builder.xor(&state_cloned[index], &temp);
                 }
             }
 
@@ -171,6 +230,7 @@ where
             // ############################################
 
             // A[0,0] = A[0,0] xor RC
+            // state[0] ^= RC[i];
             state_temp[0] = builder.xor(&state_temp[0], &round_constant_values.get(round));
         }
 
@@ -274,9 +334,13 @@ mod tests {
     use crate::chip::trace::writer::{InnerWriterData, TraceWriter};
     use crate::chip::uint::operations::instruction::UintInstruction;
     use crate::chip::uint::register::U64Register;
+    use crate::chip::uint::util::{u64_from_le_field_bytes, u64_to_le_field_bytes};
     use crate::chip::AirParameters;
+    use crate::machine::builder::Builder;
     use crate::machine::bytes::builder::BytesBuilder;
+    use crate::machine::hash::keccak::keccak256::keccak_p;
     use crate::machine::hash::keccak::{Keccak256, KeccakAir};
+    use crate::machine::hash::sha::sha256::pure;
     use crate::plonky2::stark::config::{CurtaConfig, CurtaPoseidonGoldilocksConfig};
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -289,8 +353,8 @@ mod tests {
         type Instruction = UintInstruction;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
-        const NUM_FREE_COLUMNS: usize = 75841;
-        const EXTENDED_COLUMNS: usize = 44754;
+        const NUM_FREE_COLUMNS: usize = 77577;
+        const EXTENDED_COLUMNS: usize = 46086;
     }
 
     #[test]
@@ -305,18 +369,11 @@ mod tests {
         let mut builder = BytesBuilder::<Keccak256Test>::new();
 
         let num_words = 25;
-        let state = builder.api.alloc_array_public::<U64Register>(num_words);
-
-        for i in 0..num_words {
-            builder.api.set_to_expression_public(
-                &state.get(i),
-                ArithmeticExpression::from_constant_vec(vec![GoldilocksField::ZERO; 8]),
-            );
-        }
+        let state = builder.constant_array(&[u64_to_le_field_bytes(0); 25]);
 
         let new_state = Keccak256::keccak_p(&mut builder, state);
 
-        let num_rows = 1 << 6;
+        let num_rows = 1 << 3;
         let stark = builder.build::<C, 2>(num_rows);
 
         let writer = TraceWriter::new(&stark.air_data, num_rows);
@@ -324,8 +381,15 @@ mod tests {
         writer.write_global_instructions(&stark.air_data);
         for i in 0..num_rows {
             writer.write_row_instructions(&stark.air_data, i);
-            println!("{:?}", writer.read_array::<U64Register, 25>(&new_state, i));
+            let array = writer.read_array::<U64Register, 25>(&new_state, i);
+            println!("array 0{:?}", u64_from_le_field_bytes(&array[0]));
+            println!("array 24 {:?}", u64_from_le_field_bytes(&array[24]));
+            // println!("{:?}", writer.read_array::<U64Register, 25>(&new_state, i));
         }
+        let mut pure_input = [0; 25];
+        keccak_p(&mut pure_input);
+        println!("original 0 {:?}", pure_input[0]);
+        println!("original 24 {:?}", pure_input[24]);
 
         let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
         let proof = stark.prove(&trace, &public, &mut timing).unwrap();

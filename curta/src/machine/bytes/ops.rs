@@ -126,6 +126,7 @@ where
 
     fn rotate_left(self, rhs: usize, builder: &mut BytesBuilder<L>) -> Self::Output {
         builder.rotate_right(self, 8 * N - rhs)
+        // builder.rotate_left(self, rhs)
     }
 }
 
