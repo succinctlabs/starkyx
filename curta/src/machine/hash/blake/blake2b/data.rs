@@ -12,8 +12,9 @@ use crate::math::field::Field;
 pub struct BLAKE2BData<L: AirParameters> {
     pub public: BLAKE2BPublicData,
     pub trace: BLAKE2BTraceData,
-    pub memory: BLAKE2BMemory<L>,
-    pub consts: BLAKE2BConsts,
+    pub memory: BLAKE2BMemory,
+    pub consts: BLAKE2BConsts<L>,
+    pub const_nums: BLAKE2BConstNums,
 }
 
 pub struct BLAKE2BPublicData {
@@ -28,30 +29,29 @@ pub struct BLAKE2BTraceData {
     pub(crate) is_compress_first_row: BitRegister,
     pub(crate) is_compress_third_row: BitRegister,
     pub(crate) save_h: Slice<BitRegister>,
-    pub(crate) cycle_8_end_bit: BitRegister, // Used for each mix iteration
-    pub(crate) cycle_96_end_bit: BitRegister, // Used for each compress round
     pub(crate) compress_id: ElementRegister,
     pub(crate) compress_index: ElementRegister,
     pub(crate) mix_iteration: ElementRegister,
     pub(crate) mix_index: ElementRegister,
 }
 
-pub struct BLAKE2BMemory<L: AirParameters> {
+pub struct BLAKE2BMemory {
+    pub(crate) h: Slice<U64Register>,
+    pub(crate) v: Slice<U64Register>,
+    pub(crate) v_final: Slice<U64Register>,
+    pub(crate) m: Slice<U64Register>,
+}
+
+pub struct BLAKE2BConsts<L: AirParameters> {
     pub(crate) compress_initial_indices: MemoryArray<L, 4, 2>,
     pub(crate) iv: Slice<U64Register>,
     pub(crate) compress_iv: Slice<U64Register>,
     pub(crate) v_indices: MemoryArray<L, 8, 4>,
     pub(crate) v_last_write_ages: MemoryArray<L, 8, 4>,
     pub(crate) permutations: MemoryArray<L, 12, 16>,
-    pub(crate) h: Slice<U64Register>,
-    pub(crate) v: Slice<U64Register>,
-    pub(crate) v_final: Slice<U64Register>,
-    pub(crate) m: Slice<U64Register>,
-    pub(crate) end_bit: Slice<BitRegister>,
-    pub(crate) dummy_index: ElementRegister,
 }
 
-pub struct BLAKE2BConsts {
+pub struct BLAKE2BConstNums {
     pub(crate) const_0: ElementRegister,
     pub(crate) const_1: ElementRegister,
     pub(crate) const_2: ElementRegister,
