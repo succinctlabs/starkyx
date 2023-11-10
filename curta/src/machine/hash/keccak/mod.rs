@@ -53,6 +53,16 @@ where
         builder: &mut BytesBuilder<L>,
         state: ArrayRegister<U64Register>,
     ) -> ArrayRegister<U64Register> {
+        const NUM_WORDS: usize = 25;
+
+        const RHO_OFFSETS: [[usize; 5]; 5] = [
+            [0, 1, 190, 28, 91],
+            [36, 300, 6, 55, 276],
+            [3, 10, 171, 153, 231],
+            [105, 45, 15, 21, 136],
+            [210, 66, 253, 120, 78],
+        ];
+
         const RC: [u64; 24] = [
             1u64,
             0x8082u64,
@@ -84,34 +94,9 @@ where
         let round_constant_values =
             builder.constant_array::<U64Register>(&RC.map(u64_to_le_field_bytes));
 
-        let num_words = 25;
-
-        // let mut state_temp: Vec<U64Register> = Vec::with_capacity(25);
-        let mut state_temp: Vec<U64Register> = (0..num_words).map(|i| state.get(i)).collect();
-        // let mut b: Vec<U64Register> = Vec::with_capacity(5);
-        // for i in 0..num_words {
-        //     state_temp.push(state.get(i));
-        //     // b.push(builder.constant(&[L::Field::ZERO; 8]));
-        // }
-
-        // let mut c: Vec<U64Register> = Vec::with_capacity(5);
-        // let mut d: Vec<U64Register> = Vec::with_capacity(5);
-        // let mut c: Vec<U64Register> = vec![0; 5]
-        //     .iter()
-        //     .map(|_| builder.constant(&[L::Field::ZERO; 8]))
-        //     .collect();
-        // let mut d: Vec<U64Register> = vec![0; 5]
-        //     .iter()
-        //     .map(|_| builder.constant(&[L::Field::ZERO; 8]))
-        //     .collect();
-        // for _i in 0..5 {
-        //     c.push(builder.constant(&[L::Field::ZERO; 8]));
-        //     d.push(builder.constant(&[L::Field::ZERO; 8]));
-        // }
+        let mut state_temp: Vec<U64Register> = (0..NUM_WORDS).map(|i| state.get(i)).collect();
 
         for round in 0..24 {
-            // let mut c = [0; 5];
-            // let mut d = [0; 5];
             let mut c: Vec<U64Register> = (0..5)
                 .map(|_| builder.constant(&u64_to_le_field_bytes(0)))
                 .collect();
@@ -119,42 +104,21 @@ where
                 .map(|_| builder.constant(&u64_to_le_field_bytes(0)))
                 .collect();
 
-            // let mut c: Vec<U64Register> = Vec::new();
-            // let mut d: Vec<U64Register> = Vec::new();
-            // let mut b: Vec<U64Register> = Vec::new();
-            // for i in 0..5 {
-            //     c[i] = builder.constant(&[L::Field::ZERO; 8]);
-            //     d[i] = builder.constant(&[L::Field::ZERO; 8]);
-            // }
-
-            // C[x] = A[x,0] xor A[x,1] xor A[x,2] xor A[x,3] xor A[x,4], for x in 0…4
-            // for x in 0..5 {
-            //     let mut c_temp = builder.xor(&c[x], &state_temp[x]);
-            //     c_temp = builder.xor(&c_temp, &state_temp[x + 5]);
-            //     c_temp = builder.xor(&c_temp, &state_temp[x + 10]);
-            //     c_temp = builder.xor(&c_temp, &state_temp[x + 15]);
-            //     c[x] = builder.xor(&c_temp, &state_temp[x + 20]);
-            // }
             for y in 0..5 {
                 for x in 0..5 {
-                    // c[x] ^= state[x + y * 5];
                     c[x] = builder.xor(&c[x], &state_temp[x + y * 5]);
                 }
             }
 
             // D[x] = C[x-1] xor rot(C[x+1],1), for x in 0…4
             for x in 0..5 {
-                // d[x] = c[(x + 4) % 5] ^ c[(x + 1) % 5].rotate_left(1);
                 let d_temp = builder.rotate_left(c[(x + 1) % 5], 1);
-                // d[x] = builder.rotate_left::<U64Register, usize>(d_temp, 1);
-                // let d_temp = builder.xor(&c[(x + 4) % 5], &c[(x + 1) % 5]);
                 d[x] = builder.xor(&c[(x + 4) % 5], &d_temp);
             }
 
             // A[x,y] = A[x,y] xor D[x], for (x,y) in (0…4,0…4)
             for y in 0..5 {
                 for x in 0..5 {
-                    // state[x + y * 5] ^= d[x];
                     state_temp[x + y * 5] = builder.xor(&state_temp[x + y * 5], &d[x]);
                 }
             }
@@ -166,24 +130,8 @@ where
             let mut rho_x = 0;
             let mut rho_y = 1;
 
-            // TODO: save that to the trace
-            const RHO_OFFSETS: [[usize; 5]; 5] = [
-                [0, 1, 190, 28, 91],
-                [36, 300, 6, 55, 276],
-                [3, 10, 171, 153, 231],
-                [105, 45, 15, 21, 136],
-                [210, 66, 253, 120, 78],
-            ];
-
             for _ in 0..24 {
                 // Rotate each lane by an offset
-                //
-                // let index = rho_x + 5 * rho_y;
-                // state[index] = state[index].rotate_left(RHO_OFFSETS[rho_y][rho_x] % 64);
-                // let rho_x_prev = rho_x;
-                // rho_x = rho_y;
-                // rho_y = (2 * rho_x_prev + 3 * rho_y) % 5;
-                //
                 let index = rho_x + 5 * rho_y;
                 state_temp[index] =
                     builder.rotate_left(state_temp[index], RHO_OFFSETS[rho_y][rho_x] % 64);
@@ -200,8 +148,6 @@ where
             // B[y,2*x+3*y] = rot(A[x,y], r[x,y]), for (x,y) in (0…4,0…4)
             for y in 0..5 {
                 for x in 0..5 {
-                    // let index = ((x + 3 * y) % 5) + x * 5;
-                    // state[x + y * 5] = state_cloned[index];
                     let index = ((x + 3 * y) % 5) + x * 5;
                     state_temp[x + y * 5] = state_cloned[index];
                 }
@@ -215,9 +161,6 @@ where
             // A[x,y] = B[x,y] xor ((not B[x+1,y]) and B[x+2,y]), for (x,y) in (0…4,0…4)
             for y in 0..5 {
                 for x in 0..5 {
-                    // let index = x + y * 5;
-                    // state[index] = state_cloned[index]
-                    //     ^ (!state_cloned[(x + 1) % 5 + y * 5]) & state_cloned[(x + 2) % 5 + y * 5];
                     let index = x + y * 5;
                     let mut temp = builder.not(state_cloned[(x + 1) % 5 + y * 5]);
                     temp = builder.and(&temp, &state_cloned[(x + 2) % 5 + y * 5]);
@@ -230,18 +173,16 @@ where
             // ############################################
 
             // A[0,0] = A[0,0] xor RC
-            // state[0] ^= RC[i];
             state_temp[0] = builder.xor(&state_temp[0], &round_constant_values.get(round));
         }
 
-        let new_state = builder.alloc_array::<U64Register>(num_words);
+        let new_state = builder.alloc_array::<U64Register>(NUM_WORDS);
 
-        for i in 0..num_words {
+        for i in 0..NUM_WORDS {
             builder.set_to_expression(&new_state.get(i), state_temp[i].expr());
         }
 
         new_state
-        // state
     }
 
     fn hash(builder: &mut BytesBuilder<L>, input: &[u8]) -> [u8; 32] {
@@ -322,14 +263,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use core::num;
-
     use plonky2::field::goldilocks_field::GoldilocksField;
-    use plonky2::field::types::Field;
     use plonky2::util::timing::TimingTree;
     use serde::{Deserialize, Serialize};
 
-    use crate::chip::arithmetic::expression::ArithmeticExpression;
     use crate::chip::builder::tests::GoldilocksCubicParameters;
     use crate::chip::trace::writer::{InnerWriterData, TraceWriter};
     use crate::chip::uint::operations::instruction::UintInstruction;
@@ -340,7 +277,6 @@ mod tests {
     use crate::machine::bytes::builder::BytesBuilder;
     use crate::machine::hash::keccak::keccak256::keccak_p;
     use crate::machine::hash::keccak::{Keccak256, KeccakAir};
-    use crate::machine::hash::sha::sha256::pure;
     use crate::plonky2::stark::config::{CurtaConfig, CurtaPoseidonGoldilocksConfig};
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -362,15 +298,15 @@ mod tests {
         type C = CurtaPoseidonGoldilocksConfig;
         type _Config = <C as CurtaConfig<2>>::GenericConfig;
 
+        const NUM_WORDS: usize = 25;
+
         let _ = env_logger::builder().is_test(true).try_init();
 
         let mut timing = TimingTree::new("test_byte_multi_stark", log::Level::Debug);
 
         let mut builder = BytesBuilder::<Keccak256Test>::new();
 
-        let num_words = 25;
-        let state = builder.constant_array(&[u64_to_le_field_bytes(0); 25]);
-
+        let state = builder.constant_array(&[u64_to_le_field_bytes(0); NUM_WORDS]);
         let new_state = Keccak256::keccak_p(&mut builder, state);
 
         let num_rows = 1 << 3;
@@ -379,17 +315,20 @@ mod tests {
         let writer = TraceWriter::new(&stark.air_data, num_rows);
         // NOTE: you always need to write something to the trace even if you have zero values, otherwise the lookup argument will fail at the proof level
         writer.write_global_instructions(&stark.air_data);
+
         for i in 0..num_rows {
             writer.write_row_instructions(&stark.air_data, i);
-            let array = writer.read_array::<U64Register, 25>(&new_state, i);
-            println!("array 0{:?}", u64_from_le_field_bytes(&array[0]));
-            println!("array 24 {:?}", u64_from_le_field_bytes(&array[24]));
             // println!("{:?}", writer.read_array::<U64Register, 25>(&new_state, i));
         }
-        let mut pure_input = [0; 25];
-        keccak_p(&mut pure_input);
-        println!("original 0 {:?}", pure_input[0]);
-        println!("original 24 {:?}", pure_input[24]);
+
+        // Check against pure vanilla implementation of keccak
+        let air_hash_output = writer.read_array::<U64Register, 25>(&new_state, num_rows - 1);
+        let mut pure_state = [0; NUM_WORDS];
+        keccak_p(&mut pure_state);
+        assert_eq!(
+            pure_state,
+            air_hash_output.map(|i| u64_from_le_field_bytes(&i))
+        );
 
         let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
         let proof = stark.prove(&trace, &public, &mut timing).unwrap();
