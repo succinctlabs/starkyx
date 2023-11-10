@@ -5,7 +5,7 @@ use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::element::ElementRegister;
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::chip::uint::bytes::register::ByteRegister;
 use crate::math::prelude::*;
 
@@ -40,5 +40,16 @@ impl<F: PrimeField64> Instruction<F> for ByteOperationInstruction {
         let value = self.inner.write(writer, row_index);
         let digest = F::from_canonical_u32(value.lookup_digest_value());
         writer.write(&self.digest, &digest, row_index);
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        if let Some(r) = writer.row_index() {
+            if self.global && r != 0 {
+                return;
+            }
+        }
+        let value = self.inner.write_to_air(writer);
+        let digest = F::from_canonical_u32(value.lookup_digest_value());
+        writer.write(&self.digest, &digest);
     }
 }

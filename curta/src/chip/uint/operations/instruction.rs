@@ -4,7 +4,7 @@ use super::add::ByteArrayAdd;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::instruction::Instruction;
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::chip::uint::bytes::decode::ByteDecodeInstruction;
 use crate::chip::uint::bytes::lookup_table::{ByteInstructionSet, ByteInstructions};
 use crate::chip::uint::bytes::operations::instruction::ByteOperationInstruction;
@@ -40,6 +40,13 @@ impl<F: PrimeField64> Instruction<F> for UintInstruction {
         match self {
             Self::Bit(op) => Instruction::<F>::write(op, writer, row_index),
             Self::Add(op) => Instruction::<F>::write(op, writer, row_index),
+        }
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        match self {
+            Self::Bit(op) => Instruction::<F>::write_to_air(op, writer),
+            Self::Add(op) => Instruction::<F>::write_to_air(op, writer),
         }
     }
 }

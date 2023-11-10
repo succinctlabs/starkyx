@@ -21,9 +21,7 @@ pub trait Instruction<F: Field>:
 
     #[allow(unused_variables)]
     // Writes the instruction to a general AirWriter.
-    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
-        unimplemented!("write_to_air not implemented for this instruction")
-    }
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>);
 }
 
 /// An instruction that only consists of constraints
