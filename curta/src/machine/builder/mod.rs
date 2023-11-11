@@ -34,6 +34,8 @@ pub trait Builder: Sized {
     /// Returns the underlying AIR builder.
     fn api(&mut self) -> &mut AirBuilder<Self::Parameters>;
 
+    fn clk(&mut self) -> ElementRegister;
+
     /// Allocates a trace register.
     fn alloc<T: Register>(&mut self) -> T {
         self.api().alloc()
@@ -162,6 +164,20 @@ pub trait Builder: Sized {
         self.api().assert_expression_zero_transition(expression)
     }
 
+    /// Sets `dest` in the next row of the trace to equal the value of `src` in the current row.
+    fn set_next<T: Register>(&mut self, dest: &T, src: &T) {
+        self.set_to_expression_transition(&dest.next(), src.expr());
+    }
+
+    /// Sets `dest` in the first row of the trace to equal the value of `src` in the current row.
+    fn set_first_row<T: Register>(&mut self, dest: &T, src: &T) {
+        assert!(
+            matches!(dest.register(), MemorySlice::Local(_, _)),
+            "Cannot set non-local register in a first row constraint"
+        );
+        self.set_to_expression_first_row(dest, src.expr());
+    }
+
     fn assert_expressions_equal(
         &mut self,
         a: ArithmeticExpression<Self::Field>,
@@ -227,6 +243,18 @@ pub trait Builder: Sized {
         );
         self.api()
             .set_to_expression_transition(register, expression);
+    }
+
+    fn set_next_expression<T: Register>(
+        &mut self,
+        dest: &T,
+        src: ArithmeticExpression<Self::Field>,
+    ) {
+        assert!(
+            matches!(dest.register(), MemorySlice::Local(_, _)),
+            "Cannot set a next register in a transition constraint"
+        );
+        self.api().set_to_expression_transition(&dest.next(), src);
     }
 
     /// Computes the expression `expression` and returns the result as a trace register of type `T`.
@@ -394,5 +422,9 @@ impl<L: AirParameters> Builder for AirBuilder<L> {
 
     fn api(&mut self) -> &mut AirBuilder<L> {
         self
+    }
+
+    fn clk(&mut self) -> ElementRegister {
+        self.clock()
     }
 }

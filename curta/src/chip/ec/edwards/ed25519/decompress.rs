@@ -1,5 +1,4 @@
 use curve25519_dalek::edwards::CompressedEdwardsY;
-use itertools::Itertools;
 use num::{BigUint, One};
 
 use super::params::{Ed25519, Ed25519BaseField, Ed25519Parameters};
@@ -35,7 +34,7 @@ impl<L: AirParameters> AirBuilder<L> {
             one_limbs
                 .iter()
                 .map(|x| L::Field::from_canonical_u16(*x))
-                .collect_vec(),
+                .collect::<Vec<_>>(),
         );
         let one = self.constant(&one_p);
 
@@ -43,7 +42,7 @@ impl<L: AirParameters> AirBuilder<L> {
             Ed25519Parameters::D[0..num_limbs]
                 .iter()
                 .map(|x| L::Field::from_canonical_u16(*x))
-                .collect_vec(),
+                .collect::<Vec<_>>(),
         );
         let d: FieldRegister<Ed25519BaseField> = self.constant(&d_p);
 
@@ -52,7 +51,7 @@ impl<L: AirParameters> AirBuilder<L> {
             zero_limbs
                 .iter()
                 .map(|x| L::Field::from_canonical_u16(*x))
-                .collect_vec(),
+                .collect::<Vec<_>>(),
         );
         let zero: FieldRegister<Ed25519BaseField> = self.constant(&zero_p);
 

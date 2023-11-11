@@ -32,7 +32,8 @@ pub mod test_utils {
     use plonky2::util::timing::TimingTree;
 
     use super::*;
-    use crate::chip::trace::writer::{InnerWriterData, TraceWriter};
+    use crate::chip::trace::writer::data::AirWriterData;
+    use crate::chip::trace::writer::AirWriter;
     use crate::chip::uint::operations::instruction::UintInstructions;
     use crate::chip::{AirParameters, Chip};
     use crate::machine::bytes::builder::BytesBuilder;
@@ -105,7 +106,8 @@ pub mod test_utils {
         let rec_data = recursive_builder.build::<Config>();
 
         // Write trace.
-        let writer = TraceWriter::new(&stark.air_data, num_rows);
+        let mut writer_data = AirWriterData::new(&stark.air_data, num_rows);
+        let mut writer = writer_data.public_writer();
 
         let mut current_state = S::INITIAL_HASH;
         let mut hash_iter = hash_state.iter();
@@ -117,11 +119,7 @@ pub mod test_utils {
             .zip_eq(end_bits_values.iter())
             .enumerate()
         {
-            writer.write_array(
-                register,
-                message.iter().map(|x| S::int_to_field_value(*x)),
-                0,
-            );
+            writer.write_array(register, message.iter().map(|x| S::int_to_field_value(*x)));
 
             let pre_processed = S::pre_process(message);
             current_state = S::process(current_state, &pre_processed);
@@ -130,35 +128,40 @@ pub mod test_utils {
                 writer.write(
                     &digest_indices_iter.next().unwrap(),
                     &GoldilocksField::from_canonical_usize(i),
-                    0,
                 );
                 let h: S::StateVariable = *hash_iter.next().unwrap();
                 let array: ArrayRegister<_> = h.into();
-                writer.write_array(&array, &state, 0);
+                writer.write_array(&array, &state);
                 current_state = S::INITIAL_HASH;
             }
 
-            writer.write(&end_bit, end_bit_value, 0);
+            writer.write(&end_bit, end_bit_value);
         }
 
         timed!(timing, "write input", {
-            writer.write_global_instructions(&stark.air_data);
-            for i in 0..num_rows {
-                writer.write_row_instructions(&stark.air_data, i);
+            stark.air_data.write_global_instructions(&mut writer);
+
+            for mut chunk in writer_data.chunks(num_rows) {
+                for i in 0..num_rows {
+                    let mut writer = chunk.window_writer(i);
+                    stark.air_data.write_trace_instructions(&mut writer);
+                }
             }
         });
 
         // Compare expected digests with the trace values.
+        let writer = writer_data.public_writer();
         for (digest, expected) in hash_state.iter().zip_eq(expected_digests) {
             let array: ArrayRegister<S::IntRegister> = (*digest).into();
             let digest = writer
-                .read_array::<_, 8>(&array, 0)
+                .read_array::<_, 8>(&array)
                 .map(|x| S::field_value_to_int(&x));
             let expected_digest = S::decode(expected);
             assert_eq!(digest, expected_digest);
         }
 
-        let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
+        let (trace, public) = (writer_data.trace, writer_data.public);
+
         let proof = timed!(
             timing,
             "generate stark proof",

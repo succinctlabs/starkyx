@@ -5,7 +5,7 @@ use super::set::SetInstruction;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::instruction::Instruction;
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::math::field::Field;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,6 +28,13 @@ impl<F: Field> Instruction<F> for MemoryInstruction {
         match self {
             Self::Get(instr) => instr.write(writer, row_index),
             Self::Set(instr) => instr.write(writer, row_index),
+        }
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        match self {
+            Self::Get(instr) => instr.write_to_air(writer),
+            Self::Set(instr) => instr.write_to_air(writer),
         }
     }
 }

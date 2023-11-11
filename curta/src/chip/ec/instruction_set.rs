@@ -12,7 +12,7 @@ use crate::chip::field::mul::FpMulInstruction;
 use crate::chip::field::mul_const::FpMulConstInstruction;
 use crate::chip::field::sub::FpSubInstruction;
 use crate::chip::instruction::Instruction;
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::math::field::PrimeField64;
 use crate::polynomial::parser::PolynomialParser;
 
@@ -47,6 +47,13 @@ impl<E: EllipticCurve, F: PrimeField64> Instruction<F> for ECInstruction<E> {
         match self {
             Self::Fp(i) => i.write(writer, row_index),
             Self::LimbBit(i) => i.write(writer, row_index),
+        }
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        match self {
+            Self::Fp(i) => i.write_to_air(writer),
+            Self::LimbBit(i) => i.write_to_air(writer),
         }
     }
 }

@@ -10,7 +10,7 @@ use super::parameters::FieldParameters;
 use super::sub::FpSubInstruction;
 use crate::air::AirConstraint;
 use crate::chip::instruction::Instruction;
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::math::prelude::*;
 use crate::polynomial::parser::PolynomialParser;
 
@@ -77,6 +77,22 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpInstruction<P> {
             FpInstruction::Div(instruction) => {
                 Instruction::<F>::write(instruction, writer, row_index)
             }
+        }
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        match self {
+            FpInstruction::Add(instruction) => Instruction::<F>::write_to_air(instruction, writer),
+            FpInstruction::Mul(instruction) => Instruction::<F>::write_to_air(instruction, writer),
+            FpInstruction::MulConst(instruction) => {
+                Instruction::<F>::write_to_air(instruction, writer)
+            }
+            FpInstruction::Inner(instruction) => {
+                Instruction::<F>::write_to_air(instruction, writer)
+            }
+            FpInstruction::Den(instruction) => Instruction::<F>::write_to_air(instruction, writer),
+            FpInstruction::Sub(instruction) => Instruction::<F>::write_to_air(instruction, writer),
+            FpInstruction::Div(instruction) => Instruction::<F>::write_to_air(instruction, writer),
         }
     }
 }

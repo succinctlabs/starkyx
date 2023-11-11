@@ -7,7 +7,7 @@ use crate::air::AirConstraint;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,6 +84,31 @@ impl<F: Field> Instruction<F> for SetInstruction {
             }
             _ => unimplemented!("Cannot write to this memory slice type."),
         };
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        let multiplicity = if let Some(mult) = self.multiplicity {
+            writer.read(&mult)
+        } else {
+            F::ONE
+        };
+
+        let key = self.ptr.read_from_air(writer);
+
+        let value = writer.read_slice(&self.register).to_vec();
+
+        writer
+            .memory_mut()
+            .0
+            .entry(key)
+            .and_modify(|v| {
+                v.value.copy_from_slice(&value);
+                v.multiplicity += multiplicity;
+            })
+            .or_insert_with(|| MemEntry {
+                value,
+                multiplicity,
+            });
     }
 }
 

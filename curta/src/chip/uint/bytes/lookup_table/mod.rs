@@ -14,7 +14,7 @@ use crate::air::AirConstraint;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
 use crate::chip::table::lookup::values::LogLookupValues;
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::chip::AirParameters;
 
 pub mod builder_operations;
@@ -99,6 +99,17 @@ impl<F: PrimeField64> Instruction<F> for ByteInstructionSet {
             Self::BitNot(op) => Instruction::<F>::write(op, writer, row_index),
             Self::Decode(instruction) => Instruction::<F>::write(instruction, writer, row_index),
             Self::Digest(instruction) => Instruction::<F>::write(instruction, writer, row_index),
+        }
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        match self {
+            Self::Op(op) => Instruction::<F>::write_to_air(op, writer),
+            Self::BitAnd(op) => Instruction::<F>::write_to_air(op, writer),
+            Self::BitXor(op) => Instruction::<F>::write_to_air(op, writer),
+            Self::BitNot(op) => Instruction::<F>::write_to_air(op, writer),
+            Self::Decode(instruction) => Instruction::<F>::write_to_air(instruction, writer),
+            Self::Digest(instruction) => Instruction::<F>::write_to_air(instruction, writer),
         }
     }
 }

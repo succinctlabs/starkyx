@@ -5,7 +5,6 @@ use super::mul::FpMulInstruction;
 use super::parameters::FieldParameters;
 use super::register::FieldRegister;
 use crate::air::AirConstraint;
-use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
@@ -60,31 +59,23 @@ impl<L: AirParameters> AirBuilder<L> {
     {
         let is_trace = a.is_trace() || b.is_trace() || result.is_trace();
 
-        let mut one_value = vec![L::Field::ONE];
-        one_value.resize(P::NB_LIMBS, L::Field::ZERO);
-
         let denom_carry: FieldRegister<P>;
         let denom_witness_low: ArrayRegister<U16Register>;
         let denom_witness_high: ArrayRegister<U16Register>;
-        let one: FieldRegister<P>;
+        let one = self.fp_one();
         let b_inv: FieldRegister<P>;
 
         if is_trace {
             denom_carry = self.alloc::<FieldRegister<P>>();
             denom_witness_low = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
             denom_witness_high = self.alloc_array::<U16Register>(P::NB_WITNESS_LIMBS);
-            one = self.alloc::<FieldRegister<P>>();
             b_inv = self.alloc::<FieldRegister<P>>();
         } else {
             denom_carry = self.alloc_public::<FieldRegister<P>>();
             denom_witness_low = self.alloc_array_public::<U16Register>(P::NB_WITNESS_LIMBS);
             denom_witness_high = self.alloc_array_public::<U16Register>(P::NB_WITNESS_LIMBS);
-            one = self.alloc_public::<FieldRegister<P>>();
             b_inv = self.alloc_public::<FieldRegister<P>>();
         }
-
-        // set a register to the constant one.
-        self.set_to_expression(&one, ArithmeticExpression::from_constant_vec(one_value));
 
         // check that b * b_inv = one.
         let denominator = FpMulInstruction {
@@ -161,6 +152,29 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpDivInstruction<P>
 
         self.denominator.write(writer, row_index);
         self.multiplication.write(writer, row_index);
+    }
+
+    fn write_to_air(&self, writer: &mut impl crate::chip::trace::writer::AirWriter<Field = F>) {
+        let p_b = writer.read(&self.denominator.a);
+
+        let b_digits = p_b
+            .coefficients
+            .iter()
+            .map(|x| x.as_canonical_u64() as u16)
+            .collect::<Vec<_>>();
+
+        let b = digits_to_biguint(&b_digits);
+
+        let modulus = P::modulus();
+        let b_inv_int = b.modpow(&(&modulus - BigUint::from(2u64)), &modulus);
+        let p_b_inv = to_u16_le_limbs_polynomial::<F, P>(&b_inv_int);
+
+        let b_inv = &self.denominator.b;
+
+        writer.write(b_inv, &p_b_inv);
+
+        self.denominator.write_to_air(writer);
+        self.multiplication.write_to_air(writer);
     }
 }
 

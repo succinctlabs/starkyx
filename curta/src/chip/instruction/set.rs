@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::assign::AssignInstruction;
 use super::bit::BitConstraint;
+use super::clock::ClockInstruction;
 use super::cycle::{Cycle, ProcessIdInstruction};
 use super::Instruction;
 use crate::air::parser::{AirParser, MulParser};
@@ -22,6 +23,7 @@ pub enum AirInstruction<F, I> {
     Assign(AssignInstruction<F>),
     Select(SelectInstruction),
     Cycle(Cycle<F>),
+    Clock(ClockInstruction),
     ProcessId(ProcessIdInstruction),
     Filtered(ArithmeticExpression<F>, Arc<Self>),
     Mem(MemoryInstruction),
@@ -38,6 +40,7 @@ where
             AirInstruction::Assign(i) => AirConstraint::<AP>::eval(i, parser),
             AirInstruction::Select(i) => AirConstraint::<AP>::eval(i, parser),
             AirInstruction::Cycle(i) => AirConstraint::<AP>::eval(i, parser),
+            AirInstruction::Clock(i) => AirConstraint::<AP>::eval(i, parser),
             AirInstruction::ProcessId(i) => AirConstraint::<AP>::eval(i, parser),
             AirInstruction::Filtered(expression, instr) => {
                 assert_eq!(
@@ -67,6 +70,7 @@ impl<F: Field, I: Instruction<F>> Instruction<F> for AirInstruction<F, I> {
             AirInstruction::Select(i) => Instruction::<F>::write(i, writer, row_index),
             AirInstruction::Assign(i) => Instruction::<F>::write(i, writer, row_index),
             AirInstruction::Cycle(i) => Instruction::<F>::write(i, writer, row_index),
+            AirInstruction::Clock(i) => Instruction::<F>::write(i, writer, row_index),
             AirInstruction::ProcessId(i) => Instruction::<F>::write(i, writer, row_index),
             AirInstruction::Filtered(expression, i) => {
                 let filter = writer.read_expression(expression, row_index)[0];
@@ -75,6 +79,25 @@ impl<F: Field, I: Instruction<F>> Instruction<F> for AirInstruction<F, I> {
                 }
             }
             AirInstruction::Mem(i) => Instruction::<F>::write(i, writer, row_index),
+        }
+    }
+
+    fn write_to_air(&self, writer: &mut impl crate::chip::trace::writer::AirWriter<Field = F>) {
+        match self {
+            AirInstruction::CustomInstruction(i) => i.write_to_air(writer),
+            AirInstruction::BitConstraint(i) => i.write_to_air(writer),
+            AirInstruction::Select(i) => i.write_to_air(writer),
+            AirInstruction::Assign(i) => i.write_to_air(writer),
+            AirInstruction::Cycle(i) => i.write_to_air(writer),
+            AirInstruction::Clock(i) => i.write_to_air(writer),
+            AirInstruction::ProcessId(i) => i.write_to_air(writer),
+            AirInstruction::Filtered(expression, i) => {
+                let filter = writer.read_expression(expression)[0];
+                if filter == F::ONE {
+                    i.write_to_air(writer)
+                }
+            }
+            AirInstruction::Mem(i) => i.write_to_air(writer),
         }
     }
 }
@@ -104,5 +127,9 @@ impl<F, I> AirInstruction<F, I> {
 
     pub fn mem(instruction: MemoryInstruction) -> Self {
         AirInstruction::Mem(instruction)
+    }
+
+    pub fn clock(instruction: ClockInstruction) -> Self {
+        AirInstruction::Clock(instruction)
     }
 }

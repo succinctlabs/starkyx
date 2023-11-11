@@ -8,7 +8,7 @@ use crate::chip::instruction::ConstraintInstruction;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::register::{Register, RegisterSerializable};
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::chip::uint::bytes::bit_operations::util::u8_to_bits_le;
 use crate::chip::uint::bytes::register::ByteRegister;
 use crate::chip::uint::bytes::util::byte_decomposition;
@@ -234,6 +234,88 @@ impl ByteOperation<ByteRegister> {
             }
             ByteOperation::Range(a) => {
                 let a_val = from_field(writer.read(a, row_index));
+                ByteOperation::Range(a_val)
+            }
+        }
+    }
+
+    pub fn write_to_air<F: PrimeField64>(
+        &self,
+        writer: &mut impl AirWriter<Field = F>,
+    ) -> ByteOperation<u8> {
+        let from_field = |x: F| F::as_canonical_u64(&x) as u8;
+        let as_field = |x| F::from_canonical_u8(x);
+        match self {
+            ByteOperation::And(a, b, c) => {
+                let a_val = from_field(writer.read(a));
+                let b_val = from_field(writer.read(b));
+                let c_val = a_val & b_val;
+                writer.write(c, &as_field(c_val));
+                ByteOperation::And(a_val, b_val, c_val)
+            }
+            ByteOperation::Xor(a, b, c) => {
+                let a_val = from_field(writer.read(a));
+                let b_val = from_field(writer.read(b));
+                let c_val = a_val ^ b_val;
+                writer.write(c, &as_field(c_val));
+                ByteOperation::Xor(a_val, b_val, c_val)
+            }
+            ByteOperation::Shr(a, b, c) => {
+                let a_val = from_field(writer.read(a));
+                let b_val = from_field(writer.read(b));
+                let c_val = a_val >> (b_val & 0x7);
+                writer.write(c, &as_field(c_val));
+                ByteOperation::Shr(a_val, b_val, c_val)
+            }
+            ByteOperation::ShrConst(a, b, c) => {
+                let a_val = from_field(writer.read(a));
+                let c_val = a_val >> (b & 0x7);
+                writer.write(c, &as_field(c_val));
+                ByteOperation::Shr(a_val, *b, c_val)
+            }
+            ByteOperation::ShrCarry(a, b, result, carry) => {
+                let a_val = from_field(writer.read(a));
+                let b_mod = b & 0x7;
+                let (res_val, mut carry_val) = if b_mod != 0 {
+                    let res_val = a_val >> b_mod;
+                    let carry_val = (a_val << (8 - b_mod)) >> (8 - b_mod);
+                    debug_assert_eq!(
+                        a_val.rotate_right(b_mod as u32),
+                        res_val + (carry_val << (8 - b_mod))
+                    );
+                    (res_val, carry_val)
+                } else {
+                    (a_val, 0u8)
+                };
+                writer.write(result, &as_field(res_val));
+                writer.write(carry, &as_field(carry_val));
+
+                if carry_val != 0 {
+                    carry_val <<= 8 - b_mod;
+                }
+                ByteOperation::Rot(a_val, *b, res_val + carry_val)
+            }
+            ByteOperation::Rot(a, b, c) => {
+                let a_val = from_field(writer.read(a));
+                let b_val = from_field(writer.read(b));
+                let c_val = a_val.rotate_right((b_val & 0x7) as u32);
+                writer.write(c, &as_field(c_val));
+                ByteOperation::Rot(a_val, b_val, c_val)
+            }
+            ByteOperation::RotConst(a, b, c) => {
+                let a_val = from_field(writer.read(a));
+                let c_val = a_val.rotate_right((b & 0x7) as u32);
+                writer.write(c, &as_field(c_val));
+                ByteOperation::Rot(a_val, *b, c_val)
+            }
+            ByteOperation::Not(a, b) => {
+                let a_val = from_field(writer.read(a));
+                let b_val = !a_val;
+                writer.write(b, &as_field(b_val));
+                ByteOperation::Not(a_val, b_val)
+            }
+            ByteOperation::Range(a) => {
+                let a_val = from_field(writer.read(a));
                 ByteOperation::Range(a_val)
             }
         }

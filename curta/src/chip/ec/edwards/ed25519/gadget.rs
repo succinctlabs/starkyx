@@ -6,7 +6,7 @@ use super::point::CompressedPointRegister;
 use crate::chip::builder::AirBuilder;
 use crate::chip::field::register::FieldRegister;
 use crate::chip::register::bit::BitRegister;
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
 use crate::polynomial::to_u16_le_limbs_polynomial;
@@ -31,6 +31,31 @@ pub trait CompressedPointWriter {
         row_index: usize,
     );
 }
+
+pub trait CompressedPointAirWriter: AirWriter {
+    fn write_ec_compressed_point(
+        &mut self,
+        data: &CompressedPointRegister,
+        value: &CompressedEdwardsY,
+    ) {
+        let mut value_bytes = *value.as_bytes();
+        let compressed_sign_bit = Self::Field::from_canonical_u8(value_bytes[31] >> 7);
+
+        //println!("compressed_sign_bit is {:?}", compressed_sign_bit);
+
+        self.write(&data.sign, &compressed_sign_bit);
+
+        // mask the most significant bit
+        value_bytes[31] &= 0x7f;
+
+        let y = BigUint::from_bytes_le(&value_bytes);
+
+        let value_y = to_u16_le_limbs_polynomial::<Self::Field, Ed25519BaseField>(&y);
+        self.write(&data.y, &value_y);
+    }
+}
+
+impl<W: AirWriter> CompressedPointAirWriter for W {}
 
 impl<L: AirParameters> CompressedPointGadget for AirBuilder<L> {
     fn alloc_local_ec_compressed_point(&mut self) -> CompressedPointRegister {

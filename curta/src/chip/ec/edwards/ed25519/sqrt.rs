@@ -14,7 +14,7 @@ use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::u16::U16Register;
 use crate::chip::register::{Register, RegisterSerializable};
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::chip::utils::digits_to_biguint;
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
@@ -150,6 +150,32 @@ impl<F: PrimeField64> Instruction<F> for Ed25519FpSqrtInstruction {
         writer.write_array(&self.limb_witness, limb_bits, row_index);
 
         self.square.write(writer, row_index);
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        let p_a = writer.read(&self.square.result);
+
+        let a_digits = p_a
+            .coefficients
+            .iter()
+            .map(|x| x.as_canonical_u64() as u16)
+            .collect::<Vec<_>>();
+
+        let a = digits_to_biguint(&a_digits);
+
+        let beta = sqrt(a);
+        let p_beta = to_u16_le_limbs_polynomial::<F, Ed25519BaseField>(&beta);
+        let a = &self.square.a;
+
+        let limb = p_beta.coefficients[0].as_canonical_u64();
+        let limb_bits = (0..Ed25519BaseField::NB_BITS_PER_LIMB)
+            .map(|i| F::from_canonical_u64((limb >> i) & 1))
+            .skip(1);
+
+        writer.write(a, &p_beta);
+        writer.write_array(&self.limb_witness, limb_bits);
+
+        self.square.write_to_air(writer);
     }
 }
 

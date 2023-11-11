@@ -1,5 +1,3 @@
-use itertools::Itertools;
-
 use super::{EdwardsCurve, EdwardsParameters};
 use crate::chip::builder::AirBuilder;
 use crate::chip::ec::point::AffinePointRegister;
@@ -29,7 +27,7 @@ impl<L: AirParameters> AirBuilder<L> {
             one_limbs
                 .iter()
                 .map(|x| L::Field::from_canonical_u16(*x))
-                .collect_vec(),
+                .collect::<Vec<_>>(),
         );
         let one = self.constant(&one_p);
 
@@ -37,7 +35,7 @@ impl<L: AirParameters> AirBuilder<L> {
             E::D[0..num_limbs]
                 .iter()
                 .map(|x| L::Field::from_canonical_u16(*x))
-                .collect_vec(),
+                .collect::<Vec<_>>(),
         );
 
         let d = self.constant(&d_p);

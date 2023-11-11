@@ -22,20 +22,38 @@ use crate::trace::window::TraceWindow;
 use crate::trace::window_parser::TraceWindowParser;
 use crate::trace::AirTrace;
 
+pub mod data;
+pub mod public;
 pub mod row;
 pub mod window;
 
-pub trait AirWriter<F: Field> {
-    fn write_slice(&mut self, memory_slice: &MemorySlice, value: &[F]);
+pub trait AirWriter: Sized {
+    type Field: Field;
 
-    fn read_slice(&self, memory_slice: &MemorySlice) -> &[F];
+    fn write_slice(&mut self, memory_slice: &MemorySlice, value: &[Self::Field]);
 
-    fn read<T: Register>(&self, data: &T) -> T::Value<F> {
+    fn read_slice(&self, memory_slice: &MemorySlice) -> &[Self::Field];
+
+    fn memory(&self) -> &MemoryMap<Self::Field>;
+
+    fn memory_mut(&mut self) -> &mut MemoryMap<Self::Field>;
+
+    /// The current row index in the trace of the writer.
+    fn row_index(&self) -> Option<usize>;
+
+    // The total number of lines in the trace.
+    fn height(&self) -> usize;
+
+    fn read<T: Register>(&self, data: &T) -> T::Value<Self::Field> {
         let slice = self.read_slice(data.register());
         T::value_from_slice(slice)
     }
 
-    fn read_vec<R: Register>(&self, array: &ArrayRegister<R>) -> Vec<R::Value<F>> {
+    fn read_expression(&self, expression: &ArithmeticExpression<Self::Field>) -> Vec<Self::Field> {
+        expression.expression.eval_writer(self)
+    }
+
+    fn read_vec<R: Register>(&self, array: &ArrayRegister<R>) -> Vec<R::Value<Self::Field>> {
         array
             .into_iter()
             .map(|register| self.read(&register))
@@ -45,35 +63,39 @@ pub trait AirWriter<F: Field> {
     fn read_array<R: Register, const N: usize>(
         &self,
         array: &ArrayRegister<R>,
-    ) -> [R::Value<F>; N] {
+    ) -> [R::Value<Self::Field>; N] {
         let elem_fn = |i| self.read(&array.get(i));
         core::array::from_fn(elem_fn)
     }
 
-    fn write<T: Register>(&mut self, data: &T, value: &T::Value<F>) {
+    fn write<T: Register>(&mut self, data: &T, value: &T::Value<Self::Field>) {
         self.write_slice(data.register(), T::align(value))
     }
 
     fn write_array<T: Register, I>(&mut self, array: &ArrayRegister<T>, values: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<T::Value<F>>,
+        I::Item: Borrow<T::Value<Self::Field>>,
     {
         for (data, value) in array.into_iter().zip(values) {
             self.write(&data, value.borrow());
         }
     }
 
-    fn read_log_entry<T: EvalCubic>(&self, entry: &LogEntry<T>) -> LogEntryValue<F> {
+    fn write_instruction(&mut self, instruction: &impl Instruction<Self::Field>) {
+        instruction.write_to_air(self)
+    }
+
+    fn read_log_entry<T: EvalCubic>(&self, entry: &LogEntry<T>) -> LogEntryValue<Self::Field> {
         let eval = |value: &T| T::trace_value_as_cubic(self.read(value));
         match entry {
             LogEntry::Input(value) => LogEntryValue {
                 value: eval(value),
-                multiplier: F::ONE,
+                multiplier: Self::Field::ONE,
             },
             LogEntry::Output(value) => LogEntryValue {
                 value: eval(value),
-                multiplier: -F::ONE,
+                multiplier: -Self::Field::ONE,
             },
             LogEntry::InputMultiplicity(value, multiplier) => {
                 let multiplier = self.read(multiplier);

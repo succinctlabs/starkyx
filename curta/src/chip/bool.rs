@@ -10,7 +10,7 @@ use super::register::bit::BitRegister;
 use super::register::element::ElementRegister;
 use super::register::memory::MemorySlice;
 use super::register::{Register, RegisterSerializable};
-use super::trace::writer::TraceWriter;
+use super::trace::writer::{AirWriter, TraceWriter};
 use super::AirParameters;
 use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
@@ -106,6 +106,22 @@ impl<F: Field> Instruction<F> for SelectInstruction {
             writer.write_slice(&self.result, &true_value, row_index);
         } else {
             writer.write_slice(&self.result, &false_value, row_index);
+        }
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        let bit = writer.read(&self.bit);
+        let true_value_array =
+            ArrayRegister::<ElementRegister>::from_register_unsafe(self.true_value);
+        let false_value_array =
+            ArrayRegister::<ElementRegister>::from_register_unsafe(self.false_value);
+        let true_value = writer.read_vec(&true_value_array);
+        let false_value = writer.read_vec(&false_value_array);
+
+        if bit == F::ONE {
+            writer.write_slice(&self.result, &true_value);
+        } else {
+            writer.write_slice(&self.result, &false_value);
         }
     }
 }
