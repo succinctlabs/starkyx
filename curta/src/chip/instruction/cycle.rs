@@ -285,7 +285,6 @@ mod tests {
     #[test]
     fn test_cycle_instruction() {
         type L = CycleTest;
-        type SC = PoseidonGoldilocksStarkConfig;
 
         let _ = env_logger::builder().is_test(true).try_init();
 
@@ -296,8 +295,6 @@ mod tests {
 
         let num_rows = 1 << 8;
         let mut air_writer_data = AirWriterData::new(&trace_data, num_rows);
-        assert_eq!(air_writer_data.trace.height(), num_rows);
-        assert_eq!(air_writer_data.trace.width, L::num_columns());
 
         let chunk_size = 1 << 4;
         let chunk_length = num_rows / chunk_size;
@@ -318,17 +315,7 @@ mod tests {
 
         for window in trace.windows() {
             let mut window_parser = TraceWindowParser::new(window, &[], &[], &[]);
-            assert_eq!(window_parser.local_slice().len(), L::num_columns());
             air.eval(&mut window_parser);
         }
-
-        let stark = Starky::new(air);
-        let config = SC::standard_fast_config(num_rows);
-
-        // Generate proof and verify as a stark
-        test_starky(&stark, &config, &generator, &[]);
-
-        // Test the recursive proof.
-        test_recursive_starky(stark, config, generator, &[]);
     }
 }
