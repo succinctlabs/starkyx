@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::air::parser::AirParser;
 use crate::chip::register::memory::MemorySlice;
-use crate::chip::register::Register;
 use crate::chip::trace::writer::AirWriter;
 use crate::math::prelude::*;
 
@@ -39,20 +38,8 @@ pub enum ArithmeticExpressionSlice<F> {
 }
 
 impl<F: Field> ArithmeticExpressionSlice<F> {
-    pub fn new<T: Register>(input: &T) -> Self {
-        ArithmeticExpressionSlice::Input(*input.register())
-    }
-
     pub fn from_raw_register(input: MemorySlice) -> Self {
         ArithmeticExpressionSlice::Input(input)
-    }
-
-    pub fn from_constant(constant: F) -> Self {
-        ArithmeticExpressionSlice::Const(vec![constant])
-    }
-
-    pub fn from_constant_vec(constants: Vec<F>) -> Self {
-        ArithmeticExpressionSlice::Const(constants)
     }
 
     pub fn registers(&self) -> Vec<MemorySlice> {

@@ -185,7 +185,7 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
         let process_id = data.process_id;
         let temp_x_ptr = data.temp_x_ptr.get_at(process_id);
         let temp_y_ptr = data.temp_y_ptr.get_at(process_id);
-        let clk = Time::from_element(self.api().clock());
+        let clk = Time::from_element(self.clk());
         let temp_x = self.load(&temp_x_ptr, &clk);
         let temp_y = self.load(&temp_y_ptr, &clk);
         let temp = AffinePointRegister::new(temp_x, temp_y);
@@ -257,7 +257,7 @@ mod tests {
         type Instruction = ECInstruction<Ed25519>;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 1632;
-        const NUM_FREE_COLUMNS: usize = 20;
+        const NUM_FREE_COLUMNS: usize = 19;
         const EXTENDED_COLUMNS: usize = 2502;
     }
 
