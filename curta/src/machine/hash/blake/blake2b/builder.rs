@@ -77,7 +77,6 @@ where
             const_13: self.constant(&L::Field::from_canonical_u8(13)),
             const_14: self.constant(&L::Field::from_canonical_u8(14)),
             const_15: self.constant(&L::Field::from_canonical_u8(15)),
-            const_92: self.constant(&L::Field::from_canonical_u8(92)),
             const_96: self.constant(&L::Field::from_canonical_u8(96)),
             const_ffffffffffffffff: self
                 .constant::<U64Register>(&u64_to_le_field_bytes::<L::Field>(0xFFFFFFFFFFFFFFFF)),
@@ -216,17 +215,6 @@ where
             compress_id.expr() + cycle_96_end_bit.expr(),
         );
 
-        let mix_iteration: ElementRegister = self.alloc::<ElementRegister>();
-        self.set_to_expression_first_row(&mix_iteration, L::Field::ZERO.into());
-        self.set_to_expression_transition(
-            &mix_iteration.next(),
-            (cycle_96_end_bit.expr() * const_nums.const_0.expr())
-                + cycle_96_end_bit.not_expr()
-                    * (cycle_8_end_bit.not_expr() * mix_iteration.expr()
-                        + cycle_8_end_bit.expr()
-                            * (mix_iteration.expr() + const_nums.const_1.expr())),
-        );
-
         let mix_index = self.alloc::<ElementRegister>();
         self.set_to_expression_first_row(&mix_index, L::Field::ZERO.into());
         self.set_to_expression_transition(
@@ -299,7 +287,6 @@ where
             save_h,
             compress_id,
             compress_index,
-            mix_iteration,
             mix_index,
         }
     }
@@ -307,15 +294,29 @@ where
     pub fn blake2b_memory(
         &mut self,
         padded_chunks: &[ArrayRegister<U64Register>],
+        num_consts: &BLAKE2BConstNums,
         consts: &BLAKE2BConsts<L>,
     ) -> BLAKE2BMemory {
         // Initialize the h memory
         // Need to set DUMMY_VALUE at DUMMY_TS with multiplicity of (96 - 4) * 2.
+        let num_dummy_accesses = self.constant(&L::Field::from_canonical_usize(368));
         let h = self.uninit_slice();
+        self.store(
+            &h.get_at(consts.dummy_index),
+            num_consts.const_0_u64,
+            &Time::from_element(consts.dummy_ts),
+            Some(num_dummy_accesses),
+        );
 
         // Initialize the v memory
         // Need to set DUMMY_VALUE at DUMMY_TS with multiplicity of 1.
         let v = self.uninit_slice();
+        self.store(
+            &v.get_at(consts.dummy_index),
+            num_consts.const_0_u64,
+            &Time::from_element(consts.dummy_ts),
+            None,
+        );
 
         // Initialize the v final memory
         let v_final = self.uninit_slice();
@@ -368,7 +369,7 @@ where
         let trace = self.blake2b_trace_data(&const_nums, &num_compresses_element, end_bits);
 
         // create the memory data
-        let memory = self.blake2b_memory(padded_chunks, &consts);
+        let memory = self.blake2b_memory(padded_chunks, &const_nums, &consts);
 
         BLAKE2BData {
             public,
