@@ -54,7 +54,14 @@ where
         digest_bits: &ArrayRegister<BitRegister>,
         digest_indices: &ArrayRegister<ElementRegister>,
     ) -> Vec<ArrayRegister<U64Register>> {
-        let data = Self::blake2b_data(builder, padded_chunks, msg_lens, end_bits, digest_indices);
+        let data = Self::blake2b_data(
+            builder,
+            padded_chunks,
+            msg_lens,
+            end_bits,
+            digest_bits,
+            digest_indices,
+        );
 
         let (v_indices, v_values) = Self::blake2b_compress_initialize(builder, &data);
         Self::blake2b_compress(builder, &v_indices, &v_values, &data)
@@ -196,6 +203,7 @@ where
         const_nums: &BLAKE2BConstNums,
         num_rounds_element: &ElementRegister,
         end_bits: &ArrayRegister<BitRegister>,
+        digest_bits: &ArrayRegister<BitRegister>,
     ) -> BLAKE2BTraceData {
         let (cycle_3_end_bit, cycle_4_end_bit, cycle_8_end_bit, cycle_96_end_bit) =
             Self::cycles_end_bits(builder);
@@ -206,6 +214,15 @@ where
             builder.store(
                 &end_bit.get(i),
                 end_bit_val,
+                &Time::zero(),
+                Some(const_nums.const_96),
+            );
+        }
+        let digest_bit = builder.uninit_slice();
+        for (i, digest_bit_val) in digest_bits.iter().enumerate() {
+            builder.store(
+                &digest_bit.get(i),
+                digest_bit_val,
                 &Time::zero(),
                 Some(const_nums.const_96),
             );
@@ -290,6 +307,8 @@ where
             is_compress_initialize,
             is_compress_first_row,
             is_compress_third_row,
+            cycle_96_end_bit,
+            digest_bit,
             save_h,
             compress_id,
             compress_index,
@@ -344,6 +363,7 @@ where
         padded_chunks: &[ArrayRegister<U64Register>],
         msg_lens: &[ArrayRegister<U64Register>],
         end_bits: &ArrayRegister<BitRegister>,
+        digest_bits: &ArrayRegister<BitRegister>,
         digest_indices: &ArrayRegister<ElementRegister>,
     ) -> BLAKE2BData<L> {
         assert_eq!(padded_chunks.len(), end_bits.len());
@@ -376,8 +396,13 @@ where
         );
 
         // create the trace data
-        let trace =
-            Self::blake2b_trace_data(builder, &const_nums, &num_compresses_element, end_bits);
+        let trace = Self::blake2b_trace_data(
+            builder,
+            &const_nums,
+            &num_compresses_element,
+            end_bits,
+            digest_bits,
+        );
 
         // create the memory data
         let memory = Self::blake2b_memory(builder, padded_chunks, &const_nums, &consts);
@@ -566,6 +591,19 @@ where
             .map(|_| builder.alloc_array_public(4))
             .collect::<Vec<_>>();
 
+        let state_ptr = builder.uninit_slice();
+
+        for (i, h_slice) in data
+            .public
+            .digest_indices
+            .iter()
+            .zip(hash_state_public.iter())
+        {
+            for (j, h) in h_slice.iter().enumerate() {
+                builder.free(&state_ptr.get(j), h, &Time::from_element(i));
+            }
+        }
+
         let m_idx_1 = data.consts.permutations.get_at(
             builder,
             data.trace.compress_index,
@@ -674,17 +712,32 @@ where
             data.const_nums.const_6,
             data.const_nums.const_7,
         ];
-        for (workspace_i, (v_i, h_i)) in v_indices.iter().zip(h_indices.iter()).enumerate() {
-            let mut v_value = builder.load(
+        let h = builder.alloc_array::<U64Register>(8);
+        for (i, (v_i, h_i)) in v_indices.iter().zip(h_indices.iter()).enumerate() {
+            let v_value = builder.load(
                 &data.memory.v_final.get_at(*v_i),
                 &Time::from_element(write_ts),
             );
-            v_value = builder.xor(h_workspace_2.get(workspace_i), v_value);
+            builder.set_to_expression(&h.get(i), builder.xor(h_workspace_2.get(i), v_value).expr());
             builder.store(
                 &data.memory.h.get_at(*h_i),
                 v_value,
                 &Time::from_element(write_ts),
                 None,
+            );
+        }
+
+        let digest_bit = builder.load(
+            &data.trace.digest_bit.get_at(data.trace.compress_id),
+            &Time::zero(),
+        );
+        let flag = Some(builder.expression(data.trace.cycle_96_end_bit.expr() * digest_bit.expr()));
+        for (i, element) in h.get_subarray(0..4).iter().enumerate() {
+            builder.store(
+                &state_ptr.get(i),
+                element,
+                &Time::from_element(data.trace.compress_id),
+                flag,
             );
         }
 
