@@ -49,7 +49,7 @@ where
     pub fn blake2b(
         builder: &mut BytesBuilder<L>,
         padded_chunks: &[ArrayRegister<U64Register>],
-        msg_lens: &[ArrayRegister<U64Register>],
+        t_values: &ArrayRegister<U64Register>,
         end_bits: &ArrayRegister<BitRegister>,
         digest_bits: &ArrayRegister<BitRegister>,
         digest_indices: &ArrayRegister<ElementRegister>,
@@ -57,7 +57,7 @@ where
         let data = Self::blake2b_data(
             builder,
             padded_chunks,
-            msg_lens,
+            t_values,
             end_bits,
             digest_bits,
             digest_indices,
@@ -349,9 +349,11 @@ where
         // Initialize the m memory
         let m = builder.uninit_slice();
 
-        for (i, padded_chunk) in padded_chunks.iter().enumerate() {
-            for (j, word) in padded_chunk.iter().enumerate().take(32) {
-                builder.store(&m.get(j), word, &Time::constant(i), None);
+        let mut compress_id = 0;
+        for padded_chunk in padded_chunks.iter() {
+            for (j, word) in padded_chunk.iter().enumerate().take(16) {
+                builder.store(&m.get(j), word, &Time::constant(compress_id), None);
+                compress_id += 1;
             }
         }
 
@@ -361,7 +363,7 @@ where
     pub fn blake2b_data(
         builder: &mut BytesBuilder<L>,
         padded_chunks: &[ArrayRegister<U64Register>],
-        msg_lens: &[ArrayRegister<U64Register>],
+        t_values: &ArrayRegister<U64Register>,
         end_bits: &ArrayRegister<BitRegister>,
         digest_bits: &ArrayRegister<BitRegister>,
         digest_indices: &ArrayRegister<ElementRegister>,
@@ -382,6 +384,7 @@ where
 
         let public = BLAKE2BPublicData {
             padded_chunks: padded_chunks.to_vec(),
+            t_values: *t_values,
             end_bits: *end_bits,
             digest_indices: *digest_indices,
         };
@@ -617,8 +620,14 @@ where
             .permutations
             .get_at(builder, data.trace.compress_index, next_col);
 
-        let m_1 = builder.load(&data.memory.m.get_at(m_idx_1), &Time::zero());
-        let m_2 = builder.load(&data.memory.m.get_at(m_idx_2), &Time::zero());
+        let m_1 = builder.load(
+            &data.memory.m.get_at(m_idx_1),
+            &Time::from_element(data.trace.compress_id),
+        );
+        let m_2 = builder.load(
+            &data.memory.m.get_at(m_idx_2),
+            &Time::from_element(data.trace.compress_id),
+        );
 
         let (updated_v0, updated_v1, updated_v2, updated_v3) = Self::blake2b_mix(
             builder,

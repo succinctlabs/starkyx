@@ -19,6 +19,7 @@ pub struct BLAKE2BData<L: AirParameters> {
 
 pub struct BLAKE2BPublicData {
     pub padded_chunks: Vec<ArrayRegister<U64Register>>,
+    pub t_values: ArrayRegister<U64Register>,
     pub end_bits: ArrayRegister<BitRegister>,
     pub digest_indices: ArrayRegister<ElementRegister>,
 }
