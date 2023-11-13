@@ -49,10 +49,13 @@ pub struct BLAKE2BConsts<L: AirParameters> {
     pub(crate) v_indices: MemoryArray<L, 8, 4>,
     pub(crate) v_last_write_ages: MemoryArray<L, 8, 4>,
     pub(crate) permutations: MemoryArray<L, 12, 16>,
+    pub(crate) dummy_index: ElementRegister,
+    pub(crate) dummy_ts: ElementRegister,
 }
 
 pub struct BLAKE2BConstNums {
     pub(crate) const_0: ElementRegister,
+    pub(crate) const_0_u64: U64Register,
     pub(crate) const_1: ElementRegister,
     pub(crate) const_2: ElementRegister,
     pub(crate) const_3: ElementRegister,
@@ -74,7 +77,7 @@ pub struct BLAKE2BConstNums {
 }
 
 pub(crate) struct MemoryArray<L: AirParameters, const R: usize, const C: usize> {
-    flattened_memory: Slice<ElementRegister>,
+    pub flattened_memory: Slice<ElementRegister>,
     c_const: ElementRegister,
     _marker: std::marker::PhantomData<L>,
 }
@@ -89,7 +92,7 @@ impl<L: AirParameters, const R: usize, const C: usize> MemoryArray<L, R, C> {
     }
 
     pub(crate) fn store_row(
-        self,
+        &mut self,
         builder: &mut BytesBuilder<L>,
         row: usize,
         values: &[u8],

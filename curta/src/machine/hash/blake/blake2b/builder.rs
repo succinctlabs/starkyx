@@ -51,16 +51,17 @@ where
         padded_chunks: &[ArrayRegister<U64Register>],
         msg_lens: &[ArrayRegister<U64Register>],
         end_bits: &ArrayRegister<BitRegister>,
-    ) -> Vec<SHA256DigestRegister> {
+    ) {
         let data = self.blake2b_data(padded_chunks, msg_lens, end_bits);
 
         let (v_indices, v_values) = self.blake2b_compress_initialize(&data);
-        self.blake2b_compress(self, &v_indices, &v_values, &data)
+        self.blake2b_compress(&v_indices, &v_values, &data);
     }
 
     pub fn blake2b_const_nums(&mut self) -> BLAKE2BConstNums {
         BLAKE2BConstNums {
             const_0: self.constant(&L::Field::from_canonical_u8(0)),
+            const_0_u64: self.constant(&u64_to_le_field_bytes(0u64)),
             const_1: self.constant(&L::Field::from_canonical_u8(1)),
             const_2: self.constant(&L::Field::from_canonical_u8(2)),
             const_3: self.constant(&L::Field::from_canonical_u8(3)),
@@ -88,18 +89,34 @@ where
         num_compress_element: &ElementRegister,
         num_mix_iterations: &ElementRegister,
         end_bits: &ArrayRegister<BitRegister>,
+        const_nums: &BLAKE2BConstNums,
     ) -> BLAKE2BConsts<L> {
         let mut num_messages: ElementRegister = self.alloc_public();
-        for (i, end_bit) in end_bits.iter().enumerate() {
+        for end_bit in end_bits.iter() {
             num_messages = self.expression(end_bit.expr() + num_messages.expr());
         }
+
+        assert!(DUMMY_INDEX < L::Field::order());
+        let dummy_index: ElementRegister =
+            self.constant(&L::Field::from_canonical_u64(DUMMY_INDEX));
+
+        assert!(DUMMY_TS < L::Field::order());
+        let dummy_ts: ElementRegister = self.constant(&L::Field::from_canonical_u64(DUMMY_TS));
 
         let iv_values = self.constant_array::<U64Register>(&IV.map(u64_to_le_field_bytes));
         let iv = self.uninit_slice();
         for (i, value) in iv_values.iter().enumerate() {
             self.store(&iv.get(i), value, &Time::zero(), Some(num_messages));
         }
-        // TODO:  Need to add in the multiplcity for the IV dummy index
+        let num_dummy_reads = 2 * (96 - 4) * 2;
+        let num_dummy_reads_element =
+            self.constant(&L::Field::from_canonical_usize(num_dummy_reads));
+        self.store(
+            &iv.get_at(dummy_index),
+            const_nums.const_0_u64,
+            &Time::zero(),
+            Some(num_dummy_reads_element),
+        );
 
         let compress_iv_values =
             self.constant_array::<U64Register>(&COMPRESS_IV.map(u64_to_le_field_bytes));
@@ -112,25 +129,46 @@ where
                 Some(*num_compress_element),
             );
         }
-        // TODO:  Need to add in the multiplcity for the compress IV dummy index
+        let num_dummy_reads = 2 * (96 - 4) * 2;
+        let num_dummy_reads_element =
+            self.constant(&L::Field::from_canonical_usize(num_dummy_reads));
+        self.store(
+            &compress_iv.get_at(dummy_index),
+            const_nums.const_0_u64,
+            &Time::zero(),
+            Some(num_dummy_reads_element),
+        );
 
-        let compress_initial_indices = MemoryArray::<L, 4, 2>::new(self);
+        let mut compress_initial_indices = MemoryArray::<L, 4, 2>::new(self);
         for (i, indices) in COMPRESS_INITIALIZE_INDICES.iter().enumerate() {
             compress_initial_indices.store_row(self, i, indices, *num_compress_element);
         }
+        // Add in the stores for the dummy index.  There will be two reads for all compress rows
+        // other than the first four.
+        let num_dummy_reads = 2 * (96 - 4);
+        let num_dummy_reads_element =
+            self.constant(&L::Field::from_canonical_usize(num_dummy_reads));
+        self.store(
+            &compress_initial_indices
+                .flattened_memory
+                .get_at(dummy_index),
+            dummy_index,
+            &Time::zero(),
+            Some(num_dummy_reads_element),
+        );
 
         // Each element is loaded once per compress cycle.
-        let v_indices = MemoryArray::<L, 8, 4>::new(self);
+        let mut v_indices = MemoryArray::<L, 8, 4>::new(self);
         for (i, indices) in V_INDICES.iter().enumerate() {
             v_indices.store_row(self, i, indices, *num_mix_iterations);
         }
 
-        let v_last_write_ages = MemoryArray::<L, 8, 4>::new(self);
+        let mut v_last_write_ages = MemoryArray::<L, 8, 4>::new(self);
         for (i, ages) in V_LAST_WRITE_AGES.iter().enumerate() {
             v_last_write_ages.store_row(self, i, ages, *num_mix_iterations);
         }
 
-        let permutations = MemoryArray::<L, 12, 16>::new(self);
+        let mut permutations = MemoryArray::<L, 12, 16>::new(self);
         for (i, permutation) in SIGMA_PERMUTATIONS.iter().enumerate() {
             permutations.store_row(self, i, permutation, *num_mix_iterations);
         }
@@ -142,6 +180,8 @@ where
             v_indices,
             v_last_write_ages,
             permutations,
+            dummy_index,
+            dummy_ts,
         }
     }
 
@@ -239,10 +279,12 @@ where
         // At those rows, the V values should be saved to v_final, so that those values can be used
         // to calculate the compress h values.
         let save_h: Slice<BitRegister> = self.uninit_slice();
+        let true_const = self.constant::<BitRegister>(&L::Field::from_canonical_usize(1));
+        let false_const = self.constant::<BitRegister>(&L::Field::from_canonical_usize(0));
         for i in 0..96 {
             self.store(
                 &save_h.get(i),
-                if i < 92 { self.zero() } else { self.one() },
+                if i < 92 { false_const } else { true_const },
                 &Time::zero(),
                 Some(*num_rounds_element),
             );
@@ -265,20 +307,18 @@ where
     pub fn blake2b_memory(
         &mut self,
         padded_chunks: &[ArrayRegister<U64Register>],
+        consts: &BLAKE2BConsts<L>,
     ) -> BLAKE2BMemory {
         // Initialize the h memory
+        // Need to set DUMMY_VALUE at DUMMY_TS with multiplicity of (96 - 4) * 2.
         let h = self.uninit_slice();
 
         // Initialize the v memory
+        // Need to set DUMMY_VALUE at DUMMY_TS with multiplicity of 1.
         let v = self.uninit_slice();
-        let dummy_entry =
-            self.constant::<Self::IntRegister>(&Self::int_to_field_value(Self::Integer::zero()));
 
         // Initialize the v final memory
         let v_final = self.uninit_slice();
-
-        assert!(DUMMY_INDEX < L::Field::order());
-        let dummy_index = self.constant(&L::Field::from_canonical_u64(DUMMY_INDEX));
 
         // Initialize the m memory
         let m = self.uninit_slice();
@@ -299,6 +339,10 @@ where
         end_bits: &ArrayRegister<BitRegister>,
     ) -> BLAKE2BData<L> {
         assert_eq!(padded_chunks.len(), end_bits.len());
+
+        // create the const numbers data
+        let const_nums = self.blake2b_const_nums();
+
         let num_compresses = padded_chunks.len();
         // Convert the number of rounds to a field element.
         let num_compresses_element = self.constant(&L::Field::from_canonical_usize(num_compresses));
@@ -312,21 +356,19 @@ where
             end_bits: *end_bits,
         };
 
-        // create the const numbers data
-        let const_nums = self.blake2b_const_nums();
-
         // create the consts data
         let consts = self.blake2b_const(
             &num_compresses_element,
             &num_mix_iterations_element,
             end_bits,
+            &const_nums,
         );
 
         // create the trace data
         let trace = self.blake2b_trace_data(&const_nums, &num_compresses_element, end_bits);
 
         // create the memory data
-        let memory = self.blake2b_memory(padded_chunks);
+        let memory = self.blake2b_memory(padded_chunks, &consts);
 
         BLAKE2BData {
             public,
@@ -349,7 +391,7 @@ where
         let compress_index = self.select(
             is_compress_initialize,
             &data.trace.compress_index,
-            &data.memory.dummy_index,
+            &data.consts.dummy_index,
         );
 
         let init_idx_1 = &data.consts.compress_initial_indices.get_at(
@@ -370,7 +412,7 @@ where
         // If we are within hash initialize, then read from a dummy h values from a dummy timestamp.
         previous_compress_id = self.select(
             data.trace.is_hash_initialize,
-            DUMMY_TS,
+            &data.consts.dummy_ts,
             &previous_compress_id,
         );
 
@@ -393,13 +435,13 @@ where
 
         // For all the other cycles of compress, read the v values from the v memory. Will need to
         // specify the age of the last write to the v memory entry.
-        let v_indices = data.consts.v_indices;
+        let v_indices = &data.consts.v_indices;
         let v1_idx = v_indices.get_at(self, data.trace.mix_index, data.const_nums.const_0);
         let v2_idx = v_indices.get_at(self, data.trace.mix_index, data.const_nums.const_1);
         let v3_idx = v_indices.get_at(self, data.trace.mix_index, data.const_nums.const_2);
         let v4_idx = v_indices.get_at(self, data.trace.mix_index, data.const_nums.const_3);
 
-        let v_last_write_ages = data.consts.v_last_write_ages;
+        let v_last_write_ages = &data.consts.v_last_write_ages;
         let v1_last_write_age =
             v_last_write_ages.get_at(self, data.trace.mix_index, data.const_nums.const_0);
         let v2_last_write_age =
@@ -409,24 +451,52 @@ where
         let v4_last_write_age =
             v_last_write_ages.get_at(self, data.trace.mix_index, data.const_nums.const_3);
 
-        let v1_last_write_ts = self.expression(data.trace.clk.expr() - v1_last_write_age.expr());
-        let v2_last_write_ts = self.expression(data.trace.clk.expr() - v2_last_write_age.expr());
-        let v3_last_write_ts = self.expression(data.trace.clk.expr() - v3_last_write_age.expr());
-        let v4_last_write_ts = self.expression(data.trace.clk.expr() - v4_last_write_age.expr());
+        let mut v1_last_write_ts =
+            self.expression(data.trace.clk.expr() - v1_last_write_age.expr());
+        let mut v2_last_write_ts =
+            self.expression(data.trace.clk.expr() - v2_last_write_age.expr());
+        let mut v3_last_write_ts =
+            self.expression(data.trace.clk.expr() - v3_last_write_age.expr());
+        let mut v4_last_write_ts =
+            self.expression(data.trace.clk.expr() - v4_last_write_age.expr());
 
-        let mut v1_value = self.load(
+        v1_last_write_ts = self.select(
+            data.trace.is_hash_initialize,
+            &data.consts.dummy_ts,
+            &v1_last_write_ts,
+        );
+
+        v2_last_write_ts = self.select(
+            data.trace.is_hash_initialize,
+            &data.consts.dummy_ts,
+            &v2_last_write_ts,
+        );
+
+        v3_last_write_ts = self.select(
+            data.trace.is_hash_initialize,
+            &data.consts.dummy_ts,
+            &v3_last_write_ts,
+        );
+
+        v4_last_write_ts = self.select(
+            data.trace.is_hash_initialize,
+            &data.consts.dummy_ts,
+            &v4_last_write_ts,
+        );
+
+        let v1_value = self.load(
             &data.memory.v.get_at(v1_idx),
             &Time::from_element(v1_last_write_ts),
         );
-        let mut v2_value = self.load(
+        let v2_value = self.load(
             &data.memory.v.get_at(v2_idx),
             &Time::from_element(v2_last_write_ts),
         );
-        let mut v3_value = self.load(
+        let v3_value = self.load(
             &data.memory.v.get_at(v3_idx),
             &Time::from_element(v3_last_write_ts),
         );
-        let mut v4_value = self.load(
+        let v4_value = self.load(
             &data.memory.v.get_at(v4_idx),
             &Time::from_element(v4_last_write_ts),
         );
@@ -434,14 +504,14 @@ where
         let v1_value = self.expression(
             data.trace.is_hash_initialize.expr() * iv_value_1.expr()
                 + (data.trace.is_hash_initialize.not_expr()
-                    * (data.trace.is_compress_initialize.expr() * compress_iv_value_1.expr()
+                    * (data.trace.is_compress_initialize.expr() * h_value_1.expr()
                         + data.trace.is_compress_initialize.not_expr() * v1_value.expr())),
         );
 
         let v2_value = self.expression(
             data.trace.is_hash_initialize.expr() * iv_value_2.expr()
                 + (data.trace.is_hash_initialize.not_expr()
-                    * (data.trace.is_compress_initialize.expr() * compress_iv_value_2.expr()
+                    * (data.trace.is_compress_initialize.expr() * h_value_2.expr()
                         + data.trace.is_compress_initialize.not_expr() * v2_value.expr())),
         );
 
@@ -475,30 +545,30 @@ where
     /// The processing step of a SHA256 round.
     pub fn blake2b_compress(
         &mut self,
-        h: &ArrayRegister<U64Register>,
         v_indices: &[ElementRegister; 4],
         v_values: &[U64Register; 4],
         data: &BLAKE2BData<L>,
-    ) -> Vec<SHA256DigestRegister> {
+    ) {
         let m_idx_1 =
             data.consts
                 .permutations
                 .get_at(self, data.trace.compress_index, data.trace.mix_index);
 
-        let m_idx_2 = data.consts.permutations.get_at(
-            self,
-            data.trace.compress_index,
-            self.add(data.trace.mix_index, self.one()),
-        );
+        let next_col =
+            self.expression(data.trace.mix_index.expr() + data.const_nums.const_1.expr());
+        let m_idx_2 = data
+            .consts
+            .permutations
+            .get_at(self, data.trace.compress_index, next_col);
 
         let m_1 = self.load(&data.memory.m.get_at(m_idx_1), &Time::zero());
         let m_2 = self.load(&data.memory.m.get_at(m_idx_2), &Time::zero());
 
-        self.blake2b_mix(
-            &mut v_values[0],
-            &mut v_values[1],
-            &mut v_values[2],
-            &mut v_values[3],
+        let (updated_v0, updated_v1, updated_v2, updated_v3) = self.blake2b_mix(
+            &v_values[0],
+            &v_values[1],
+            &v_values[2],
+            &v_values[3],
             &m_1,
             &m_2,
         );
@@ -508,14 +578,9 @@ where
             &Time::zero(),
         );
 
-        let write_ts = self.select(save_h, &data.trace.compress_id, DUMMY_TS);
-        let const_values = vec![
-            data.const_nums.const_0,
-            data.const_nums.const_1,
-            data.const_nums.const_2,
-            data.const_nums.const_3,
-        ];
-        for (i, value) in v_values.iter().enumerate() {
+        let write_ts = self.select(save_h, &data.trace.compress_id, &data.consts.dummy_ts);
+        let updated_v_values = [updated_v0, updated_v1, updated_v2, updated_v3];
+        for (i, value) in updated_v_values.iter().enumerate() {
             self.store(
                 &data.memory.v.get_at(v_indices[i]),
                 *value,
@@ -539,7 +604,7 @@ where
         let previous_compress_id =
             self.expression(data.trace.compress_id.expr() - data.const_nums.const_1.expr());
         let h_workspace_1 = self.alloc_array::<U64Register>(8);
-        let consts = vec![
+        let consts = [
             data.const_nums.const_0,
             data.const_nums.const_1,
             data.const_nums.const_2,
@@ -549,7 +614,7 @@ where
             data.const_nums.const_6,
             data.const_nums.const_7,
         ];
-        for (h_workspace_i, const_i) in h_workspace_1.iter().zip(consts.iter()) {
+        for (mut h_workspace_i, const_i) in h_workspace_1.iter().zip(consts.iter()) {
             h_workspace_i = self.load(
                 &data.memory.h.get_at(*const_i),
                 &Time::from_element(previous_compress_id),
@@ -558,7 +623,7 @@ where
 
         // Xor the first 8 final v values
         let h_workspace_2 = self.alloc_array::<U64Register>(8);
-        for (h_workspace_1_i, (h_workspace_2_i, const_i)) in h_workspace_1
+        for (h_workspace_1_i, (mut h_workspace_2_i, const_i)) in h_workspace_1
             .iter()
             .zip(h_workspace_2.iter().zip(consts.iter()))
         {
@@ -570,7 +635,7 @@ where
         }
 
         // Xor the second 8 final v values
-        let consts = vec![
+        let v_indices = [
             data.const_nums.const_8,
             data.const_nums.const_9,
             data.const_nums.const_10,
@@ -580,51 +645,63 @@ where
             data.const_nums.const_14,
             data.const_nums.const_15,
         ];
-        for (i, const_i) in consts.iter().enumerate() {
-            let mut v_i = self.load(
-                &data.memory.v_final.get_at(*const_i),
+        let h_indices = [
+            data.const_nums.const_0,
+            data.const_nums.const_1,
+            data.const_nums.const_2,
+            data.const_nums.const_3,
+            data.const_nums.const_4,
+            data.const_nums.const_5,
+            data.const_nums.const_6,
+            data.const_nums.const_7,
+        ];
+        for (workspace_i, (v_i, h_i)) in v_indices.iter().zip(h_indices.iter()).enumerate() {
+            let mut v_value = self.load(
+                &data.memory.v_final.get_at(*v_i),
                 &Time::from_element(write_ts),
             );
-            v_i = self.xor(h_workspace_2.get(i), v_i);
+            v_value = self.xor(h_workspace_2.get(workspace_i), v_value);
             self.store(
-                &data.memory.h.get_at(*const_i),
-                v_i,
+                &data.memory.h.get_at(*h_i),
+                v_value,
                 &Time::from_element(write_ts),
-                Some(data.const_nums.const_2),
+                None,
             );
         }
     }
 
     pub fn blake2b_mix(
         &mut self,
-        v_a: &mut U64Register,
-        v_b: &mut U64Register,
-        v_c: &mut U64Register,
-        v_d: &mut U64Register,
+        v_a: &U64Register,
+        v_b: &U64Register,
+        v_c: &U64Register,
+        v_d: &U64Register,
         x: &U64Register,
         y: &U64Register,
-    ) {
-        *v_a = self.add(*v_a, *v_b);
-        *v_a = self.add(*v_a, *x);
+    ) -> (U64Register, U64Register, U64Register, U64Register) {
+        let mut v_a_inter = self.add(*v_a, *v_b);
+        v_a_inter = self.add(v_a_inter, *x);
 
-        *v_d = self.xor(*v_d, *v_a);
-        *v_d = self.rotate_right(*v_d, 32);
+        let mut v_d_inter = self.xor(*v_d, *v_a);
+        v_d_inter = self.rotate_right(v_d_inter, 32);
 
-        *v_c = self.add(*v_c, *v_d);
+        let mut v_c_inter = self.add(*v_c, v_d_inter);
 
-        *v_b = self.xor(*v_b, *v_c);
-        *v_b = self.rotate_right(*v_b, 24);
+        let mut v_b_inter = self.xor(*v_b, v_c_inter);
+        v_b_inter = self.rotate_right(v_b_inter, 24);
 
-        *v_a = self.add(*v_a, *v_b);
-        *v_a = self.add(*v_a, *y);
+        v_a_inter = self.add(v_a_inter, v_b_inter);
+        v_a_inter = self.add(v_a_inter, *y);
 
-        *v_d = self.xor(*v_d, *v_a);
-        *v_d = self.rotate_right(*v_d, 16);
+        v_d_inter = self.xor(v_d_inter, v_a_inter);
+        v_d_inter = self.rotate_right(v_d_inter, 16);
 
-        *v_c = self.add(*v_c, *v_d);
+        v_c_inter = self.add(v_c_inter, v_d_inter);
 
-        *v_b = self.xor(*v_b, *v_c);
-        *v_b = self.rotate_right(*v_b, 63);
+        v_b_inter = self.xor(v_b_inter, v_c_inter);
+        v_b_inter = self.rotate_right(v_b_inter, 63);
+
+        (v_a_inter, v_b_inter, v_c_inter, v_d_inter)
     }
 }
 
