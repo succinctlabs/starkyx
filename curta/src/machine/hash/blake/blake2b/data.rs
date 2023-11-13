@@ -43,6 +43,7 @@ pub struct BLAKE2BMemory {
     pub(crate) v: Slice<U64Register>,
     pub(crate) v_final: Slice<U64Register>,
     pub(crate) m: Slice<U64Register>,
+    pub(crate) t: Slice<U64Register>,
 }
 
 pub struct BLAKE2BConsts<L: AirParameters> {

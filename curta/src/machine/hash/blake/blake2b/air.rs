@@ -319,6 +319,7 @@ where
     pub fn blake2b_memory(
         builder: &mut BytesBuilder<L>,
         padded_chunks: &[ArrayRegister<U64Register>],
+        t_values: &ArrayRegister<U64Register>,
         num_consts: &BLAKE2BConstNums,
         consts: &BLAKE2BConsts<L>,
     ) -> BLAKE2BMemory {
@@ -357,7 +358,25 @@ where
             }
         }
 
-        BLAKE2BMemory { h, v, v_final, m }
+        let t = builder.uninit_slice();
+        compress_id = 0;
+        for t_value in t_values.iter() {
+            builder.store(
+                &t.get(compress_id),
+                t_value,
+                &Time::zero(),
+                Some(num_consts.const_96),
+            );
+            compress_id += 1;
+        }
+
+        BLAKE2BMemory {
+            h,
+            v,
+            v_final,
+            m,
+            t,
+        }
     }
 
     pub fn blake2b_data(
@@ -408,7 +427,7 @@ where
         );
 
         // create the memory data
-        let memory = Self::blake2b_memory(builder, padded_chunks, &const_nums, &consts);
+        let memory = Self::blake2b_memory(builder, padded_chunks, t_values, &const_nums, &consts);
 
         BLAKE2BData {
             public,
@@ -566,7 +585,9 @@ where
         );
 
         // If we are at the first compress row, then will need to xor v4 with t
-        // todo!();
+        let t = builder.load(&data.memory.t.get_at(data.trace.compress_id), &Time::zero());
+        let v4_xor_t = builder.xor(v4_value, t);
+        v4_value = builder.select(data.trace.is_compress_first_row, &v4_xor_t, &v4_value);
 
         // If we are at the third compress row, then will need to xor v4 with 0xFFFFFFFFFFFFFFFF
         let inverse_v4_value = builder.xor(&v4_value, &data.const_nums.const_ffffffffffffffff);
