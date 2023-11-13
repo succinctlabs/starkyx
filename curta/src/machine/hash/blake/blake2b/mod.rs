@@ -1,5 +1,10 @@
+pub mod air;
 pub mod builder;
 pub mod data;
+
+pub struct BLAKE2BAir<L> {
+    _marker: core::marker::PhantomData<L>,
+}
 
 const HASH_ARRAY_SIZE: usize = 8;
 
