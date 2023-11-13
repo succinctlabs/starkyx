@@ -614,24 +614,23 @@ where
             data.const_nums.const_6,
             data.const_nums.const_7,
         ];
-        for (mut h_workspace_i, const_i) in h_workspace_1.iter().zip(consts.iter()) {
-            h_workspace_i = self.load(
+        for (i, const_i) in consts.iter().enumerate() {
+            let h_value = self.load(
                 &data.memory.h.get_at(*const_i),
                 &Time::from_element(previous_compress_id),
             );
+            self.set_to_expression(&h_workspace_1.get(i), h_value.expr());
         }
 
         // Xor the first 8 final v values
         let h_workspace_2 = self.alloc_array::<U64Register>(8);
-        for (h_workspace_1_i, (mut h_workspace_2_i, const_i)) in h_workspace_1
-            .iter()
-            .zip(h_workspace_2.iter().zip(consts.iter()))
-        {
+        for (i, const_i) in consts.iter().enumerate() {
             let v_i = self.load(
                 &data.memory.v_final.get_at(*const_i),
                 &Time::from_element(write_ts),
             );
-            h_workspace_2_i = self.xor(h_workspace_1_i, v_i);
+            let updated_h = self.xor(h_workspace_1.get(i), v_i);
+            self.set_to_expression(&h_workspace_2.get(i), updated_h.expr());
         }
 
         // Xor the second 8 final v values
