@@ -51,11 +51,13 @@ where
         padded_chunks: &[ArrayRegister<U64Register>],
         msg_lens: &[ArrayRegister<U64Register>],
         end_bits: &ArrayRegister<BitRegister>,
-    ) {
-        let data = Self::blake2b_data(builder, padded_chunks, msg_lens, end_bits);
+        digest_bits: &ArrayRegister<BitRegister>,
+        digest_indices: &ArrayRegister<ElementRegister>,
+    ) -> Vec<ArrayRegister<U64Register>> {
+        let data = Self::blake2b_data(builder, padded_chunks, msg_lens, end_bits, digest_indices);
 
         let (v_indices, v_values) = Self::blake2b_compress_initialize(builder, &data);
-        Self::blake2b_compress(builder, &v_indices, &v_values, &data);
+        Self::blake2b_compress(builder, &v_indices, &v_values, &data)
     }
 
     pub fn blake2b_const_nums(builder: &mut BytesBuilder<L>) -> BLAKE2BConstNums {
@@ -342,6 +344,7 @@ where
         padded_chunks: &[ArrayRegister<U64Register>],
         msg_lens: &[ArrayRegister<U64Register>],
         end_bits: &ArrayRegister<BitRegister>,
+        digest_indices: &ArrayRegister<ElementRegister>,
     ) -> BLAKE2BData<L> {
         assert_eq!(padded_chunks.len(), end_bits.len());
 
@@ -360,6 +363,7 @@ where
         let public = BLAKE2BPublicData {
             padded_chunks: padded_chunks.to_vec(),
             end_bits: *end_bits,
+            digest_indices: *digest_indices,
         };
 
         // create the consts data
@@ -556,7 +560,12 @@ where
         v_indices: &[ElementRegister; 4],
         v_values: &[U64Register; 4],
         data: &BLAKE2BData<L>,
-    ) {
+    ) -> Vec<ArrayRegister<U64Register>> {
+        let num_digests = data.public.digest_indices.len();
+        let hash_state_public = (0..num_digests)
+            .map(|_| builder.alloc_array_public(4))
+            .collect::<Vec<_>>();
+
         let m_idx_1 = data.consts.permutations.get_at(
             builder,
             data.trace.compress_index,
@@ -678,6 +687,8 @@ where
                 None,
             );
         }
+
+        hash_state_public
     }
 
     pub fn blake2b_mix(

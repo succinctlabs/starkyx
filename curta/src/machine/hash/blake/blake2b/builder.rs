@@ -43,25 +43,12 @@ pub mod test_utils {
     use crate::plonky2::stark::config::{CurtaConfig, CurtaPoseidonGoldilocksConfig};
     use crate::plonky2::Plonky2Air;
 
-    pub fn test_sha<
-        'a,
-        L,
-        S,
-        I: IntoIterator<Item = &'a [u8]>,
-        J: IntoIterator<Item = &'a str>,
-        const CYCLE_LENGTH: usize,
-    >(
-        messages: I,
-        expected_digests: J,
-    ) where
-        L: AirParameters<Field = GoldilocksField, CubicParams = GoldilocksCubicParameters>,
-        L::Instruction: UintInstructions,
-        S: SHAir<BytesBuilder<L>, CYCLE_LENGTH>,
-        Chip<L>: Plonky2Air<GoldilocksField, 2>,
-        S::Integer: PartialEq + Eq + Debug,
-    {
+    #[test]
+    pub fn test_blake2b() {
         type C = CurtaPoseidonGoldilocksConfig;
         type Config = <C as CurtaConfig<2>>::GenericConfig;
+
+        let message = "abc";
 
         let mut end_bits_values = Vec::new();
         let mut num_messages = 0;
