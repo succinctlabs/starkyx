@@ -224,7 +224,9 @@ impl<E: EllipticCurveAir<B::Parameters>, B: Builder> EllipticCurveBuilder<E> for
 
 #[cfg(test)]
 mod tests {
-    use log::debug;
+    use std::time;
+
+    use log::{debug, info};
     use num::bigint::RandBigInt;
     use plonky2::field::goldilocks_field::GoldilocksField;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
@@ -275,7 +277,7 @@ mod tests {
 
         let mut builder = EmulatedBuilder::<L>::new();
 
-        let num_ops = 3;
+        let num_ops = 512;
 
         let points = (0..num_ops)
             .map(|_| builder.alloc_public_ec_point())
@@ -296,8 +298,18 @@ mod tests {
         let num_rows = 1 << degree_log;
         let stark = builder.build::<C, 2>(1 << degree_log);
 
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
+
+        let (proof_target, public_input) =
+            stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
+        stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
+
+        let data = recursive_builder.build::<Config>();
+
         let order = E::prime_group_order();
 
+        let time = time::Instant::now();
         // Get thr results
         let ec_data = (0..num_ops)
             .into_par_iter()
@@ -351,17 +363,10 @@ mod tests {
         let (trace, public) = (writer_data.trace, writer_data.public);
 
         let proof = stark.prove(&trace, &public, &mut timing).unwrap();
+        let diff = time.elapsed();
+        info!("Stark Proving time: {:?}", diff);
 
         stark.verify(proof.clone(), &public).unwrap();
-
-        let config_rec = CircuitConfig::standard_recursion_config();
-        let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
-
-        let (proof_target, public_input) =
-            stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
-        stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
-
-        let data = recursive_builder.build::<Config>();
 
         let mut pw = PartialWitness::new();
 
@@ -369,7 +374,131 @@ mod tests {
         stark.set_proof_target(&mut pw, &proof_target, proof);
 
         let rec_proof = data.prove(pw).unwrap();
+        let diff = time.elapsed();
+        info!("Recursive Proving time: {:?}", diff);
+
         data.verify(rec_proof).unwrap();
+
+        timing.print();
+    }
+
+    #[test]
+    fn test_bench_ec_scalar_mul() {
+        type F = GoldilocksField;
+        type L = Ed25519ScalarMulTest;
+        type C = CurtaPoseidonGoldilocksConfig;
+        type Config = <C as CurtaConfig<2>>::GenericConfig;
+        type E = Ed25519;
+
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let mut timing = TimingTree::new("Ed25519 Scalar mul", log::Level::Debug);
+
+        let max_num_ops_log = 10;
+
+        for i in 0..max_num_ops_log {
+            let num_ops = 1 << i;
+            let mut builder = EmulatedBuilder::<L>::new();
+            let points = (0..num_ops)
+                .map(|_| builder.alloc_public_ec_point())
+                .collect::<Vec<_>>();
+
+            let scalars = (0..num_ops)
+                .map(|_| builder.alloc_array_public::<ElementRegister>(8))
+                .map(ECScalarRegister::<E>::new)
+                .collect::<Vec<_>>();
+
+            let results = (0..num_ops)
+                .map(|_| builder.alloc_public_ec_point())
+                .collect::<Vec<_>>();
+
+            builder.scalar_mul_batch(&points, &scalars, &results);
+
+            let degree_log = log2_ceil(num_ops * 256);
+            let num_rows = 1 << degree_log;
+            let stark = builder.build::<C, 2>(1 << degree_log);
+
+            let config_rec = CircuitConfig::standard_recursion_config();
+            let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
+
+            let (proof_target, public_input) =
+                stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
+            stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
+
+            let data = recursive_builder.build::<Config>();
+
+            let order = E::prime_group_order();
+
+            let time = time::Instant::now();
+            // Get thr results
+            let ec_data = (0..num_ops)
+                .into_par_iter()
+                .map(|_| {
+                    let mut rng = thread_rng();
+                    let a = rng.gen_biguint(256);
+                    let point = E::ec_generator() * a;
+                    let scalar = rng.gen_biguint(256) % &order;
+                    let result = &point * &scalar;
+                    (point, scalar, result)
+                })
+                .collect::<Vec<_>>();
+
+            let mut writer_data = AirWriterData::new(&stark.air_data, num_rows);
+
+            let mut writer = writer_data.public_writer();
+            timed!(
+                timing,
+                "writing input",
+                points
+                    .iter()
+                    .zip(scalars.iter())
+                    .zip(results.iter())
+                    .zip(ec_data)
+                    .for_each(
+                        |(((point_reg, scalar_reg), result_reg), (point, scalar, result))| {
+                            writer.write_ec_point(point_reg, &point);
+                            writer.write_ec_point(result_reg, &result);
+
+                            let mut limb_values = scalar.to_u32_digits();
+                            limb_values.resize(8, 0);
+
+                            for (limb_reg, limb) in scalar_reg.limbs.iter().zip_eq(limb_values) {
+                                writer.write(&limb_reg, &F::from_canonical_u32(limb));
+                            }
+                        }
+                    )
+            );
+
+            stark.air_data.write_global_instructions(&mut writer);
+
+            writer_data.chunks_par(256).for_each(|mut chunk| {
+                for i in 0..256 {
+                    let mut writer = chunk.window_writer(i);
+                    stark.air_data.write_trace_instructions(&mut writer);
+                }
+            });
+
+            debug!("Generated execution trace");
+
+            let (trace, public) = (writer_data.trace, writer_data.public);
+
+            let proof = stark.prove(&trace, &public, &mut timing).unwrap();
+            let diff = time.elapsed();
+            info!("Stark Proving time: {:?}", diff);
+
+            stark.verify(proof.clone(), &public).unwrap();
+
+            let mut pw = PartialWitness::new();
+
+            pw.set_target_arr(&public_input, &public);
+            stark.set_proof_target(&mut pw, &proof_target, proof);
+
+            let rec_proof = data.prove(pw).unwrap();
+            let diff = time.elapsed();
+            info!("Recursive Proving time: {:?}", diff);
+
+            data.verify(rec_proof).unwrap();
+        }
 
         timing.print();
     }
