@@ -387,6 +387,8 @@ mod tests {
     use crate::chip::field::parameters::tests::Fp25519;
     use crate::chip::field::parameters::FieldParameters;
     use crate::chip::field::register::FieldRegister;
+    use crate::chip::register::element::ElementRegister;
+    use crate::chip::register::Register;
     use crate::chip::trace::writer::data::AirWriterData;
     use crate::chip::trace::writer::AirWriter;
     use crate::machine::builder::Builder;
@@ -407,6 +409,82 @@ mod tests {
         const NUM_ARITHMETIC_COLUMNS: usize = 124;
         const NUM_FREE_COLUMNS: usize = 3;
         const EXTENDED_COLUMNS: usize = 198;
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct FibonacciTest;
+
+    impl AirParameters for FibonacciTest {
+        type Field = GoldilocksField;
+        type CubicParams = GoldilocksCubicParameters;
+
+        type Instruction = FpInstruction<Fp25519>;
+
+        const NUM_ARITHMETIC_COLUMNS: usize = 0;
+        const NUM_FREE_COLUMNS: usize = 3;
+        const EXTENDED_COLUMNS: usize = 3;
+    }
+
+    #[test]
+    fn test_fibonacci_air_stark() {
+        type L = FibonacciTest;
+        type F = GoldilocksField;
+        type C = CurtaPoseidonGoldilocksConfig;
+        type Config = <C as CurtaConfig<2>>::GenericConfig;
+
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let mut timing = TimingTree::new("test_byte_multi_stark", log::Level::Debug);
+
+        let mut builder = StarkBuilder::<L>::new();
+
+        let x_0 = builder.alloc::<ElementRegister>();
+        let x_1 = builder.alloc::<ElementRegister>();
+
+        builder.set_first_row_const(&x_0, &F::ZERO);
+        builder.set_first_row_const(&x_1, &F::ONE);
+
+        builder.set_next(&x_0, &x_1);
+        builder.set_next_expression(&x_1, x_0.expr() + x_1.expr());
+
+        let num_rows = 1 << 5;
+        let stark = builder.build::<C, 2>(num_rows);
+
+        let mut writer_data = AirWriterData::new(&stark.air_data, num_rows);
+
+        let air_data = &stark.air_data;
+        air_data.write_global_instructions(&mut writer_data.public_writer());
+        writer_data.chunks(num_rows).for_each(|mut chunk| {
+            for i in 0..num_rows {
+                let mut writer = chunk.window_writer(i);
+                air_data.write_trace_instructions(&mut writer);
+            }
+        });
+
+        let (trace, public) = (writer_data.trace, writer_data.public);
+
+        let proof = stark.prove(&trace, &public, &mut timing).unwrap();
+
+        stark.verify(proof.clone(), &public).unwrap();
+
+        let config_rec = CircuitConfig::standard_recursion_config();
+        let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
+
+        let (proof_target, public_input) =
+            stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
+        stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
+
+        let data = recursive_builder.build::<Config>();
+
+        let mut pw = PartialWitness::new();
+
+        pw.set_target_arr(&public_input, &public);
+        stark.set_proof_target(&mut pw, &proof_target, proof);
+
+        let rec_proof = data.prove(pw).unwrap();
+        data.verify(rec_proof).unwrap();
+
+        timing.print();
     }
 
     #[test]

@@ -79,7 +79,6 @@ pub mod test_utils {
         assert_eq!(end_bits_values.len() * 16, padded_chunks_values.len());
         let num_rounds = end_bits_values.len();
         let _ = env_logger::builder().is_test(true).try_init();
-        let mut timing = TimingTree::new("test_sha", log::Level::Debug);
 
         // Build the stark.
         let mut builder = BytesBuilder::<L>::new();
@@ -106,6 +105,8 @@ pub mod test_utils {
         let rec_data = recursive_builder.build::<Config>();
 
         // Write trace.
+        let mut timing = TimingTree::new("test_sha", log::Level::Debug);
+
         let mut writer_data = AirWriterData::new(&stark.air_data, num_rows);
         let mut writer = writer_data.public_writer();
 
@@ -138,7 +139,7 @@ pub mod test_utils {
             writer.write(&end_bit, end_bit_value);
         }
 
-        timed!(timing, "write input", {
+        timed!(timing, "write initial trace", {
             stark.air_data.write_global_instructions(&mut writer);
 
             for mut chunk in writer_data.chunks(num_rows) {

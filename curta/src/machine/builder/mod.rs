@@ -245,16 +245,39 @@ pub trait Builder: Sized {
             .set_to_expression_transition(register, expression);
     }
 
+    fn set_first_row_expression<T: Register>(
+        &mut self,
+        dest: &T,
+        expr: ArithmeticExpression<Self::Field>,
+    ) {
+        assert!(
+            matches!(dest.register(), MemorySlice::Local(_, _)),
+            "Can only set_first_row to a local register"
+        );
+        self.api().set_to_expression_first_row(dest, expr);
+    }
+
+    fn set_first_row_const<T: Register>(&mut self, dest: &T, value: &T::Value<Self::Field>) {
+        assert!(
+            matches!(dest.register(), MemorySlice::Local(_, _)),
+            "Can only set_first_row to a local register"
+        );
+        self.api().set_to_expression_first_row(
+            dest,
+            ArithmeticExpression::from_constant_vec(T::align(value).to_vec()),
+        );
+    }
+
     fn set_next_expression<T: Register>(
         &mut self,
         dest: &T,
-        src: ArithmeticExpression<Self::Field>,
+        expr: ArithmeticExpression<Self::Field>,
     ) {
         assert!(
             matches!(dest.register(), MemorySlice::Local(_, _)),
             "Cannot set a next register in a transition constraint"
         );
-        self.api().set_to_expression_transition(&dest.next(), src);
+        self.api().set_to_expression_transition(&dest.next(), expr);
     }
 
     /// Computes the expression `expression` and returns the result as a trace register of type `T`.

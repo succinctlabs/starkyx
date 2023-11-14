@@ -66,7 +66,7 @@ impl<T: PartialEq + Eq + Hash> AirWriterData<T> {
         chunk_size: usize,
     ) -> impl Iterator<Item = AirWriterChunkMut<'_, T>> + '_
     where
-        T: Clone + Send + Sync,
+        T: Clone,
     {
         let height = self.trace.height();
         assert_eq!(height % chunk_size, 0);
@@ -112,6 +112,21 @@ impl<T: PartialEq + Eq + Hash> AirWriterData<T> {
 }
 
 impl<'a, T: PartialEq + Eq + Hash> AirWriterChunkMut<'a, T> {
+    // #[inline]
+    // pub fn rows(self) -> impl Iterator<Item = RowWriter<'a, T>> + 'a {
+    //     let Self {
+    //         trace,
+    //         public,
+    //         memory,
+    //         height,
+    //         initial_row,
+    //     } = self;
+
+    //     trace.rows_mut().enumerate().map(move |(i, row)| {
+    //         RowWriter::new(row, public, &mut memory, i + *initial_row, *height)
+    //     })
+    // }
+
     #[inline]
     pub fn row_writer(&mut self, row_index: usize) -> RowWriter<'_, T> {
         RowWriter::new(
