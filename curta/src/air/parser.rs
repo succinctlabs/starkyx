@@ -131,6 +131,10 @@ pub trait AirParser: Sized {
     }
 }
 
+/// A parser that multiplies all constraints by a given multiplier.
+///
+/// Given any `AirParser` implementation, this parser will multiply all constraints by a given
+/// multiplier. This is useful for implementing selector constraints in a universal way.
 #[derive(Debug)]
 pub struct MulParser<'a, AP: AirParser> {
     pub parser: &'a mut AP,

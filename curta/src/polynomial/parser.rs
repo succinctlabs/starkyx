@@ -3,6 +3,11 @@ use itertools::Itertools;
 use super::Polynomial;
 use crate::air::parser::{AirParser, MulParser};
 
+/// An extension of the `AirParser` trait that provides methods for parsing polynomial operations.
+///
+/// This trait provides default implementations for all methods using the usual formulas for adding,
+/// subtracting, and multiplying polynomials. Implementations of this trait may override these
+/// methods with more efficient implementations.
 pub trait PolynomialParser: AirParser {
     fn zero_poly(&mut self) -> Polynomial<Self::Var> {
         Polynomial {
