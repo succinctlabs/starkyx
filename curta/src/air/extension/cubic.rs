@@ -3,24 +3,33 @@ use crate::math::extension::cubic::element::CubicElement;
 use crate::math::extension::cubic::extension::CubicExtension;
 use crate::math::extension::cubic::parameters::CubicParameters;
 
+/// Parser operations for the cubic extension field F[X]/(X^3 - X - 1).
+///
+/// All the methods are equipped with default implementations. Users can choose to override them
+/// with their own implementations for better performance.
 pub trait CubicParser<E: CubicParameters<Self::Field>>: AirParser {
+    /// Get an extension field element from a base field element.
     fn element_from_base_field(&mut self, value: Self::Var) -> CubicElement<Self::Var> {
         CubicElement([value, self.zero(), self.zero()])
     }
 
+    /// Get an extension field element from a slice of base field elements.
     fn element_from_base_slice(&self, values: &[Self::Var]) -> CubicElement<Self::Var> {
         assert!(values.len() == 3);
         CubicElement([values[0], values[1], values[2]])
     }
 
+    /// Get the coefficients of an extension field element.
     fn as_base_array(&self, value: CubicElement<Self::Var>) -> [Self::Var; 3] {
         value.0
     }
 
+    /// The multiplicative identity of the extension field.
     fn one_extension(&mut self) -> CubicElement<Self::Var> {
         CubicElement([self.one(), self.zero(), self.zero()])
     }
 
+    /// The additive identity of the extension field.
     fn zero_extension(&mut self) -> CubicElement<Self::Var> {
         CubicElement([self.zero(), self.zero(), self.zero()])
     }

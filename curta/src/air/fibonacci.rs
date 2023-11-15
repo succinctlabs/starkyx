@@ -6,6 +6,7 @@ use crate::air::RoundDatum;
 use crate::math::prelude::*;
 use crate::trace::AirTrace;
 
+/// An AIR for computing Fibonacci numbers, used for testing.  
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FibonacciAir;
 
@@ -14,10 +15,12 @@ impl FibonacciAir {
         Self {}
     }
 
+    /// Compute the nth Fibonacci number.
     pub fn fibonacci<F: Field>(n: usize, x0: F, x1: F) -> F {
         (0..n).fold((x0, x1), |x, _| (x.1, x.0 + x.1)).1
     }
 
+    /// Generate a computational trace of Fibonacci numbers.
     pub fn generate_trace<F: Field>(x0: F, x1: F, num_rows: usize) -> AirTrace<F> {
         let trace_rows = (0..num_rows)
             .scan([x0, x1], |acc, _| {
@@ -59,20 +62,33 @@ impl RAirData for FibonacciAir {
 
 impl<AP: AirParser> RAir<AP> for FibonacciAir {
     fn eval(&self, parser: &mut AP) {
-        // Check public inputs.
+        // We encode the coputation of the fibonacci numbers in an AIR by keeping track of two
+        // variables, x0 and x1, and updating them according to the following rules:
+        // x0_next = x1
+        // x_1_next = x0 + x1.
+        // The first two values of the sequence are given as public inputs, and the last value is
+        // the output of the computation.
+
+        // First, we constrain the public inputs to be the first two values of the sequence in the
+        // first row.
         let pis_constraints = [
             parser.sub(parser.local_slice()[0], parser.public_slice()[0]),
             parser.sub(parser.local_slice()[1], parser.public_slice()[1]),
-            // parser.sub(parser.local_slice()[1], parser.global_slice()[2]),
         ];
         parser.constraint_first_row(pis_constraints[0]);
         parser.constraint_first_row(pis_constraints[1]);
-        // parser.constraint_last_row(pis_constraints[2]);
 
-        // x0' <- x1
+        // We then encode the transition constraints. Using the `AirParser` trait, we can access the
+        // values of the variables in the current row and the next row. The constrain is then given
+        // by:
+        // x0_next - x1 = 0
+        // x1_next - x0 - x1 = 0
+
+        // First, we constrain x0_next - x1 = 0.
         let first_col_constraint = parser.sub(parser.next_slice()[0], parser.local_slice()[1]);
         parser.constraint_transition(first_col_constraint);
-        // x1' <- x0 + x1
+
+        // Then, we constrain x1_next - x0 - x1 = 0.
         let second_col_constraint = {
             let tmp = parser.sub(parser.next_slice()[1], parser.local_slice()[0]);
             parser.sub(tmp, parser.local_slice()[1])
@@ -80,6 +96,7 @@ impl<AP: AirParser> RAir<AP> for FibonacciAir {
         parser.constraint_transition(second_col_constraint);
     }
 
+    /// We don't need to do anything for the global constraints, as there are none.
     fn eval_global(&self, _parser: &mut AP) {}
 }
 

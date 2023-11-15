@@ -22,7 +22,7 @@ We recommend running the tests using the `--release` flag, as they are quite slo
 cargo test --release
 ```
 
-## Usage
+
 
 ## Building an AIR computation using Curta
 
@@ -32,3 +32,6 @@ cargo test --release
 
 ## Integrating into a Plonky2 circuit
 Curta starks can be integrated into a [Plonky2](https://github.com/mir-protocol/plonky2) circuit
+
+# About the name
+This library is named after the Curta mechanical calculator invented by Curt Herzstark. It is a small, hand-cranked device that can be used to perform addition, subtraction, multiplication, division, and, with more difficulty, square roots and other operations. Calculations can be preformed by entering a number, turning the crank, and reading the result from the display. Curta is able to perform calculations with up to 15 digits of precision in a hand-held device. The Curta calculator was used by the US Navy, NASA, and other organizations until the 1970s.

@@ -20,8 +20,12 @@ pub mod prelude {
     pub use crate::air::parser::AirParser;
     pub use crate::air::AirConstraint;
     pub use crate::chip::instruction::empty::EmptyInstruction;
+    pub use crate::chip::memory::time::Time;
+    pub use crate::chip::register::element::ElementRegister;
+    pub use crate::chip::register::{Register, RegisterSerializable};
     pub use crate::chip::trace::writer::data::AirWriterData;
     pub use crate::chip::trace::writer::AirWriter;
+    pub use crate::chip::uint::register::{ByteArrayRegister, U32Register, U64Register};
     pub use crate::chip::AirParameters;
     pub use crate::machine::builder::Builder;
     pub use crate::machine::bytes::builder::BytesBuilder;

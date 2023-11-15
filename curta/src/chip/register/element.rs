@@ -9,7 +9,7 @@ use crate::chip::builder::AirBuilder;
 use crate::chip::memory::pointer::raw::RawPointer;
 use crate::chip::memory::time::Time;
 use crate::chip::memory::value::MemoryValue;
-use crate::machine::builder::ops::{Add, Mul};
+use crate::machine::builder::ops::{Add, Mul, Sub};
 use crate::machine::builder::Builder;
 use crate::math::prelude::cubic::element::CubicElement;
 use crate::math::prelude::*;
@@ -78,5 +78,13 @@ impl<B: Builder> Mul<B> for ElementRegister {
 
     fn mul(self, rhs: Self, builder: &mut B) -> Self::Output {
         builder.expression(self.expr() * rhs.expr())
+    }
+}
+
+impl<B: Builder> Sub<B> for ElementRegister {
+    type Output = Self;
+
+    fn sub(self, rhs: Self, builder: &mut B) -> Self::Output {
+        builder.expression(self.expr() - rhs.expr())
     }
 }
