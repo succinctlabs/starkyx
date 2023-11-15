@@ -1,10 +1,4 @@
-use itertools::Itertools;
-
-use crate::chip::arithmetic::expression::ArithmeticExpression;
-use crate::chip::memory::time::Time;
 use crate::chip::register::array::ArrayRegister;
-use crate::chip::register::bit::BitRegister;
-use crate::chip::register::element::ElementRegister;
 use crate::chip::register::Register;
 use crate::chip::uint::operations::instruction::UintInstructions;
 use crate::chip::uint::register::U64Register;
@@ -12,7 +6,6 @@ use crate::chip::uint::util::u64_to_le_field_bytes;
 use crate::chip::AirParameters;
 use crate::machine::builder::Builder;
 use crate::machine::bytes::builder::BytesBuilder;
-use crate::math::prelude::*;
 
 pub struct KeccakPure;
 
@@ -123,12 +116,13 @@ impl KeccakPure {
     pub fn keccak_p(state: &mut [u64; 25]) {
         for i in 0..Self::ROUNDS {
             // ############################################
-            // Theta
+            // Theta step
             // ############################################
 
             let mut c = [0; 5];
             let mut d = [0; 5];
 
+            // Formulas taken from https://keccak.team/keccak_specs_summary.html
             // C[x] = A[x,0] xor A[x,1] xor A[x,2] xor A[x,3] xor A[x,4], for x in 0…4
             for y in 0..5 {
                 for x in 0..5 {
@@ -149,7 +143,7 @@ impl KeccakPure {
             }
 
             // ############################################
-            // Rho
+            // Rho step
             // ############################################
 
             let mut rho_x = 0;
@@ -165,10 +159,10 @@ impl KeccakPure {
             }
 
             // ############################################
-            // Pi
+            // Pi step
             // ############################################
 
-            let state_cloned = state.clone();
+            let state_cloned = *state;
             // B[y,2*x+3*y] = rot(A[x,y], r[x,y]), for (x,y) in (0…4,0…4)
             for y in 0..5 {
                 for x in 0..5 {
@@ -178,10 +172,10 @@ impl KeccakPure {
             }
 
             // ############################################
-            // Chi
+            // Chi step
             // ############################################
 
-            let state_cloned = state.clone();
+            let state_cloned = *state;
             // A[x,y] = B[x,y] xor ((not B[x+1,y]) and B[x+2,y]), for (x,y) in (0…4,0…4)
             for y in 0..5 {
                 for x in 0..5 {
@@ -192,7 +186,7 @@ impl KeccakPure {
             }
 
             // ############################################
-            // Iota
+            // Iota step
             // ############################################
 
             // A[0,0] = A[0,0] xor RC
@@ -206,14 +200,6 @@ pub trait KeccakAir<L: AirParameters>
 where
     L::Instruction: UintInstructions,
 {
-    const RHO_OFFSETS: [[usize; 5]; 5];
-
-    const NUM_WORDS: usize;
-
-    // fn to_words(bytes: &[u8]) -> Vec<u64>;
-
-    // fn pad(n_bytes: usize) -> Vec<u8>;
-
     fn keccak_p(
         builder: &mut BytesBuilder<L>,
         state: ArrayRegister<U64Register>,
@@ -226,16 +212,6 @@ impl<L: AirParameters> KeccakAir<L> for Keccak256
 where
     L::Instruction: UintInstructions,
 {
-    const RHO_OFFSETS: [[usize; 5]; 5] = [
-        [0, 1, 190, 28, 91],
-        [36, 300, 6, 55, 276],
-        [3, 10, 171, 153, 231],
-        [105, 45, 15, 21, 136],
-        [210, 66, 253, 120, 78],
-    ];
-
-    const NUM_WORDS: usize = 25;
-
     fn keccak_p(
         builder: &mut BytesBuilder<L>,
         state_input: ArrayRegister<U64Register>,
@@ -277,8 +253,9 @@ where
             0x8000000080008008u64,
         ];
 
-        // const ROUNDS: usize = 24;
+        const ROUNDS: usize = 24;
 
+        // TODO(@gnosed): reduce # of cols, add clk and process_id to handle transition constraint with RC and new_state
         // let round_end_bit = builder.alloc::<BitRegister>();
         // let clk = builder.clk;
 
@@ -287,16 +264,20 @@ where
         // let process_id = builder.process_id(ROUNDS, round_end_bit);
 
         // Initialize the round constants and set them to the constant value.
-        let round_constant_values =
+        let round_constant_values: ArrayRegister<U64Register> =
             builder.constant_array::<U64Register>(&RC.map(u64_to_le_field_bytes));
 
         // let round_constants_reg = builder.alloc::<U64Register>();
 
         // builder.set_to_expression_transition(&round_constants_reg, clk *);
 
-        let mut state: Vec<U64Register> = (0..NUM_WORDS).map(|i| state_input.get(i)).collect();
+        let mut state: Vec<U64Register> =
+            (0..NUM_WORDS).map(|i: usize| state_input.get(i)).collect();
 
-        for round in 0..24 {
+        for round in 0..ROUNDS {
+            // ############################################
+            // Theta step
+            // ############################################
             let mut c: Vec<U64Register> = (0..5)
                 .map(|_| builder.constant(&u64_to_le_field_bytes(0)))
                 .collect();
@@ -304,6 +285,8 @@ where
                 .map(|_| builder.constant(&u64_to_le_field_bytes(0)))
                 .collect();
 
+            // Formulas taken from https://keccak.team/keccak_specs_summary.html
+            // C[x] = A[x,0] xor A[x,1] xor A[x,2] xor A[x,3] xor A[x,4],   for x in 0…4
             for y in 0..5 {
                 for x in 0..5 {
                     c[x] = builder.xor(&c[x], &state[x + y * 5]);
@@ -312,8 +295,8 @@ where
 
             // D[x] = C[x-1] xor rot(C[x+1],1), for x in 0…4
             for x in 0..5 {
-                let d_temp = builder.rotate_left(c[(x + 1) % 5], 1);
-                d[x] = builder.xor(&c[(x + 4) % 5], &d_temp);
+                let temp = builder.rotate_left(c[(x + 1) % 5], 1);
+                d[x] = builder.xor(&c[(x + 4) % 5], &temp);
             }
 
             // A[x,y] = A[x,y] xor D[x], for (x,y) in (0…4,0…4)
@@ -324,7 +307,7 @@ where
             }
 
             // ############################################
-            // Rho
+            // Rho step
             // ############################################
 
             let mut rho_x = 0;
@@ -340,7 +323,7 @@ where
             }
 
             // ############################################
-            // Pi
+            // Pi step
             // ############################################
 
             let state_cloned = state.clone();
@@ -353,7 +336,7 @@ where
             }
 
             // ############################################
-            // Chi
+            // Chi step
             // ############################################
 
             let state_cloned = state.clone();
@@ -377,10 +360,9 @@ where
 
         let state_output = builder.alloc_array::<U64Register>(NUM_WORDS);
 
-        for i in 0..NUM_WORDS {
-            builder.set_to_expression(&state_output.get(i), state[i].expr());
-            // builder
-            //     .set_to_expression_transition(&state_input.get(i).next(), &state_output(i).expr());
+        for (i, state_elem) in state.iter().enumerate() {
+            builder.set_to_expression(&state_output.get(i), state_elem.expr());
+            // builder.set_to_expression_transition(&state_input.get(i).next(), &state_output(i).expr());
         }
 
         state_output
@@ -437,7 +419,7 @@ where
 
         let air_state = builder.constant_array(&state.map(u64_to_le_field_bytes));
         // The permutation
-        let new_air_state = Self::keccak_p(builder, air_state);
+        let _new_air_state = Self::keccak_p(builder, air_state);
 
         // Output in bytes (32 bytes)
         // let out = [state[0], state[1], state[2], state[3]];
