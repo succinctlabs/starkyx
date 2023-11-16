@@ -131,9 +131,12 @@ impl<F: RichField + Extendable<D>, C: CurtaConfig<D, F = F>, const D: usize> Sta
 
         let mut challenges = vec![];
         for (round, cap) in stark.air().round_data().iter().zip_eq(trace_caps.iter()) {
+            // Observe global values produced in previous round.
             let (id_0, id_1) = round.global_values_range;
             challenger.observe_elements(&global_values[id_0..id_1]);
+            // Observe the trace commitment from the previous round.
             challenger.observe_cap(cap);
+            // Get the round challenges.
             let round_challenges = challenger.get_n_challenges(round.num_challenges);
             challenges.extend(round_challenges);
         }

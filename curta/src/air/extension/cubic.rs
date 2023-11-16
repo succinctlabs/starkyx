@@ -3,7 +3,7 @@ use crate::math::extension::cubic::element::CubicElement;
 use crate::math::extension::cubic::extension::CubicExtension;
 use crate::math::extension::cubic::parameters::CubicParameters;
 
-/// Parser operations for the cubic extension field F[X]/(X^3 - X - 1).
+/// Parser operations for the cubic extension field F[X]/(X^3 - X + 1).
 ///
 /// All the methods are equipped with default implementations. Users can choose to override them
 /// with their own implementations for better performance.
