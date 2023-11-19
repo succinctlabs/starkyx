@@ -748,7 +748,8 @@ where
                 &data.memory.v_final.get_at(*v_i),
                 &Time::from_element(write_ts),
             );
-            builder.set_to_expression(&h.get(i), builder.xor(h_workspace_2.get(i), v_value).expr());
+            let xor = builder.xor(h_workspace_2.get(i), v_value);
+            builder.set_to_expression(&h.get(i), xor.expr());
             builder.store(
                 &data.memory.h.get_at(*h_i),
                 v_value,

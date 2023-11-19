@@ -1,12 +1,17 @@
 pub mod air;
 pub mod builder;
 pub mod data;
+pub mod pure;
+pub mod utils;
 
 pub struct BLAKE2BAir<L> {
     _marker: core::marker::PhantomData<L>,
 }
 
+const NUM_MIX_ROUNDS: usize = 12;
+const MSG_ARRAY_SIZE: usize = 16;
 const HASH_ARRAY_SIZE: usize = 8;
+const WORK_VECTOR_SIZE: usize = 16;
 
 const IV: [u64; HASH_ARRAY_SIZE] = [
     0x6a09e667f2bdc928,
