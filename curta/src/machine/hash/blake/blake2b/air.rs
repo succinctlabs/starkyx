@@ -117,7 +117,6 @@ where
         builder: &mut BytesBuilder<L>,
         num_compress_element: &ElementRegister,
         num_mix_iterations: &ElementRegister,
-        end_bits: &ArrayRegister<BitRegister>,
         num_messages: &ElementRegister,
         const_nums: &BLAKE2BConstNums,
     ) -> BLAKE2BConsts<L> {
@@ -347,12 +346,22 @@ where
         t_values: &ArrayRegister<U64Register>,
         num_consts: &BLAKE2BConstNums,
         consts: &BLAKE2BConsts<L>,
+        num_messages: &ElementRegister,
     ) -> BLAKE2BMemory {
         // Initialize the h memory
-        // First round will all be dummy reads.
-        // Need to set DUMMY_VALUE at DUMMY_TS with multiplicity of (96 - 4) * 2.
-        let num_dummy_accesses = builder.constant(&L::Field::from_canonical_usize(368));
+        // First round of all messages will all be dummy reads.
+        let const_24: ElementRegister = builder.constant(&L::Field::from_canonical_u8(24));
+        let num_dummy_accesses = builder.alloc_public::<ElementRegister>();
+        builder.set_to_expression(&num_dummy_accesses, num_messages.expr() * const_24.expr());
         let h = builder.uninit_slice();
+        for i in 0..8 {
+            builder.store(
+                &h.get(i),
+                num_consts.const_0_u64,
+                &Time::from_element(consts.dummy_ts),
+                Some(num_dummy_accesses),
+            );
+        }
         builder.store(
             &h.get_at(consts.dummy_index),
             num_consts.const_0_u64,
@@ -443,7 +452,6 @@ where
             builder,
             &num_compresses_element,
             &num_mix_iterations_element,
-            end_bits,
             num_messages,
             &const_nums,
         );
@@ -458,7 +466,14 @@ where
         );
 
         // create the memory data
-        let memory = Self::blake2b_memory(builder, padded_chunks, t_values, &const_nums, &consts);
+        let memory = Self::blake2b_memory(
+            builder,
+            padded_chunks,
+            t_values,
+            &const_nums,
+            &consts,
+            num_messages,
+        );
 
         BLAKE2BData {
             public,
