@@ -29,7 +29,13 @@ where
 {
     fn cycles_end_bits(
         builder: &mut BytesBuilder<L>,
-    ) -> (BitRegister, BitRegister, BitRegister, BitRegister) {
+    ) -> (
+        BitRegister,
+        BitRegister,
+        BitRegister,
+        BitRegister,
+        BitRegister,
+    ) {
         let cycle_4 = builder.cycle(2);
         let cycle_8 = builder.cycle(3);
         let loop_3 = builder.api.loop_instr(3);
@@ -37,11 +43,13 @@ where
             let cycle_32 = builder.cycle(5);
             builder.mul(loop_3.get_iteration_reg(2), cycle_32.end_bit)
         };
+        let cycle_12_end_bit = builder.mul(loop_3.get_iteration_reg(2), cycle_4.end_bit);
 
         (
             loop_3.get_iteration_reg(2),
             cycle_4.end_bit,
             cycle_8.end_bit,
+            cycle_12_end_bit,
             cycle_96_end_bit,
         )
     }
@@ -53,6 +61,7 @@ where
         end_bits: &ArrayRegister<BitRegister>,
         digest_bits: &ArrayRegister<BitRegister>,
         digest_indices: &ArrayRegister<ElementRegister>,
+        num_messages: &ElementRegister,
     ) -> Vec<ArrayRegister<U64Register>> {
         let data = Self::blake2b_data(
             builder,
@@ -61,10 +70,19 @@ where
             end_bits,
             digest_bits,
             digest_indices,
+            num_messages,
         );
 
         let (v_indices, v_values) = Self::blake2b_compress_initialize(builder, &data);
+
+        /*
         Self::blake2b_compress(builder, &v_indices, &v_values, &data)
+        */
+
+        let num_digests = digest_indices.len();
+        (0..num_digests)
+            .map(|_| builder.alloc_array_public(4))
+            .collect::<Vec<_>>()
     }
 
     pub fn blake2b_const_nums(builder: &mut BytesBuilder<L>) -> BLAKE2BConstNums {
@@ -100,13 +118,9 @@ where
         num_compress_element: &ElementRegister,
         num_mix_iterations: &ElementRegister,
         end_bits: &ArrayRegister<BitRegister>,
+        num_messages: &ElementRegister,
         const_nums: &BLAKE2BConstNums,
     ) -> BLAKE2BConsts<L> {
-        let mut num_messages: ElementRegister = builder.alloc_public();
-        for end_bit in end_bits.iter() {
-            num_messages = builder.expression(end_bit.expr() + num_messages.expr());
-        }
-
         assert!(DUMMY_INDEX < L::Field::order());
         let dummy_index: ElementRegister =
             builder.constant(&L::Field::from_canonical_u64(DUMMY_INDEX));
@@ -117,7 +131,7 @@ where
         let iv_values = builder.constant_array::<U64Register>(&IV.map(u64_to_le_field_bytes));
         let iv = builder.uninit_slice();
         for (i, value) in iv_values.iter().enumerate() {
-            builder.store(&iv.get(i), value, &Time::zero(), Some(num_messages));
+            builder.store(&iv.get(i), value, &Time::zero(), Some(*num_messages));
         }
         let num_dummy_reads = 2 * (96 - 4) * 2;
         let num_dummy_reads_element =
@@ -205,7 +219,7 @@ where
         end_bits: &ArrayRegister<BitRegister>,
         digest_bits: &ArrayRegister<BitRegister>,
     ) -> BLAKE2BTraceData {
-        let (cycle_3_end_bit, cycle_4_end_bit, cycle_8_end_bit, cycle_96_end_bit) =
+        let (cycle_3_end_bit, cycle_4_end_bit, cycle_8_end_bit, cycle_12_end_bit, cycle_96_end_bit) =
             Self::cycles_end_bits(builder);
 
         // Allocate end_bits from public input.
@@ -249,6 +263,16 @@ where
         let clk = builder.clk;
         let compress_index =
             builder.expression(clk.expr() - compress_id.expr() * const_nums.const_96.expr());
+
+        let compress_iteration = builder.alloc::<ElementRegister>();
+        builder.set_to_expression_first_row(&compress_iteration, L::Field::ZERO.into());
+        builder.set_to_expression_transition(
+            &compress_iteration.next(),
+            compress_iteration.expr()
+                + (cycle_12_end_bit.not_expr()
+                    * (compress_iteration.expr() + const_nums.const_1.expr())
+                    + cycle_12_end_bit.expr() * const_nums.const_0.expr()),
+        );
 
         // Flag if we are within the first four rows of a hash invocation.  In these rows, we will
         // need to use the IV values.
@@ -312,6 +336,7 @@ where
             save_h,
             compress_id,
             compress_index,
+            compress_iteration,
             mix_index,
         }
     }
@@ -324,6 +349,7 @@ where
         consts: &BLAKE2BConsts<L>,
     ) -> BLAKE2BMemory {
         // Initialize the h memory
+        // First round will all be dummy reads.
         // Need to set DUMMY_VALUE at DUMMY_TS with multiplicity of (96 - 4) * 2.
         let num_dummy_accesses = builder.constant(&L::Field::from_canonical_usize(368));
         let h = builder.uninit_slice();
@@ -335,14 +361,17 @@ where
         );
 
         // Initialize the v memory
-        // Need to set DUMMY_VALUE at DUMMY_TS with multiplicity of 1.
+        // Need to set DUMMY_VALUE for all v indices at DUMMY_TS with multiplicity of 1.
+        // Dummy values will be read at very first four rows of the stark.
         let v = builder.uninit_slice();
-        builder.store(
-            &v.get_at(consts.dummy_index),
-            num_consts.const_0_u64,
-            &Time::from_element(consts.dummy_ts),
-            None,
-        );
+        for i in 0..16 {
+            builder.store(
+                &v.get(i),
+                num_consts.const_0_u64,
+                &Time::from_element(consts.dummy_ts),
+                None,
+            );
+        }
 
         // Initialize the v final memory
         let v_final = builder.uninit_slice();
@@ -386,6 +415,7 @@ where
         end_bits: &ArrayRegister<BitRegister>,
         digest_bits: &ArrayRegister<BitRegister>,
         digest_indices: &ArrayRegister<ElementRegister>,
+        num_messages: &ElementRegister,
     ) -> BLAKE2BData<L> {
         assert_eq!(padded_chunks.len(), end_bits.len());
 
@@ -414,6 +444,7 @@ where
             &num_compresses_element,
             &num_mix_iterations_element,
             end_bits,
+            num_messages,
             &const_nums,
         );
 
@@ -456,13 +487,13 @@ where
         let init_idx_1 = &data.consts.compress_initial_indices.get_at(
             builder,
             compress_index,
-            data.const_nums.const_1,
+            data.const_nums.const_0,
         );
 
         let init_idx_2 = &data.consts.compress_initial_indices.get_at(
             builder,
             compress_index,
-            data.const_nums.const_2,
+            data.const_nums.const_1,
         );
 
         let mut previous_compress_id =
@@ -586,6 +617,7 @@ where
 
         // If we are at the first compress row, then will need to xor v4 with t
         let t = builder.load(&data.memory.t.get_at(data.trace.compress_id), &Time::zero());
+
         let v4_xor_t = builder.xor(v4_value, t);
         v4_value = builder.select(data.trace.is_compress_first_row, &v4_xor_t, &v4_value);
 
@@ -603,7 +635,7 @@ where
         )
     }
 
-    /// The processing step of a SHA256 round.
+    /// The processing step of a BLAKE2B round.
     pub fn blake2b_compress(
         builder: &mut BytesBuilder<L>,
         v_indices: &[ElementRegister; 4],
@@ -611,6 +643,8 @@ where
         data: &BLAKE2BData<L>,
     ) -> Vec<ArrayRegister<U64Register>> {
         let num_digests = data.public.digest_indices.len();
+
+        // Create the public registers to verify the hash.
         let hash_state_public = (0..num_digests)
             .map(|_| builder.alloc_array_public(4))
             .collect::<Vec<_>>();
@@ -630,16 +664,16 @@ where
 
         let m_idx_1 = data.consts.permutations.get_at(
             builder,
-            data.trace.compress_index,
+            data.trace.compress_iteration,
             data.trace.mix_index,
         );
 
         let next_col =
             builder.expression(data.trace.mix_index.expr() + data.const_nums.const_1.expr());
-        let m_idx_2 = data
-            .consts
-            .permutations
-            .get_at(builder, data.trace.compress_index, next_col);
+        let m_idx_2 =
+            data.consts
+                .permutations
+                .get_at(builder, data.trace.compress_iteration, next_col);
 
         let m_1 = builder.load(
             &data.memory.m.get_at(m_idx_1),

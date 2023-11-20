@@ -35,6 +35,7 @@ pub struct BLAKE2BTraceData {
     pub(crate) save_h: Slice<BitRegister>,
     pub(crate) compress_id: ElementRegister,
     pub(crate) compress_index: ElementRegister,
+    pub(crate) compress_iteration: ElementRegister,
     pub(crate) mix_index: ElementRegister,
 }
 

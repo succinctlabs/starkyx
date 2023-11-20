@@ -18,6 +18,7 @@ where
         end_bits: &ArrayRegister<BitRegister>,
         digest_bits: &ArrayRegister<BitRegister>,
         digest_indices: &ArrayRegister<ElementRegister>,
+        num_messages: &ElementRegister,
     ) -> Vec<ArrayRegister<U64Register>> {
         BLAKE2BAir::blake2b(
             self,
@@ -26,6 +27,7 @@ where
             end_bits,
             digest_bits,
             digest_indices,
+            num_messages,
         )
     }
 }
@@ -88,14 +90,15 @@ pub mod test_utils {
         let t_values = builder.alloc_array_public::<U64Register>(num_rounds);
         let end_bits = builder.alloc_array_public::<BitRegister>(num_rounds);
         let digest_indices = builder.alloc_array_public(num_messages);
+        let num_messages = builder.alloc_public();
         let hash_state = builder.blake2b(
             &padded_chunks,
             &t_values,
             &end_bits,
             &end_bits,
             &digest_indices,
+            &num_messages,
         );
-        println!("hash_state length is {}", hash_state.len());
 
         let num_rows_degree = log2_ceil(96 * num_rounds);
         let num_rows = 1 << num_rows_degree;
@@ -125,12 +128,14 @@ pub mod test_utils {
             })
             .collect_vec();
         let t_values_values = [[GoldilocksField::ZERO; 8]];
-        let end_bits_values = [GoldilocksField::ZERO];
+        let end_bits_values = [GoldilocksField::ONE];
         let digest_indices_values = [GoldilocksField::ZERO];
+        let num_messages_value = GoldilocksField::ONE;
 
         // Write trace.
         let writer = TraceWriter::new(&stark.air_data, num_rows);
 
+        writer.write(&num_messages, &num_messages_value, 0);
         let mut intial_state = IV;
         for i in 0..num_rounds {
             writer.write_array(&padded_chunks[0], &padded_chunks_values, 0);
@@ -146,7 +151,7 @@ pub mod test_utils {
                     .collect_vec(),
                 &mut intial_state,
                 0,
-                false,
+                true,
             );
 
             writer.write_array(
@@ -157,10 +162,13 @@ pub mod test_utils {
         }
 
         writer.write_global_instructions(&stark.air_data);
+        println!("wrote global instructions");
         (0..num_rounds).for_each(|r| {
             for k in 0..96 {
                 let i = r * 96 + k;
+                println!("writing row instructions for row {}", i);
                 writer.write_row_instructions(&stark.air_data, i);
+                println!("wrote row instructions for row {}", i);
             }
         });
 

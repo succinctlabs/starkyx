@@ -407,6 +407,7 @@ impl<F: Field> TraceWriter<F> {
         row_index: usize,
     ) {
         for instruction in air_data.instructions.iter() {
+            println!("writing instruction {:?}", instruction);
             self.write_instruction(instruction, row_index);
         }
     }
