@@ -75,14 +75,7 @@ where
 
         let (v_indices, v_values) = Self::blake2b_compress_initialize(builder, &data);
 
-        /*
         Self::blake2b_compress(builder, &v_indices, &v_values, &data)
-        */
-
-        let num_digests = digest_indices.len();
-        (0..num_digests)
-            .map(|_| builder.alloc_array_public(4))
-            .collect::<Vec<_>>()
     }
 
     pub fn blake2b_const_nums(builder: &mut BytesBuilder<L>) -> BLAKE2BConstNums {
@@ -347,6 +340,7 @@ where
         num_consts: &BLAKE2BConstNums,
         consts: &BLAKE2BConsts<L>,
         num_messages: &ElementRegister,
+        num_compresses: &ElementRegister,
     ) -> BLAKE2BMemory {
         // Initialize the h memory
         // First round of all messages will all be dummy reads.
@@ -383,7 +377,23 @@ where
         }
 
         // Initialize the v final memory
+        // Need to set dummy reads.  Two reads will be accessed for every non final set of rows
+        // for each compress.
         let v_final = builder.uninit_slice();
+        let const_23: ElementRegister = builder.constant(&L::Field::from_canonical_u8(23));
+        let num_dummy_v_final_accesses = builder.alloc_public::<ElementRegister>();
+        builder.set_to_expression(
+            &num_dummy_v_final_accesses,
+            num_compresses.expr() * const_23.expr(),
+        );
+        for i in 0..16 {
+            builder.store(
+                &v_final.get(i),
+                num_consts.const_0_u64,
+                &Time::from_element(consts.dummy_ts),
+                Some(num_dummy_v_final_accesses),
+            );
+        }
 
         // Initialize the m memory
         let m = builder.uninit_slice();
@@ -473,6 +483,7 @@ where
             &const_nums,
             &consts,
             num_messages,
+            &num_compresses_element,
         );
 
         BLAKE2BData {
