@@ -264,6 +264,13 @@ pub trait Builder: Sized {
         register
     }
 
+    /// Prints out a log message (using the log::debug! macro) with the value of the register.
+    ///
+    /// The message will be presented with `RUST_LOG=debug` or `RUST_LOG=trace`.
+    fn watch(&mut self, data: &impl Register, name: &str) {
+        self.api().watch(data, name);
+    }
+
     /// Computes the expression `expression` and returns the result as a public register of type `T`.
     fn public_expression<T: Register>(
         &mut self,
