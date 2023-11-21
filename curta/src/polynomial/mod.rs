@@ -13,7 +13,7 @@ use crate::chip::utils::{bigint_into_u16_digits, biguint_to_16_digits_field};
 use crate::math::prelude::*;
 
 /// A wrapper around a vector of elements to represent a polynomial.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Polynomial<T> {
     pub coefficients: Vec<T>,
 }

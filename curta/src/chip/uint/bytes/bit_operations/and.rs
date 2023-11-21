@@ -5,7 +5,7 @@ use crate::air::AirConstraint;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 pub use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -39,6 +39,15 @@ impl<F: Field, const NUM_BITS: usize> Instruction<F> for And<NUM_BITS> {
         let result = a.into_iter().zip(b).map(|(a, b)| a * b);
 
         writer.write_array(&self.result, result, row_index);
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        let a = writer.read_array::<_, NUM_BITS>(&self.a);
+        let b = writer.read_array::<_, NUM_BITS>(&self.b);
+
+        let result = a.into_iter().zip(b).map(|(a, b)| a * b);
+
+        writer.write_array(&self.result, result);
     }
 }
 

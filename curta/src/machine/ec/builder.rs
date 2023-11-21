@@ -170,21 +170,22 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
         // Keep track of whether res is the identity, which is the point at infinity for some
         // curves.
         //
-        // The value starts by being one at the begining of each cycle, and set to zero once the
+        // The value starts by being '0' at the begining of each cycle, and set to '1' once the
         // scalar bit is different from zero.
-        let is_res_unit = self.alloc::<BitRegister>();
+        let is_res_valid = self.alloc::<BitRegister>();
         let scalar_bit = data.bit;
         let end_bit = data.end_bit;
-        self.set_to_expression_first_row(&is_res_unit, Self::Field::ONE.into());
-        let next_res_unit =
-            self.expression(is_res_unit.expr() - scalar_bit.expr() * is_res_unit.expr());
-        self.select_next(end_bit, &end_bit, &next_res_unit, &is_res_unit);
+        let start_bit = data.start_bit;
+        self.set_to_expression_first_row(&is_res_valid, Self::Field::ZERO.into());
+        let next_res_valid =
+            self.expression(is_res_valid.expr() + scalar_bit.expr() * is_res_valid.not_expr());
+        self.select_next(end_bit, &start_bit, &next_res_valid, &is_res_valid);
 
         // Load temp.
         let process_id = data.process_id;
         let temp_x_ptr = data.temp_x_ptr.get_at(process_id);
         let temp_y_ptr = data.temp_y_ptr.get_at(process_id);
-        let clk = Time::from_element(self.api().clock());
+        let clk = Time::from_element(self.clk());
         let temp_x = self.load(&temp_x_ptr, &clk);
         let temp_y = self.load(&temp_y_ptr, &clk);
         let temp = AffinePointRegister::new(temp_x, temp_y);
@@ -199,10 +200,10 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
         let result = self.alloc_ec_point();
 
         // Calculate res_next = res + temp if scalar_bit is 1, otherwise res_next = res.
-        let addend = self.select_ec_point(is_res_unit, &temp_next, &result);
+        let addend = self.select_ec_point(is_res_valid, &result, &temp_next);
         let sum = self.add(&temp, &addend);
 
-        let res_plus_temp = self.select_ec_point(is_res_unit, &temp, &sum);
+        let res_plus_temp = self.select_ec_point(is_res_valid, &sum, &temp);
         let result_next = self.select_ec_point(scalar_bit, &res_plus_temp, &result);
 
         let zero_field = self.zero::<FieldRegister<E::BaseField>>();
@@ -236,9 +237,10 @@ mod tests {
 
     use super::*;
     use crate::chip::ec::edwards::ed25519::params::Ed25519;
-    use crate::chip::ec::gadget::EllipticCurveWriter;
+    use crate::chip::ec::gadget::EllipticCurveAirWriter;
     use crate::chip::ec::{ECInstruction, EllipticCurve};
-    use crate::chip::trace::writer::{InnerWriterData, TraceWriter};
+    use crate::chip::trace::writer::data::AirWriterData;
+    use crate::chip::trace::writer::AirWriter;
     use crate::chip::AirParameters;
     use crate::machine::emulated::builder::EmulatedBuilder;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
@@ -255,7 +257,7 @@ mod tests {
         type Instruction = ECInstruction<Ed25519>;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 1632;
-        const NUM_FREE_COLUMNS: usize = 20;
+        const NUM_FREE_COLUMNS: usize = 19;
         const EXTENDED_COLUMNS: usize = 2502;
     }
 
@@ -294,46 +296,60 @@ mod tests {
         let num_rows = 1 << degree_log;
         let stark = builder.build::<C, 2>(1 << degree_log);
 
-        let writer = TraceWriter::new(&stark.air_data, num_rows);
-
         let order = E::prime_group_order();
 
+        // Get thr results
+        let ec_data = (0..num_ops)
+            .into_par_iter()
+            .map(|_| {
+                let mut rng = thread_rng();
+                let a = rng.gen_biguint(256);
+                let point = E::ec_generator() * a;
+                let scalar = rng.gen_biguint(256) % &order;
+                let result = &point * &scalar;
+                (point, scalar, result)
+            })
+            .collect::<Vec<_>>();
+
+        let mut writer_data = AirWriterData::new(&stark.air_data, num_rows);
+
+        let mut writer = writer_data.public_writer();
         timed!(
             timing,
             "writing input",
             points
-                .par_iter()
-                .zip(scalars.par_iter())
-                .zip(results.par_iter())
-                .for_each(|((point_reg, scalar_reg), result_reg)| {
-                    let mut rng = thread_rng();
-                    let a = rng.gen_biguint(256);
-                    let point = E::ec_generator() * a;
-                    let scalar = rng.gen_biguint(256) % &order;
-                    let result = &point * &scalar;
+                .iter()
+                .zip(scalars.iter())
+                .zip(results.iter())
+                .zip(ec_data)
+                .for_each(
+                    |(((point_reg, scalar_reg), result_reg), (point, scalar, result))| {
+                        writer.write_ec_point(point_reg, &point);
+                        writer.write_ec_point(result_reg, &result);
 
-                    writer.write_ec_point(point_reg, &point, 0);
-                    writer.write_ec_point(result_reg, &result, 0);
+                        let mut limb_values = scalar.to_u32_digits();
+                        limb_values.resize(8, 0);
 
-                    let mut limb_values = scalar.to_u32_digits();
-                    limb_values.resize(8, 0);
-
-                    for (limb_reg, limb) in scalar_reg.limbs.iter().zip_eq(limb_values) {
-                        writer.write(&limb_reg, &F::from_canonical_u32(limb), 0);
+                        for (limb_reg, limb) in scalar_reg.limbs.iter().zip_eq(limb_values) {
+                            writer.write(&limb_reg, &F::from_canonical_u32(limb));
+                        }
                     }
-                })
+                )
         );
-        debug!("Wrote input values to public inputs");
 
-        timed!(timing, "generate trace", {
-            writer.write_global_instructions(&stark.air_data);
-            for i in 0..num_rows {
-                writer.write_row_instructions(&stark.air_data, i);
+        stark.air_data.write_global_instructions(&mut writer);
+
+        writer_data.chunks_par(256).for_each(|mut chunk| {
+            for i in 0..256 {
+                let mut writer = chunk.window_writer(i);
+                stark.air_data.write_trace_instructions(&mut writer);
             }
         });
+
         debug!("Generated execution trace");
 
-        let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
+        let (trace, public) = (writer_data.trace, writer_data.public);
+
         let proof = stark.prove(&trace, &public, &mut timing).unwrap();
 
         stark.verify(proof.clone(), &public).unwrap();

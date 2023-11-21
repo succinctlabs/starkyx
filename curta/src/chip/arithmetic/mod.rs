@@ -5,7 +5,7 @@ use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 
 pub mod expression;
-pub mod expression_slice;
+pub(crate) mod expression_slice;
 
 use crate::math::prelude::*;
 

@@ -14,7 +14,7 @@ use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::u16::U16Register;
 use crate::chip::register::{Register, RegisterSerializable};
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::chip::utils::{field_limbs_to_biguint, split_u32_limbs_to_u16_limbs};
 use crate::chip::AirParameters;
 use crate::math::prelude::*;
@@ -164,6 +164,59 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpInnerProductInstr
         writer.write(&self.carry, &p_carry, row_index);
         writer.write_array(&self.witness_low, &p_witness_low, row_index);
         writer.write_array(&self.witness_high, &p_witness_high, row_index);
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        // Make little endian polynomial limbs.
+        let p_a_vec = self
+            .a
+            .iter()
+            .map(|a| writer.read(a))
+            .collect::<Vec<Polynomial<F>>>();
+        let p_b_vec = self
+            .b
+            .iter()
+            .map(|b| writer.read(b))
+            .collect::<Vec<Polynomial<F>>>();
+
+        let modulus = &P::modulus();
+        let inner_product = p_a_vec
+            .iter()
+            .zip(p_b_vec.iter())
+            .map(|(a, b)| {
+                (
+                    field_limbs_to_biguint(a.coefficients()),
+                    field_limbs_to_biguint(b.coefficients()),
+                )
+            })
+            .fold(BigUint::zero(), |acc, (c, d)| acc + c * d);
+
+        let result = &(&inner_product % modulus);
+        let carry = &((&inner_product - result) / modulus);
+        assert!(result < modulus);
+        assert!(carry < &(2u32 * modulus));
+        assert_eq!(carry * modulus, inner_product - result);
+
+        let p_modulus = to_u16_le_limbs_polynomial::<F, P>(modulus);
+        let p_result = to_u16_le_limbs_polynomial::<F, P>(result);
+        let p_carry = to_u16_le_limbs_polynomial::<F, P>(carry);
+
+        // Compute the vanishing polynomial.
+        let p_inner_product = p_a_vec.into_iter().zip(p_b_vec).fold(
+            Polynomial::<F>::from_coefficients(vec![F::ZERO]),
+            |acc, (c, d)| acc + &c * &d,
+        );
+        let p_vanishing = p_inner_product - &p_result - &p_carry * &p_modulus;
+        assert_eq!(p_vanishing.degree(), P::NB_WITNESS_LIMBS);
+
+        // Compute the witness
+        let p_witness = util::compute_root_quotient_and_shift(&p_vanishing, P::WITNESS_OFFSET);
+        let (p_witness_low, p_witness_high) = split_u32_limbs_to_u16_limbs(&p_witness);
+
+        writer.write(&self.result, &p_result);
+        writer.write(&self.carry, &p_carry);
+        writer.write_array(&self.witness_low, &p_witness_low);
+        writer.write_array(&self.witness_high, &p_witness_high);
     }
 }
 

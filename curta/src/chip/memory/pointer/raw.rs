@@ -8,7 +8,7 @@ use crate::chip::builder::AirBuilder;
 use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::chip::AirParameters;
 use crate::math::field::Field;
 use crate::math::prelude::cubic::element::CubicElement;
@@ -108,6 +108,16 @@ impl RawPointer {
         let element_shift = self
             .element_shift
             .map(|s| writer.read(&s, row_index))
+            .unwrap_or(F::ZERO);
+        let constant_shift = self.constant_shift.map(i32_to_field).unwrap_or(F::ZERO);
+        let shift = element_shift + constant_shift;
+        RawPointerKey::new(self.challenge, shift)
+    }
+
+    pub fn read_from_air<F: Field>(&self, writer: &impl AirWriter<Field = F>) -> RawPointerKey<F> {
+        let element_shift = self
+            .element_shift
+            .map(|s| writer.read(&s))
             .unwrap_or(F::ZERO);
         let constant_shift = self.constant_shift.map(i32_to_field).unwrap_or(F::ZERO);
         let shift = element_shift + constant_shift;

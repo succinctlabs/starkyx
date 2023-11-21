@@ -73,20 +73,21 @@ impl<'a, T> Iterator for TraceWindowsMutIter<'a, T> {
     type Item = TraceWindowMut<'a, T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_row >= self.height {
+        if self.current_row >= self.height - 1 {
             return None;
         }
         let slice = core::mem::take(&mut self.values);
         let (local_row, rest) = slice.split_at_mut(self.width);
         let (next_row, new_values) = rest.split_at_mut(self.width);
         self.values = new_values;
+        let current_row = self.current_row;
         self.current_row += 1;
         Some(TraceWindowMut {
             local_slice: local_row,
             next_slice: next_row,
             row: self.current_row,
-            is_first_row: self.current_row == 0,
-            is_last_row: self.current_row == self.height - 1,
+            is_first_row: current_row == 0,
+            is_last_row: current_row == self.height - 1,
         })
     }
 }

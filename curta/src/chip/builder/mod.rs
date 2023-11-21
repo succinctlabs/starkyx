@@ -8,12 +8,13 @@ use core::cmp::Ordering;
 use self::shared_memory::SharedMemory;
 use super::arithmetic::expression::ArithmeticExpression;
 use super::constraint::Constraint;
+use super::instruction::clock::ClockInstruction;
 use super::instruction::set::AirInstruction;
 use super::memory::pointer::accumulate::PointerAccumulator;
 use super::register::array::ArrayRegister;
 use super::register::cubic::CubicRegister;
 use super::register::element::ElementRegister;
-use super::register::{Register, RegisterSerializable};
+use super::register::Register;
 use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
 use super::table::bus::global::Bus;
@@ -21,7 +22,7 @@ use super::table::lookup::table::LookupTable;
 use super::table::lookup::values::LookupValues;
 use super::trace::data::AirTraceData;
 use super::{AirParameters, Chip};
-use crate::math::prelude::*;
+use crate::chip::register::RegisterSerializable;
 
 #[derive(Debug, Clone)]
 #[allow(clippy::type_complexity)]
@@ -106,6 +107,19 @@ impl<L: AirParameters> AirBuilder<L> {
         array
     }
 
+    /// Prints out a log message (using the log::debug! macro) with the value of the register.
+    ///
+    /// The message will be presented with `RUST_LOG=debug` or `RUST_LOG=trace`.
+    pub fn watch(&mut self, data: &impl Register, name: &str) {
+        let register = ArrayRegister::from_register_unsafe(*data.register());
+        let instruction = AirInstruction::Watch(name.to_string(), register);
+        if data.is_trace() {
+            self.register_air_instruction_internal(instruction);
+        } else {
+            self.register_global_air_instruction_internal(instruction);
+        }
+    }
+
     /// Registers an custom instruction with the builder.
     pub fn register_instruction<I>(&mut self, instruction: I)
     where
@@ -179,9 +193,8 @@ impl<L: AirParameters> AirBuilder<L> {
     pub fn clock(&mut self) -> ElementRegister {
         let clk = self.alloc::<ElementRegister>();
 
-        self.set_to_expression_first_row(&clk, ArithmeticExpression::zero());
-        self.set_to_expression_transition(&clk.next(), clk.expr() + L::Field::ONE);
-
+        let instruction = AirInstruction::clock(ClockInstruction { clk });
+        self.register_air_instruction_internal(instruction);
         clk
     }
 
@@ -269,6 +282,7 @@ impl<L: AirParameters> AirBuilder<L> {
                 num_challenges: self.shared_memory.challenge_index(),
                 num_public_inputs: self.shared_memory.public_index(),
                 num_global_values: self.shared_memory.global_index(),
+                execution_trace_length,
                 instructions: self.instructions,
                 global_instructions: self.global_instructions,
                 accumulators: self.accumulators,
@@ -301,6 +315,7 @@ pub(crate) mod tests {
     pub use crate::chip::register::RegisterSerializable;
     pub use crate::chip::trace::generator::ArithmeticGenerator;
     pub use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
+    use crate::math::prelude::*;
     pub use crate::maybe_rayon::*;
     pub use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
     pub(crate) use crate::plonky2::stark::tests::{test_recursive_starky, test_starky};
@@ -316,6 +331,7 @@ pub(crate) mod tests {
         type Instruction = EmptyInstruction<GoldilocksField>;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
         const NUM_FREE_COLUMNS: usize = 2;
+        const EXTENDED_COLUMNS: usize = 0;
     }
 
     #[test]
@@ -370,14 +386,18 @@ pub(crate) mod tests {
         type L = FibonacciParameters;
         type SC = PoseidonGoldilocksStarkConfig;
 
+        let _ = env_logger::builder().is_test(true).try_init();
+
         let mut builder = AirBuilder::<L>::new();
         let x_0 = builder.alloc::<ElementRegister>();
         let x_1 = builder.alloc::<ElementRegister>();
 
         // x0' <- x1
-        let constr_1 = builder.set_to_expression_transition(&x_0.next(), x_1.expr());
+        builder.set_to_expression_transition(&x_0.next(), x_1.expr());
         // x1' <- x0 + x1
-        let constr_2 = builder.set_to_expression_transition(&x_1.next(), x_0.expr() + x_1.expr());
+        builder.set_to_expression_transition(&x_1.next(), x_0.expr() + x_1.expr());
+
+        builder.watch(&x_1, "x_1 fib");
 
         let num_rows = 1 << 10;
         let public_inputs = [
@@ -398,8 +418,7 @@ pub(crate) mod tests {
         writer.write(&x_1, &F::ONE, 0);
 
         for i in 0..num_rows {
-            writer.write_instruction(&constr_1, i);
-            writer.write_instruction(&constr_2, i);
+            writer.write_row_instructions(&generator.air_data, i);
         }
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);

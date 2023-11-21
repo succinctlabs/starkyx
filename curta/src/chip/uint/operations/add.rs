@@ -6,7 +6,7 @@ use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::Register;
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::chip::uint::bytes::lookup_table::builder_operations::ByteLookupOperations;
 use crate::chip::uint::bytes::operations::instruction::ByteOperationInstruction;
 use crate::chip::uint::bytes::operations::value::ByteOperation;
@@ -220,6 +220,27 @@ impl<F: PrimeField64> Instruction<F> for ByteArrayAdd<4> {
             &self.result_carry,
             &F::from_canonical_u8(result_carry as u8),
             row_index,
+        );
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        let a = writer.read(&self.a);
+        let b = writer.read(&self.b);
+        let in_carry = self.in_carry.map(|x| writer.read(&x));
+
+        let a_val = u32::from_le_bytes(a.map(|x| x.as_canonical_u64() as u8));
+        let b_val = u32::from_le_bytes(b.map(|x| x.as_canonical_u64() as u8));
+        let in_carry_val = in_carry
+            .map(|x| x.as_canonical_u64() as u8 == 1)
+            .unwrap_or(false);
+
+        let (result, result_carry) = a_val.carrying_add(b_val, in_carry_val);
+        let result_bytes = result.to_le_bytes().map(|x| F::from_canonical_u8(x));
+
+        writer.write(&self.result, &result_bytes);
+        writer.write(
+            &self.result_carry,
+            &F::from_canonical_u8(result_carry as u8),
         );
     }
 }

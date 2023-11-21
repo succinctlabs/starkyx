@@ -224,7 +224,7 @@ mod tests {
     fn test_sha512_short_message() {
         let msg = b"plonky2";
         let expected_digest = "7c6159dd615db8c15bc76e23d36106e77464759979a0fcd1366e531f552cfa0852dbf5c832f00bb279cbc945b44a132bff3ed0028259813b6a07b57326e88c87";
-        let num_messages = 2;
+        let num_messages = 1000;
         test_sha512(
             iter::repeat(msg).take(num_messages).map(|x| x.as_slice()),
             iter::repeat(expected_digest).take(num_messages),

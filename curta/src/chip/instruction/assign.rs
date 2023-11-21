@@ -6,7 +6,7 @@ use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::register::memory::MemorySlice;
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -93,6 +93,30 @@ impl<F: Field> Instruction<F> for AssignInstruction<F> {
                 let value = writer.read_expression(&self.source, row_index);
                 writer.write_slice(&self.target, &value, row_index);
             }
+        }
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        let row_index = writer.row_index();
+        let height = writer.height();
+        match (self.kind, row_index) {
+            (AssignType::First, Some(0)) => {
+                let value = writer.read_expression(&self.source);
+                writer.write_slice(&self.target, &value);
+            }
+            (AssignType::Last, Some(r)) if r == height - 1 => {
+                let value = writer.read_expression(&self.source);
+                writer.write_slice(&self.target, &value);
+            }
+            (AssignType::Transition, Some(r)) if r < height - 1 => {
+                let value = writer.read_expression(&self.source);
+                writer.write_slice(&self.target, &value);
+            }
+            (AssignType::All, _) => {
+                let value = writer.read_expression(&self.source);
+                writer.write_slice(&self.target, &value);
+            }
+            _ => {}
         }
     }
 }

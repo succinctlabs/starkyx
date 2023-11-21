@@ -10,7 +10,7 @@ use crate::chip::instruction::Instruction;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::u16::U16Register;
 use crate::chip::register::{Register, RegisterSerializable};
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::chip::utils::{
     compute_root_quotient_and_shift, field_limbs_to_biguint, split_u32_limbs_to_u16_limbs,
 };
@@ -162,6 +162,57 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpDenInstruction<P>
         writer.write(&self.carry, &p_carry, row_index);
         writer.write_array(&self.witness_low, &p_witness_low, row_index);
         writer.write_array(&self.witness_high, &p_witness_high, row_index);
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        let p_a = writer.read(&self.a);
+        let p_b = writer.read(&self.b);
+
+        let a = field_limbs_to_biguint(p_a.coefficients());
+        let b = field_limbs_to_biguint(p_b.coefficients());
+
+        let p = P::modulus();
+        let minus_b_int = &p - &b;
+        let b_signed = if self.sign { &b } else { &minus_b_int };
+        let denominator = (b_signed + 1u32) % &p;
+        let den_inv = denominator.modpow(&(&p - 2u32), &p);
+        let result = (&a * &den_inv) % &p;
+        debug_assert_eq!(&den_inv * &denominator % &p, BigUint::from(1u32));
+        debug_assert!(result < p);
+
+        let equation_lhs = if self.sign {
+            &b * &result + &result
+        } else {
+            &b * &result + &a
+        };
+        let equation_rhs = if self.sign { a.clone() } else { result.clone() };
+        let carry = (&equation_lhs - &equation_rhs) / &p;
+        debug_assert!(carry < p);
+        debug_assert_eq!(&carry * &p, &equation_lhs - &equation_rhs);
+
+        // Make little endian polynomial limbs.
+        let p_a = to_u16_le_limbs_polynomial::<F, P>(&a);
+        let p_b = to_u16_le_limbs_polynomial::<F, P>(&b);
+        let p_p = to_u16_le_limbs_polynomial::<F, P>(&p);
+        let p_result = to_u16_le_limbs_polynomial::<F, P>(&result);
+        let p_carry = to_u16_le_limbs_polynomial::<F, P>(&carry);
+
+        // Compute the vanishing polynomial.
+        let vanishing_poly = if self.sign {
+            &p_b * &p_result + &p_result - &p_a - &p_carry * &p_p
+        } else {
+            &p_b * &p_result + &p_a - &p_result - &p_carry * &p_p
+        };
+        debug_assert_eq!(vanishing_poly.degree(), P::NB_WITNESS_LIMBS);
+
+        // Compute the witness.
+        let p_witness_shifted = compute_root_quotient_and_shift(&vanishing_poly, P::WITNESS_OFFSET);
+        let (p_witness_low, p_witness_high) = split_u32_limbs_to_u16_limbs::<F>(&p_witness_shifted);
+
+        writer.write(&self.result, &p_result);
+        writer.write(&self.carry, &p_carry);
+        writer.write_array(&self.witness_low, &p_witness_low);
+        writer.write_array(&self.witness_high, &p_witness_high);
     }
 }
 

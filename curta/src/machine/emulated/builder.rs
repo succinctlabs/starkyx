@@ -26,6 +26,10 @@ impl<L: AirParameters> Builder for EmulatedBuilder<L> {
     fn api(&mut self) -> &mut AirBuilder<Self::Parameters> {
         &mut self.api
     }
+
+    fn clk(&mut self) -> ElementRegister {
+        self.clk
+    }
 }
 
 impl<L: AirParameters> EmulatedBuilder<L> {

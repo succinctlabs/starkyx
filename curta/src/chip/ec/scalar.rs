@@ -11,7 +11,7 @@ use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
-use crate::chip::trace::writer::TraceWriter;
+use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::chip::AirParameters;
 use crate::math::field::{Field, PrimeField64};
 
@@ -124,6 +124,33 @@ impl<F: PrimeField64> Instruction<F> for LimbBitInstruction {
                 .as_canonical_u64() as u32;
             let next_value = F::from_canonical_u32((bit_accumulator - bit) / 2);
             writer.write(&self.bit_accumulator.next(), &next_value, row_index);
+        }
+    }
+
+    fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        // Load the limb value and write the correct bit.
+        let limb = writer.read(&self.limb);
+        let limb_u32 = limb.as_canonical_u64() as u32;
+
+        let bit_index = writer.row_index().unwrap() % 32;
+        let bit = (limb_u32 >> bit_index) & 1;
+        writer.write(&self.bit, &F::from_canonical_u32(bit));
+
+        // Write the bit accumulator.
+        let start_bit = writer.read(&self.start_bit) == F::ONE;
+        let end_bit = writer.read(&self.end_bit) == F::ONE;
+
+        // If this is the first bit, then the bit accumulator is the limb value.
+        if start_bit {
+            writer.write(&self.bit_accumulator, &limb);
+        }
+
+        // Unless this is the last bit, the next bit accumulator is given as:
+        // `bit_accumulator_next = (bit_accumulator - bit) / 2.`
+        if !end_bit {
+            let bit_accumulator = writer.read(&self.bit_accumulator).as_canonical_u64() as u32;
+            let next_value = F::from_canonical_u32((bit_accumulator - bit) / 2);
+            writer.write(&self.bit_accumulator.next(), &next_value);
         }
     }
 }
