@@ -262,10 +262,8 @@ where
         builder.set_to_expression_first_row(&compress_iteration, L::Field::ZERO.into());
         builder.set_to_expression_transition(
             &compress_iteration.next(),
-            compress_iteration.expr()
-                + (cycle_12_end_bit.not_expr()
-                    * (compress_iteration.expr() + const_nums.const_1.expr())
-                    + cycle_12_end_bit.expr() * const_nums.const_0.expr()),
+            (cycle_12_end_bit.not_expr() * (compress_iteration.expr() + const_nums.const_1.expr())
+                + cycle_12_end_bit.expr() * const_nums.const_0.expr()),
         );
 
         let at_last_hash_compress = builder.load(&end_bit.get_at(compress_id), &Time::zero());
@@ -274,7 +272,7 @@ where
         builder.set_to_expression_transition(
             &at_first_compress.next(),
             (cycle_96_end_bit.not_expr() * at_first_compress.expr())
-                * (cycle_96_end_bit.expr() * at_last_hash_compress.expr()),
+                + (cycle_96_end_bit.expr() * at_last_hash_compress.expr()),
         );
 
         // Flag if we are within the first four rows of a hash invocation.  In these rows, we will
@@ -402,9 +400,16 @@ where
         let m = builder.uninit_slice();
 
         let mut compress_id = 0;
+        // Each message chunk will be read 24 times per compress.  Two times per compress iteration.
+        let const_24 = builder.constant::<ElementRegister>(&L::Field::from_canonical_usize(24));
         for padded_chunk in padded_chunks.iter() {
             for (j, word) in padded_chunk.iter().enumerate().take(16) {
-                builder.store(&m.get(j), word, &Time::constant(compress_id), None);
+                builder.store(
+                    &m.get(j),
+                    word,
+                    &Time::constant(compress_id),
+                    Some(const_24),
+                );
                 compress_id += 1;
             }
         }
@@ -549,6 +554,10 @@ where
             init_idx_2,
         );
 
+        builder.watch(&data.trace.at_first_compress, "at_first_compress");
+        builder.watch(&h_init_idx_1, "h_init_idx_1");
+        builder.watch(&previous_compress_id, "previous_compress_id");
+
         let h_value_1 = builder.load(
             &data.memory.h.get_at(h_init_idx_1),
             &Time::from_element(previous_compress_id),
@@ -653,6 +662,8 @@ where
             &v4_last_write_ts,
         );
 
+        builder.watch(&v1_idx, "v1_idx");
+
         let v1_value = builder.load(
             &data.memory.v.get_at(v1_idx),
             &Time::from_element(v1_last_write_ts),
@@ -708,6 +719,8 @@ where
             &v4_value,
         );
 
+        builder.watch(&v4_value, "v4_value");
+
         (
             [v1_idx, v2_idx, v3_idx, v4_idx],
             [v1_value, v2_value, v3_value, v4_value],
@@ -743,6 +756,10 @@ where
 
         let mut permutation_col: ElementRegister =
             builder.mul(data.trace.mix_index, data.const_nums.const_2);
+
+        builder.watch(&data.trace.compress_iteration, "compress iteration");
+        builder.watch(&permutation_col, "permutation col");
+
         let m_idx_1 = data.consts.permutations.get_at(
             builder,
             data.trace.compress_iteration,
@@ -758,14 +775,22 @@ where
             data.const_nums.const_false,
         );
 
+        builder.watch(&m_idx_1, "m_idx_1");
+        builder.watch(&data.trace.compress_id, "compress_id");
+
         let m_1 = builder.load(
             &data.memory.m.get_at(m_idx_1),
             &Time::from_element(data.trace.compress_id),
         );
+
+        builder.watch(&m_idx_2, "m_idx_2");
+
         let m_2 = builder.load(
             &data.memory.m.get_at(m_idx_2),
             &Time::from_element(data.trace.compress_id),
         );
+
+        builder.watch(&m_1, "m_1");
 
         let (updated_v0, updated_v1, updated_v2, updated_v3) = Self::blake2b_mix(
             builder,
@@ -782,7 +807,12 @@ where
             &Time::zero(),
         );
 
+        builder.watch(&save_h, "save_h");
+
         let write_ts = builder.select(save_h, &data.trace.compress_id, &data.consts.dummy_ts);
+
+        builder.watch(&write_ts, "write_ts");
+        builder.watch(&updated_v0, "updated v");
         let updated_v_values = [updated_v0, updated_v1, updated_v2, updated_v3];
         for (i, value) in updated_v_values.iter().enumerate() {
             builder.store(
@@ -794,7 +824,8 @@ where
 
             // Save to v_final if at the last 4 cycles of the round
             let v_final_value =
-                builder.select(save_h, value, &data.const_nums.const_ffffffffffffffff);
+                builder.select(save_h, &data.const_nums.const_ffffffffffffffff, value);
+            builder.watch(&v_final_value, "v final value");
             builder.store(
                 &data.memory.v_final.get_at(v_indices[i]),
                 v_final_value,
