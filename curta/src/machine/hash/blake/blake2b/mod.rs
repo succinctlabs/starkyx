@@ -39,8 +39,6 @@ const COMPRESS_IV: [u64; HASH_ARRAY_SIZE] = [
     0x5be0cd19137e2179,
 ];
 
-const COMPRESS_INITIALIZE_INDICES: [[u8; 2]; 4] = [[0, 4], [1, 5], [2, 6], [3, 7]];
-
 const V_INDICES: [[u8; 4]; 8] = [
     [0, 4, 8, 12],
     [1, 5, 9, 13],

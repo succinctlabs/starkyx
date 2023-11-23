@@ -49,7 +49,6 @@ pub struct BLAKE2BMemory {
 }
 
 pub struct BLAKE2BConsts<L: AirParameters> {
-    pub(crate) compress_initial_indices: MemoryArray<L, 4, 2>,
     pub(crate) iv_values: ArrayRegister<U64Register>,
     pub(crate) compress_iv: Slice<U64Register>,
     pub(crate) v_indices: MemoryArray<L, 8, 4>,

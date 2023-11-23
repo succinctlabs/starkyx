@@ -68,8 +68,8 @@ pub mod test_utils {
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = UintInstruction;
 
-        const NUM_FREE_COLUMNS: usize = 1263;
-        const EXTENDED_COLUMNS: usize = 714;
+        const NUM_FREE_COLUMNS: usize = 1318;
+        const EXTENDED_COLUMNS: usize = 768;
     }
 
     #[test]
@@ -113,21 +113,23 @@ pub mod test_utils {
         stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
         */
 
-        let message = hex::decode("").unwrap();
-        let padded_chunks_values: Vec<[GoldilocksField; 8]> = BLAKE2BUtil::pad(&message, 1)
-            .chunks_exact(8)
-            .map(|x| {
-                let a: [GoldilocksField; 8] = x
-                    .iter()
-                    .map(|y| GoldilocksField::from_canonical_u8(*y))
-                    .collect_vec()
-                    .as_slice()
-                    .try_into()
-                    .unwrap();
-                a
-            })
-            .collect_vec();
-        let t_values_values = [[GoldilocksField::ZERO; 8]];
+        let message = b"1";
+        let padded_chunks_values: Vec<[GoldilocksField; 8]> =
+            BLAKE2BUtil::pad(&message.to_vec(), 1)
+                .chunks_exact(8)
+                .map(|x| {
+                    let a: [GoldilocksField; 8] = x
+                        .iter()
+                        .map(|y| GoldilocksField::from_canonical_u8(*y))
+                        .collect_vec()
+                        .as_slice()
+                        .try_into()
+                        .unwrap();
+                    a
+                })
+                .collect_vec();
+        let mut t_values_values = [[GoldilocksField::ZERO; 8]];
+        t_values_values[0][0] = GoldilocksField::ONE;
         let end_bits_values = [GoldilocksField::ONE];
         let digest_indices_values = [GoldilocksField::ZERO];
         let num_messages_value = GoldilocksField::ONE;
