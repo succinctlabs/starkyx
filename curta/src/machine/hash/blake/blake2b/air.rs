@@ -1,3 +1,5 @@
+use env_logger::init;
+
 use super::data::{BLAKE2BConstNums, BLAKE2BConsts, BLAKE2BData};
 use super::{BLAKE2BAir, IV};
 use crate::chip::memory::pointer::slice::Slice;
@@ -73,32 +75,21 @@ where
             num_messages,
         );
 
-        let (v_indices, v_values) = Self::blake2b_compress_initialize(builder, &data);
+        let (v_indices, v_values, previous_compress_id) =
+            Self::blake2b_compress_initialize(builder, &data);
 
-        Self::blake2b_compress(builder, &v_indices, &v_values, &data)
+        Self::blake2b_compress(builder, &v_indices, &v_values, previous_compress_id, &data)
     }
 
     pub fn blake2b_const_nums(builder: &mut BytesBuilder<L>) -> BLAKE2BConstNums {
         BLAKE2BConstNums {
-            const_true: builder.constant(&L::Field::ONE),
-            const_false: builder.constant(&L::Field::ZERO),
             const_0: builder.constant(&L::Field::from_canonical_u8(0)),
             const_0_u64: builder.constant(&u64_to_le_field_bytes(0u64)),
             const_1: builder.constant(&L::Field::from_canonical_u8(1)),
             const_2: builder.constant(&L::Field::from_canonical_u8(2)),
             const_3: builder.constant(&L::Field::from_canonical_u8(3)),
             const_4: builder.constant(&L::Field::from_canonical_u8(4)),
-            const_5: builder.constant(&L::Field::from_canonical_u8(5)),
-            const_6: builder.constant(&L::Field::from_canonical_u8(6)),
-            const_7: builder.constant(&L::Field::from_canonical_u8(7)),
-            const_8: builder.constant(&L::Field::from_canonical_u8(8)),
             const_9: builder.constant(&L::Field::from_canonical_u8(9)),
-            const_10: builder.constant(&L::Field::from_canonical_u8(10)),
-            const_11: builder.constant(&L::Field::from_canonical_u8(11)),
-            const_12: builder.constant(&L::Field::from_canonical_u8(12)),
-            const_13: builder.constant(&L::Field::from_canonical_u8(13)),
-            const_14: builder.constant(&L::Field::from_canonical_u8(14)),
-            const_15: builder.constant(&L::Field::from_canonical_u8(15)),
             const_96: builder.constant(&L::Field::from_canonical_u8(96)),
             const_ffffffffffffffff: builder.constant::<U64Register>(&u64_to_le_field_bytes::<
                 L::Field,
@@ -112,7 +103,6 @@ where
         builder: &mut BytesBuilder<L>,
         num_compress_element: &ElementRegister,
         num_mix_iterations: &ElementRegister,
-        num_messages: &ElementRegister,
         const_nums: &BLAKE2BConstNums,
     ) -> BLAKE2BConsts<L> {
         assert!(DUMMY_INDEX < L::Field::order());
@@ -123,19 +113,6 @@ where
         let dummy_ts: ElementRegister = builder.constant(&L::Field::from_canonical_u64(DUMMY_TS));
 
         let iv_values = builder.constant_array::<U64Register>(&IV.map(u64_to_le_field_bytes));
-        let iv = builder.uninit_slice();
-        for (i, value) in iv_values.iter().enumerate() {
-            builder.store(&iv.get(i), value, &Time::zero(), Some(*num_messages));
-        }
-        let num_dummy_reads = 2 * (96 - 4) * 2;
-        let num_dummy_reads_element =
-            builder.constant(&L::Field::from_canonical_usize(num_dummy_reads));
-        builder.store(
-            &iv.get_at(dummy_index),
-            const_nums.const_0_u64,
-            &Time::zero(),
-            Some(num_dummy_reads_element),
-        );
 
         let compress_iv_values =
             builder.constant_array::<U64Register>(&COMPRESS_IV.map(u64_to_le_field_bytes));
@@ -158,7 +135,7 @@ where
             Some(num_dummy_reads_element),
         );
 
-        let mut compress_initial_indices = MemoryArray::<L, 4, 2>::new(builder, dummy_index);
+        let mut compress_initial_indices = MemoryArray::<L, 4, 2>::new(builder);
         for (i, indices) in COMPRESS_INITIALIZE_INDICES.iter().enumerate() {
             compress_initial_indices.store_row(builder, i, indices, *num_compress_element);
         }
@@ -177,23 +154,23 @@ where
         );
 
         // Each element is loaded once per compress cycle.
-        let mut v_indices = MemoryArray::<L, 8, 4>::new(builder, dummy_index);
+        let mut v_indices = MemoryArray::<L, 8, 4>::new(builder);
         for (i, indices) in V_INDICES.iter().enumerate() {
             v_indices.store_row(builder, i, indices, *num_mix_iterations);
         }
 
-        let mut v_last_write_ages = MemoryArray::<L, 8, 4>::new(builder, dummy_index);
+        let mut v_last_write_ages = MemoryArray::<L, 8, 4>::new(builder);
         for (i, ages) in V_LAST_WRITE_AGES.iter().enumerate() {
             v_last_write_ages.store_row(builder, i, ages, *num_mix_iterations);
         }
 
-        let mut permutations = MemoryArray::<L, 12, 16>::new(builder, dummy_index);
+        let mut permutations = MemoryArray::<L, 12, 16>::new(builder);
         for (i, permutation) in SIGMA_PERMUTATIONS.iter().enumerate() {
             permutations.store_row(builder, i, permutation, *num_mix_iterations);
         }
 
         BLAKE2BConsts {
-            iv,
+            iv_values,
             compress_iv,
             compress_initial_indices,
             v_indices,
@@ -250,7 +227,7 @@ where
         builder.set_to_expression_transition(
             &mix_index.next(),
             cycle_8_end_bit.not_expr() * (mix_index.expr() + const_nums.const_1.expr())
-                + cycle_8_end_bit.expr() * const_nums.const_9.expr(),
+                + cycle_8_end_bit.expr() * const_nums.const_0.expr(),
         );
 
         // The array index register can be computed as `clock - process_id * CYCLE_LENGTH`.
@@ -262,8 +239,8 @@ where
         builder.set_to_expression_first_row(&compress_iteration, L::Field::ZERO.into());
         builder.set_to_expression_transition(
             &compress_iteration.next(),
-            (cycle_12_end_bit.not_expr() * (compress_iteration.expr() + const_nums.const_1.expr())
-                + cycle_12_end_bit.expr() * const_nums.const_0.expr()),
+            cycle_12_end_bit.not_expr() * (compress_iteration.expr() + const_nums.const_1.expr())
+                + cycle_12_end_bit.expr() * const_nums.const_0.expr(),
         );
 
         let at_last_hash_compress = builder.load(&end_bit.get_at(compress_id), &Time::zero());
@@ -351,17 +328,33 @@ where
         num_messages: &ElementRegister,
         num_compresses: &ElementRegister,
     ) -> BLAKE2BMemory {
-        // Initialize the h memory
-        // First round of all messages will all be dummy reads.
-        let const_192: ElementRegister = builder.constant(&L::Field::from_canonical_u8(192));
-        let num_dummy_accesses = builder.alloc_public::<ElementRegister>();
-        builder.set_to_expression(&num_dummy_accesses, num_messages.expr() * const_192.expr());
         let h = builder.uninit_slice();
+
+        // Initialize h with IV values
+        // For every first compress of each message, the initial h values will be read twice.
+        // Once when initializing the V vector (at the start of the compress function) and once
+        // when mixing the V vector into the resulting h vector (at the end of the compress function).
+        let num_initial_h_reads = builder.alloc_public::<ElementRegister>();
+        builder.set_to_expression(
+            &num_initial_h_reads,
+            num_messages.expr() * (num_consts.const_2.expr() + num_consts.const_96.expr()),
+        );
+        for i in 0..8 {
+            builder.store(
+                &h.get(i),
+                consts.iv_values.get(i),
+                &Time::from_element(consts.dummy_ts),
+                Some(num_initial_h_reads),
+            );
+        }
+        // All of the non compress initial rows will read this dummy index
+        let const_184 = builder.constant::<ElementRegister>(&L::Field::from_canonical_usize(184));
+        let num_dummy_h_reads = builder.mul(*num_compresses, const_184);
         builder.store(
             &h.get_at(consts.dummy_index),
             num_consts.const_0_u64,
             &Time::from_element(consts.dummy_ts),
-            Some(num_dummy_accesses),
+            Some(const_184),
         );
 
         // Initialize the v memory
@@ -381,11 +374,11 @@ where
         // Need to set dummy reads.  Two reads will be accessed for every non final set of rows
         // for each compress.
         let v_final = builder.uninit_slice();
-        let const_23: ElementRegister = builder.constant(&L::Field::from_canonical_u8(23));
+        let const_92: ElementRegister = builder.constant(&L::Field::from_canonical_u8(95));
         let num_dummy_v_final_accesses = builder.alloc_public::<ElementRegister>();
         builder.set_to_expression(
             &num_dummy_v_final_accesses,
-            num_compresses.expr() * const_23.expr(),
+            num_compresses.expr() * const_92.expr(),
         );
         for i in 0..16 {
             builder.store(
@@ -470,7 +463,6 @@ where
             builder,
             &num_compresses_element,
             &num_mix_iterations_element,
-            num_messages,
             &const_nums,
         );
 
@@ -507,29 +499,20 @@ where
     pub fn blake2b_compress_initialize(
         builder: &mut BytesBuilder<L>,
         data: &BLAKE2BData<L>,
-    ) -> ([ElementRegister; 4], [U64Register; 4]) {
-        let is_compress_initialize = data.trace.is_compress_initialize;
+    ) -> ([ElementRegister; 4], [U64Register; 4], ElementRegister) {
+        let mut init_idx_1 = data.trace.compress_index;
+        let mut init_idx_2 = builder.add(data.trace.compress_index, data.const_nums.const_4);
 
-        // Get the v values if we are within the initialization section of compress (the first four
-        // cycles of compress).
-        let is_dummy_lookup = builder.select(
-            is_compress_initialize,
-            &data.const_nums.const_false,
-            &data.const_nums.const_true,
+        init_idx_1 = builder.select(
+            data.trace.is_compress_initialize,
+            &init_idx_1,
+            &data.consts.dummy_index,
         );
 
-        let init_idx_1 = &data.consts.compress_initial_indices.get_at(
-            builder,
-            data.trace.compress_index,
-            data.const_nums.const_0,
-            is_dummy_lookup,
-        );
-
-        let init_idx_2 = &data.consts.compress_initial_indices.get_at(
-            builder,
-            data.trace.compress_index,
-            data.const_nums.const_1,
-            is_dummy_lookup,
+        init_idx_2 = builder.select(
+            data.trace.is_compress_initialize,
+            &init_idx_2,
+            &data.consts.dummy_index,
         );
 
         let mut previous_compress_id =
@@ -542,92 +525,42 @@ where
             &previous_compress_id,
         );
 
-        let h_init_idx_1 = builder.select(
-            data.trace.at_first_compress,
-            &data.consts.dummy_index,
-            init_idx_1,
-        );
-
-        let h_init_idx_2 = builder.select(
-            data.trace.at_first_compress,
-            &data.consts.dummy_index,
-            init_idx_2,
-        );
-
         builder.watch(&data.trace.at_first_compress, "at_first_compress");
-        builder.watch(&h_init_idx_1, "h_init_idx_1");
-        builder.watch(&previous_compress_id, "previous_compress_id");
 
         let h_value_1 = builder.load(
-            &data.memory.h.get_at(h_init_idx_1),
+            &data.memory.h.get_at(init_idx_1),
             &Time::from_element(previous_compress_id),
         );
         let h_value_2 = builder.load(
-            &data.memory.h.get_at(h_init_idx_2),
+            &data.memory.h.get_at(init_idx_2),
             &Time::from_element(previous_compress_id),
         );
 
-        let iv_value_1 = builder.load(&data.consts.iv.get_at(*init_idx_1), &Time::zero());
-        let iv_value_2 = builder.load(&data.consts.iv.get_at(*init_idx_2), &Time::zero());
+        builder.watch(&h_value_1, "h value 1");
 
         let compress_iv_value_1 =
-            builder.load(&data.consts.compress_iv.get_at(*init_idx_1), &Time::zero());
+            builder.load(&data.consts.compress_iv.get_at(init_idx_1), &Time::zero());
         let compress_iv_value_2 =
-            builder.load(&data.consts.compress_iv.get_at(*init_idx_2), &Time::zero());
+            builder.load(&data.consts.compress_iv.get_at(init_idx_2), &Time::zero());
 
         // For all the other cycles of compress, read the v values from the v memory. Will need to
         // specify the age of the last write to the v memory entry.
+        builder.watch(&data.trace.mix_index, "mix index");
         let v_indices = &data.consts.v_indices;
-        let v1_idx = v_indices.get_at(
-            builder,
-            data.trace.mix_index,
-            data.const_nums.const_0,
-            data.const_nums.const_false,
-        );
-        let v2_idx = v_indices.get_at(
-            builder,
-            data.trace.mix_index,
-            data.const_nums.const_1,
-            data.const_nums.const_false,
-        );
-        let v3_idx = v_indices.get_at(
-            builder,
-            data.trace.mix_index,
-            data.const_nums.const_2,
-            data.const_nums.const_false,
-        );
-        let v4_idx = v_indices.get_at(
-            builder,
-            data.trace.mix_index,
-            data.const_nums.const_3,
-            data.const_nums.const_false,
-        );
+        let v1_idx = v_indices.get_at(builder, data.trace.mix_index, data.const_nums.const_0);
+        let v2_idx = v_indices.get_at(builder, data.trace.mix_index, data.const_nums.const_1);
+        let v3_idx = v_indices.get_at(builder, data.trace.mix_index, data.const_nums.const_2);
+        let v4_idx = v_indices.get_at(builder, data.trace.mix_index, data.const_nums.const_3);
 
         let v_last_write_ages = &data.consts.v_last_write_ages;
-        let v1_last_write_age = v_last_write_ages.get_at(
-            builder,
-            data.trace.mix_index,
-            data.const_nums.const_0,
-            data.const_nums.const_false,
-        );
-        let v2_last_write_age = v_last_write_ages.get_at(
-            builder,
-            data.trace.mix_index,
-            data.const_nums.const_1,
-            data.const_nums.const_false,
-        );
-        let v3_last_write_age = v_last_write_ages.get_at(
-            builder,
-            data.trace.mix_index,
-            data.const_nums.const_2,
-            data.const_nums.const_false,
-        );
-        let v4_last_write_age = v_last_write_ages.get_at(
-            builder,
-            data.trace.mix_index,
-            data.const_nums.const_3,
-            data.const_nums.const_false,
-        );
+        let v1_last_write_age =
+            v_last_write_ages.get_at(builder, data.trace.mix_index, data.const_nums.const_0);
+        let v2_last_write_age =
+            v_last_write_ages.get_at(builder, data.trace.mix_index, data.const_nums.const_1);
+        let v3_last_write_age =
+            v_last_write_ages.get_at(builder, data.trace.mix_index, data.const_nums.const_2);
+        let v4_last_write_age =
+            v_last_write_ages.get_at(builder, data.trace.mix_index, data.const_nums.const_3);
 
         let mut v1_last_write_ts =
             builder.expression(data.trace.clk.expr() - v1_last_write_age.expr());
@@ -681,28 +614,17 @@ where
             &Time::from_element(v4_last_write_ts),
         );
 
-        let v1_value = builder.expression(
-            data.trace.is_hash_initialize.expr() * iv_value_1.expr()
-                + (data.trace.is_hash_initialize.not_expr()
-                    * (data.trace.is_compress_initialize.expr() * h_value_1.expr()
-                        + data.trace.is_compress_initialize.not_expr() * v1_value.expr())),
+        let v1_value = builder.select(data.trace.is_compress_initialize, &h_value_1, &v1_value);
+        let v2_value = builder.select(data.trace.is_compress_initialize, &h_value_2, &v2_value);
+        let v3_value = builder.select(
+            data.trace.is_compress_initialize,
+            &compress_iv_value_1,
+            &v3_value,
         );
-
-        let v2_value = builder.expression(
-            data.trace.is_hash_initialize.expr() * iv_value_2.expr()
-                + (data.trace.is_hash_initialize.not_expr()
-                    * (data.trace.is_compress_initialize.expr() * h_value_2.expr()
-                        + data.trace.is_compress_initialize.not_expr() * v2_value.expr())),
-        );
-
-        let v3_value = builder.expression(
-            data.trace.is_compress_initialize.expr() * compress_iv_value_1.expr()
-                + data.trace.is_compress_initialize.not_expr() * v3_value.expr(),
-        );
-
-        let mut v4_value = builder.expression(
-            data.trace.is_compress_initialize.expr() * compress_iv_value_2.expr()
-                + data.trace.is_compress_initialize.not_expr() * v4_value.expr(),
+        let mut v4_value = builder.select(
+            data.trace.is_compress_initialize,
+            &compress_iv_value_2,
+            &v4_value,
         );
 
         // If we are at the first compress row, then will need to xor v4 with t
@@ -724,6 +646,7 @@ where
         (
             [v1_idx, v2_idx, v3_idx, v4_idx],
             [v1_value, v2_value, v3_value, v4_value],
+            previous_compress_id,
         )
     }
 
@@ -732,6 +655,7 @@ where
         builder: &mut BytesBuilder<L>,
         v_indices: &[ElementRegister; 4],
         v_values: &[U64Register; 4],
+        previous_compress_id: ElementRegister,
         data: &BLAKE2BData<L>,
     ) -> Vec<ArrayRegister<U64Register>> {
         let num_digests = data.public.digest_indices.len();
@@ -764,7 +688,6 @@ where
             builder,
             data.trace.compress_iteration,
             permutation_col,
-            data.const_nums.const_false,
         );
         permutation_col = builder.add(permutation_col, data.const_nums.const_1);
 
@@ -772,7 +695,6 @@ where
             builder,
             data.trace.compress_iteration,
             permutation_col,
-            data.const_nums.const_false,
         );
 
         builder.watch(&m_idx_1, "m_idx_1");
@@ -822,13 +744,12 @@ where
                 None,
             );
 
-            // Save to v_final if at the last 4 cycles of the round
-            let v_final_value =
-                builder.select(save_h, &data.const_nums.const_ffffffffffffffff, value);
-            builder.watch(&v_final_value, "v final value");
+            builder.watch(&v_indices[i], "v_indices[i]");
+
+            // Note that this will do a "no-op" store if save_h == false.
             builder.store(
                 &data.memory.v_final.get_at(v_indices[i]),
-                v_final_value,
+                *value,
                 &Time::from_element(write_ts),
                 Some(save_h.as_element()),
             );
@@ -837,93 +758,64 @@ where
         // If we are at the last cycle of the round, then compute and save the h value.
 
         // First load the previous round's h value.
-        let previous_compress_id =
-            builder.expression(data.trace.compress_id.expr() - data.const_nums.const_1.expr());
         let h_workspace_1 = builder.alloc_array::<U64Register>(8);
-        let consts = [
-            data.const_nums.const_0,
-            data.const_nums.const_1,
-            data.const_nums.const_2,
-            data.const_nums.const_3,
-            data.const_nums.const_4,
-            data.const_nums.const_5,
-            data.const_nums.const_6,
-            data.const_nums.const_7,
-        ];
-        for (i, const_i) in consts.iter().enumerate() {
-            let h_idx = builder.select(
-                data.trace.is_compress_initialize,
-                &data.consts.dummy_index,
-                const_i,
-            );
+        for i in 0..8 {
             let h_value = builder.load(
-                &data.memory.h.get_at(h_idx),
+                &data.memory.h.get(i),
                 &Time::from_element(previous_compress_id),
             );
             builder.set_to_expression(&h_workspace_1.get(i), h_value.expr());
         }
+        builder.watch(&h_workspace_1.get(0), "h_workspace_1[0]");
 
         // Xor the first 8 final v values
         let h_workspace_2 = builder.alloc_array::<U64Register>(8);
-        for (i, const_i) in consts.iter().enumerate() {
-            let v_i = builder.load(
-                &data.memory.v_final.get_at(*const_i),
-                &Time::from_element(write_ts),
-            );
+        let read_ts = builder.select(
+            data.trace.cycle_96_end_bit,
+            &data.trace.compress_id,
+            &data.consts.dummy_ts,
+        );
+        builder.watch(&read_ts, "read_ts");
+        for i in 0..8 {
+            let v_i = builder.load(&data.memory.v_final.get(i), &Time::from_element(read_ts));
             let updated_h = builder.xor(h_workspace_1.get(i), v_i);
             builder.set_to_expression(&h_workspace_2.get(i), updated_h.expr());
         }
 
-        // Xor the second 8 final v values
-        let v_indices = [
-            data.const_nums.const_8,
-            data.const_nums.const_9,
-            data.const_nums.const_10,
-            data.const_nums.const_11,
-            data.const_nums.const_12,
-            data.const_nums.const_13,
-            data.const_nums.const_14,
-            data.const_nums.const_15,
-        ];
-        let h_indices = [
-            data.const_nums.const_0,
-            data.const_nums.const_1,
-            data.const_nums.const_2,
-            data.const_nums.const_3,
-            data.const_nums.const_4,
-            data.const_nums.const_5,
-            data.const_nums.const_6,
-            data.const_nums.const_7,
-        ];
+        builder.watch(&h_workspace_2.get(0), "h_workspace_2[0]");
 
+        // Xor the second 8 final v values
         let digest_bit = builder.load(
             &data.trace.digest_bit.get_at(data.trace.compress_id),
             &Time::zero(),
         );
-        let flag = Some(builder.expression(data.trace.cycle_96_end_bit.expr() * digest_bit.expr()));
+        let flag = builder.expression(data.trace.cycle_96_end_bit.expr() * digest_bit.expr());
+        builder.watch(&flag, "flag");
 
         let h = builder.alloc_array::<U64Register>(8);
-        for (i, (v_i, h_i)) in v_indices.iter().zip(h_indices.iter()).enumerate() {
+        for i in 0..8 {
             let v_value = builder.load(
-                &data.memory.v_final.get_at(*v_i),
-                &Time::from_element(write_ts),
+                &data.memory.v_final.get(i + 8),
+                &Time::from_element(read_ts),
             );
+            builder.watch(&v_value, "v_value");
             let xor = builder.xor(h_workspace_2.get(i), v_value);
             builder.set_to_expression(&h.get(i), xor.expr());
             builder.store(
-                &data.memory.h.get_at(*h_i),
-                v_value,
+                &data.memory.h.get(i),
+                xor,
                 &Time::from_element(write_ts),
-                flag,
+                Some(flag),
             );
         }
 
         for (i, element) in h.get_subarray(0..4).iter().enumerate() {
+            builder.watch(&element, "element");
             builder.store(
                 &state_ptr.get(i),
                 element,
                 &Time::from_element(data.trace.compress_id),
-                flag,
+                Some(flag),
             );
         }
 
