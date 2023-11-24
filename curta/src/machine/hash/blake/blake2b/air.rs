@@ -21,7 +21,8 @@ use crate::machine::hash::blake::blake2b::{
 use crate::math::prelude::*;
 
 const DUMMY_INDEX: u64 = i32::MAX as u64;
-const DUMMY_TS: u64 = i32::MAX as u64;
+const DUMMY_TS: u64 = (i32::MAX - 1) as u64;
+const FIRST_COMPRESS_H_READ_TS: u64 = i32::MAX as u64;
 
 impl<L: AirParameters> BLAKE2BAir<L>
 where
@@ -102,6 +103,10 @@ where
         assert!(DUMMY_TS < L::Field::order());
         let dummy_ts: ElementRegister = builder.constant(&L::Field::from_canonical_u64(DUMMY_TS));
 
+        assert!(FIRST_COMPRESS_H_READ_TS < L::Field::order());
+        let first_compress_h_read_ts: ElementRegister =
+            builder.constant(&L::Field::from_canonical_u64(FIRST_COMPRESS_H_READ_TS));
+
         let iv_values = builder.constant_array::<U64Register>(&IV.map(u64_to_le_field_bytes));
 
         let compress_iv_values =
@@ -149,6 +154,7 @@ where
             permutations,
             dummy_index,
             dummy_ts,
+            first_compress_h_read_ts,
         }
     }
 
@@ -264,12 +270,12 @@ where
         // Need to flag to the last 4 rows of the compress cycle.
         // At those rows, the V values should be saved to v_final, so that those values can be used
         // to calculate the compress h values.
-        let save_h: Slice<BitRegister> = builder.uninit_slice();
+        let save_final_v: Slice<BitRegister> = builder.uninit_slice();
         let true_const = builder.constant::<BitRegister>(&L::Field::from_canonical_usize(1));
         let false_const = builder.constant::<BitRegister>(&L::Field::from_canonical_usize(0));
         for i in 0..96 {
             builder.store(
-                &save_h.get(i),
+                &save_final_v.get(i),
                 if i < 92 { false_const } else { true_const },
                 &Time::zero(),
                 Some(*num_rounds_element),
@@ -285,7 +291,7 @@ where
             at_first_compress,
             cycle_96_end_bit,
             digest_bit,
-            save_h,
+            save_final_v,
             compress_id,
             compress_index,
             compress_iteration,
@@ -314,10 +320,12 @@ where
             num_messages.expr() * (num_consts.const_2.expr() + num_consts.const_96.expr()),
         );
         for i in 0..8 {
+            builder.watch(&consts.iv_values.get(i), "consts.iv_values");
+            builder.watch(&consts.first_compress_h_read_ts, "first compress h read ts");
             builder.store(
                 &h.get(i),
                 consts.iv_values.get(i),
-                &Time::from_element(consts.dummy_ts),
+                &Time::from_element(consts.first_compress_h_read_ts),
                 Some(num_initial_h_reads),
             );
         }
@@ -495,10 +503,11 @@ where
         // If we are within the first compress of a message, then read from a dummy h values from a dummy timestamp.
         previous_compress_id = builder.select(
             data.trace.at_first_compress,
-            &data.consts.dummy_ts,
+            &data.consts.first_compress_h_read_ts,
             &previous_compress_id,
         );
 
+        builder.watch(&previous_compress_id, "h read ts 1");
         let h_value_1 = builder.load(
             &data.memory.h.get_at(init_idx_1),
             &Time::from_element(previous_compress_id),
@@ -690,15 +699,15 @@ where
             &m_2,
         );
 
-        let save_h = builder.load(
-            &data.trace.save_h.get_at(data.trace.compress_index),
+        let save_final_v = builder.load(
+            &data.trace.save_final_v.get_at(data.trace.compress_index),
             &Time::zero(),
         );
 
-        let write_ts = builder.select(save_h, &data.trace.compress_id, &data.consts.dummy_ts);
+        let final_v_write_ts =
+            builder.select(save_final_v, &data.trace.compress_id, &data.consts.dummy_ts);
 
         let updated_v_values = [updated_v0, updated_v1, updated_v2, updated_v3];
-        //let large_const = builder.constant(&L::Field::from_canonical_usize(999));
         for (i, value) in updated_v_values.iter().enumerate() {
             builder.store(
                 &data.memory.v.get_at(v_indices[i]),
@@ -707,36 +716,34 @@ where
                 None,
             );
 
-            // Note that this will do a "no-op" store if save_h == false.
+            let v_final_idx = builder.select(save_final_v, &v_indices[i], &data.consts.dummy_index);
+            let v_final_value = builder.select(save_final_v, value, &data.const_nums.const_0_u64);
+
             builder.store(
-                &data.memory.v_final.get_at(v_indices[i]),
-                *value,
-                &Time::from_element(write_ts),
-                Some(save_h.as_element()),
+                &data.memory.v_final.get_at(v_final_idx),
+                v_final_value,
+                &Time::from_element(final_v_write_ts),
+                Some(save_final_v.as_element()),
             );
-
-            // builder.store(
-            //     &data.memory.v_final.get_at(v_indices[i]),
-            //     *value,
-            //     &Time::from_element(write_ts),
-            //     Some(large_const),
-            // );
         }
 
-        for i in 0..16 {
-            let output_v = builder.load(&data.memory.v_final.get(i), &Time::from_element(write_ts));
-            builder.watch(&output_v, "output_v");
-        }
+        // for i in 0..16 {
+        //     let output_v = builder.load(&data.memory.v_final.get(i), &Time::from_element(write_ts));
+        //     builder.watch(&output_v, "output_v");
+        // }
 
         // If we are at the last cycle of the round, then compute and save the h value.
 
         // First load the previous round's h value.
+        builder.watch(&previous_compress_id, "previous compress id");
+
         let h_workspace_1 = builder.alloc_array::<U64Register>(8);
         for i in 0..8 {
             let h_value = builder.load(
                 &data.memory.h.get(i),
                 &Time::from_element(previous_compress_id),
             );
+            builder.watch(&h_value, "previous h");
             builder.set_to_expression(&h_workspace_1.get(i), h_value.expr());
         }
         // Xor the first 8 final v values
@@ -749,6 +756,7 @@ where
         for i in 0..8 {
             let v_i = builder.load(&data.memory.v_final.get(i), &Time::from_element(read_ts));
             let updated_h = builder.xor(h_workspace_1.get(i), v_i);
+            builder.watch(&updated_h, "intermediate h");
             builder.set_to_expression(&h_workspace_2.get(i), updated_h.expr());
         }
 
@@ -757,7 +765,15 @@ where
             &data.trace.digest_bit.get_at(data.trace.compress_id),
             &Time::zero(),
         );
-        let flag = builder.expression(data.trace.cycle_96_end_bit.expr() * digest_bit.expr());
+        let save_digest =
+            builder.expression(data.trace.cycle_96_end_bit.expr() * digest_bit.expr());
+        builder.watch(&save_digest, "save digest");
+
+        let h_write_ts = builder.select(
+            data.trace.cycle_96_end_bit,
+            &data.trace.compress_id,
+            &data.consts.dummy_ts,
+        );
 
         let h = builder.alloc_array::<U64Register>(8);
         for i in 0..8 {
@@ -767,20 +783,26 @@ where
             );
             let xor = builder.xor(h_workspace_2.get(i), v_value);
             builder.set_to_expression(&h.get(i), xor.expr());
+
+            let save_h_value =
+                builder.select(data.trace.cycle_96_end_bit, &xor, &h_workspace_1.get(i));
+
             builder.store(
                 &data.memory.h.get(i),
-                xor,
-                &Time::from_element(write_ts),
-                Some(flag),
+                save_h_value,
+                &Time::from_element(h_write_ts),
+                Some(data.trace.cycle_96_end_bit.as_element()),
             );
+
+            builder.watch(&save_h_value, "final h");
         }
 
         for (i, element) in h.get_subarray(0..4).iter().enumerate() {
             builder.store(
                 &state_ptr.get(i),
                 element,
-                &Time::from_element(data.trace.compress_id),
-                Some(flag),
+                &Time::from_element(h_write_ts),
+                Some(save_digest),
             );
         }
 

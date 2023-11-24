@@ -33,7 +33,7 @@ pub struct BLAKE2BTraceData {
     pub(crate) at_first_compress: BitRegister,
     pub(crate) cycle_96_end_bit: BitRegister,
     pub(crate) digest_bit: Slice<BitRegister>,
-    pub(crate) save_h: Slice<BitRegister>,
+    pub(crate) save_final_v: Slice<BitRegister>,
     pub(crate) compress_id: ElementRegister,
     pub(crate) compress_index: ElementRegister,
     pub(crate) compress_iteration: ElementRegister,
@@ -56,6 +56,7 @@ pub struct BLAKE2BConsts<L: AirParameters> {
     pub(crate) permutations: MemoryArray<L, 12, 16>,
     pub(crate) dummy_index: ElementRegister,
     pub(crate) dummy_ts: ElementRegister,
+    pub(crate) first_compress_h_read_ts: ElementRegister,
 }
 
 pub struct BLAKE2BConstNums {
