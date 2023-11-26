@@ -80,8 +80,11 @@ where
             const_2: builder.constant(&L::Field::from_canonical_u8(2)),
             const_3: builder.constant(&L::Field::from_canonical_u8(3)),
             const_4: builder.constant(&L::Field::from_canonical_u8(4)),
-            const_9: builder.constant(&L::Field::from_canonical_u8(9)),
+            const_16: builder.constant(&L::Field::from_canonical_u8(16)),
             const_96: builder.constant(&L::Field::from_canonical_u8(96)),
+            const_97: builder.constant(&L::Field::from_canonical_u8(97)),
+            const_184: builder.constant(&L::Field::from_canonical_u8(184)),
+            const_192: builder.constant(&L::Field::from_canonical_u8(192)),
             const_ffffffffffffffff: builder.constant::<U64Register>(&u64_to_le_field_bytes::<
                 L::Field,
             >(
@@ -289,6 +292,7 @@ where
             is_compress_first_row,
             is_compress_third_row,
             at_first_compress,
+            at_last_hash_compress,
             cycle_96_end_bit,
             digest_bit,
             save_final_v,
@@ -299,6 +303,7 @@ where
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn blake2b_memory(
         builder: &mut BytesBuilder<L>,
         padded_chunks: &[ArrayRegister<U64Register>],
@@ -307,6 +312,7 @@ where
         consts: &BLAKE2BConsts<L>,
         num_messages: &ElementRegister,
         num_compresses: &ElementRegister,
+        num_compresses_value: usize,
     ) -> BLAKE2BMemory {
         let h = builder.uninit_slice();
 
@@ -317,7 +323,7 @@ where
         let num_initial_h_reads = builder.alloc_public::<ElementRegister>();
         builder.set_to_expression(
             &num_initial_h_reads,
-            num_messages.expr() * (num_consts.const_2.expr() + num_consts.const_96.expr()),
+            num_messages.expr() * num_consts.const_192.expr(),
         );
         for i in 0..8 {
             builder.watch(&consts.iv_values.get(i), "consts.iv_values");
@@ -330,13 +336,11 @@ where
             );
         }
         // All of the non compress initial rows will read this dummy index
-        let const_184 = builder.constant::<ElementRegister>(&L::Field::from_canonical_usize(184));
-        let num_dummy_h_reads = builder.mul(*num_compresses, const_184);
         builder.store(
             &h.get_at(consts.dummy_index),
             num_consts.const_0_u64,
             &Time::from_element(consts.dummy_ts),
-            Some(const_184),
+            Some(num_consts.const_184),
         );
 
         // Initialize the v memory
@@ -374,23 +378,23 @@ where
         // Initialize the m memory
         let m = builder.uninit_slice();
 
-        let mut compress_id = 0;
         // Each message chunk will be read 24 times per compress.  Two times per compress iteration.
         let const_24 = builder.constant::<ElementRegister>(&L::Field::from_canonical_usize(24));
-        for padded_chunk in padded_chunks.iter() {
-            for (j, word) in padded_chunk.iter().enumerate().take(16) {
+        for (compress_id_value, padded_chunk) in padded_chunks.iter().enumerate() {
+            assert!(padded_chunk.len() == 16);
+            for (j, word) in padded_chunk.iter().enumerate() {
+                builder.watch(&word, "word");
                 builder.store(
-                    &m.get(j),
+                    &m.get(compress_id_value * 16 + j),
                     word,
-                    &Time::constant(compress_id),
+                    &Time::zero(),
                     Some(const_24),
                 );
-                compress_id += 1;
             }
         }
 
         let t = builder.uninit_slice();
-        compress_id = 0;
+        let mut compress_id = 0;
         for t_value in t_values.iter() {
             builder.store(
                 &t.get(compress_id),
@@ -466,6 +470,7 @@ where
             &consts,
             num_messages,
             &num_compresses_element,
+            num_compresses,
         );
 
         BLAKE2BData {
@@ -611,11 +616,11 @@ where
 
         // If we are at the third compress row, then will need to xor v4 with 0xFFFFFFFFFFFFFFFF
         let inverse_v4_value = builder.xor(&v4_value, &data.const_nums.const_ffffffffffffffff);
-        v4_value = builder.select(
-            data.trace.is_compress_third_row,
-            &inverse_v4_value,
-            &v4_value,
+        let use_inverse_v4_value = builder.mul(
+            data.trace.at_last_hash_compress,
+            data.trace.is_compress_first_row,
         );
+        v4_value = builder.select(use_inverse_v4_value, &inverse_v4_value, &v4_value);
 
         (
             [v1_idx, v2_idx, v3_idx, v4_idx],
@@ -660,6 +665,10 @@ where
             data.trace.compress_iteration,
             permutation_col,
         );
+        builder.set_to_expression(
+            &m_idx_1,
+            data.trace.compress_id.expr() * data.const_nums.const_16.expr() + m_idx_1.expr(),
+        );
         permutation_col = builder.add(permutation_col, data.const_nums.const_1);
 
         let m_idx_2 = data.consts.permutations.get_at(
@@ -667,20 +676,18 @@ where
             data.trace.compress_iteration,
             permutation_col,
         );
+        builder.set_to_expression(
+            &m_idx_2,
+            data.trace.compress_id.expr() * data.const_nums.const_16.expr() + m_idx_2.expr(),
+        );
 
-        builder.watch(&data.trace.compress_iteration, "compress_iteration");
+        builder.watch(&data.trace.compress_id, "compress_id");
         builder.watch(&data.trace.mix_index, "mix_index");
         builder.watch(&m_idx_2, "m_idx_2");
 
-        let m_1 = builder.load(
-            &data.memory.m.get_at(m_idx_1),
-            &Time::from_element(data.trace.compress_id),
-        );
+        let m_1 = builder.load(&data.memory.m.get_at(m_idx_1), &Time::zero());
 
-        let m_2 = builder.load(
-            &data.memory.m.get_at(m_idx_2),
-            &Time::from_element(data.trace.compress_id),
-        );
+        let m_2 = builder.load(&data.memory.m.get_at(m_idx_2), &Time::zero());
 
         builder.watch(&v_values[0], "va");
         builder.watch(&v_values[1], "vb");
@@ -776,6 +783,10 @@ where
         );
 
         let h = builder.alloc_array::<U64Register>(8);
+        let num_h_reads = builder.mul(
+            data.trace.cycle_96_end_bit.as_element(),
+            data.const_nums.const_97,
+        );
         for i in 0..8 {
             let v_value = builder.load(
                 &data.memory.v_final.get(i + 8),
@@ -791,7 +802,7 @@ where
                 &data.memory.h.get(i),
                 save_h_value,
                 &Time::from_element(h_write_ts),
-                Some(data.trace.cycle_96_end_bit.as_element()),
+                Some(num_h_reads),
             );
 
             builder.watch(&save_h_value, "final h");

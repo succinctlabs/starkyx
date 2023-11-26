@@ -31,6 +31,7 @@ pub struct BLAKE2BTraceData {
     pub(crate) is_compress_first_row: BitRegister,
     pub(crate) is_compress_third_row: BitRegister,
     pub(crate) at_first_compress: BitRegister,
+    pub(crate) at_last_hash_compress: BitRegister,
     pub(crate) cycle_96_end_bit: BitRegister,
     pub(crate) digest_bit: Slice<BitRegister>,
     pub(crate) save_final_v: Slice<BitRegister>,
@@ -66,8 +67,11 @@ pub struct BLAKE2BConstNums {
     pub(crate) const_2: ElementRegister,
     pub(crate) const_3: ElementRegister,
     pub(crate) const_4: ElementRegister,
-    pub(crate) const_9: ElementRegister,
+    pub(crate) const_16: ElementRegister,
     pub(crate) const_96: ElementRegister,
+    pub(crate) const_97: ElementRegister,
+    pub(crate) const_184: ElementRegister,
+    pub(crate) const_192: ElementRegister,
     pub(crate) const_ffffffffffffffff: U64Register,
 }
 

@@ -68,8 +68,8 @@ pub mod test_utils {
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = UintInstruction;
 
-        const NUM_FREE_COLUMNS: usize = 1318;
-        const EXTENDED_COLUMNS: usize = 768;
+        const NUM_FREE_COLUMNS: usize = 1323;
+        const EXTENDED_COLUMNS: usize = 834;
     }
 
     #[test]
@@ -80,8 +80,8 @@ pub mod test_utils {
         let _ = env_logger::builder().is_test(true).try_init();
         let mut timing = TimingTree::new("test_sha", log::Level::Debug);
 
-        let num_rounds = 1;
-        let num_messages = 1;
+        let num_rounds = 2;
+        let num_messages_value = 1;
 
         let mut builder = BytesBuilder::<BLAKE2BTest>::new();
         let padded_chunks = (0..num_rounds)
@@ -89,7 +89,7 @@ pub mod test_utils {
             .collect::<Vec<_>>();
         let t_values = builder.alloc_array_public::<U64Register>(num_rounds);
         let end_bits = builder.alloc_array_public::<BitRegister>(num_rounds);
-        let digest_indices = builder.alloc_array_public(num_messages);
+        let digest_indices = builder.alloc_array_public(num_messages_value);
         let num_messages = builder.alloc_public();
         let hash_state = builder.blake2b(
             &padded_chunks,
@@ -113,25 +113,25 @@ pub mod test_utils {
         stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
         */
 
-        let message = b"1";
-        let padded_chunks_values: Vec<[GoldilocksField; 8]> =
-            BLAKE2BUtil::pad(&message.to_vec(), 1)
-                .chunks_exact(8)
-                .map(|x| {
-                    let a: [GoldilocksField; 8] = x
-                        .iter()
-                        .map(|y| GoldilocksField::from_canonical_u8(*y))
-                        .collect_vec()
-                        .as_slice()
-                        .try_into()
-                        .unwrap();
-                    a
-                })
-                .collect_vec();
-        let mut t_values_values = [[GoldilocksField::ZERO; 8]];
-        t_values_values[0][0] = GoldilocksField::ONE;
-        let end_bits_values = [GoldilocksField::ONE];
-        let digest_indices_values = [GoldilocksField::ZERO];
+        let message = b"325623465236262asdagds326fdsfy3w456gery46462ialweurnawieyailughoiwabn4bkq23bh2jh5bkwaeublaieunrqi4awijbjkahtiqi3uwagastt3asgesgg3";
+        let padded_chunks_values: Vec<[GoldilocksField; 8]> = BLAKE2BUtil::pad(message.as_ref(), 2)
+            .chunks_exact(8)
+            .map(|x| {
+                let a: [GoldilocksField; 8] = x
+                    .iter()
+                    .map(|y| GoldilocksField::from_canonical_u8(*y))
+                    .collect_vec()
+                    .as_slice()
+                    .try_into()
+                    .unwrap();
+                a
+            })
+            .collect_vec();
+        let mut t_values_values = [[GoldilocksField::ZERO; 8], [GoldilocksField::ZERO; 8]];
+        t_values_values[0][0] = GoldilocksField::from_canonical_u8(128);
+        t_values_values[1][0] = GoldilocksField::from_canonical_u8(1);
+        let end_bits_values = [GoldilocksField::ZERO, GoldilocksField::ONE];
+        let digest_indices_values = [GoldilocksField::ONE];
         let num_messages_value = GoldilocksField::ONE;
 
         // Write trace.
@@ -140,10 +140,13 @@ pub mod test_utils {
         writer.write(&num_messages, &num_messages_value, 0);
         let mut intial_state = IV;
         for i in 0..num_rounds {
-            writer.write_array(&padded_chunks[0], &padded_chunks_values, 0);
+            writer.write_array(
+                &padded_chunks[i],
+                &padded_chunks_values[i * 16..(i + 1) * 16],
+                0,
+            );
             writer.write(&end_bits.get(i), &end_bits_values[i], 0);
             writer.write(&t_values.get(i), &t_values_values[i], 0);
-            writer.write(&digest_indices.get(i), &digest_indices_values[i], 0);
 
             let hash = BLAKE2BPure::compress(
                 &padded_chunks_values
@@ -161,6 +164,10 @@ pub mod test_utils {
                 hash.map(u64_to_le_field_bytes::<GoldilocksField>),
                 0,
             );
+        }
+
+        for i in 0..num_messages_value.as_canonical_u64() as usize {
+            writer.write(&digest_indices.get(i), &digest_indices_values[i], 0);
         }
 
         writer.write_global_instructions(&stark.air_data);
