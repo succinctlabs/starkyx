@@ -129,7 +129,7 @@ pub mod test_utils {
             .collect_vec();
         let mut t_values_values = [[GoldilocksField::ZERO; 8], [GoldilocksField::ZERO; 8]];
         t_values_values[0][0] = GoldilocksField::from_canonical_u8(128);
-        t_values_values[1][0] = GoldilocksField::from_canonical_u8(1);
+        t_values_values[1][0] = GoldilocksField::from_canonical_u8(129);
         let end_bits_values = [GoldilocksField::ZERO, GoldilocksField::ONE];
         let digest_indices_values = [GoldilocksField::ONE];
         let num_messages_value = GoldilocksField::ONE;

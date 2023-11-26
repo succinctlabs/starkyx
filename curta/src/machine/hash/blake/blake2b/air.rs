@@ -312,7 +312,6 @@ where
         consts: &BLAKE2BConsts<L>,
         num_messages: &ElementRegister,
         num_compresses: &ElementRegister,
-        num_compresses_value: usize,
     ) -> BLAKE2BMemory {
         let h = builder.uninit_slice();
 
@@ -470,7 +469,6 @@ where
             &consts,
             num_messages,
             &num_compresses_element,
-            num_compresses,
         );
 
         BLAKE2BData {
@@ -611,6 +609,7 @@ where
         // If we are at the first compress row, then will need to xor v4 with t
         let t = builder.load(&data.memory.t.get_at(data.trace.compress_id), &Time::zero());
 
+        builder.watch(&t, "t");
         let v4_xor_t = builder.xor(v4_value, t);
         v4_value = builder.select(data.trace.is_compress_first_row, &v4_xor_t, &v4_value);
 
@@ -618,7 +617,7 @@ where
         let inverse_v4_value = builder.xor(&v4_value, &data.const_nums.const_ffffffffffffffff);
         let use_inverse_v4_value = builder.mul(
             data.trace.at_last_hash_compress,
-            data.trace.is_compress_first_row,
+            data.trace.is_compress_third_row,
         );
         v4_value = builder.select(use_inverse_v4_value, &inverse_v4_value, &v4_value);
 
@@ -807,6 +806,17 @@ where
 
             builder.watch(&save_h_value, "final h");
         }
+
+        let num_dummy_h_reads = builder.mul(
+            data.trace.cycle_96_end_bit.as_element(),
+            data.const_nums.const_184,
+        );
+        builder.store(
+            &data.memory.h.get_at(data.consts.dummy_index),
+            data.const_nums.const_0_u64,
+            &Time::from_element(h_write_ts),
+            Some(num_dummy_h_reads),
+        );
 
         for (i, element) in h.get_subarray(0..4).iter().enumerate() {
             builder.store(
