@@ -5,6 +5,7 @@ pub mod parser;
 
 #[cfg(test)]
 pub mod fibonacci;
+pub mod lucas;
 
 use parser::AirParser;
 
