@@ -69,21 +69,39 @@ impl<AP: AirParser> RAir<AP> for LucasAir {
         let pis_constraints = [
             parser.sub(parser.local_slice()[0], parser.public_slice()[0]),
             parser.sub(parser.local_slice()[1], parser.public_slice()[1]),
-            // parser.sub(parser.local_slice()[1], parser.global_slice()[2]),
+            parser.sub(parser.local_slice()[2], parser.public_slice()[2]),
+            parser.sub(parser.local_slice()[3], parser.public_slice()[3]),
         ];
         parser.constraint_first_row(pis_constraints[0]);
         parser.constraint_first_row(pis_constraints[1]);
-        // parser.constraint_last_row(pis_constraints[2]);
+        parser.constraint_first_row(pis_constraints[2]);
+        parser.constraint_first_row(pis_constraints[3]);
 
         // x0' <- x1
         let first_col_constraint = parser.sub(parser.next_slice()[0], parser.local_slice()[1]);
         parser.constraint_transition(first_col_constraint);
-        // x1' <- x0 + x1
+
+        // next <- p * current - q * previous
         let second_col_constraint = {
-            let tmp = parser.sub(parser.next_slice()[1], parser.local_slice()[0]);
-            parser.sub(tmp, parser.local_slice()[1])
+            let next = parser.next_slice()[1];
+            let current = parser.local_slice()[1];
+            let previous = parser.local_slice()[0];
+            let p = parser.local_slice()[2];
+            let q = parser.local_slice()[3];
+            let p_current = parser.mul(p, current);
+            let q_previous = parser.mul(q, previous);
+            let next_exp = parser.sub(p_current, q_previous);
+            parser.sub(next, next_exp)
         };
         parser.constraint_transition(second_col_constraint);
+
+        // p' <- p
+        let col_constraint_p = parser.sub(parser.next_slice()[2], parser.local_slice()[2]);
+        parser.constraint_transition(col_constraint_p);
+
+        // q' <- q
+        let col_constraint_q = parser.sub(parser.next_slice()[3], parser.local_slice()[3]);
+        parser.constraint_transition(col_constraint_q);
     }
 
     fn eval_global(&self, _parser: &mut AP) {}
@@ -110,7 +128,7 @@ mod tests {
             F::ONE,
             LucasAir::lucas(num_rows - 1, F::ZERO, F::ONE, F::ONE, F::ONE),
         ];
-        let trace = LucasAir::generate_trace(F::ZERO, F::ONE, num_rows, F::ONE, F::ONE);
+        let trace = LucasAir::generate_trace(F::ZERO, F::ONE, F::ONE, F::ONE, num_rows);
 
         for window in trace.windows() {
             assert_eq!(window.local_slice.len(), 2);
