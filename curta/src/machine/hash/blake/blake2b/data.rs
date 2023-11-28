@@ -68,10 +68,10 @@ pub struct BLAKE2BConstNums {
     pub(crate) const_3: ElementRegister,
     pub(crate) const_4: ElementRegister,
     pub(crate) const_16: ElementRegister,
+    pub(crate) const_24: ElementRegister,
     pub(crate) const_96: ElementRegister,
     pub(crate) const_97: ElementRegister,
     pub(crate) const_184: ElementRegister,
-    pub(crate) const_192: ElementRegister,
     pub(crate) const_ffffffffffffffff: U64Register,
 }
 

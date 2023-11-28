@@ -39,15 +39,12 @@ pub mod test_utils {
 
     use itertools::Itertools;
     use plonky2::field::goldilocks_field::GoldilocksField;
-    use plonky2::plonk::circuit_builder::CircuitBuilder;
-    use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::timed;
     use plonky2::util::log2_ceil;
     use plonky2::util::timing::TimingTree;
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::chip::trace::writer::{InnerWriterData, TraceWriter};
     use crate::chip::uint::operations::instruction::UintInstruction;
     use crate::chip::uint::util::u64_to_le_field_bytes;
     use crate::chip::AirParameters;
@@ -59,6 +56,7 @@ pub mod test_utils {
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
     use crate::math::prelude::*;
     use crate::plonky2::stark::config::{CurtaConfig, CurtaPoseidonGoldilocksConfig};
+    use crate::prelude::{AirWriter, AirWriterData};
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct BLAKE2BTest;
@@ -68,7 +66,7 @@ pub mod test_utils {
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = UintInstruction;
 
-        const NUM_FREE_COLUMNS: usize = 1323;
+        const NUM_FREE_COLUMNS: usize = 1356;
         const EXTENDED_COLUMNS: usize = 834;
     }
 
@@ -80,16 +78,72 @@ pub mod test_utils {
         let _ = env_logger::builder().is_test(true).try_init();
         let mut timing = TimingTree::new("test_sha", log::Level::Debug);
 
-        let num_rounds = 2;
-        let num_messages_value = 1;
+        const MAX_CHUNK_SIZE: u64 = 2;
 
+        // Collect the public inputs
+        let messages = vec![
+            b"325623465236262asdagds326fdsfy3w456gery46462ialweurnawieyailughoiwabn4bkq23bh2jh5bkwaeublaieunrqi4awijbjkahtiqi3uwagastt3asgesgg3".to_vec(),
+            b"asfiwu4yrlisuhgluashdlowaualisdugylawi4thagasdf23uiraskdgbasjkdfhaliwhfrasdfaw4jhbskfjhsadkif325sgdsfawera".to_vec()
+        ];
+
+        let mut padded_chunks_values = Vec::new();
+        let mut t_values_values = Vec::new();
+        let mut end_bits_values = Vec::new();
+        let mut digest_indices_values = Vec::new();
+
+        let mut digest_index = 0;
+        for message in messages.clone() {
+            let msg_u64_limbs: Vec<[GoldilocksField; 8]> =
+                BLAKE2BUtil::pad(&message, MAX_CHUNK_SIZE)
+                    .chunks_exact(8)
+                    .map(|x| {
+                        x.iter()
+                            .map(|y| GoldilocksField::from_canonical_u8(*y))
+                            .collect_vec()
+                            .try_into()
+                            .unwrap()
+                    })
+                    .collect_vec();
+
+            let msg_padded_chunks: Vec<[[GoldilocksField; 8]; 16]> = msg_u64_limbs
+                .chunks_exact(16)
+                .map(|x| x.try_into().unwrap())
+                .collect_vec();
+
+            let mut t_value = 0u64;
+            let msg_len = message.len() as u64;
+            for (i, chunk) in msg_padded_chunks.iter().enumerate() {
+                let at_last_chunk = i == msg_padded_chunks.len() - 1;
+
+                padded_chunks_values.push(*chunk);
+
+                t_value += 128;
+                t_values_values.push(if at_last_chunk {
+                    u64_to_le_field_bytes(msg_len)
+                } else {
+                    u64_to_le_field_bytes(t_value)
+                });
+
+                end_bits_values.push(GoldilocksField::from_canonical_usize(
+                    at_last_chunk as usize,
+                ));
+            }
+
+            digest_index += msg_padded_chunks.len();
+            digest_indices_values.push(GoldilocksField::from_canonical_usize(digest_index));
+        }
+
+        let num_messages_value = GoldilocksField::from_canonical_usize(messages.len());
+
+        // Build the stark
+        let num_rounds = padded_chunks_values.len();
         let mut builder = BytesBuilder::<BLAKE2BTest>::new();
         let padded_chunks = (0..num_rounds)
             .map(|_| builder.alloc_array_public::<U64Register>(16))
             .collect::<Vec<_>>();
         let t_values = builder.alloc_array_public::<U64Register>(num_rounds);
         let end_bits = builder.alloc_array_public::<BitRegister>(num_rounds);
-        let digest_indices = builder.alloc_array_public(num_messages_value);
+        let digest_indices = builder.alloc_array_public(messages.len());
         let num_messages = builder.alloc_public();
         let hash_state = builder.blake2b(
             &padded_chunks,
@@ -100,10 +154,6 @@ pub mod test_utils {
             &num_messages,
         );
 
-        let num_rows_degree = log2_ceil(96 * num_rounds);
-        let num_rows = 1 << num_rows_degree;
-        let stark = builder.build::<C, 2>(num_rows);
-
         /*
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
@@ -113,46 +163,30 @@ pub mod test_utils {
         stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
         */
 
-        let message = b"325623465236262asdagds326fdsfy3w456gery46462ialweurnawieyailughoiwabn4bkq23bh2jh5bkwaeublaieunrqi4awijbjkahtiqi3uwagastt3asgesgg3";
-        let padded_chunks_values: Vec<[GoldilocksField; 8]> = BLAKE2BUtil::pad(message.as_ref(), 2)
-            .chunks_exact(8)
-            .map(|x| {
-                let a: [GoldilocksField; 8] = x
-                    .iter()
-                    .map(|y| GoldilocksField::from_canonical_u8(*y))
-                    .collect_vec()
-                    .as_slice()
-                    .try_into()
-                    .unwrap();
-                a
-            })
-            .collect_vec();
-        let mut t_values_values = [[GoldilocksField::ZERO; 8], [GoldilocksField::ZERO; 8]];
-        t_values_values[0][0] = GoldilocksField::from_canonical_u8(128);
-        t_values_values[1][0] = GoldilocksField::from_canonical_u8(129);
-        let end_bits_values = [GoldilocksField::ZERO, GoldilocksField::ONE];
-        let digest_indices_values = [GoldilocksField::ONE];
-        let num_messages_value = GoldilocksField::ONE;
+        let num_rows_degree = log2_ceil(96 * num_rounds);
+        let num_rows = 1 << num_rows_degree;
+        let stark = builder.build::<C, 2>(num_rows);
 
         // Write trace.
-        let writer = TraceWriter::new(&stark.air_data, num_rows);
+        let mut writer_data = AirWriterData::new(&stark.air_data, num_rows);
+        let mut writer = writer_data.public_writer();
 
-        writer.write(&num_messages, &num_messages_value, 0);
+        writer.write(&num_messages, &num_messages_value);
         let mut intial_state = IV;
         for i in 0..num_rounds {
-            writer.write_array(
-                &padded_chunks[i],
-                &padded_chunks_values[i * 16..(i + 1) * 16],
-                0,
-            );
-            writer.write(&end_bits.get(i), &end_bits_values[i], 0);
-            writer.write(&t_values.get(i), &t_values_values[i], 0);
+            let padded_chunk = padded_chunks_values[i];
+            writer.write_array(&padded_chunks[i], padded_chunk);
+            writer.write(&end_bits.get(i), &end_bits_values[i]);
+            writer.write(&t_values.get(i), &t_values_values[i]);
 
+            let chunk = padded_chunks_values[i];
+            let a = chunk.iter().flatten().collect_vec();
+            println!("len of a is {}", a.len());
             let hash = BLAKE2BPure::compress(
-                &padded_chunks_values
+                &chunk
                     .iter()
                     .flatten()
-                    .map(|x| GoldilocksField::as_canonical_u64(&x) as u8)
+                    .map(|x| GoldilocksField::as_canonical_u64(x) as u8)
                     .collect_vec(),
                 &mut intial_state,
                 0,
@@ -162,38 +196,40 @@ pub mod test_utils {
             writer.write_array(
                 &hash_state[0],
                 hash.map(u64_to_le_field_bytes::<GoldilocksField>),
-                0,
             );
         }
 
         for i in 0..num_messages_value.as_canonical_u64() as usize {
-            writer.write(&digest_indices.get(i), &digest_indices_values[i], 0);
+            writer.write(&digest_indices.get(i), &digest_indices_values[i]);
         }
 
-        writer.write_global_instructions(&stark.air_data);
-        println!("wrote global instructions");
-        (0..num_rounds).for_each(|r| {
-            for k in 0..96 {
-                let i = r * 96 + k;
-                println!("writing row instructions for row {}", i);
-                writer.write_row_instructions(&stark.air_data, i);
-                println!("wrote row instructions for row {}", i);
+        timed!(timing, "write input", {
+            stark.air_data.write_global_instructions(&mut writer);
+
+            for mut chunk in writer_data.chunks(num_rows) {
+                for i in 0..num_rows {
+                    println!("writing trace instructions for row {}", i);
+                    let mut writer = chunk.window_writer(i);
+                    stark.air_data.write_trace_instructions(&mut writer);
+                }
             }
         });
 
         /*
         // Compare expected digests with the trace values.
+        let writer = writer_data.public_writer();
         for (digest, expected) in hash_state.iter().zip_eq(expected_digests) {
             let array: ArrayRegister<S::IntRegister> = (*digest).into();
             let digest = writer
-                .read_array::<_, 8>(&array, 0)
+                .read_array::<_, 8>(&array)
                 .map(|x| S::field_value_to_int(&x));
             let expected_digest = S::decode(expected);
             assert_eq!(digest, expected_digest);
         }
         */
 
-        let InnerWriterData { trace, public, .. } = writer.into_inner().unwrap();
+        let (trace, public) = (writer_data.trace, writer_data.public);
+
         let proof = timed!(
             timing,
             "generate stark proof",
