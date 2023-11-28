@@ -1,5 +1,6 @@
 use alloc::sync::Arc;
 
+use log::debug;
 use serde::{Deserialize, Serialize};
 
 use super::assign::AssignInstruction;
@@ -12,6 +13,8 @@ use crate::air::AirConstraint;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::bool::SelectInstruction;
 use crate::chip::memory::instruction::MemoryInstruction;
+use crate::chip::register::array::ArrayRegister;
+use crate::chip::register::element::ElementRegister;
 use crate::chip::register::memory::MemorySlice;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
@@ -27,6 +30,7 @@ pub enum AirInstruction<F, I> {
     ProcessId(ProcessIdInstruction),
     Filtered(ArithmeticExpression<F>, Arc<Self>),
     Mem(MemoryInstruction),
+    Watch(String, ArrayRegister<ElementRegister>),
 }
 
 impl<F: Field, AP: AirParser<Field = F>, I> AirConstraint<AP> for AirInstruction<F, I>
@@ -58,6 +62,7 @@ where
                 }
             }
             AirInstruction::Mem(i) => AirConstraint::<AP>::eval(i, parser),
+            AirInstruction::Watch(_, _) => {}
         }
     }
 }
@@ -79,6 +84,10 @@ impl<F: Field, I: Instruction<F>> Instruction<F> for AirInstruction<F, I> {
                 }
             }
             AirInstruction::Mem(i) => Instruction::<F>::write(i, writer, row_index),
+            AirInstruction::Watch(name, register) => {
+                let value = writer.read_vec(register, row_index);
+                debug!("row {}: , {}: {:?}", row_index, name, value);
+            }
         }
     }
 
@@ -98,6 +107,15 @@ impl<F: Field, I: Instruction<F>> Instruction<F> for AirInstruction<F, I> {
                 }
             }
             AirInstruction::Mem(i) => i.write_to_air(writer),
+            AirInstruction::Watch(name, register) => {
+                let value = writer.read_vec(register);
+                let row_index = writer.row_index();
+                if let Some(index) = row_index {
+                    debug!("row {}: , {}: {:?}", index, name, value);
+                } else {
+                    debug!("{}: {:?}", name, value);
+                }
+            }
         }
     }
 }

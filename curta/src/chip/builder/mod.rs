@@ -22,6 +22,7 @@ use super::table::lookup::table::LookupTable;
 use super::table::lookup::values::LookupValues;
 use super::trace::data::AirTraceData;
 use super::{AirParameters, Chip};
+use crate::chip::register::RegisterSerializable;
 
 #[derive(Debug, Clone)]
 #[allow(clippy::type_complexity)]
@@ -104,6 +105,19 @@ impl<L: AirParameters> AirBuilder<L> {
         }
 
         array
+    }
+
+    /// Prints out a log message (using the log::debug! macro) with the value of the register.
+    ///
+    /// The message will be presented with `RUST_LOG=debug` or `RUST_LOG=trace`.
+    pub fn watch(&mut self, data: &impl Register, name: &str) {
+        let register = ArrayRegister::from_register_unsafe(*data.register());
+        let instruction = AirInstruction::Watch(name.to_string(), register);
+        if data.is_trace() {
+            self.register_air_instruction_internal(instruction);
+        } else {
+            self.register_global_air_instruction_internal(instruction);
+        }
     }
 
     /// Registers an custom instruction with the builder.
@@ -317,6 +331,7 @@ pub(crate) mod tests {
         type Instruction = EmptyInstruction<GoldilocksField>;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
         const NUM_FREE_COLUMNS: usize = 2;
+        const EXTENDED_COLUMNS: usize = 0;
     }
 
     #[test]
@@ -371,14 +386,18 @@ pub(crate) mod tests {
         type L = FibonacciParameters;
         type SC = PoseidonGoldilocksStarkConfig;
 
+        let _ = env_logger::builder().is_test(true).try_init();
+
         let mut builder = AirBuilder::<L>::new();
         let x_0 = builder.alloc::<ElementRegister>();
         let x_1 = builder.alloc::<ElementRegister>();
 
         // x0' <- x1
-        let constr_1 = builder.set_to_expression_transition(&x_0.next(), x_1.expr());
+        builder.set_to_expression_transition(&x_0.next(), x_1.expr());
         // x1' <- x0 + x1
-        let constr_2 = builder.set_to_expression_transition(&x_1.next(), x_0.expr() + x_1.expr());
+        builder.set_to_expression_transition(&x_1.next(), x_0.expr() + x_1.expr());
+
+        builder.watch(&x_1, "x_1 fib");
 
         let num_rows = 1 << 10;
         let public_inputs = [
@@ -399,8 +418,7 @@ pub(crate) mod tests {
         writer.write(&x_1, &F::ONE, 0);
 
         for i in 0..num_rows {
-            writer.write_instruction(&constr_1, i);
-            writer.write_instruction(&constr_2, i);
+            writer.write_row_instructions(&generator.air_data, i);
         }
         let stark = Starky::new(air);
         let config = SC::standard_fast_config(num_rows);
