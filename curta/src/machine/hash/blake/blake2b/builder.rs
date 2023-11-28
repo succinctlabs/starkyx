@@ -66,7 +66,7 @@ pub mod test_utils {
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = UintInstruction;
 
-        const NUM_FREE_COLUMNS: usize = 1356;
+        const NUM_FREE_COLUMNS: usize = 1387;
         const EXTENDED_COLUMNS: usize = 834;
     }
 
@@ -113,11 +113,15 @@ pub mod test_utils {
             let mut t_value = 0u64;
             let msg_len = message.len() as u64;
             for (i, chunk) in msg_padded_chunks.iter().enumerate() {
-                let at_last_chunk = i == msg_padded_chunks.len() - 1;
-
                 padded_chunks_values.push(*chunk);
 
                 t_value += 128;
+
+                let mut at_last_chunk = false;
+                if t_value >= msg_len {
+                    at_last_chunk = true;
+                }
+
                 t_values_values.push(if at_last_chunk {
                     u64_to_le_field_bytes(msg_len)
                 } else {

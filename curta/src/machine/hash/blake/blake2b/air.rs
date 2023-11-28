@@ -115,6 +115,24 @@ where
             builder.constant(&L::Field::from_canonical_u64(FIRST_COMPRESS_H_READ_TS));
 
         let iv_values = builder.constant_array::<U64Register>(&IV.map(u64_to_le_field_bytes));
+        let iv = builder.uninit_slice();
+        for (i, value) in iv_values.iter().enumerate() {
+            builder.store(&iv.get(i), value, &Time::zero(), Some(*num_rounds));
+        }
+        // (num_rounds - 1) * 184 + length_last_round
+        let num_dummy_iv_reads = builder.alloc_public::<ElementRegister>();
+        builder.set_to_expression(
+            &num_dummy_iv_reads,
+            (num_rounds.expr() - const_nums.const_1.expr()) * const_nums.const_184.expr()
+                + (length_last_round.expr() * const_nums.const_2.expr()),
+        );
+
+        builder.store(
+            &iv.get_at(dummy_index),
+            const_nums.const_0_u64,
+            &Time::zero(),
+            Some(num_dummy_iv_reads),
+        );
 
         let compress_iv_values =
             builder.constant_array::<U64Register>(&COMPRESS_IV.map(u64_to_le_field_bytes));
@@ -123,8 +141,6 @@ where
             builder.store(&compress_iv.get(i), value, &Time::zero(), Some(*num_rounds));
         }
 
-        // (num_rounds - 1) * 184 + length_last_round
-        let num_dummy_iv_reads = builder.alloc_public::<ElementRegister>();
         builder.set_to_expression(
             &num_dummy_iv_reads,
             (num_rounds.expr() - const_nums.const_1.expr()) * const_nums.const_184.expr()
@@ -158,6 +174,7 @@ where
         }
 
         BLAKE2BConsts {
+            iv,
             iv_values,
             compress_iv,
             v_indices,
@@ -358,17 +375,12 @@ where
         // For every first compress of each message, the initial h values will be read twice.
         // Once when initializing the V vector (at the start of the compress function) and once
         // when mixing the V vector into the resulting h vector (at the end of the compress function).
-        let num_initial_h_reads = builder.alloc_public::<ElementRegister>();
-        builder.set_to_expression(
-            &num_initial_h_reads,
-            num_messages.expr() * (const_nums.const_96.expr() + const_nums.const_1.expr()),
-        );
         for i in 0..8 {
             builder.store(
                 &h.get(i),
                 consts.iv_values.get(i),
                 &Time::from_element(consts.first_compress_h_read_ts),
-                Some(num_initial_h_reads),
+                Some(const_nums.const_97),
             );
         }
 
@@ -575,9 +587,6 @@ where
         let mut init_idx_1 = data.trace.compress_index;
         let mut init_idx_2 = builder.add(data.trace.compress_index, data.const_nums.const_4);
 
-        builder.watch(&init_idx_1, "init idx 1");
-        builder.watch(&init_idx_2, "init idx 2");
-
         init_idx_1 = builder.select(
             data.trace.is_compress_initialize,
             &init_idx_1,
@@ -593,9 +602,6 @@ where
         let mut previous_compress_id =
             builder.expression(data.trace.compress_id.expr() - data.const_nums.const_1.expr());
 
-        // If we are within the first compress of a message, then read from a dummy h values from a dummy timestamp.
-        builder.watch(&data.trace.at_first_compress, "at_first_compress");
-
         previous_compress_id = builder.select(
             data.trace.at_first_compress,
             &data.consts.first_compress_h_read_ts,
@@ -604,16 +610,22 @@ where
 
         builder.watch(&previous_compress_id, "previous compress id");
         builder.watch(&init_idx_1, "init idx 1");
-        let h_value_1 = builder.load(
+        let mut h_value_1 = builder.load(
             &data.memory.h.get_at(init_idx_1),
             &Time::from_element(previous_compress_id),
         );
         builder.watch(&h_value_1, "h value 1");
-        let h_value_2 = builder.load(
+        let mut h_value_2 = builder.load(
             &data.memory.h.get_at(init_idx_2),
             &Time::from_element(previous_compress_id),
         );
         builder.watch(&h_value_2, "h value 2");
+
+        let iv_value_1 = builder.load(&data.consts.iv.get_at(init_idx_1), &Time::zero());
+        let iv_value_2 = builder.load(&data.consts.iv.get_at(init_idx_2), &Time::zero());
+
+        h_value_1 = builder.select(data.trace.is_hash_initialize, &iv_value_1, &h_value_1);
+        h_value_2 = builder.select(data.trace.is_hash_initialize, &iv_value_2, &h_value_2);
 
         let compress_iv_value_1 =
             builder.load(&data.consts.compress_iv.get_at(init_idx_1), &Time::zero());
@@ -845,9 +857,14 @@ where
 
         let h_workspace_1 = builder.alloc_array::<U64Register>(8);
         for i in 0..8 {
-            let h_value = builder.load(
+            let mut h_value = builder.load(
                 &data.memory.h.get(i),
                 &Time::from_element(previous_compress_id),
+            );
+            h_value = builder.select(
+                data.trace.at_first_compress,
+                &data.consts.iv_values.get(i),
+                &h_value,
             );
             builder.watch(&h_value, "previous h");
             builder.set_to_expression(&h_workspace_1.get(i), h_value.expr());
@@ -875,12 +892,6 @@ where
             builder.expression(data.trace.cycle_96_end_bit.expr() * digest_bit.expr());
         builder.watch(&save_digest, "save digest");
 
-        let h_write_ts = builder.select(
-            data.trace.cycle_96_end_bit,
-            &data.trace.compress_id,
-            &data.consts.dummy_ts,
-        );
-
         let h = builder.alloc_array::<U64Register>(8);
         let num_h_reads = builder.mul(
             data.trace.cycle_96_end_bit.as_element(),
@@ -893,7 +904,6 @@ where
             );
             let xor = builder.xor(h_workspace_2.get(i), v_value);
             builder.set_to_expression(&h.get(i), xor.expr());
-
             builder.watch(&xor, "final h");
 
             // If we are at the last compress of a message, then save the IV into memory.h
@@ -901,15 +911,14 @@ where
                 builder.select(data.trace.cycle_96_end_bit, &xor, &h_workspace_1.get(i));
 
             builder.watch(&save_h_value, "save h value");
-            builder.watch(&h_write_ts, "h write ts");
             builder.store(
                 &data.memory.h.get(i),
                 save_h_value,
-                &Time::from_element(h_write_ts),
+                &Time::from_element(data.trace.compress_id),
                 Some(num_h_reads),
             );
 
-            builder.watch_memory(&data.memory.h.get(i), "h[i]");
+            //builder.watch_memory(&data.memory.h.get(i), "h[i]");
         }
 
         let num_dummy_h_reads = builder.mul(
@@ -919,7 +928,7 @@ where
         builder.store(
             &data.memory.h.get_at(data.consts.dummy_index),
             data.const_nums.const_0_u64,
-            &Time::from_element(h_write_ts),
+            &Time::from_element(data.trace.compress_id),
             Some(num_dummy_h_reads),
         );
 
@@ -927,7 +936,7 @@ where
             builder.store(
                 &state_ptr.get(i),
                 element,
-                &Time::from_element(h_write_ts),
+                &Time::from_element(data.trace.compress_id),
                 Some(save_digest),
             );
         }
