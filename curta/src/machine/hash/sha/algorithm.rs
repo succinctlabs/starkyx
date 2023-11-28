@@ -22,6 +22,7 @@ const DUMMY_INDEX: u64 = i32::MAX as u64;
 /// Pure SHA algorithm implementation.
 ///
 /// An interface for the SHA algorithm as a Rust function operating on numerical values.
+/// It looks like CYCLE_LENGTH is the word size.
 pub trait SHAPure<const CYCLE_LENGTH: usize>:
     Debug + Clone + 'static + Serialize + DeserializeOwned + Send + Sync
 {
@@ -59,6 +60,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
     fn field_value_to_int(value: &Self::Value) -> Self::Integer;
 
     /// The clock register, whose value equals the current row.
+    ///
+    /// I don't really think I understand this very well. Does the i-th row have i? Is that it?
     fn clk(builder: &mut B) -> ElementRegister;
 
     /// End bits for a 16-cycle and a CYCLE_LENGTH-cycle.
@@ -66,9 +69,12 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
     /// This function should return two bits `(cycle_16_end_bit, cycle_end_bit)` such that
     ///     -  `cycle_16_end_bit` is `1` at the end of every 16 cycles and `0` otherwise.
     ///     - `cycle_end_bit` is `1` at the end of every CYCLE_LENGTH cycles and `0` otherwise.
+    ///
+    /// What is a cycle? And what is an end bit for a cycle?
     fn cycles_end_bits(builder: &mut B) -> (BitRegister, BitRegister);
 
-    /// Given the elements `w[i-15]`, `w[i-2]`, `w[i-16]`, `w[i-7]`, compute `w[i]`.
+    /// Given the elements `w[i-15]`, `w[i-2]`, `w[i-16]`, `w[i-7]`, compute `w[i]`. We perform this
+    /// from i = 16..63 (inclusive). This is the first thing we do for each 512-bit chunk.
     fn preprocessing_step(
         builder: &mut B,
         w_i_minus_15: Self::IntRegister,
@@ -138,6 +144,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         let degree_log = log2_ceil(num_real_rounds * CYCLE_LENGTH);
         assert!(degree_log < 31, "AIR degree is too large");
         debug!("AIR degree after padding: {}", 1 << degree_log);
+
+        // What is a dummy round?
         let num_dummy_rounds = (1 << degree_log) / CYCLE_LENGTH + 1 - num_real_rounds;
         // Keep track of the last round length to know how many dummy reads to add.
         let length_last_round = (1 << degree_log) % CYCLE_LENGTH;
@@ -261,6 +269,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         //    - `is_preprocessing` becomes `1` at the end of every 16 cycle unless this coincides
         //       with the end of a CYCLE_LENGTH-cycle.
         //    - otherwise, `is_preprocessing` remains the same.
+        //
+        // It looks like we use this BitRegister to simulate a for loop?
         let is_preprocessing = builder.alloc::<BitRegister>();
         builder.set_to_expression_first_row(&is_preprocessing, B::Field::ZERO.into());
         builder.set_to_expression_transition(
@@ -374,6 +384,7 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         }
     }
 
+    // Does this get overwritten in `preprocessing` in sha256/air.rs?
     fn preprocessing(
         builder: &mut B,
         data: &SHAData<Self::IntRegister, CYCLE_LENGTH>,
@@ -429,6 +440,7 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         w_i
     }
 
+    // Does this get overwritten in `processing` in sha256/air.rs?
     fn processing(
         builder: &mut B,
         w_i: Self::IntRegister,
@@ -438,6 +450,7 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         let hash_state_public = (0..num_digests)
             .map(|_| builder.alloc_public::<Self::StateVariable>())
             .collect::<Vec<_>>();
+        // I don't quite understand what "load_state" does. I imagine this works well with "store_state".
         let state_ptr = Self::load_state(builder, &hash_state_public, data.public.digest_indices);
 
         let index = data.trace.index;
