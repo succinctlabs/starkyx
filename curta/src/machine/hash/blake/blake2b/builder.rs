@@ -82,8 +82,8 @@ pub mod test_utils {
 
         // Collect the public inputs
         let messages = vec![
+            b"asfiwu4yrlisuhgluashdlowaualisdugylawi4thagasdf23uiraskdgbasjkdfhaliwhfrasdfaw4jhbskfjhsadkif325sgdsfawera".to_vec(),
             b"325623465236262asdagds326fdsfy3w456gery46462ialweurnawieyailughoiwabn4bkq23bh2jh5bkwaeublaieunrqi4awijbjkahtiqi3uwagastt3asgesgg3".to_vec(),
-            b"asfiwu4yrlisuhgluashdlowaualisdugylawi4thagasdf23uiraskdgbasjkdfhaliwhfrasdfaw4jhbskfjhsadkif325sgdsfawera".to_vec()
         ];
 
         let mut padded_chunks_values = Vec::new();
@@ -112,7 +112,7 @@ pub mod test_utils {
 
             let mut t_value = 0u64;
             let msg_len = message.len() as u64;
-            for (i, chunk) in msg_padded_chunks.iter().enumerate() {
+            for chunk in msg_padded_chunks.iter() {
                 padded_chunks_values.push(*chunk);
 
                 t_value += 128;
@@ -203,8 +203,8 @@ pub mod test_utils {
             );
         }
 
-        for i in 0..num_messages_value.as_canonical_u64() as usize {
-            writer.write(&digest_indices.get(i), &digest_indices_values[i]);
+        for (i, digest_index) in digest_indices_values.iter().enumerate() {
+            writer.write(&digest_indices.get(i), digest_index);
         }
 
         timed!(timing, "write input", {

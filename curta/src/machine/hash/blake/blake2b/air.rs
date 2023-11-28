@@ -101,6 +101,7 @@ where
         num_rounds: &ElementRegister,
         length_last_round: &ElementRegister,
         num_mix_iterations: usize,
+        num_mix_iterations_last_round: usize,
         const_nums: &BLAKE2BConstNums,
     ) -> BLAKE2BConsts<L> {
         assert!(DUMMY_INDEX < L::Field::order());
@@ -119,12 +120,13 @@ where
         for (i, value) in iv_values.iter().enumerate() {
             builder.store(&iv.get(i), value, &Time::zero(), Some(*num_rounds));
         }
-        // (num_rounds - 1) * 184 + length_last_round
+        // (num_rounds - 1) * 184 + (length_last_round - 4) * 2
         let num_dummy_iv_reads = builder.alloc_public::<ElementRegister>();
         builder.set_to_expression(
             &num_dummy_iv_reads,
             (num_rounds.expr() - const_nums.const_1.expr()) * const_nums.const_184.expr()
-                + (length_last_round.expr() * const_nums.const_2.expr()),
+                + ((length_last_round.expr() - const_nums.const_4.expr())
+                    * const_nums.const_2.expr()),
         );
 
         builder.store(
@@ -140,12 +142,6 @@ where
         for (i, value) in compress_iv_values.iter().enumerate() {
             builder.store(&compress_iv.get(i), value, &Time::zero(), Some(*num_rounds));
         }
-
-        builder.set_to_expression(
-            &num_dummy_iv_reads,
-            (num_rounds.expr() - const_nums.const_1.expr()) * const_nums.const_184.expr()
-                + (length_last_round.expr() * const_nums.const_2.expr()),
-        );
 
         builder.store(
             &compress_iv.get_at(dummy_index),
@@ -168,9 +164,23 @@ where
             v_last_write_ages.store_row(builder, i, ages, num_mix_iterations_element);
         }
 
+        let num_rounds_minus_1 = builder.alloc_public::<ElementRegister>();
+        builder.set_to_expression(
+            &num_rounds_minus_1,
+            num_rounds.expr() - const_nums.const_1.expr(),
+        );
         let mut permutations = MemoryArray::<L, 12, 16>::new(builder);
         for (i, permutation) in SIGMA_PERMUTATIONS.iter().enumerate() {
-            permutations.store_row(builder, i, permutation, num_mix_iterations_element);
+            permutations.store_row(
+                builder,
+                i,
+                permutation,
+                if i < num_mix_iterations_last_round {
+                    *num_rounds
+                } else {
+                    num_rounds_minus_1
+                },
+            );
         }
 
         BLAKE2BConsts {
@@ -506,11 +516,8 @@ where
         assert!(degree_log < 31, "AIR degree is too large");
         debug!("AIR degree after padding: {}", 1 << degree_log);
         let num_dummy_rounds = (1 << degree_log) / 96 + 1 - num_real_rounds;
-        println!("num_real_rounds: {}", num_real_rounds);
-        println!("num_dummy_rounds: {}", num_dummy_rounds);
         // Keep track of the last round length to know how many dummy reads to add.
         let length_last_round = (1 << degree_log) % 96;
-        println!("length_last_round: {}", length_last_round);
 
         // create the const numbers data
         let const_nums = Self::blake2b_const_nums(builder);
@@ -541,6 +548,7 @@ where
             &num_rounds_element,
             &length_last_round_element,
             num_mix_iterations,
+            num_mix_iterations_last_round,
             &const_nums,
         );
 
@@ -552,7 +560,7 @@ where
             end_bits,
             digest_bits,
             num_dummy_rounds,
-            num_mix_iterations,
+            length_last_round,
         );
 
         // create the memory data
@@ -845,11 +853,6 @@ where
             );
         }
 
-        // for i in 0..16 {
-        //     let output_v = builder.load(&data.memory.v_final.get(i), &Time::from_element(write_ts));
-        //     builder.watch(&output_v, "output_v");
-        // }
-
         // If we are at the last cycle of the round, then compute and save the h value.
 
         // First load the previous round's h value.
@@ -917,8 +920,6 @@ where
                 &Time::from_element(data.trace.compress_id),
                 Some(num_h_reads),
             );
-
-            //builder.watch_memory(&data.memory.h.get(i), "h[i]");
         }
 
         let num_dummy_h_reads = builder.mul(
@@ -940,6 +941,43 @@ where
                 Some(save_digest),
             );
         }
+
+        builder.watch_memory(&data.consts.iv.get(0), "iv[0]");
+        builder.watch_memory(&data.consts.iv.get(7), "iv[7]");
+        builder.watch_memory(
+            &data.consts.iv.get_at(data.consts.dummy_index),
+            "iv[dummy_index]",
+        );
+        builder.watch_memory(&data.consts.compress_iv.get(0), "compress_iv[0]");
+        builder.watch_memory(&data.consts.compress_iv.get(7), "compress_iv[7]");
+        builder.watch_memory(
+            &data.consts.compress_iv.get_at(data.consts.dummy_index),
+            "compress_iv[dummy_index]",
+        );
+        builder.watch_memory(
+            &data.consts.v_indices.flattened_memory.get(0),
+            "v_indices[0]",
+        );
+        builder.watch_memory(
+            &data.consts.v_indices.flattened_memory.get(31),
+            "v_indices[31]",
+        );
+        builder.watch_memory(
+            &data.consts.v_last_write_ages.flattened_memory.get(0),
+            "v_last_write_ages[0]",
+        );
+        builder.watch_memory(
+            &data.consts.v_last_write_ages.flattened_memory.get(31),
+            "v_last_write_ages[31]",
+        );
+        builder.watch_memory(
+            &data.consts.permutations.flattened_memory.get(0),
+            "permutations[0]",
+        );
+        builder.watch_memory(
+            &data.consts.permutations.flattened_memory.get(127),
+            "permutations[127]",
+        );
 
         hash_state_public
     }
