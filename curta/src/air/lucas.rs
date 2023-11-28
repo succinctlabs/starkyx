@@ -81,7 +81,7 @@ impl<AP: AirParser> RAir<AP> for LucasAir {
         let first_col_constraint = parser.sub(parser.next_slice()[0], parser.local_slice()[1]);
         parser.constraint_transition(first_col_constraint);
 
-        // next <- p * current - q * previous
+        // x1' <- p * x1 - q * x0
         let second_col_constraint = {
             let next = parser.next_slice()[1];
             let current = parser.local_slice()[1];
@@ -121,6 +121,7 @@ mod tests {
         let num_rows = 1 << 5usize;
         let air = LucasAir::new();
 
+        // Defines the sequence x_n = x_{n - 1} - x_{n - 2} with x_1 = 1, x_0 = 0.
         let public_inputs = [
             F::ZERO,
             F::ONE,
@@ -130,10 +131,20 @@ mod tests {
         ];
         let trace = LucasAir::generate_trace(F::ZERO, F::ONE, F::ONE, F::ONE, num_rows);
 
+        let last_row = trace.row(num_rows - 1);
+
+        // The sequence is: 0, 1, 1, 0, -1, -1, 0, 1, 1, 0, -1, -1, ...  In other words, the
+        // sequence is periodic with period 6. The last row contains the 32nd and 33rd elements,
+        // which are the same as the 2nd and 3rd elements. (1-indexed)
+        assert_eq!(last_row[0], F::ONE);
+        assert_eq!(last_row[1], F::ONE);
+        assert_eq!(last_row[2], public_inputs[2]);
+        assert_eq!(last_row[3], public_inputs[3]);
+
         for window in trace.windows() {
-            assert_eq!(window.local_slice.len(), 2);
+            assert_eq!(window.local_slice.len(), 4);
             let mut window_parser = TraceWindowParser::new(window, &[], &[], &public_inputs);
-            assert_eq!(window_parser.local_slice().len(), 2);
+            assert_eq!(window_parser.local_slice().len(), 4);
             air.eval(&mut window_parser);
         }
     }
