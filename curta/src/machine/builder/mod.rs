@@ -124,6 +124,14 @@ pub trait Builder: Sized {
         self.api().free(ptr, value, last_write)
     }
 
+    /// Prints out a log message (using the log::debug! macro) with the value and multiplicity
+    /// of the memory slot.
+    ///
+    /// The message will be presented with `RUST_LOG=debug` or `RUST_LOG=trace`.
+    fn watch_memory<V: MemoryValue>(&mut self, ptr: &Pointer<V>, name: &str) {
+        self.api().watch_memory(ptr, name)
+    }
+
     /// Asserts that `a = b` in all rows of the trace.
     fn assert_equal<T: Register>(&mut self, a: &T, b: &T) {
         self.api().assert_equal(a, b)

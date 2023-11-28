@@ -7,6 +7,7 @@ use super::pointer::Pointer;
 use super::set::SetInstruction;
 use super::time::Time;
 use super::value::MemoryValue;
+use super::watch::WatchInstruction;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::set::AirInstruction;
 use crate::chip::register::cubic::CubicRegister;
@@ -176,5 +177,10 @@ impl<L: AirParameters> AirBuilder<L> {
         let write_digest = value.compress(self, ptr.raw, write_ts, &ptr.challenges);
         self.input_to_memory_bus(write_digest, multiplicity);
         self.unsafe_raw_write(ptr, value, multiplicity, !write_digest.is_trace())
+    }
+
+    pub fn watch_memory<V: MemoryValue>(&mut self, ptr: &Pointer<V>, name: &str) {
+        let instr = MemoryInstruction::Watch(WatchInstruction::new(ptr.raw, name.to_string()));
+        self.register_air_instruction_internal(AirInstruction::mem(instr));
     }
 }

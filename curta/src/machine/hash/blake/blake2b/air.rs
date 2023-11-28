@@ -908,6 +908,8 @@ where
                 &Time::from_element(h_write_ts),
                 Some(num_h_reads),
             );
+
+            builder.watch_memory(&data.memory.h.get(i), "h[i]");
         }
 
         let num_dummy_h_reads = builder.mul(
