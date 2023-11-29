@@ -83,6 +83,7 @@ where
             const_2: builder.constant(&L::Field::from_canonical_u8(2)),
             const_3: builder.constant(&L::Field::from_canonical_u8(3)),
             const_4: builder.constant(&L::Field::from_canonical_u8(4)),
+            const_8: builder.constant(&L::Field::from_canonical_u8(8)),
             const_16: builder.constant(&L::Field::from_canonical_u8(16)),
             const_24: builder.constant(&L::Field::from_canonical_u8(24)),
             const_96: builder.constant(&L::Field::from_canonical_u8(96)),
@@ -399,7 +400,7 @@ where
         num_messages: &ElementRegister,
         num_compresses: &ElementRegister,
         num_dummy_rounds: usize,
-        num_mix_iterations_last_round: usize,
+        length_last_round: usize,
     ) -> BLAKE2BMemory {
         let h = builder.uninit_slice();
 
@@ -438,23 +439,20 @@ where
         }
 
         // Initialize the v final memory
-        // Need to set dummy reads.  Two reads will be accessed for every non final set of rows
-        // for each compress.
         let v_final = builder.uninit_slice();
-        let const_92: ElementRegister = builder.constant(&L::Field::from_canonical_u8(95));
-        let num_dummy_v_final_accesses = builder.alloc_public::<ElementRegister>();
-        builder.set_to_expression(
-            &num_dummy_v_final_accesses,
-            num_compresses.expr() * const_92.expr(),
+
+        // Need to set dummy reads.
+        // It will be (num_compresses - 1) * (16 * 95) + length_last_round * 16
+        let num_dummy_v_final_reads =
+            builder.constant::<ElementRegister>(&L::Field::from_canonical_usize(
+                (padded_chunks.len() + num_dummy_rounds - 1) * (16 * 95) + length_last_round * 16,
+            ));
+        builder.store(
+            &v_final.get_at(consts.dummy_index),
+            const_nums.const_0_u64,
+            &Time::from_element(consts.dummy_ts),
+            Some(num_dummy_v_final_reads),
         );
-        for i in 0..16 {
-            builder.store(
-                &v_final.get(i),
-                const_nums.const_0_u64,
-                &Time::from_element(consts.dummy_ts),
-                Some(num_dummy_v_final_accesses),
-            );
-        }
 
         // Initialize the m memory
         let m = builder.uninit_slice();
@@ -481,7 +479,7 @@ where
                 );
             }
         }
-        for i in 0..num_mix_iterations_last_round {
+        for i in 0..length_last_round {
             builder.store(
                 &m.get((num_dummy_rounds - 1 + padded_chunks.len()) * 16 + i),
                 const_nums.const_0_u64,
@@ -847,9 +845,6 @@ where
             &Time::zero(),
         );
 
-        let final_v_write_ts =
-            builder.select(save_final_v, &data.trace.compress_id, &data.consts.dummy_ts);
-
         let updated_v_values = [updated_v0, updated_v1, updated_v2, updated_v3];
         for (value, v_index) in updated_v_values.iter().zip(v_indices.iter()) {
             builder.store(
@@ -859,13 +854,10 @@ where
                 None,
             );
 
-            let v_final_idx = builder.select(save_final_v, v_index, &data.consts.dummy_index);
-            let v_final_value = builder.select(save_final_v, value, &data.const_nums.const_0_u64);
-
             builder.store(
-                &data.memory.v_final.get_at(v_final_idx),
-                v_final_value,
-                &Time::from_element(final_v_write_ts),
+                &data.memory.v_final.get_at(*v_index),
+                *value,
+                &Time::from_element(data.trace.compress_id),
                 Some(save_final_v.as_element()),
             );
         }
@@ -894,7 +886,16 @@ where
             &data.consts.dummy_ts,
         );
         for i in 0..8 {
-            let v_i = builder.load(&data.memory.v_final.get(i), &Time::from_element(read_ts));
+            let i_element = builder.constant::<ElementRegister>(&L::Field::from_canonical_usize(i));
+            let v_final_idx = builder.select(
+                data.trace.cycle_96_end_bit,
+                &i_element,
+                &data.consts.dummy_index,
+            );
+            let v_i = builder.load(
+                &data.memory.v_final.get_at(v_final_idx),
+                &Time::from_element(read_ts),
+            );
             let updated_h = builder.xor(h_workspace_1.get(i), v_i);
             builder.set_to_expression(&h_workspace_2.get(i), updated_h.expr());
         }
@@ -927,8 +928,16 @@ where
         );
         for i in 0..8 {
             let i_element = builder.constant::<ElementRegister>(&L::Field::from_canonical_usize(i));
+            let i_element_plus_8 = builder.add(i_element, data.const_nums.const_8);
+
+            let v_final_idx = builder.select(
+                data.trace.cycle_96_end_bit,
+                &i_element_plus_8,
+                &data.consts.dummy_index,
+            );
+
             let v_value = builder.load(
-                &data.memory.v_final.get(i + 8),
+                &data.memory.v_final.get_at(v_final_idx),
                 &Time::from_element(read_ts),
             );
             let xor = builder.xor(h_workspace_2.get(i), v_value);
@@ -1028,7 +1037,10 @@ where
         builder.watch_memory(&data.memory.v.get(0), "v[0]");
         builder.watch_memory(&data.memory.v.get(15), "v[15]");
         builder.watch_memory(&data.memory.v_final.get(0), "v_final[0]");
-        builder.watch_memory(&data.memory.v_final.get(15), "v_final[15]");
+        builder.watch_memory(
+            &data.memory.v_final.get_at(data.consts.dummy_index),
+            "v_final[dummy_index]",
+        );
 
         hash_state_public
     }
