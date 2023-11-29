@@ -1,22 +1,9 @@
 use super::{COMPRESS_IV, HASH_ARRAY_SIZE, WORK_VECTOR_SIZE};
-use crate::machine::hash::blake::blake2b::{NUM_MIX_ROUNDS, SIGMA_PERMUTATIONS};
+use crate::machine::hash::blake::blake2b::SIGMA_PERMUTATIONS;
 
 pub struct BLAKE2BPure;
 
 impl BLAKE2BPure {
-    fn permute_msgs<T: Clone>(&self, arr: &[T], mix_round_num: usize) -> Vec<T> {
-        assert!(mix_round_num <= NUM_MIX_ROUNDS);
-
-        let permutation = SIGMA_PERMUTATIONS[mix_round_num % 10];
-        let mut result = vec![arr[0].clone(); arr.len()];
-
-        for (to_index, &from_index) in permutation.iter().enumerate() {
-            result[to_index] = arr[from_index as usize].clone();
-        }
-
-        result
-    }
-
     pub fn compress(
         msg_chunk: &[u8],
         state: &mut [u64; HASH_ARRAY_SIZE],
@@ -39,9 +26,7 @@ impl BLAKE2BPure {
             .map(|x| u64::from_le_bytes(x.try_into().unwrap()))
             .collect::<Vec<_>>();
 
-        for i in 0..NUM_MIX_ROUNDS {
-            let s = SIGMA_PERMUTATIONS[i];
-
+        for s in SIGMA_PERMUTATIONS.iter() {
             Self::mix(
                 &mut v,
                 0,

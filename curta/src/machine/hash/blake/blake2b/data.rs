@@ -32,6 +32,7 @@ pub struct BLAKE2BTraceData {
     pub(crate) is_compress_third_row: BitRegister,
     pub(crate) at_first_compress: BitRegister,
     pub(crate) at_last_hash_compress: BitRegister,
+    pub(crate) at_partial_compress: Slice<BitRegister>,
     pub(crate) cycle_96_end_bit: BitRegister,
     pub(crate) digest_bit: Slice<BitRegister>,
     pub(crate) save_final_v: Slice<BitRegister>,
@@ -59,6 +60,7 @@ pub struct BLAKE2BConsts<L: AirParameters> {
     pub(crate) dummy_index: ElementRegister,
     pub(crate) dummy_ts: ElementRegister,
     pub(crate) first_compress_h_read_ts: ElementRegister,
+    pub(crate) length_last_round: ElementRegister,
 }
 
 pub struct BLAKE2BConstNums {
