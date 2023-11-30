@@ -83,8 +83,8 @@ where
             const_4: builder.constant(&L::Field::from_canonical_u8(4)),
             const_8: builder.constant(&L::Field::from_canonical_u8(8)),
             const_10: builder.constant(&L::Field::from_canonical_u8(10)),
+            const_12: builder.constant(&L::Field::from_canonical_u8(12)),
             const_16: builder.constant(&L::Field::from_canonical_u8(16)),
-            const_24: builder.constant(&L::Field::from_canonical_u8(24)),
             const_91: builder.constant(&L::Field::from_canonical_u8(91)),
             const_95: builder.constant(&L::Field::from_canonical_u8(95)),
             const_96: builder.constant(&L::Field::from_canonical_u8(96)),
@@ -237,6 +237,9 @@ where
         let (cycle_3_end_bit, cycle_4_end_bit, cycle_8_end_bit, cycle_96_end_bit) =
             Self::cycles_end_bits(builder);
 
+        let true_const = builder.constant::<BitRegister>(&L::Field::from_canonical_usize(1));
+        let false_const = builder.constant::<BitRegister>(&L::Field::from_canonical_usize(0));
+
         // Allocate end_bits from public input.
         let end_bit = builder.uninit_slice();
         for (i, end_bit_val) in end_bits.iter().enumerate() {
@@ -247,10 +250,6 @@ where
                 Some(const_nums.const_96),
             );
         }
-
-        let true_const = builder.constant::<BitRegister>(&L::Field::from_canonical_usize(1));
-        let false_const = builder.constant::<BitRegister>(&L::Field::from_canonical_usize(0));
-
         for i in 0..num_dummy_rounds - 1 {
             builder.store(
                 &end_bit.get(i + end_bits.len()),
@@ -449,6 +448,7 @@ where
         num_compresses: &ElementRegister,
         num_dummy_rounds: usize,
         length_last_round: usize,
+        num_mix_iterations_last_round: usize,
     ) -> BLAKE2BMemory {
         let h = builder.uninit_slice();
 
@@ -532,7 +532,7 @@ where
                     &m.get(compress_id_value * 16 + j),
                     word,
                     &Time::zero(),
-                    Some(const_nums.const_24),
+                    Some(const_nums.const_12),
                 );
             }
         }
@@ -542,16 +542,20 @@ where
                     &m.get((i + padded_chunks.len()) * 16 + j),
                     const_nums.const_0_u64,
                     &Time::zero(),
-                    Some(const_nums.const_24),
+                    Some(const_nums.const_12),
                 );
             }
         }
-        for i in 0..length_last_round {
+
+        let num_mix_iterations_last_round_element = builder.constant::<ElementRegister>(
+            &L::Field::from_canonical_usize(num_mix_iterations_last_round),
+        );
+        for i in 0..16 {
             builder.store(
                 &m.get((num_dummy_rounds - 1 + padded_chunks.len()) * 16 + i),
                 const_nums.const_0_u64,
                 &Time::zero(),
-                Some(const_nums.const_24),
+                Some(num_mix_iterations_last_round_element),
             );
         }
 
@@ -564,7 +568,7 @@ where
                 Some(const_nums.const_96),
             );
         }
-        for i in 0..num_dummy_rounds {
+        for i in 0..num_dummy_rounds - 1 {
             builder.store(
                 &t.get(i + t_values.len()),
                 const_nums.const_0_u64,
@@ -572,6 +576,13 @@ where
                 Some(const_nums.const_96),
             );
         }
+
+        builder.store(
+            &t.get(num_dummy_rounds - 1 + t_values.len()),
+            const_nums.const_0_u64,
+            &Time::zero(),
+            Some(length_last_round_element),
+        );
 
         BLAKE2BMemory {
             h,
@@ -661,6 +672,7 @@ where
             &num_compresses,
             num_dummy_rounds,
             length_last_round,
+            num_mix_iterations_last_round,
         );
 
         BLAKE2BData {
