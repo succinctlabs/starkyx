@@ -11,7 +11,7 @@ use crate::chip::builder::AirBuilder;
 use crate::chip::memory::pointer::raw::RawPointer;
 use crate::chip::memory::time::Time;
 use crate::chip::memory::value::MemoryValue;
-use crate::machine::builder::ops::{Add, Mul, Not};
+use crate::machine::builder::ops::{Add, And, Mul, Not, Or};
 use crate::machine::builder::Builder;
 use crate::math::prelude::*;
 
@@ -98,5 +98,21 @@ impl<B: Builder> Not<B> for BitRegister {
 
     fn not(self, builder: &mut B) -> Self::Output {
         builder.expression(self.not_expr())
+    }
+}
+
+impl<B: Builder> Or<B> for BitRegister {
+    type Output = Self;
+
+    fn or(self, rhs: Self, builder: &mut B) -> Self::Output {
+        builder.expression(self.expr() + rhs.expr() - self.expr() * rhs.expr())
+    }
+}
+
+impl<B: Builder> And<B> for BitRegister {
+    type Output = Self;
+
+    fn and(self, rhs: Self, builder: &mut B) -> Self::Output {
+        builder.expression(self.expr() * rhs.expr())
     }
 }

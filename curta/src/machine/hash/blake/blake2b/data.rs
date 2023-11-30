@@ -26,17 +26,17 @@ pub struct BLAKE2BPublicData {
 
 pub struct BLAKE2BTraceData {
     pub(crate) clk: ElementRegister,
-    pub(crate) is_hash_initialize: BitRegister,
     pub(crate) is_compress_initialize: BitRegister,
     pub(crate) is_compress_first_row: BitRegister,
     pub(crate) is_compress_third_row: BitRegister,
+    pub(crate) is_compress_final_row: BitRegister,
+    pub(crate) is_compress_finalize: BitRegister,
+    pub(crate) is_digest_row: BitRegister,
     pub(crate) at_first_compress: BitRegister,
-    pub(crate) at_last_hash_compress: BitRegister,
-    pub(crate) at_partial_compress: Slice<BitRegister>,
-    pub(crate) cycle_96_end_bit: BitRegister,
-    pub(crate) digest_bit: Slice<BitRegister>,
-    pub(crate) save_final_v: Slice<BitRegister>,
+    pub(crate) at_digest_compress: BitRegister,
+    pub(crate) at_partial_compress: BitRegister,
     pub(crate) compress_id: ElementRegister,
+    pub(crate) previous_compress_id: ElementRegister,
     pub(crate) compress_index: ElementRegister,
     pub(crate) compress_iteration: ElementRegister,
     pub(crate) mix_index: ElementRegister,
@@ -60,7 +60,6 @@ pub struct BLAKE2BConsts<L: AirParameters> {
     pub(crate) dummy_index: ElementRegister,
     pub(crate) dummy_ts: ElementRegister,
     pub(crate) first_compress_h_read_ts: ElementRegister,
-    pub(crate) length_last_round: ElementRegister,
 }
 
 pub struct BLAKE2BConstNums {
@@ -71,8 +70,11 @@ pub struct BLAKE2BConstNums {
     pub(crate) const_3: ElementRegister,
     pub(crate) const_4: ElementRegister,
     pub(crate) const_8: ElementRegister,
+    pub(crate) const_10: ElementRegister,
     pub(crate) const_16: ElementRegister,
     pub(crate) const_24: ElementRegister,
+    pub(crate) const_91: ElementRegister,
+    pub(crate) const_95: ElementRegister,
     pub(crate) const_96: ElementRegister,
     pub(crate) const_97: ElementRegister,
     pub(crate) const_184: ElementRegister,

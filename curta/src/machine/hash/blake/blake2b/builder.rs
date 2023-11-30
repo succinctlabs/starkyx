@@ -66,7 +66,7 @@ pub mod test_utils {
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = UintInstruction;
 
-        const NUM_FREE_COLUMNS: usize = 1397;
+        const NUM_FREE_COLUMNS: usize = 1408;
         const EXTENDED_COLUMNS: usize = 834;
     }
 
@@ -89,6 +89,7 @@ pub mod test_utils {
         let mut padded_chunks_values = Vec::new();
         let mut t_values_values = Vec::new();
         let mut end_bits_values = Vec::new();
+        let mut digest_bits_values = Vec::new();
         let mut digest_indices_values = Vec::new();
 
         let mut digest_index = 0;
@@ -112,7 +113,7 @@ pub mod test_utils {
 
             let mut t_value = 0u64;
             let msg_len = message.len() as u64;
-            for chunk in msg_padded_chunks.iter() {
+            for (i, chunk) in msg_padded_chunks.iter().enumerate() {
                 padded_chunks_values.push(*chunk);
 
                 t_value += 128;
@@ -128,8 +129,12 @@ pub mod test_utils {
                     u64_to_le_field_bytes(t_value)
                 });
 
-                end_bits_values.push(GoldilocksField::from_canonical_usize(
+                digest_bits_values.push(GoldilocksField::from_canonical_usize(
                     at_last_chunk as usize,
+                ));
+
+                end_bits_values.push(GoldilocksField::from_canonical_usize(
+                    (i == msg_padded_chunks.len() - 1) as usize,
                 ));
             }
 
@@ -147,13 +152,14 @@ pub mod test_utils {
             .collect::<Vec<_>>();
         let t_values = builder.alloc_array_public::<U64Register>(num_rounds);
         let end_bits = builder.alloc_array_public::<BitRegister>(num_rounds);
+        let digest_bits = builder.alloc_array_public::<BitRegister>(num_rounds);
         let digest_indices = builder.alloc_array_public(messages.len());
         let num_messages = builder.alloc_public();
         let hash_state = builder.blake2b(
             &padded_chunks,
             &t_values,
             &end_bits,
-            &end_bits,
+            &digest_bits,
             &digest_indices,
             &num_messages,
         );
@@ -181,6 +187,7 @@ pub mod test_utils {
             let padded_chunk = padded_chunks_values[i];
             writer.write_array(&padded_chunks[i], padded_chunk);
             writer.write(&end_bits.get(i), &end_bits_values[i]);
+            writer.write(&digest_bits.get(i), &digest_bits_values[i]);
             writer.write(&t_values.get(i), &t_values_values[i]);
 
             let chunk = padded_chunks_values[i];
