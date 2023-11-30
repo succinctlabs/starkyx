@@ -714,13 +714,28 @@ where
         );
         builder.watch(&read_dummy_h_idx, "read dummy h idx");
 
-        let h_idx_1 = builder.select(read_dummy_h_idx, &data.consts.dummy_index, &init_idx_1);
-        let h_idx_2 = builder.select(read_dummy_h_idx, &data.consts.dummy_index, &init_idx_2);
+        let mut h_idx_1 = builder.alloc::<ElementRegister>();
+        builder.set_to_expression(
+            &h_idx_1,
+            data.trace.previous_compress_id.expr() * data.const_nums.const_8.expr()
+                + init_idx_1.expr(),
+        );
+        h_idx_1 = builder.select(read_dummy_h_idx, &data.consts.dummy_index, &h_idx_1);
+
+        let mut h_idx_2 = builder.alloc::<ElementRegister>();
+        builder.set_to_expression(
+            &h_idx_2,
+            data.trace.previous_compress_id.expr() * data.const_nums.const_8.expr()
+                + init_idx_2.expr(),
+        );
+        h_idx_2 = builder.select(read_dummy_h_idx, &data.consts.dummy_index, &h_idx_2);
+
         let h_ts = builder.select(
             read_dummy_h_idx,
             &data.consts.dummy_ts,
-            &data.trace.previous_compress_id,
+            &data.const_nums.const_0,
         );
+        builder.watch(&h_idx_1, "read h h_idx_1");
 
         let mut h_value_1 = builder.load(&data.memory.h.get_at(h_idx_1), &Time::from_element(h_ts));
         let mut h_value_2 = builder.load(&data.memory.h.get_at(h_idx_2), &Time::from_element(h_ts));
@@ -1054,13 +1069,20 @@ where
         let h_ts = builder.select(
             read_dummy_h_idx,
             &data.consts.dummy_ts,
-            &data.trace.previous_compress_id,
+            &data.const_nums.const_0,
         );
         for i in 0..8 {
             let i_element = builder.constant::<ElementRegister>(&L::Field::from_canonical_usize(i));
-            let h_idx = builder.select(read_dummy_h_idx, &data.consts.dummy_index, &i_element);
+            let mut h_idx = builder.alloc::<ElementRegister>();
+            builder.set_to_expression(
+                &h_idx,
+                data.trace.previous_compress_id.expr() * data.const_nums.const_8.expr()
+                    + i_element.expr(),
+            );
+            h_idx = builder.select(read_dummy_h_idx, &data.consts.dummy_index, &h_idx);
             let mut h_value = builder.load(&data.memory.h.get_at(h_idx), &Time::from_element(h_ts));
-            builder.watch(&h_value, "h_value 2");
+            builder.watch(&h_idx, "debug h");
+            builder.watch_memory(&data.memory.h.get_at(h_idx), "debug h");
 
             // If we are at the first compress of a message, then use the iv values instead of the h values.
             h_value = builder.select(
@@ -1077,7 +1099,7 @@ where
         // Read dummy v_final values if NOT at last row of a compress
         let read_dummy_v_final_idx = builder.not(data.trace.is_compress_final_row);
         builder.watch(&read_dummy_v_final_idx, "read_dummy_v_final_idx");
-        let v_ts = builder.select(
+        let v_final_ts = builder.select(
             read_dummy_v_final_idx,
             &data.trace.compress_id,
             &data.consts.dummy_ts,
@@ -1088,7 +1110,7 @@ where
                 builder.select(read_dummy_v_final_idx, &data.consts.dummy_index, &i_element);
             let v_i = builder.load(
                 &data.memory.v_final.get_at(v_final_idx),
-                &Time::from_element(v_ts),
+                &Time::from_element(v_final_ts),
             );
             let updated_h = builder.xor(h_workspace_1.get(i), v_i);
             builder.set_to_expression(&h_workspace_2.get(i), updated_h.expr());
@@ -1108,16 +1130,26 @@ where
 
             let v_value = builder.load(
                 &data.memory.v_final.get_at(v_final_idx),
-                &Time::from_element(v_ts),
+                &Time::from_element(v_final_ts),
             );
             let xor = builder.xor(h_workspace_2.get(i), v_value);
             builder.set_to_expression(&h.get(i), xor.expr());
             builder.watch(&xor, "final h");
 
-            let h_idx = builder.select(
+            let mut h_idx = builder.alloc::<ElementRegister>();
+            builder.set_to_expression(
+                &h_idx,
+                data.trace.compress_id.expr() * data.const_nums.const_8.expr() + i_element.expr(),
+            );
+            h_idx = builder.select(
                 data.trace.is_compress_final_row,
-                &i_element,
+                &h_idx,
                 &data.consts.dummy_index,
+            );
+            let h_ts = builder.select(
+                data.trace.is_compress_final_row,
+                &data.const_nums.const_0,
+                &data.consts.first_compress_h_read_ts,
             );
 
             // Need to save the h value twice as it will be written twice per compress.
@@ -1129,7 +1161,7 @@ where
             builder.store(
                 &data.memory.h.get_at(h_idx),
                 xor,
-                &Time::from_element(data.trace.compress_id),
+                &Time::from_element(h_ts),
                 Some(h_multiplicity),
             );
         }
@@ -1181,8 +1213,6 @@ where
             &data.consts.permutations.flattened_memory.get(127),
             "permutations[127]",
         );
-        //builder.watch_memory(&data.memory.h.get(0), "h[0]");
-        //builder.watch_memory(&data.memory.h.get(7), "h[7]");
         builder.watch_memory(
             &data.memory.h.get_at(data.consts.dummy_index),
             "h[dummy_index]",
