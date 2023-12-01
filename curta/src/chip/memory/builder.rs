@@ -1,7 +1,7 @@
 use core::borrow::Borrow;
 
 use super::get::GetInstruction;
-use super::instruction::MemoryInstruction;
+use super::instruction::{MemoryInstruction, MemoryOutput, MemorySliceIndex};
 use super::pointer::slice::{RawSlice, Slice};
 use super::pointer::Pointer;
 use super::set::SetInstruction;
@@ -40,7 +40,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let ptr = self.uninit();
         let digest = value.compress(self, ptr.raw, time, &ptr.challenges);
         self.input_to_memory_bus(digest, multiplicity);
-        self.unsafe_raw_write(&ptr, *value, multiplicity, true);
+        self.unsafe_raw_write(&ptr, *value, multiplicity, true, None);
 
         ptr
     }
@@ -78,7 +78,7 @@ impl<L: AirParameters> AirBuilder<L> {
             let ptr = slice.get(i);
             let digest = value.compress(self, ptr.raw, time, &ptr.challenges);
             self.input_to_memory_bus(digest, multiplicity);
-            self.unsafe_raw_write(&ptr, *value, multiplicity, true);
+            self.unsafe_raw_write(&ptr, *value, multiplicity, true, None);
         }
         slice
     }
@@ -123,16 +123,36 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 
     /// Reads the value from the memory at location `ptr`.
-    pub fn get<V: MemoryValue>(&mut self, ptr: &Pointer<V>, last_write_ts: &Time<L::Field>) -> V {
-        let value = self.unsafe_raw_read(ptr);
+    pub fn get<V: MemoryValue>(
+        &mut self,
+        ptr: &Pointer<V>,
+        last_write_ts: &Time<L::Field>,
+        label: Option<String>,
+        index: Option<MemorySliceIndex>,
+    ) -> V {
+        let memory_output = label.map(|label| MemoryOutput {
+            label,
+            index,
+            ts: (*last_write_ts).clone(),
+        });
+
+        let value = self.unsafe_raw_read(ptr, memory_output);
         let read_digest = value.compress(self, ptr.raw, last_write_ts, &ptr.challenges);
         self.output_from_memory_bus(read_digest);
         value
     }
 
-    fn unsafe_raw_read<V: MemoryValue>(&mut self, ptr: &Pointer<V>) -> V {
+    fn unsafe_raw_read<V: MemoryValue>(
+        &mut self,
+        ptr: &Pointer<V>,
+        memory_output: Option<MemoryOutput<L::Field>>,
+    ) -> V {
         let value = self.alloc::<V>();
-        let instr = MemoryInstruction::Get(GetInstruction::new(ptr.raw, *value.register()));
+        let instr = MemoryInstruction::Get(GetInstruction::new(
+            ptr.raw,
+            *value.register(),
+            memory_output,
+        ));
         self.register_air_instruction_internal(AirInstruction::mem(instr));
         value
     }
@@ -143,11 +163,13 @@ impl<L: AirParameters> AirBuilder<L> {
         value: V,
         multiplicity: Option<ElementRegister>,
         global: bool,
+        memory_output: Option<MemoryOutput<L::Field>>,
     ) {
         let instr = MemoryInstruction::Set(SetInstruction::new(
             ptr.raw,
             *value.register(),
             multiplicity,
+            memory_output,
         ));
         if global {
             self.register_global_air_instruction_internal(AirInstruction::mem(instr))
@@ -168,6 +190,8 @@ impl<L: AirParameters> AirBuilder<L> {
         value: V,
         write_ts: &Time<L::Field>,
         multiplicity: Option<ElementRegister>,
+        label: Option<String>,
+        index: Option<MemorySliceIndex>,
     ) {
         if value.is_trace() {
             if let Some(mult) = multiplicity {
@@ -176,7 +200,20 @@ impl<L: AirParameters> AirBuilder<L> {
         }
         let write_digest = value.compress(self, ptr.raw, write_ts, &ptr.challenges);
         self.input_to_memory_bus(write_digest, multiplicity);
-        self.unsafe_raw_write(ptr, value, multiplicity, !write_digest.is_trace())
+
+        let memory_output = label.map(|label| MemoryOutput {
+            label,
+            index,
+            ts: (*write_ts).clone(),
+        });
+
+        self.unsafe_raw_write(
+            ptr,
+            value,
+            multiplicity,
+            !write_digest.is_trace(),
+            memory_output,
+        );
     }
 
     pub fn watch_memory<V: MemoryValue>(&mut self, ptr: &Pointer<V>, name: &str) {

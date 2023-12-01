@@ -34,7 +34,8 @@ pub struct BLAKE2BTraceData {
     pub(crate) is_digest_row: BitRegister,
     pub(crate) at_first_compress: BitRegister,
     pub(crate) at_digest_compress: BitRegister,
-    pub(crate) at_partial_compress: BitRegister,
+    pub(crate) at_end_compress: BitRegister,
+    pub(crate) at_dummy_compress: BitRegister,
     pub(crate) compress_id: ElementRegister,
     pub(crate) previous_compress_id: ElementRegister,
     pub(crate) compress_index: ElementRegister,
@@ -58,6 +59,7 @@ pub struct BLAKE2BConsts<L: AirParameters> {
     pub(crate) v_last_write_ages: MemoryArray<L, 8, 4>,
     pub(crate) permutations: MemoryArray<L, 12, 16>,
     pub(crate) dummy_index: ElementRegister,
+    pub(crate) dummy_index_2: ElementRegister,
     pub(crate) dummy_ts: ElementRegister,
     pub(crate) first_compress_h_read_ts: ElementRegister,
 }
@@ -113,6 +115,8 @@ impl<L: AirParameters, const R: usize, const C: usize> MemoryArray<L, R, C> {
                 value_const,
                 &Time::zero(),
                 Some(mul),
+                None,
+                None,
             );
         }
     }
@@ -125,6 +129,11 @@ impl<L: AirParameters, const R: usize, const C: usize> MemoryArray<L, R, C> {
     ) -> ElementRegister {
         let mut idx = builder.mul(row, self.c_const);
         idx = builder.add(idx, col);
-        builder.load(&self.flattened_memory.get_at(idx), &Time::zero())
+        builder.load(
+            &self.flattened_memory.get_at(idx),
+            &Time::zero(),
+            None,
+            None,
+        )
     }
 }

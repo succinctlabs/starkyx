@@ -29,7 +29,7 @@ pub enum AirInstruction<F, I> {
     Clock(ClockInstruction),
     ProcessId(ProcessIdInstruction),
     Filtered(ArithmeticExpression<F>, Arc<Self>),
-    Mem(MemoryInstruction),
+    Mem(MemoryInstruction<F>),
     Watch(String, ArrayRegister<ElementRegister>),
 }
 
@@ -143,7 +143,7 @@ impl<F, I> AirInstruction<F, I> {
         AirInstruction::Filtered(filter, Arc::new(self))
     }
 
-    pub fn mem(instruction: MemoryInstruction) -> Self {
+    pub fn mem(instruction: MemoryInstruction<F>) -> Self {
         AirInstruction::Mem(instruction)
     }
 

@@ -66,9 +66,12 @@ pub mod test_utils {
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = UintInstruction;
 
-        const NUM_FREE_COLUMNS: usize = 1408;
+        const NUM_FREE_COLUMNS: usize = 1525;
         const EXTENDED_COLUMNS: usize = 834;
     }
+
+    #[test]
+    pub fn test_dummy_stores() {}
 
     #[test]
     pub fn test_blake2b() {
@@ -84,6 +87,11 @@ pub mod test_utils {
         let messages = vec![
             b"asfiwu4yrlisuhgluashdlowaualisdugylawi4thagasdf23uiraskdgbasjkdfhaliwhfrasdfaw4jhbskfjhsadkif325sgdsfawera".to_vec(),
             b"325623465236262asdagds326fdsfy3w456gery46462ialweurnawieyailughoiwabn4bkq23bh2jh5bkwaeublaieunrqi4awijbjkahtiqi3uwagastt3asgesgg3".to_vec(),
+        ];
+
+        let expected_digests = [
+            "86a4f4aa0d9bd16dfd205843af0528ea8f1c7887447a4fff8e9ef035f3e7b9f5",
+            "125d5cab5bf4cf832ebb1c8a5622658199966dad5f95c8ee3b8690af8d67f438",
         ];
 
         let mut padded_chunks_values = Vec::new();

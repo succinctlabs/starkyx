@@ -4,6 +4,7 @@ use crate::chip::builder::AirBuilder;
 use crate::chip::ec::scalar::LimbBitInstruction;
 use crate::chip::instruction::cycle::Cycle;
 use crate::chip::instruction::Instruction;
+use crate::chip::memory::instruction::MemorySliceIndex;
 use crate::chip::memory::pointer::slice::Slice;
 use crate::chip::memory::pointer::Pointer;
 use crate::chip::memory::time::Time;
@@ -99,8 +100,14 @@ pub trait Builder: Sized {
     }
 
     /// Reads the memory at location `ptr` with last write time given by `last_write_ts`.
-    fn load<V: MemoryValue>(&mut self, ptr: &Pointer<V>, last_write_ts: &Time<Self::Field>) -> V {
-        self.api().get(ptr, last_write_ts)
+    fn load<V: MemoryValue>(
+        &mut self,
+        ptr: &Pointer<V>,
+        last_write_ts: &Time<Self::Field>,
+        label: Option<String>,
+        index: Option<MemorySliceIndex>,
+    ) -> V {
+        self.api().get(ptr, last_write_ts, label, index)
     }
 
     /// Writes `value` to the memory at location `ptr` with write time given by `write_ts`. Values
@@ -115,10 +122,12 @@ pub trait Builder: Sized {
         value: V,
         write_ts: &Time<Self::Field>,
         multiplicity: Option<ElementRegister>,
+        label: Option<String>,
+        index: Option<MemorySliceIndex>,
     ) {
-        self.api().set(ptr, value, write_ts, multiplicity)
+        self.api()
+            .set(ptr, value, write_ts, multiplicity, label, index)
     }
-
     /// Frees the memory at location `ptr` with last write time given by `last_write_ts`.
     fn free<V: MemoryValue>(&mut self, ptr: &Pointer<V>, value: V, last_write: &Time<Self::Field>) {
         self.api().free(ptr, value, last_write)

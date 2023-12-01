@@ -3,6 +3,7 @@ use plonky2::util::log2_ceil;
 
 use super::data::{BLAKE2BConstNums, BLAKE2BConsts, BLAKE2BData};
 use super::{BLAKE2BAir, IV};
+use crate::chip::memory::instruction::MemorySliceIndex;
 use crate::chip::memory::pointer::slice::Slice;
 use crate::chip::memory::time::Time;
 use crate::chip::register::array::ArrayRegister;
@@ -24,6 +25,7 @@ use crate::machine::hash::blake::blake2b::{
 use crate::math::prelude::*;
 
 const DUMMY_INDEX: u64 = i32::MAX as u64;
+const DUMMY_INDEX_2: u64 = (i32::MAX - 1) as u64;
 const DUMMY_TS: u64 = (i32::MAX - 1) as u64;
 const FIRST_COMPRESS_H_READ_TS: u64 = i32::MAX as u64;
 
@@ -101,16 +103,21 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn blake2b_const(
         builder: &mut BytesBuilder<L>,
-        num_rows: &ElementRegister,
-        num_messages: &ElementRegister,
-        num_compresses: &ElementRegister,
-        num_mix_iterations: usize,
-        num_mix_iterations_last_round: usize,
+        num_rows_element: &ElementRegister,
+        num_messages_element: &ElementRegister,
+        num_real_compresses: usize,
+        num_real_compresses_element: &ElementRegister,
+        num_dummy_compresses: usize,
+        num_total_mix_iterations: usize,
+        num_mix_iterations_last_compress: usize,
         const_nums: &BLAKE2BConstNums,
     ) -> BLAKE2BConsts<L> {
         assert!(DUMMY_INDEX < L::Field::order());
         let dummy_index: ElementRegister =
             builder.constant(&L::Field::from_canonical_u64(DUMMY_INDEX));
+
+        let dummy_index_2: ElementRegister =
+            builder.constant(&L::Field::from_canonical_u64(DUMMY_INDEX_2));
 
         assert!(DUMMY_TS < L::Field::order());
         let dummy_ts: ElementRegister = builder.constant(&L::Field::from_canonical_u64(DUMMY_TS));
@@ -121,20 +128,22 @@ where
 
         let iv_values = builder.constant_array::<U64Register>(&IV.map(u64_to_le_field_bytes));
         let iv: Slice<crate::chip::uint::register::ByteArrayRegister<8>> = builder.uninit_slice();
-        let num_messages_plus_1 = builder.alloc_public::<ElementRegister>();
-        builder.set_to_expression(
-            &num_messages_plus_1,
-            num_messages.expr() + const_nums.const_1.expr(),
-        );
         for (i, value) in iv_values.iter().enumerate() {
-            builder.store(&iv.get(i), value, &Time::zero(), Some(num_messages_plus_1));
+            builder.store(
+                &iv.get(i),
+                value,
+                &Time::zero(),
+                Some(*num_messages_element),
+                Some("iv".to_string()),
+                Some(MemorySliceIndex::Index(i)),
+            );
         }
         // The dummy iv value is read twice at the rows other than the first 4 rows of the each messages's
         // first compress round.
         let num_dummy_iv_reads = builder.alloc_public::<ElementRegister>();
         builder.set_to_expression(
             &num_dummy_iv_reads,
-            (num_rows.expr() - (num_messages_plus_1.expr() * const_nums.const_4.expr()))
+            (num_rows_element.expr() - (num_messages_element.expr() * const_nums.const_4.expr()))
                 * const_nums.const_2.expr(),
         );
 
@@ -143,6 +152,8 @@ where
             const_nums.const_0_u64,
             &Time::zero(),
             Some(num_dummy_iv_reads),
+            Some("iv".to_string()),
+            Some(MemorySliceIndex::IndexElement(dummy_index)),
         );
 
         let compress_iv_values =
@@ -153,18 +164,19 @@ where
                 &compress_iv.get(i),
                 value,
                 &Time::zero(),
-                Some(*num_compresses),
+                Some(*num_real_compresses_element),
+                Some("compress_iv".to_string()),
+                Some(MemorySliceIndex::Index(i)),
             );
         }
 
         // The dummy iv_compress value is read twice for all rows other than the first four rows
-        // of each compress round.
-        builder.watch(num_rows, "num_rows");
-        builder.watch(num_compresses, "num_compresses");
+        // of each real compress round.
         let num_dummy_iv_compress_reads = builder.alloc_public::<ElementRegister>();
         builder.set_to_expression(
             &num_dummy_iv_compress_reads,
-            (num_rows.expr() - (num_compresses.expr() * const_nums.const_4.expr()))
+            (num_rows_element.expr()
+                - (num_real_compresses_element.expr() * const_nums.const_4.expr()))
                 * const_nums.const_2.expr(),
         );
         builder.store(
@@ -172,37 +184,38 @@ where
             const_nums.const_0_u64,
             &Time::zero(),
             Some(num_dummy_iv_compress_reads),
+            Some("compress_iv".to_string()),
+            Some(MemorySliceIndex::IndexElement(dummy_index)),
         );
 
-        let num_mix_iterations_element =
-            builder.constant(&L::Field::from_canonical_usize(num_mix_iterations));
-
-        // Each element is loaded once per compress cycle.
+        let num_total_mix_iterations_element = builder
+            .constant::<ElementRegister>(&L::Field::from_canonical_usize(num_total_mix_iterations));
         let mut v_indices = MemoryArray::<L, 8, 4>::new(builder);
         for (i, indices) in V_INDICES.iter().enumerate() {
-            v_indices.store_row(builder, i, indices, num_mix_iterations_element);
+            v_indices.store_row(builder, i, indices, num_total_mix_iterations_element);
         }
 
         let mut v_last_write_ages = MemoryArray::<L, 8, 4>::new(builder);
         for (i, ages) in V_LAST_WRITE_AGES.iter().enumerate() {
-            v_last_write_ages.store_row(builder, i, ages, num_mix_iterations_element);
+            v_last_write_ages.store_row(builder, i, ages, num_total_mix_iterations_element);
         }
 
-        let num_compresses_plus_1 = builder.alloc_public::<ElementRegister>();
-        builder.set_to_expression(
-            &num_compresses_plus_1,
-            num_compresses.expr() + const_nums.const_1.expr(),
-        );
         let mut permutations = MemoryArray::<L, 12, 16>::new(builder);
+        let num_compresses_element = builder.constant::<ElementRegister>(
+            &L::Field::from_canonical_usize(num_real_compresses + num_dummy_compresses),
+        );
+        let num_full_compresses_element = builder.constant::<ElementRegister>(
+            &L::Field::from_canonical_usize(num_real_compresses + num_dummy_compresses - 1),
+        );
         for (i, permutation) in SIGMA_PERMUTATIONS.iter().enumerate() {
             permutations.store_row(
                 builder,
                 i,
                 permutation,
-                if i < num_mix_iterations_last_round {
-                    num_compresses_plus_1
+                if i < num_mix_iterations_last_compress {
+                    num_compresses_element
                 } else {
-                    *num_compresses
+                    num_full_compresses_element
                 },
             );
         }
@@ -215,6 +228,7 @@ where
             v_last_write_ages,
             permutations,
             dummy_index,
+            dummy_index_2,
             dummy_ts,
             first_compress_h_read_ts,
         }
@@ -227,18 +241,20 @@ where
         builder: &mut BytesBuilder<L>,
         const_nums: &BLAKE2BConstNums,
         consts: &BLAKE2BConsts<L>,
-        num_compresses: &ElementRegister,
+        num_real_compresses: usize,
         end_bits: &ArrayRegister<BitRegister>,
         digest_bits: &ArrayRegister<BitRegister>,
-        num_dummy_rounds: usize,
-        length_last_round: usize,
-        length_last_round_element: &ElementRegister,
+        num_dummy_compresses: usize,
+        length_last_compress: usize,
+        length_last_compress_element: &ElementRegister,
     ) -> BLAKE2BTraceData {
         let (cycle_3_end_bit, cycle_4_end_bit, cycle_8_end_bit, cycle_96_end_bit) =
             Self::cycles_end_bits(builder);
 
         let true_const = builder.constant::<BitRegister>(&L::Field::from_canonical_usize(1));
         let false_const = builder.constant::<BitRegister>(&L::Field::from_canonical_usize(0));
+
+        let num_total_compresses = num_real_compresses + num_dummy_compresses;
 
         // Allocate end_bits from public input.
         let end_bit = builder.uninit_slice();
@@ -248,21 +264,28 @@ where
                 end_bit_val,
                 &Time::zero(),
                 Some(const_nums.const_96),
+                Some("end_bit".to_string()),
+                Some(MemorySliceIndex::Index(i)),
             );
         }
-        for i in 0..num_dummy_rounds - 1 {
+        for i in num_real_compresses..num_total_compresses - 1 {
             builder.store(
-                &end_bit.get(i + end_bits.len()),
+                &end_bit.get(i),
                 false_const,
                 &Time::zero(),
                 Some(const_nums.const_96),
+                Some("end_bit".to_string()),
+                Some(MemorySliceIndex::Index(i)),
             );
         }
+        let last_compress_idx = num_total_compresses - 1;
         builder.store(
-            &end_bit.get(num_dummy_rounds - 1 + end_bits.len()),
+            &end_bit.get(last_compress_idx),
             false_const,
             &Time::zero(),
-            Some(*length_last_round_element),
+            Some(*length_last_compress_element),
+            Some("end_bit".to_string()),
+            Some(MemorySliceIndex::Index(last_compress_idx)),
         );
 
         let digest_bit = builder.uninit_slice();
@@ -272,21 +295,27 @@ where
                 digest_bit_val,
                 &Time::zero(),
                 Some(const_nums.const_96),
+                Some("digest_bit".to_string()),
+                Some(MemorySliceIndex::Index(i)),
             );
         }
-        for i in 0..num_dummy_rounds - 1 {
+        for i in num_real_compresses..num_total_compresses - 1 {
             builder.store(
-                &digest_bit.get(i + digest_bits.len()),
+                &digest_bit.get(i),
                 false_const,
                 &Time::zero(),
                 Some(const_nums.const_96),
+                Some("digest_bit".to_string()),
+                Some(MemorySliceIndex::Index(i)),
             );
         }
         builder.store(
-            &digest_bit.get(num_dummy_rounds - 1 + digest_bits.len()),
+            &digest_bit.get(last_compress_idx),
             false_const,
             &Time::zero(),
-            Some(*length_last_round_element),
+            Some(*length_last_compress_element),
+            Some("digest_bit".to_string()),
+            Some(MemorySliceIndex::Index(last_compress_idx)),
         );
 
         // `compress_id` is a register is computed by counting the number of cycles. We do this by
@@ -322,7 +351,12 @@ where
                             * (compress_iteration.expr() + const_nums.const_1.expr()))),
         );
 
-        let at_end_compress = builder.load(&end_bit.get_at(compress_id), &Time::zero());
+        let at_end_compress = builder.load(
+            &end_bit.get_at(compress_id),
+            &Time::zero(),
+            Some("end_bit".to_string()),
+            Some(MemorySliceIndex::IndexElement(compress_id)),
+        );
         let at_first_compress = builder.alloc::<BitRegister>();
         builder.set_to_expression_first_row(&at_first_compress, L::Field::ONE.into());
         builder.set_to_expression_transition(
@@ -371,50 +405,78 @@ where
         // At those rows, the V values should be saved to v_final, so that those values can be used
         // to calculate the compress h values.
         let save_final_v: Slice<BitRegister> = builder.uninit_slice();
-        let num_compresses_plus_1 = builder.alloc_public::<ElementRegister>();
-        builder.set_to_expression(
-            &num_compresses_plus_1,
-            num_compresses.expr() + const_nums.const_1.expr(),
+        let num_compresses_element = builder.constant::<ElementRegister>(
+            &L::Field::from_canonical_usize(num_real_compresses + num_dummy_compresses),
+        );
+        let num_full_compresses_element = builder.constant::<ElementRegister>(
+            &L::Field::from_canonical_usize(num_real_compresses + num_dummy_compresses - 1),
         );
         for i in 0..96 {
             builder.store(
                 &save_final_v.get(i),
                 if i < 92 { false_const } else { true_const },
                 &Time::zero(),
-                Some(if i < length_last_round {
-                    num_compresses_plus_1
+                Some(if i < length_last_compress {
+                    num_compresses_element
                 } else {
-                    *num_compresses
+                    num_full_compresses_element
                 }),
+                Some("save_final_v".to_string()),
+                Some(MemorySliceIndex::Index(i)),
             );
         }
-        let is_compress_finalize =
-            builder.load(&save_final_v.get_at(compress_index), &Time::zero());
+        let is_compress_finalize = builder.load(
+            &save_final_v.get_at(compress_index),
+            &Time::zero(),
+            Some("save_final_v".to_string()),
+            Some(MemorySliceIndex::IndexElement(compress_index)),
+        );
         builder.watch(&is_compress_finalize, "is_compress_finalize");
 
-        let at_partial_compress_memory = builder.uninit_slice();
-        for i in 0..end_bits.len() + num_dummy_rounds - 1 {
+        let at_dummy_compress_memory = builder.uninit_slice();
+        for i in 0..num_real_compresses {
             builder.store(
-                &at_partial_compress_memory.get(i),
+                &at_dummy_compress_memory.get(i),
                 false_const,
                 &Time::zero(),
                 Some(const_nums.const_96),
+                Some("at_dummy_compress_memory".to_string()),
+                Some(MemorySliceIndex::Index(i)),
+            );
+        }
+        for i in num_real_compresses..num_total_compresses - 1 {
+            builder.store(
+                &at_dummy_compress_memory.get(i),
+                true_const,
+                &Time::zero(),
+                Some(const_nums.const_96),
+                Some("at_dummy_compress_memory".to_string()),
+                Some(MemorySliceIndex::Index(i)),
             );
         }
         builder.store(
-            &at_partial_compress_memory.get(end_bits.len() + num_dummy_rounds - 1),
+            &at_dummy_compress_memory.get(last_compress_idx),
             true_const,
             &Time::zero(),
-            Some(*length_last_round_element),
+            Some(*length_last_compress_element),
+            Some("at_dummy_compress_memory".to_string()),
+            Some(MemorySliceIndex::Index(last_compress_idx)),
         );
-        let at_partial_compress = builder.load(
-            &at_partial_compress_memory.get_at(compress_id),
+
+        let at_dummy_compress = builder.load(
+            &at_dummy_compress_memory.get_at(compress_id),
             &Time::zero(),
+            Some("at_dummy_compress_memory".to_string()),
+            Some(MemorySliceIndex::IndexElement(compress_id)),
         );
-        builder.watch(&at_partial_compress, "at_partial_compress");
 
         // If we are the digest compress of the message, then save the digest.
-        let at_digest_compress = builder.load(&digest_bit.get_at(compress_id), &Time::zero());
+        let at_digest_compress = builder.load(
+            &digest_bit.get_at(compress_id),
+            &Time::zero(),
+            Some("digest_bit".to_string()),
+            Some(MemorySliceIndex::IndexElement(compress_id)),
+        );
         let is_digest_row = builder.expression(cycle_96_end_bit.expr() * at_digest_compress.expr());
         builder.watch(&is_digest_row, "is_digest_row");
 
@@ -427,7 +489,8 @@ where
             is_compress_finalize,
             at_first_compress,
             at_digest_compress,
-            at_partial_compress,
+            at_end_compress,
+            at_dummy_compress,
             is_compress_final_row: cycle_96_end_bit,
             compress_id,
             previous_compress_id,
@@ -444,81 +507,84 @@ where
         t_values: &ArrayRegister<U64Register>,
         const_nums: &BLAKE2BConstNums,
         consts: &BLAKE2BConsts<L>,
-        num_messages: &ElementRegister,
-        num_compresses: &ElementRegister,
-        num_dummy_rounds: usize,
-        length_last_round: usize,
-        num_mix_iterations_last_round: usize,
+        num_messages_element: &ElementRegister,
+        num_real_compresses: usize,
+        num_real_compresses_element: &ElementRegister,
+        num_dummy_rows: usize,
     ) -> BLAKE2BMemory {
+        // Initialize the h memory
         let h = builder.uninit_slice();
 
-        let num_messages_plus_1 = builder.alloc_public::<ElementRegister>();
-        builder.set_to_expression(
-            &num_messages_plus_1,
-            num_messages.expr() + const_nums.const_1.expr(),
-        );
+        builder.watch(num_messages_element, "num_messages_element");
+        builder.watch(num_real_compresses_element, "num_real_compresses_element");
+        println!("num_real_compresses: {}", num_real_compresses);
+        println!("num_dummy_rows: {}", num_dummy_rows);
+
         // Set dummy reads for h
-        // Every row in the first compress of each message will read it 10 times. (96 * 10 * (num_messages + 1))
+        // Every row in the first compress of each message will read it 10 times. (96 * 10 * num_messages))
         // For the non first compress of each message
         //    1) First four rows will read it 8 times.  4 * 8
         //    2) Last row will read it 2 times.    2
         //    3) All other rows will read it 10 times.   91 * 10
-        // For the partial compress, it will read it 10 times per row. (length_last_round * 10)
+        // For the dummy compress, it will read it 10 times per row. (length_last_round * 10)
         let num_dummy_h_reads = builder.alloc_public::<ElementRegister>();
-        let length_last_round_element =
-            builder.constant::<ElementRegister>(&L::Field::from_canonical_usize(length_last_round));
+        let num_dummy_rows_element =
+            builder.constant::<ElementRegister>(&L::Field::from_canonical_usize(num_dummy_rows));
         let num_non_first_compresses = builder.alloc_public::<ElementRegister>();
         builder.set_to_expression(
             &num_non_first_compresses,
-            num_compresses.expr() - num_messages_plus_1.expr(),
+            num_real_compresses_element.expr() - num_messages_element.expr(),
         );
         builder.set_to_expression(
             &num_dummy_h_reads,
-            (num_messages_plus_1.expr() * const_nums.const_96.expr() * const_nums.const_10.expr())
+            (num_messages_element.expr() * const_nums.const_96.expr() * const_nums.const_10.expr())
                 + (num_non_first_compresses.expr()
                     * (const_nums.const_4.expr() * const_nums.const_8.expr()
                         + const_nums.const_2.expr()
                         + const_nums.const_91.expr() * const_nums.const_10.expr()))
-                + (length_last_round_element.expr() * const_nums.const_10.expr()),
+                + (num_dummy_rows_element.expr() * const_nums.const_10.expr()),
         );
         builder.store(
             &h.get_at(consts.dummy_index),
             const_nums.const_0_u64,
             &Time::from_element(consts.dummy_ts),
             Some(num_dummy_h_reads),
+            Some("h".to_string()),
+            Some(MemorySliceIndex::IndexElement(consts.dummy_index)),
         );
 
         // Initialize the v memory
-        // Need to set DUMMY_VALUE for all first four rows of every compress round.
-        // It will be read 4 times per row.
-        // Multiplicities = num_compress_round * 4 * 4;
-        // It will also be read 4 times for every partial compress row.
-        let num_dummy_v_reads =
-            builder.constant::<ElementRegister>(&L::Field::from_canonical_usize(
-                (padded_chunks.len() + num_dummy_rounds - 1) * 4 * 4 + length_last_round * 4,
-            ));
         let v = builder.uninit_slice();
+        // Set dummy reads for v
+        // Every first four rows of every real compress round will read it four times.
+        // Every dummy row will read it four times.
+        let num_dummy_v_reads = builder.constant::<ElementRegister>(
+            &L::Field::from_canonical_usize(num_real_compresses * 16 + num_dummy_rows * 4),
+        );
         builder.store(
             &v.get_at(consts.dummy_index),
             const_nums.const_0_u64,
             &Time::from_element(consts.dummy_ts),
             Some(num_dummy_v_reads),
+            Some("v".to_string()),
+            Some(MemorySliceIndex::IndexElement(consts.dummy_index)),
         );
 
-        // Initialize the v final memory
+        // Initialize the v_final memory
         let v_final = builder.uninit_slice();
-
-        // Need to set dummy reads.
-        // It will be num_compresses * (16 * 95) + length_last_round * 16
-        let num_dummy_v_final_reads =
-            builder.constant::<ElementRegister>(&L::Field::from_canonical_usize(
-                (padded_chunks.len() + num_dummy_rounds - 1) * (16 * 95) + length_last_round * 16,
-            ));
+        // Set dummy reads for v_final
+        // Every first 95 rows of every real compress round will read it 16 times.
+        // Every dummy row will read it 16 times.
+        let num_dummy_v_final_reads = builder.constant::<ElementRegister>(
+            &L::Field::from_canonical_usize(num_real_compresses * 95 * 16 + num_dummy_rows * 16),
+        );
         builder.store(
             &v_final.get_at(consts.dummy_index),
             const_nums.const_0_u64,
             &Time::from_element(consts.dummy_ts),
             Some(num_dummy_v_final_reads),
+            Some("v_final".to_string()),
+            Some(MemorySliceIndex::IndexElement(consts.dummy_index)),
         );
 
         // Initialize the m memory
@@ -533,32 +599,25 @@ where
                     word,
                     &Time::zero(),
                     Some(const_nums.const_12),
+                    Some("m".to_string()),
+                    Some(MemorySliceIndex::Index(compress_id_value * 16 + j)),
                 );
             }
         }
-        for i in 0..num_dummy_rounds - 1 {
-            for j in 0..16 {
-                builder.store(
-                    &m.get((i + padded_chunks.len()) * 16 + j),
-                    const_nums.const_0_u64,
-                    &Time::zero(),
-                    Some(const_nums.const_12),
-                );
-            }
-        }
-
-        let num_mix_iterations_last_round_element = builder.constant::<ElementRegister>(
-            &L::Field::from_canonical_usize(num_mix_iterations_last_round),
+        // Set dummy reads for m
+        // For each dummy row, it will read it 2 times.
+        let num_dummy_m_reads = builder
+            .constant::<ElementRegister>(&L::Field::from_canonical_usize(num_dummy_rows * 2));
+        builder.store(
+            &m.get_at(consts.dummy_index),
+            const_nums.const_0_u64,
+            &Time::zero(),
+            Some(num_dummy_m_reads),
+            Some("m".to_string()),
+            Some(MemorySliceIndex::IndexElement(consts.dummy_index)),
         );
-        for i in 0..16 {
-            builder.store(
-                &m.get((num_dummy_rounds - 1 + padded_chunks.len()) * 16 + i),
-                const_nums.const_0_u64,
-                &Time::zero(),
-                Some(num_mix_iterations_last_round_element),
-            );
-        }
 
+        // Initialize the t memory
         let t = builder.uninit_slice();
         for (compress_id, t_value) in t_values.iter().enumerate() {
             builder.store(
@@ -566,22 +625,19 @@ where
                 t_value,
                 &Time::zero(),
                 Some(const_nums.const_96),
+                Some("t".to_string()),
+                Some(MemorySliceIndex::Index(compress_id)),
             );
         }
-        for i in 0..num_dummy_rounds - 1 {
-            builder.store(
-                &t.get(i + t_values.len()),
-                const_nums.const_0_u64,
-                &Time::zero(),
-                Some(const_nums.const_96),
-            );
-        }
-
+        // Set dummy reads for t.
+        // For each dummy row, it will read it once.
         builder.store(
-            &t.get(num_dummy_rounds - 1 + t_values.len()),
+            &t.get_at(consts.dummy_index),
             const_nums.const_0_u64,
             &Time::zero(),
-            Some(length_last_round_element),
+            Some(num_dummy_rows_element),
+            Some("t".to_string()),
+            Some(MemorySliceIndex::IndexElement(consts.dummy_index)),
         );
 
         BLAKE2BMemory {
@@ -600,35 +656,33 @@ where
         end_bits: &ArrayRegister<BitRegister>,
         digest_bits: &ArrayRegister<BitRegister>,
         digest_indices: &ArrayRegister<ElementRegister>,
-        num_messages: &ElementRegister,
+        num_messages_element: &ElementRegister,
     ) -> BLAKE2BData<L> {
         assert_eq!(padded_chunks.len(), end_bits.len());
 
-        let num_real_rounds = padded_chunks.len();
-        let degree_log = log2_ceil(num_real_rounds * 96);
+        let num_real_compresses = padded_chunks.len();
+        let num_real_compresses_element = builder
+            .constant::<ElementRegister>(&L::Field::from_canonical_usize(num_real_compresses));
+        let degree_log = log2_ceil(num_real_compresses * 96);
         assert!(degree_log < 31, "AIR degree is too large");
         debug!("AIR degree after padding: {}", 1 << degree_log);
-        let num_dummy_rounds = (1 << degree_log) / 96 + 1 - num_real_rounds;
-        // Keep track of the last round length to know how many dummy reads to add.
-        let length_last_round = (1 << degree_log) % 96;
-        let num_rows =
+
+        let num_dummy_compresses = (1 << degree_log) / 96 + 1 - num_real_compresses;
+        let length_last_compress = (1 << degree_log) % 96;
+        let length_last_compress_element = builder
+            .constant::<ElementRegister>(&L::Field::from_canonical_usize(length_last_compress));
+        let num_dummy_rows = (num_dummy_compresses - 1) * 96 + length_last_compress;
+
+        let num_rows_element =
             builder.constant::<ElementRegister>(&L::Field::from_canonical_usize(1 << degree_log));
 
         // create the const numbers data
         let const_nums = Self::blake2b_const_nums(builder);
 
-        // The number of full compress rounds
-        let num_compresses = builder.constant(&L::Field::from_canonical_usize(
-            num_real_rounds + num_dummy_rounds - 1,
-        ));
-
-        let length_last_round_element =
-            builder.constant(&L::Field::from_canonical_usize(length_last_round));
-
-        let mut num_mix_iterations = (num_real_rounds + num_dummy_rounds - 1) * 12;
-        let num_mix_iterations_last_round = length_last_round / 8;
-        assert!(num_mix_iterations_last_round == 4 || num_mix_iterations_last_round == 8);
-        num_mix_iterations += num_mix_iterations_last_round;
+        let mut num_total_mix_iterations = (num_real_compresses + num_dummy_compresses - 1) * 12;
+        let num_mix_iterations_last_compress = length_last_compress / 8;
+        assert!(num_mix_iterations_last_compress == 4 || num_mix_iterations_last_compress == 8);
+        num_total_mix_iterations += num_mix_iterations_last_compress;
 
         let public = BLAKE2BPublicData {
             padded_chunks: padded_chunks.to_vec(),
@@ -640,11 +694,13 @@ where
         // create the consts data
         let consts = Self::blake2b_const(
             builder,
-            &num_rows,
-            num_messages,
-            &num_compresses,
-            num_mix_iterations,
-            num_mix_iterations_last_round,
+            &num_rows_element,
+            num_messages_element,
+            num_real_compresses,
+            &num_real_compresses_element,
+            num_dummy_compresses,
+            num_total_mix_iterations,
+            num_mix_iterations_last_compress,
             &const_nums,
         );
 
@@ -653,12 +709,12 @@ where
             builder,
             &const_nums,
             &consts,
-            &num_compresses,
+            num_real_compresses,
             end_bits,
             digest_bits,
-            num_dummy_rounds,
-            length_last_round,
-            &length_last_round_element,
+            num_dummy_compresses,
+            length_last_compress,
+            &length_last_compress_element,
         );
 
         // create the memory data
@@ -668,11 +724,10 @@ where
             t_values,
             &const_nums,
             &consts,
-            num_messages,
-            &num_compresses,
-            num_dummy_rounds,
-            length_last_round,
-            num_mix_iterations_last_round,
+            num_messages_element,
+            num_real_compresses,
+            &num_real_compresses_element,
+            num_dummy_rows,
         );
 
         BLAKE2BData {
@@ -699,18 +754,18 @@ where
         // Read the dummy index from h at any of the following conditions
         // 1) in the first compress of a message (first 4 rows will read from IV instead)
         // 2) NOT in the first 4 rows of compress (e.g. not is_compress_initialize)
-        // 3) in the partial compress.
+        // 3) in the dummy compress.
         //
-        // Boolean expression is at_first_compress OR NOT(is_compress_initialize) OR at_partial_compress
+        // Boolean expression is at_first_compress OR NOT(is_compress_initialize) OR at_dummy_compress
         // That is equivalent to
-        // NOT(NOT(at_first_compress) AND is_compress_initialize AND NOT(at_partial_compress))
+        // NOT(NOT(at_first_compress) AND is_compress_initialize AND NOT(at_dummy_compress))
         let read_dummy_h_idx = builder.alloc::<BitRegister>();
         builder.set_to_expression(
             &read_dummy_h_idx,
             data.const_nums.const_1.expr()
                 - (data.trace.at_first_compress.not_expr()
                     * data.trace.is_compress_initialize.expr()
-                    * data.trace.at_partial_compress.not_expr()),
+                    * data.trace.at_dummy_compress.not_expr()),
         );
         builder.watch(&read_dummy_h_idx, "read dummy h idx");
 
@@ -737,8 +792,18 @@ where
         );
         builder.watch(&h_idx_1, "read h h_idx_1");
 
-        let mut h_value_1 = builder.load(&data.memory.h.get_at(h_idx_1), &Time::from_element(h_ts));
-        let mut h_value_2 = builder.load(&data.memory.h.get_at(h_idx_2), &Time::from_element(h_ts));
+        let mut h_value_1 = builder.load(
+            &data.memory.h.get_at(h_idx_1),
+            &Time::from_element(h_ts),
+            Some("h".to_string()),
+            Some(MemorySliceIndex::IndexElement(h_idx_1)),
+        );
+        let mut h_value_2 = builder.load(
+            &data.memory.h.get_at(h_idx_2),
+            &Time::from_element(h_ts),
+            Some("h".to_string()),
+            Some(MemorySliceIndex::IndexElement(h_idx_2)),
+        );
         builder.watch(&h_value_1, "h_value_1");
 
         // Read the iv values.
@@ -746,46 +811,53 @@ where
         // Read the dummy value at any of the following conditions
         // 1) NOT in the first 4 rows of compress (e.g. not is_compress_initialize)
         // 2) NOT the first compress of a messge
-        // 3) In the partial compress
+        // 3) In the dummy compress
         //
-        // Boolean expression is NOT(is_compress_initialize) OR NOT(at_first_compress) OR at_partial_compress
+        // Boolean expression is NOT(is_compress_initialize) OR NOT(at_first_compress) OR at_dummy_compress
         // That is equivalent to
-        // NOT(is_compress_initialize AND at_first_compress AND NOT(at_partial_compress))
-        builder.watch(&data.trace.at_first_compress, "at_first_compress");
+        // NOT(is_compress_initialize AND at_first_compress AND NOT(at_dummy_compress))
         let read_dummy_iv_idx = builder.alloc::<BitRegister>();
         builder.set_to_expression(
             &read_dummy_iv_idx,
             data.const_nums.const_1.expr()
                 - (data.trace.is_compress_initialize.expr()
                     * data.trace.at_first_compress.expr()
-                    * data.trace.at_partial_compress.not_expr()),
+                    * data.trace.at_dummy_compress.not_expr()),
         );
         builder.watch(&read_dummy_iv_idx, "read_dummy_iv_idx");
         let iv_idx_1 = builder.select(read_dummy_iv_idx, &data.consts.dummy_index, &init_idx_1);
         let iv_idx_2 = builder.select(read_dummy_iv_idx, &data.consts.dummy_index, &init_idx_2);
 
-        let iv_value_1 = builder.load(&data.consts.iv.get_at(iv_idx_1), &Time::zero());
-        let iv_value_2 = builder.load(&data.consts.iv.get_at(iv_idx_2), &Time::zero());
+        let iv_value_1 = builder.load(
+            &data.consts.iv.get_at(iv_idx_1),
+            &Time::zero(),
+            Some("iv".to_string()),
+            Some(MemorySliceIndex::IndexElement(iv_idx_1)),
+        );
+        let iv_value_2 = builder.load(
+            &data.consts.iv.get_at(iv_idx_2),
+            &Time::zero(),
+            Some("iv".to_string()),
+            Some(MemorySliceIndex::IndexElement(iv_idx_2)),
+        );
 
         // Read the compress iv values.
         //
         // Read the dummy value at any of the following conditions
         // 1) NOT in the first 4 rows of compress (e.g. not is_compress_initialize)
-        // 2) In the partial compress
+        // 2) In the dummy compress
         //
-        // Boolean expression is NOT(is_compress_initialize) OR at_partial_compress
+        // Boolean expression is NOT(is_compress_initialize) OR at_dummy_compress
         // That is equivalent to
-        // NOT(is_compress_initialize AND NOT(at_partial_compress))
+        // NOT(is_compress_initialize AND NOT(at_dummy_compress))
 
         let read_dummy_compress_iv_idx = builder.alloc::<BitRegister>();
         builder.set_to_expression(
             &read_dummy_compress_iv_idx,
             data.const_nums.const_1.expr()
                 - (data.trace.is_compress_initialize.expr()
-                    * data.trace.at_partial_compress.not_expr()),
+                    * data.trace.at_dummy_compress.not_expr()),
         );
-        builder.watch(&read_dummy_compress_iv_idx, "read_dummy_compress_iv_idx");
-
         let compress_iv_idx_1 = builder.select(
             read_dummy_compress_iv_idx,
             &data.consts.dummy_index,
@@ -800,10 +872,14 @@ where
         let compress_iv_value_1 = builder.load(
             &data.consts.compress_iv.get_at(compress_iv_idx_1),
             &Time::zero(),
+            Some("compress_iv".to_string()),
+            Some(MemorySliceIndex::IndexElement(compress_iv_idx_1)),
         );
         let compress_iv_value_2 = builder.load(
             &data.consts.compress_iv.get_at(compress_iv_idx_2),
             &Time::zero(),
+            Some("compress_iv".to_string()),
+            Some(MemorySliceIndex::IndexElement(compress_iv_idx_2)),
         );
 
         // Read the v values.
@@ -836,10 +912,10 @@ where
 
         // Read the dummy value at any of the following conditions
         // 1) In the first 4 rows of compress (e.g. not is_compress_initialize)
-        // 2) In the partial compress
+        // 2) In the dummy compress
         let read_dummy_v_idx = builder.or(
             data.trace.is_compress_initialize,
-            data.trace.at_partial_compress,
+            data.trace.at_dummy_compress,
         );
         builder.watch(&read_dummy_v_idx, "read_dummy_v_idx");
 
@@ -860,21 +936,37 @@ where
         let v3_read_idx = builder.select(read_dummy_v_idx, &data.consts.dummy_index, &v3_idx);
         let v4_read_idx = builder.select(read_dummy_v_idx, &data.consts.dummy_index, &v4_idx);
 
+        builder.watch(&v1_read_idx, "v1_read_idx");
+        builder.watch(&v1_last_write_ts, "v1_last_write_ts");
         let mut v1_value = builder.load(
             &data.memory.v.get_at(v1_read_idx),
             &Time::from_element(v1_last_write_ts),
+            Some("v".to_string()),
+            Some(MemorySliceIndex::IndexElement(v1_read_idx)),
         );
+        builder.watch(&v2_read_idx, "v2_read_idx");
+        builder.watch(&v2_last_write_ts, "v2_last_write_ts");
         let mut v2_value = builder.load(
             &data.memory.v.get_at(v2_read_idx),
             &Time::from_element(v2_last_write_ts),
+            Some("v".to_string()),
+            Some(MemorySliceIndex::IndexElement(v2_read_idx)),
         );
+        builder.watch(&v3_read_idx, "v3_read_idx");
+        builder.watch(&v3_last_write_ts, "v3_last_write_ts");
         let mut v3_value = builder.load(
             &data.memory.v.get_at(v3_read_idx),
             &Time::from_element(v3_last_write_ts),
+            Some("v".to_string()),
+            Some(MemorySliceIndex::IndexElement(v3_read_idx)),
         );
+        builder.watch(&v4_read_idx, "v4_read_idx");
+        builder.watch(&v4_last_write_ts, "v4_last_write_ts");
         let mut v4_value = builder.load(
             &data.memory.v.get_at(v4_read_idx),
             &Time::from_element(v4_last_write_ts),
+            Some("v".to_string()),
+            Some(MemorySliceIndex::IndexElement(v4_read_idx)),
         );
 
         // Set the v values based on where in the compress we are.
@@ -907,7 +999,17 @@ where
         );
 
         // If we are at the first compress row, then will need to xor v4 with t
-        let t = builder.load(&data.memory.t.get_at(data.trace.compress_id), &Time::zero());
+        let t_idx = builder.select(
+            data.trace.at_dummy_compress,
+            &data.consts.dummy_index,
+            &data.trace.compress_id,
+        );
+        let t = builder.load(
+            &data.memory.t.get_at(t_idx),
+            &Time::zero(),
+            Some("t".to_string()),
+            Some(MemorySliceIndex::IndexElement(t_idx)),
+        );
 
         let v4_xor_t = builder.xor(v4_value, t);
         v4_value = builder.select(data.trace.is_compress_first_row, &v4_xor_t, &v4_value);
@@ -959,7 +1061,7 @@ where
         let mut permutation_col: ElementRegister =
             builder.mul(data.trace.mix_index, data.const_nums.const_2);
 
-        let m_idx_1 = data.consts.permutations.get_at(
+        let mut m_idx_1 = data.consts.permutations.get_at(
             builder,
             data.trace.compress_iteration,
             permutation_col,
@@ -970,7 +1072,7 @@ where
         );
         permutation_col = builder.add(permutation_col, data.const_nums.const_1);
 
-        let m_idx_2 = data.consts.permutations.get_at(
+        let mut m_idx_2 = data.consts.permutations.get_at(
             builder,
             data.trace.compress_iteration,
             permutation_col,
@@ -980,9 +1082,30 @@ where
             data.trace.compress_id.expr() * data.const_nums.const_16.expr() + m_idx_2.expr(),
         );
 
+        m_idx_1 = builder.select(
+            data.trace.at_dummy_compress,
+            &data.consts.dummy_index,
+            &m_idx_1,
+        );
+        m_idx_2 = builder.select(
+            data.trace.at_dummy_compress,
+            &data.consts.dummy_index,
+            &m_idx_2,
+        );
+
         // Load the message values.
-        let m_1 = builder.load(&data.memory.m.get_at(m_idx_1), &Time::zero());
-        let m_2 = builder.load(&data.memory.m.get_at(m_idx_2), &Time::zero());
+        let m_1 = builder.load(
+            &data.memory.m.get_at(m_idx_1),
+            &Time::zero(),
+            Some("m".to_string()),
+            Some(MemorySliceIndex::IndexElement(m_idx_1)),
+        );
+        let m_2 = builder.load(
+            &data.memory.m.get_at(m_idx_2),
+            &Time::zero(),
+            Some("m".to_string()),
+            Some(MemorySliceIndex::IndexElement(m_idx_2)),
+        );
 
         // Output the "parameters" being sent to the mix function.
         builder.watch(&v_values[0], "va");
@@ -1006,42 +1129,57 @@ where
 
         // Save the output into v in all of the following conditions.
         // 1) NOT in the last 4 rows of compress (e.g. not is_compress_finalize)
-        // 2) NOT in the partial compress.
+        // 2) NOT in the dummy compress.
         //
-        // Boolean expression is NOT(is_compress_initialize) AND NOT(at_partial_compress)
+        // Boolean expression is NOT(is_compress_initialize) AND NOT(at_dummy_compress)
         let save_v = builder.alloc::<BitRegister>();
         builder.set_to_expression(
             &save_v,
-            data.trace.is_compress_finalize.not_expr() * data.trace.at_partial_compress.not_expr(),
+            data.trace.is_compress_finalize.not_expr() * data.trace.at_dummy_compress.not_expr(),
         );
         builder.watch(&save_v, "save_v");
 
         // Save the output into v in all of the following conditions.
         // 1) in the last 4 rows of compress (e.g. is_compress_finalize)
-        // 2) NOT in the partial compress.
+        // 2) NOT in the dummy compress.
         //
-        // Boolean expression is is_compress_finalize AND NOT(at_partial_compress)
+        // Boolean expression is is_compress_finalize AND NOT(at_dummy_compress)
         let save_v_final = builder.alloc::<BitRegister>();
         builder.set_to_expression(
             &save_v_final,
-            data.trace.is_compress_finalize.expr() * data.trace.at_partial_compress.not_expr(),
+            data.trace.is_compress_finalize.expr() * data.trace.at_dummy_compress.not_expr(),
         );
-        builder.watch(&save_v_final, "save_v_final");
 
         let updated_v_values = [updated_v0, updated_v1, updated_v2, updated_v3];
+        let clk = builder.clk;
         for (value, v_index) in updated_v_values.iter().zip(v_indices.iter()) {
+            let v_idx = builder.select(save_v, v_index, &data.consts.dummy_index_2);
+            let v_value = builder.select(save_v, value, &data.const_nums.const_0_u64);
+            let v_ts = builder.select(save_v, &clk, &data.consts.dummy_ts);
+
+            builder.watch(&v_idx, "v store v_idx");
+            builder.watch(&v_ts, "v store v_ts");
             builder.store(
-                &data.memory.v.get_at(*v_index),
-                *value,
-                &Time::from_element(builder.clk),
+                &data.memory.v.get_at(v_idx),
+                v_value,
+                &Time::from_element(v_ts),
                 Some(save_v.as_element()),
+                Some("v".to_string()),
+                Some(MemorySliceIndex::IndexElement(v_idx)),
             );
 
+            let v_final_idx = builder.select(save_v_final, v_index, &data.consts.dummy_index_2);
+            let v_final_ts =
+                builder.select(save_v_final, &data.trace.compress_id, &data.consts.dummy_ts);
+            let v_final_value = builder.select(save_v_final, value, &data.const_nums.const_0_u64);
+
             builder.store(
-                &data.memory.v_final.get_at(*v_index),
-                *value,
-                &Time::from_element(data.trace.compress_id),
+                &data.memory.v_final.get_at(v_final_idx),
+                v_final_value,
+                &Time::from_element(v_final_ts),
                 Some(save_v_final.as_element()),
+                Some("v_final".to_string()),
+                Some(MemorySliceIndex::IndexElement(v_final_idx)),
             );
         }
 
@@ -1080,7 +1218,12 @@ where
                     + i_element.expr(),
             );
             h_idx = builder.select(read_dummy_h_idx, &data.consts.dummy_index, &h_idx);
-            let mut h_value = builder.load(&data.memory.h.get_at(h_idx), &Time::from_element(h_ts));
+            let mut h_value = builder.load(
+                &data.memory.h.get_at(h_idx),
+                &Time::from_element(h_ts),
+                Some("h".to_string()),
+                Some(MemorySliceIndex::IndexElement(h_idx)),
+            );
             builder.watch(&h_idx, "debug h");
             builder.watch_memory(&data.memory.h.get_at(h_idx), "debug h");
 
@@ -1096,13 +1239,23 @@ where
         // Xor the first 8 final v values
         let h_workspace_2 = builder.alloc_array::<U64Register>(8);
 
-        // Read dummy v_final values if NOT at last row of a compress
-        let read_dummy_v_final_idx = builder.not(data.trace.is_compress_final_row);
+        // Read dummy v_final values if NOT at last row of a compress OR in a dummy compress.
+        //
+        // Boolean expression is NOT(is_compress_final_row) OR at_dummy_compress
+        // That is equivalent to
+        // NOT(is_compress_final_row AND NOT(at_dummy_compress))
+        let read_dummy_v_final_idx = builder.alloc::<BitRegister>();
+        builder.set_to_expression(
+            &read_dummy_v_final_idx,
+            data.const_nums.const_1.expr()
+                - (data.trace.is_compress_final_row.expr()
+                    * data.trace.at_dummy_compress.not_expr()),
+        );
         builder.watch(&read_dummy_v_final_idx, "read_dummy_v_final_idx");
         let v_final_ts = builder.select(
             read_dummy_v_final_idx,
-            &data.trace.compress_id,
             &data.consts.dummy_ts,
+            &data.trace.compress_id,
         );
         for i in 0..8 {
             let i_element = builder.constant::<ElementRegister>(&L::Field::from_canonical_usize(i));
@@ -1111,6 +1264,8 @@ where
             let v_i = builder.load(
                 &data.memory.v_final.get_at(v_final_idx),
                 &Time::from_element(v_final_ts),
+                Some("v_final".to_string()),
+                Some(MemorySliceIndex::IndexElement(v_final_idx)),
             );
             let updated_h = builder.xor(h_workspace_1.get(i), v_i);
             builder.set_to_expression(&h_workspace_2.get(i), updated_h.expr());
@@ -1118,6 +1273,15 @@ where
 
         // Xor the second 8 final v values
         let h = builder.alloc_array::<U64Register>(8);
+
+        // Save h into memory if we are at the final row and it is not the end compress and not in a dummy compress.
+        let save_h = builder.alloc::<BitRegister>();
+        builder.set_to_expression(
+            &save_h,
+            data.trace.is_compress_final_row.expr()
+                * data.trace.at_end_compress.not_expr()
+                * data.trace.at_dummy_compress.not_expr(),
+        );
         for i in 0..8 {
             let i_element = builder.constant::<ElementRegister>(&L::Field::from_canonical_usize(i));
             let i_element_plus_8 = builder.add(i_element, data.const_nums.const_8);
@@ -1131,6 +1295,8 @@ where
             let v_value = builder.load(
                 &data.memory.v_final.get_at(v_final_idx),
                 &Time::from_element(v_final_ts),
+                Some("v_final".to_string()),
+                Some(MemorySliceIndex::IndexElement(v_final_idx)),
             );
             let xor = builder.xor(h_workspace_2.get(i), v_value);
             builder.set_to_expression(&h.get(i), xor.expr());
@@ -1141,28 +1307,20 @@ where
                 &h_idx,
                 data.trace.compress_id.expr() * data.const_nums.const_8.expr() + i_element.expr(),
             );
-            h_idx = builder.select(
-                data.trace.is_compress_final_row,
-                &h_idx,
-                &data.consts.dummy_index,
-            );
-            let h_ts = builder.select(
-                data.trace.is_compress_final_row,
-                &data.const_nums.const_0,
-                &data.consts.first_compress_h_read_ts,
-            );
-
+            h_idx = builder.select(save_h, &h_idx, &data.consts.dummy_index_2);
+            let h_value = builder.select(save_h, &xor, &data.const_nums.const_0_u64);
+            let h_ts = builder.select(save_h, &data.const_nums.const_0, &data.consts.dummy_ts);
             // Need to save the h value twice as it will be written twice per compress.
-            let h_multiplicity = builder.select(
-                data.trace.is_compress_final_row,
-                &data.const_nums.const_2,
-                &data.const_nums.const_0,
-            );
+            let h_multiplicity =
+                builder.select(save_h, &data.const_nums.const_2, &data.const_nums.const_0);
+
             builder.store(
                 &data.memory.h.get_at(h_idx),
-                xor,
+                h_value,
                 &Time::from_element(h_ts),
                 Some(h_multiplicity),
+                Some("h".to_string()),
+                Some(MemorySliceIndex::IndexElement(h_idx)),
             );
         }
 
@@ -1213,17 +1371,22 @@ where
             &data.consts.permutations.flattened_memory.get(127),
             "permutations[127]",
         );
+        for i in 0..39 {
+            builder.watch_memory(&data.memory.h.get(i), &format!("h[{}]", i));
+        }
         builder.watch_memory(
             &data.memory.h.get_at(data.consts.dummy_index),
             "h[dummy_index]",
         );
+
         builder.watch_memory(&data.memory.v.get(0), "v[0]");
-        //builder.watch_memory(&data.memory.v.get(15), "v[15]");
+        builder.watch_memory(&data.memory.v.get(0), "v[15]");
         builder.watch_memory(
             &data.memory.v.get_at(data.consts.dummy_index),
             "v[dummy_index]",
         );
         builder.watch_memory(&data.memory.v_final.get(0), "v_final[0]");
+        builder.watch_memory(&data.memory.v_final.get(0), "v_final[15]");
         builder.watch_memory(
             &data.memory.v_final.get_at(data.consts.dummy_index),
             "v_final[dummy_index]",
