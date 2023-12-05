@@ -38,6 +38,7 @@ pub mod test_utils {
     use core::fmt::Debug;
 
     use itertools::Itertools;
+    use log::info;
     use plonky2::field::goldilocks_field::GoldilocksField;
     use plonky2::timed;
     use plonky2::util::log2_ceil;
@@ -66,12 +67,9 @@ pub mod test_utils {
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = UintInstruction;
 
-        const NUM_FREE_COLUMNS: usize = 1525;
-        const EXTENDED_COLUMNS: usize = 834;
+        const NUM_FREE_COLUMNS: usize = 1527;
+        const EXTENDED_COLUMNS: usize = 690;
     }
-
-    #[test]
-    pub fn test_dummy_stores() {}
 
     #[test]
     pub fn test_blake2b() {
@@ -199,8 +197,6 @@ pub mod test_utils {
             writer.write(&t_values.get(i), &t_values_values[i]);
 
             let chunk = padded_chunks_values[i];
-            let a = chunk.iter().flatten().collect_vec();
-            println!("len of a is {}", a.len());
             let hash = BLAKE2BPure::compress(
                 &chunk
                     .iter()
@@ -227,7 +223,7 @@ pub mod test_utils {
 
             for mut chunk in writer_data.chunks(num_rows) {
                 for i in 0..num_rows {
-                    println!("writing trace instructions for row {}", i);
+                    info!("writing trace instructions for row {}", i);
                     let mut writer = chunk.window_writer(i);
                     stark.air_data.write_trace_instructions(&mut writer);
                 }

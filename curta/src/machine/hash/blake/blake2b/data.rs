@@ -77,10 +77,7 @@ pub struct BLAKE2BConstNums {
     pub(crate) const_12: ElementRegister,
     pub(crate) const_16: ElementRegister,
     pub(crate) const_91: ElementRegister,
-    pub(crate) const_95: ElementRegister,
     pub(crate) const_96: ElementRegister,
-    pub(crate) const_97: ElementRegister,
-    pub(crate) const_184: ElementRegister,
     pub(crate) const_ffffffffffffffff: U64Register,
 }
 
@@ -133,21 +130,12 @@ impl<L: AirParameters, const R: usize, const C: usize> MemoryArray<L, R, C> {
         let mut idx = builder.mul(row, self.c_const);
         idx = builder.add(idx, col);
 
-        if label == Some("permutation".to_string()) {
-            builder.watch(&idx, "permutation idx");
-        }
-
         let ret = builder.load(
             &self.flattened_memory.get_at(idx),
             &Time::zero(),
             label.clone(),
             Some(MemorySliceIndex::IndexElement(idx)),
         );
-
-        if label == Some("permutation".to_string()) {
-            println!("ret address is {:?}", ret);
-            builder.watch(&ret, "permutation ret");
-        }
 
         ret
     }

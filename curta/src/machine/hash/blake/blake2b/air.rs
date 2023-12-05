@@ -88,10 +88,7 @@ where
             const_12: builder.constant(&L::Field::from_canonical_u8(12)),
             const_16: builder.constant(&L::Field::from_canonical_u8(16)),
             const_91: builder.constant(&L::Field::from_canonical_u8(91)),
-            const_95: builder.constant(&L::Field::from_canonical_u8(95)),
             const_96: builder.constant(&L::Field::from_canonical_u8(96)),
-            const_97: builder.constant(&L::Field::from_canonical_u8(97)),
-            const_184: builder.constant(&L::Field::from_canonical_u8(184)),
             const_ffffffffffffffff: builder.constant::<U64Register>(&u64_to_le_field_bytes::<
                 L::Field,
             >(
@@ -534,8 +531,6 @@ where
 
         builder.watch(num_messages_element, "num_messages_element");
         builder.watch(num_real_compresses_element, "num_real_compresses_element");
-        println!("num_real_compresses: {}", num_real_compresses);
-        println!("num_dummy_rows: {}", num_dummy_rows);
 
         // Set dummy reads for h
         // Every row in the first compress of each message will read it 10 times. (96 * 10 * num_messages))
