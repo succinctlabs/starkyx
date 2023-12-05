@@ -668,6 +668,7 @@ where
         assert_eq!(padded_chunks.len(), end_bits.len());
 
         let num_real_compresses = padded_chunks.len();
+        debug!("num_real_compresses: {}", num_real_compresses);
         let num_real_compresses_element = builder
             .constant::<ElementRegister>(&L::Field::from_canonical_usize(num_real_compresses));
         let degree_log = log2_ceil(num_real_compresses * 96);
@@ -1228,14 +1229,16 @@ where
         // Read dummy h values if any of the following conditions are true
         // 1) NOT at last row of a compress
         // 2) at the first compress
+        // 3) at a dummy compress
         //
-        // Boolean expression is NOT(is_compress_final_row) OR at_first_compress
+        // Boolean expression is NOT(is_compress_final_row) OR at_first_compress OR at_dummy_compress
         // That is equivalent to
-        // NOT(is_compress_final_row AND NOT(at_first_compress))
+        // NOT(is_compress_final_row AND NOT(at_first_compress) AND NOT(at_dummy_compress))
         let read_dummy_h_idx = builder.expression(
             data.const_nums.const_1.expr()
                 - (data.trace.is_compress_final_row.expr()
-                    * data.trace.at_first_compress.not_expr()),
+                    * data.trace.at_first_compress.not_expr()
+                    * data.trace.at_dummy_compress.not_expr()),
         );
 
         builder.watch(&read_dummy_h_idx, "read_dummy_h_idx 2");
