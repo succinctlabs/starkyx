@@ -140,9 +140,7 @@ where
         }
         // The dummy iv value is read twice at the rows other than the first 4 rows of the each messages's
         // first compress round.
-        let num_dummy_iv_reads = builder.alloc_public::<ElementRegister>();
-        builder.set_to_expression(
-            &num_dummy_iv_reads,
+        let num_dummy_iv_reads = builder.public_expression(
             (num_rows_element.expr() - (num_messages_element.expr() * const_nums.const_4.expr()))
                 * const_nums.const_2.expr(),
         );
@@ -172,9 +170,7 @@ where
 
         // The dummy iv_compress value is read twice for all rows other than the first four rows
         // of each real compress round.
-        let num_dummy_iv_compress_reads = builder.alloc_public::<ElementRegister>();
-        builder.set_to_expression(
-            &num_dummy_iv_compress_reads,
+        let num_dummy_iv_compress_reads = builder.public_expression(
             (num_rows_element.expr()
                 - (num_real_compresses_element.expr() * const_nums.const_4.expr()))
                 * const_nums.const_2.expr(),
@@ -192,12 +188,28 @@ where
             .constant::<ElementRegister>(&L::Field::from_canonical_usize(num_total_mix_iterations));
         let mut v_indices = MemoryArray::<L, 8, 4>::new(builder);
         for (i, indices) in V_INDICES.iter().enumerate() {
-            v_indices.store_row(builder, i, indices, num_total_mix_iterations_element);
+            v_indices.store_row(
+                builder,
+                i,
+                indices,
+                num_total_mix_iterations_element,
+                Some("v_indices".to_string()),
+            );
         }
+        builder.watch(
+            &num_total_mix_iterations_element,
+            "num_total_mix_iterations_element",
+        );
 
         let mut v_last_write_ages = MemoryArray::<L, 8, 4>::new(builder);
         for (i, ages) in V_LAST_WRITE_AGES.iter().enumerate() {
-            v_last_write_ages.store_row(builder, i, ages, num_total_mix_iterations_element);
+            v_last_write_ages.store_row(
+                builder,
+                i,
+                ages,
+                num_total_mix_iterations_element,
+                Some("v_last_write".to_string()),
+            );
         }
 
         let mut permutations = MemoryArray::<L, 12, 16>::new(builder);
@@ -207,6 +219,10 @@ where
         let num_full_compresses_element = builder.constant::<ElementRegister>(
             &L::Field::from_canonical_usize(num_real_compresses + num_dummy_compresses - 1),
         );
+        builder.watch(&num_compresses_element, "num_compresses_element");
+
+        builder.watch(&num_full_compresses_element, "num_full_compresses_element");
+
         for (i, permutation) in SIGMA_PERMUTATIONS.iter().enumerate() {
             permutations.store_row(
                 builder,
@@ -217,6 +233,7 @@ where
                 } else {
                     num_full_compresses_element
                 },
+                Some("permutation".to_string()),
             );
         }
 
@@ -527,16 +544,11 @@ where
         //    2) Last row will read it 2 times.    2
         //    3) All other rows will read it 10 times.   91 * 10
         // For the dummy compress, it will read it 10 times per row. (length_last_round * 10)
-        let num_dummy_h_reads = builder.alloc_public::<ElementRegister>();
         let num_dummy_rows_element =
             builder.constant::<ElementRegister>(&L::Field::from_canonical_usize(num_dummy_rows));
-        let num_non_first_compresses = builder.alloc_public::<ElementRegister>();
-        builder.set_to_expression(
-            &num_non_first_compresses,
-            num_real_compresses_element.expr() - num_messages_element.expr(),
-        );
-        builder.set_to_expression(
-            &num_dummy_h_reads,
+        let num_non_first_compresses: ElementRegister = builder
+            .public_expression(num_real_compresses_element.expr() - num_messages_element.expr());
+        let num_dummy_h_reads = builder.public_expression(
             (num_messages_element.expr() * const_nums.const_96.expr() * const_nums.const_10.expr())
                 + (num_non_first_compresses.expr()
                     * (const_nums.const_4.expr() * const_nums.const_8.expr()
@@ -759,9 +771,7 @@ where
         // Boolean expression is at_first_compress OR NOT(is_compress_initialize) OR at_dummy_compress
         // That is equivalent to
         // NOT(NOT(at_first_compress) AND is_compress_initialize AND NOT(at_dummy_compress))
-        let read_dummy_h_idx = builder.alloc::<BitRegister>();
-        builder.set_to_expression(
-            &read_dummy_h_idx,
+        let read_dummy_h_idx = builder.expression(
             data.const_nums.const_1.expr()
                 - (data.trace.at_first_compress.not_expr()
                     * data.trace.is_compress_initialize.expr()
@@ -769,17 +779,13 @@ where
         );
         builder.watch(&read_dummy_h_idx, "read dummy h idx");
 
-        let mut h_idx_1 = builder.alloc::<ElementRegister>();
-        builder.set_to_expression(
-            &h_idx_1,
+        let mut h_idx_1 = builder.expression(
             data.trace.previous_compress_id.expr() * data.const_nums.const_8.expr()
                 + init_idx_1.expr(),
         );
         h_idx_1 = builder.select(read_dummy_h_idx, &data.consts.dummy_index, &h_idx_1);
 
-        let mut h_idx_2 = builder.alloc::<ElementRegister>();
-        builder.set_to_expression(
-            &h_idx_2,
+        let mut h_idx_2 = builder.expression(
             data.trace.previous_compress_id.expr() * data.const_nums.const_8.expr()
                 + init_idx_2.expr(),
         );
@@ -816,9 +822,7 @@ where
         // Boolean expression is NOT(is_compress_initialize) OR NOT(at_first_compress) OR at_dummy_compress
         // That is equivalent to
         // NOT(is_compress_initialize AND at_first_compress AND NOT(at_dummy_compress))
-        let read_dummy_iv_idx = builder.alloc::<BitRegister>();
-        builder.set_to_expression(
-            &read_dummy_iv_idx,
+        let read_dummy_iv_idx = builder.expression(
             data.const_nums.const_1.expr()
                 - (data.trace.is_compress_initialize.expr()
                     * data.trace.at_first_compress.expr()
@@ -851,9 +855,7 @@ where
         // That is equivalent to
         // NOT(is_compress_initialize AND NOT(at_dummy_compress))
 
-        let read_dummy_compress_iv_idx = builder.alloc::<BitRegister>();
-        builder.set_to_expression(
-            &read_dummy_compress_iv_idx,
+        let read_dummy_compress_iv_idx = builder.expression(
             data.const_nums.const_1.expr()
                 - (data.trace.is_compress_initialize.expr()
                     * data.trace.at_dummy_compress.not_expr()),
@@ -886,20 +888,56 @@ where
         //
         // First get the v indicies and last write timestamps.
         let v_indices = &data.consts.v_indices;
-        let v1_idx = v_indices.get_at(builder, data.trace.mix_index, data.const_nums.const_0);
-        let v2_idx = v_indices.get_at(builder, data.trace.mix_index, data.const_nums.const_1);
-        let v3_idx = v_indices.get_at(builder, data.trace.mix_index, data.const_nums.const_2);
-        let v4_idx = v_indices.get_at(builder, data.trace.mix_index, data.const_nums.const_3);
+        let v1_idx = v_indices.get_at(
+            builder,
+            data.trace.mix_index,
+            data.const_nums.const_0,
+            Some("mix_index".to_string()),
+        );
+        let v2_idx = v_indices.get_at(
+            builder,
+            data.trace.mix_index,
+            data.const_nums.const_1,
+            Some("mix_index".to_string()),
+        );
+        let v3_idx = v_indices.get_at(
+            builder,
+            data.trace.mix_index,
+            data.const_nums.const_2,
+            Some("mix_index".to_string()),
+        );
+        let v4_idx = v_indices.get_at(
+            builder,
+            data.trace.mix_index,
+            data.const_nums.const_3,
+            Some("mix_index".to_string()),
+        );
 
         let v_last_write_ages = &data.consts.v_last_write_ages;
-        let v1_last_write_age =
-            v_last_write_ages.get_at(builder, data.trace.mix_index, data.const_nums.const_0);
-        let v2_last_write_age =
-            v_last_write_ages.get_at(builder, data.trace.mix_index, data.const_nums.const_1);
-        let v3_last_write_age =
-            v_last_write_ages.get_at(builder, data.trace.mix_index, data.const_nums.const_2);
-        let v4_last_write_age =
-            v_last_write_ages.get_at(builder, data.trace.mix_index, data.const_nums.const_3);
+        let v1_last_write_age = v_last_write_ages.get_at(
+            builder,
+            data.trace.mix_index,
+            data.const_nums.const_0,
+            Some("v_last_write_ages".to_string()),
+        );
+        let v2_last_write_age = v_last_write_ages.get_at(
+            builder,
+            data.trace.mix_index,
+            data.const_nums.const_1,
+            Some("v_last_write_ages".to_string()),
+        );
+        let v3_last_write_age = v_last_write_ages.get_at(
+            builder,
+            data.trace.mix_index,
+            data.const_nums.const_2,
+            Some("v_last_write_ages".to_string()),
+        );
+        let v4_last_write_age = v_last_write_ages.get_at(
+            builder,
+            data.trace.mix_index,
+            data.const_nums.const_3,
+            Some("v_last_write_ages".to_string()),
+        );
 
         let mut v1_last_write_ts =
             builder.expression(data.trace.clk.expr() - v1_last_write_age.expr());
@@ -1061,24 +1099,32 @@ where
         let mut permutation_col: ElementRegister =
             builder.mul(data.trace.mix_index, data.const_nums.const_2);
 
+        builder.watch(
+            &data.trace.compress_iteration,
+            "getting permutation compress iterations val",
+        );
+        builder.watch(&permutation_col, "getting first permutation col val");
         let mut m_idx_1 = data.consts.permutations.get_at(
             builder,
             data.trace.compress_iteration,
             permutation_col,
+            Some("permutation".to_string()),
         );
-        builder.set_to_expression(
-            &m_idx_1,
+
+        m_idx_1 = builder.expression(
             data.trace.compress_id.expr() * data.const_nums.const_16.expr() + m_idx_1.expr(),
         );
         permutation_col = builder.add(permutation_col, data.const_nums.const_1);
 
+        builder.watch(&permutation_col, "getting second permutation col val");
         let mut m_idx_2 = data.consts.permutations.get_at(
             builder,
             data.trace.compress_iteration,
             permutation_col,
+            Some("permutation".to_string()),
         );
-        builder.set_to_expression(
-            &m_idx_2,
+
+        m_idx_2 = builder.expression(
             data.trace.compress_id.expr() * data.const_nums.const_16.expr() + m_idx_2.expr(),
         );
 
@@ -1132,9 +1178,7 @@ where
         // 2) NOT in the dummy compress.
         //
         // Boolean expression is NOT(is_compress_initialize) AND NOT(at_dummy_compress)
-        let save_v = builder.alloc::<BitRegister>();
-        builder.set_to_expression(
-            &save_v,
+        let save_v = builder.expression(
             data.trace.is_compress_finalize.not_expr() * data.trace.at_dummy_compress.not_expr(),
         );
         builder.watch(&save_v, "save_v");
@@ -1144,9 +1188,7 @@ where
         // 2) NOT in the dummy compress.
         //
         // Boolean expression is is_compress_finalize AND NOT(at_dummy_compress)
-        let save_v_final = builder.alloc::<BitRegister>();
-        builder.set_to_expression(
-            &save_v_final,
+        let save_v_final = builder.expression(
             data.trace.is_compress_finalize.expr() * data.trace.at_dummy_compress.not_expr(),
         );
 
@@ -1195,9 +1237,7 @@ where
         // Boolean expression is NOT(is_compress_final_row) OR at_first_compress
         // That is equivalent to
         // NOT(is_compress_final_row AND NOT(at_first_compress))
-        let read_dummy_h_idx = builder.alloc::<BitRegister>();
-        builder.set_to_expression(
-            &read_dummy_h_idx,
+        let read_dummy_h_idx = builder.expression(
             data.const_nums.const_1.expr()
                 - (data.trace.is_compress_final_row.expr()
                     * data.trace.at_first_compress.not_expr()),
@@ -1211,9 +1251,7 @@ where
         );
         for i in 0..8 {
             let i_element = builder.constant::<ElementRegister>(&L::Field::from_canonical_usize(i));
-            let mut h_idx = builder.alloc::<ElementRegister>();
-            builder.set_to_expression(
-                &h_idx,
+            let mut h_idx = builder.expression(
                 data.trace.previous_compress_id.expr() * data.const_nums.const_8.expr()
                     + i_element.expr(),
             );
@@ -1244,9 +1282,7 @@ where
         // Boolean expression is NOT(is_compress_final_row) OR at_dummy_compress
         // That is equivalent to
         // NOT(is_compress_final_row AND NOT(at_dummy_compress))
-        let read_dummy_v_final_idx = builder.alloc::<BitRegister>();
-        builder.set_to_expression(
-            &read_dummy_v_final_idx,
+        let read_dummy_v_final_idx = builder.expression(
             data.const_nums.const_1.expr()
                 - (data.trace.is_compress_final_row.expr()
                     * data.trace.at_dummy_compress.not_expr()),
@@ -1275,9 +1311,7 @@ where
         let h = builder.alloc_array::<U64Register>(8);
 
         // Save h into memory if we are at the final row and it is not the end compress and not in a dummy compress.
-        let save_h = builder.alloc::<BitRegister>();
-        builder.set_to_expression(
-            &save_h,
+        let save_h = builder.expression(
             data.trace.is_compress_final_row.expr()
                 * data.trace.at_end_compress.not_expr()
                 * data.trace.at_dummy_compress.not_expr(),
@@ -1302,9 +1336,7 @@ where
             builder.set_to_expression(&h.get(i), xor.expr());
             builder.watch(&xor, "final h");
 
-            let mut h_idx = builder.alloc::<ElementRegister>();
-            builder.set_to_expression(
-                &h_idx,
+            let mut h_idx = builder.expression(
                 data.trace.compress_id.expr() * data.const_nums.const_8.expr() + i_element.expr(),
             );
             h_idx = builder.select(save_h, &h_idx, &data.consts.dummy_index_2);
