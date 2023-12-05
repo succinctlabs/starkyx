@@ -38,8 +38,9 @@ pub mod test_utils {
     use core::fmt::Debug;
 
     use itertools::Itertools;
-    use log::info;
+    use log::{debug, info};
     use plonky2::field::goldilocks_field::GoldilocksField;
+    use plonky2::iop::witness::PartialWitness;
     use plonky2::timed;
     use plonky2::util::log2_ceil;
     use plonky2::util::timing::TimingTree;
@@ -77,7 +78,7 @@ pub mod test_utils {
         type Config = <C as CurtaConfig<2>>::GenericConfig;
 
         let _ = env_logger::builder().is_test(true).try_init();
-        let mut timing = TimingTree::new("test_sha", log::Level::Debug);
+        let mut timing = TimingTree::new("test_sha", log::Level::Info);
 
         const MAX_CHUNK_SIZE: u64 = 2;
 
@@ -218,12 +219,12 @@ pub mod test_utils {
             writer.write(&digest_indices.get(i), digest_index);
         }
 
-        timed!(timing, "write input", {
+        timed!(timing, log::Level::Info, "write input", {
             stark.air_data.write_global_instructions(&mut writer);
 
             for mut chunk in writer_data.chunks(num_rows) {
                 for i in 0..num_rows {
-                    info!("writing trace instructions for row {}", i);
+                    debug!("writing trace instructions for row {}", i);
                     let mut writer = chunk.window_writer(i);
                     stark.air_data.write_trace_instructions(&mut writer);
                 }
@@ -247,6 +248,7 @@ pub mod test_utils {
 
         let proof = timed!(
             timing,
+            log::Level::Info,
             "generate stark proof",
             stark.prove(&trace, &public, &mut timing).unwrap()
         );
@@ -265,8 +267,8 @@ pub mod test_utils {
             rec_data.prove(pw).unwrap()
         );
         rec_data.verify(rec_proof).unwrap();
+        */
 
         timing.print();
-        */
     }
 }
