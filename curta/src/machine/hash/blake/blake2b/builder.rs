@@ -79,7 +79,7 @@ pub mod test_utils {
         type Config = <C as CurtaConfig<2>>::GenericConfig;
 
         let _ = env_logger::builder().is_test(true).try_init();
-        let mut timing = TimingTree::new("test_sha", log::Level::Info);
+        let mut timing = TimingTree::new("test_blake2b", log::Level::Info);
 
         let mut padded_chunks_values = Vec::new();
         let mut t_values_values = Vec::new();
