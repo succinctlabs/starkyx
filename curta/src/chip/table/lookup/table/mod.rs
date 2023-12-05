@@ -169,8 +169,12 @@ impl<F: Field, E: CubicParameters<F>> LogLookupTable<CubicRegister, F, E> {
         &mut self,
         builder: &mut AirBuilder<L>,
         values: &[CubicRegister],
-    ) {
+    ) -> LogLookupValues<CubicRegister, F, E> {
         let lookup_values = self.new_lookup_values(builder, values);
         lookup_values.register_constraints(builder);
+        builder
+            .lookup_values
+            .push(LookupValues::Cubic(lookup_values.clone()));
+        lookup_values
     }
 }
