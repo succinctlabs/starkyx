@@ -1,3 +1,4 @@
+use crate::chip::memory::instruction::MemorySliceIndex;
 use crate::chip::memory::pointer::slice::Slice;
 use crate::chip::memory::time::Time;
 use crate::chip::register::array::ArrayRegister;
@@ -104,19 +105,20 @@ impl<L: AirParameters, const R: usize, const C: usize> MemoryArray<L, R, C> {
         row: usize,
         values: &[u8],
         mul: ElementRegister,
+        label: Option<String>,
     ) {
         assert_eq!(values.len(), C);
         assert!(row < R);
 
         for (i, value) in values.iter().enumerate() {
             let value_const = builder.constant(&L::Field::from_canonical_u8(*value));
-            builder.store(
+            builder.store::<ElementRegister>(
                 &self.flattened_memory.get(row * C + i),
                 value_const,
                 &Time::zero(),
                 Some(mul),
-                None,
-                None,
+                label.clone(),
+                Some(MemorySliceIndex::Index(row * C + i)),
             );
         }
     }
@@ -126,14 +128,27 @@ impl<L: AirParameters, const R: usize, const C: usize> MemoryArray<L, R, C> {
         builder: &mut BytesBuilder<L>,
         row: ElementRegister,
         col: ElementRegister,
+        label: Option<String>,
     ) -> ElementRegister {
         let mut idx = builder.mul(row, self.c_const);
         idx = builder.add(idx, col);
-        builder.load(
+
+        if label == Some("permutation".to_string()) {
+            builder.watch(&idx, "permutation idx");
+        }
+
+        let ret = builder.load(
             &self.flattened_memory.get_at(idx),
             &Time::zero(),
-            None,
-            None,
-        )
+            label.clone(),
+            Some(MemorySliceIndex::IndexElement(idx)),
+        );
+
+        if label == Some("permutation".to_string()) {
+            println!("ret address is {:?}", ret);
+            builder.watch(&ret, "permutation ret");
+        }
+
+        ret
     }
 }
