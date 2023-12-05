@@ -38,9 +38,11 @@ pub mod test_utils {
     use core::fmt::Debug;
 
     use itertools::Itertools;
-    use log::{debug, info};
+    use log::debug;
     use plonky2::field::goldilocks_field::GoldilocksField;
-    use plonky2::iop::witness::PartialWitness;
+    use plonky2::iop::witness::{PartialWitness, WitnessWrite};
+    use plonky2::plonk::circuit_builder::CircuitBuilder;
+    use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::timed;
     use plonky2::util::timing::TimingTree;
     use serde::{Deserialize, Serialize};
@@ -183,16 +185,16 @@ pub mod test_utils {
             &num_messages,
         );
 
-        /*
+        let stark = builder.build::<C, 2>(num_rows);
+
         let config_rec = CircuitConfig::standard_recursion_config();
         let mut recursive_builder = CircuitBuilder::<GoldilocksField, 2>::new(config_rec);
 
         let (proof_target, public_input) =
             stark.add_virtual_proof_with_pis_target(&mut recursive_builder);
         stark.verify_circuit(&mut recursive_builder, &proof_target, &public_input);
-        */
 
-        let stark = builder.build::<C, 2>(num_rows);
+        let rec_data = recursive_builder.build::<Config>();
 
         // Write trace.
         let mut writer_data = AirWriterData::new(&stark.air_data, num_rows);
@@ -265,7 +267,6 @@ pub mod test_utils {
 
         stark.verify(proof.clone(), &public).unwrap();
 
-        /*
         let mut pw = PartialWitness::new();
 
         pw.set_target_arr(&public_input, &public);
@@ -273,11 +274,11 @@ pub mod test_utils {
 
         let rec_proof = timed!(
             timing,
+            log::Level::Info,
             "generate recursive proof",
             rec_data.prove(pw).unwrap()
         );
         rec_data.verify(rec_proof).unwrap();
-        */
 
         timing.print();
     }
