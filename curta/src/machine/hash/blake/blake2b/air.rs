@@ -389,7 +389,6 @@ where
             &consts.first_compress_h_read_ts,
             &previous_compress_id,
         );
-        builder.watch(&previous_compress_id, "previous compress id");
 
         // Flag if we are within the first four rows of a compress.  In these rows, we will need to
         // use the COMPRESS_IV values.
@@ -445,7 +444,6 @@ where
             Some("save_final_v".to_string()),
             Some(MemorySliceIndex::IndexElement(compress_index)),
         );
-        builder.watch(&is_compress_finalize, "is_compress_finalize");
 
         let at_dummy_compress_memory = builder.uninit_slice();
         for i in 0..num_real_compresses {
@@ -492,7 +490,12 @@ where
             Some(MemorySliceIndex::IndexElement(compress_id)),
         );
         let is_digest_row = builder.expression(cycle_96_end_bit.expr() * at_digest_compress.expr());
-        builder.watch(&is_digest_row, "is_digest_row");
+        builder.watch(&compress_id, "compress id");
+        builder.watch(&at_first_compress, "at first compress");
+        builder.watch(&at_digest_compress, "at digest compress");
+        builder.watch(&at_end_compress, "at end compress");
+        builder.watch(&at_dummy_compress, "at dummy compress");
+        builder.watch(&is_digest_row, "is digest row");
 
         BLAKE2BTraceData {
             clk,
@@ -773,7 +776,6 @@ where
                     * data.trace.is_compress_initialize.expr()
                     * data.trace.at_dummy_compress.not_expr()),
         );
-        builder.watch(&read_dummy_h_idx, "read dummy h idx");
 
         let mut h_idx_1 = builder.expression(
             data.trace.previous_compress_id.expr() * data.const_nums.const_8.expr()
@@ -792,7 +794,6 @@ where
             &data.consts.dummy_ts,
             &data.const_nums.const_0,
         );
-        builder.watch(&h_idx_1, "read h h_idx_1");
 
         let mut h_value_1 = builder.load(
             &data.memory.h.get_at(h_idx_1),
@@ -806,7 +807,6 @@ where
             Some("h".to_string()),
             Some(MemorySliceIndex::IndexElement(h_idx_2)),
         );
-        builder.watch(&h_value_1, "h_value_1");
 
         // Read the iv values.
         //
@@ -824,7 +824,6 @@ where
                     * data.trace.at_first_compress.expr()
                     * data.trace.at_dummy_compress.not_expr()),
         );
-        builder.watch(&read_dummy_iv_idx, "read_dummy_iv_idx");
         let iv_idx_1 = builder.select(read_dummy_iv_idx, &data.consts.dummy_index, &init_idx_1);
         let iv_idx_2 = builder.select(read_dummy_iv_idx, &data.consts.dummy_index, &init_idx_2);
 
@@ -951,7 +950,6 @@ where
             data.trace.is_compress_initialize,
             data.trace.at_dummy_compress,
         );
-        builder.watch(&read_dummy_v_idx, "read_dummy_v_idx");
 
         v1_last_write_ts =
             builder.select(read_dummy_v_idx, &data.consts.dummy_ts, &v1_last_write_ts);
@@ -970,32 +968,24 @@ where
         let v3_read_idx = builder.select(read_dummy_v_idx, &data.consts.dummy_index, &v3_idx);
         let v4_read_idx = builder.select(read_dummy_v_idx, &data.consts.dummy_index, &v4_idx);
 
-        builder.watch(&v1_read_idx, "v1_read_idx");
-        builder.watch(&v1_last_write_ts, "v1_last_write_ts");
         let mut v1_value = builder.load(
             &data.memory.v.get_at(v1_read_idx),
             &Time::from_element(v1_last_write_ts),
             Some("v".to_string()),
             Some(MemorySliceIndex::IndexElement(v1_read_idx)),
         );
-        builder.watch(&v2_read_idx, "v2_read_idx");
-        builder.watch(&v2_last_write_ts, "v2_last_write_ts");
         let mut v2_value = builder.load(
             &data.memory.v.get_at(v2_read_idx),
             &Time::from_element(v2_last_write_ts),
             Some("v".to_string()),
             Some(MemorySliceIndex::IndexElement(v2_read_idx)),
         );
-        builder.watch(&v3_read_idx, "v3_read_idx");
-        builder.watch(&v3_last_write_ts, "v3_last_write_ts");
         let mut v3_value = builder.load(
             &data.memory.v.get_at(v3_read_idx),
             &Time::from_element(v3_last_write_ts),
             Some("v".to_string()),
             Some(MemorySliceIndex::IndexElement(v3_read_idx)),
         );
-        builder.watch(&v4_read_idx, "v4_read_idx");
-        builder.watch(&v4_last_write_ts, "v4_last_write_ts");
         let mut v4_value = builder.load(
             &data.memory.v.get_at(v4_read_idx),
             &Time::from_element(v4_last_write_ts),
@@ -1075,6 +1065,11 @@ where
         let hash_state_public = (0..num_digests)
             .map(|_| builder.alloc_array_public(4))
             .collect::<Vec<_>>();
+        for hash_state in hash_state_public.iter() {
+            for i in 0..4 {
+                builder.watch(&hash_state.get(i), "hash state");
+            }
+        }
 
         let state_ptr = builder.uninit_slice();
 
@@ -1186,8 +1181,6 @@ where
             let v_value = builder.select(save_v, value, &data.const_nums.const_0_u64);
             let v_ts = builder.select(save_v, &clk, &data.consts.dummy_ts);
 
-            builder.watch(&v_idx, "v store v_idx");
-            builder.watch(&v_ts, "v store v_ts");
             builder.store(
                 &data.memory.v.get_at(v_idx),
                 v_value,
@@ -1340,75 +1333,6 @@ where
                 Some(MemorySliceIndex::IndexElement(h_idx)),
             );
         }
-
-        for (i, element) in h.get_subarray(0..4).iter().enumerate() {
-            builder.watch(&h.get(i), "digest");
-            builder.store(
-                &state_ptr.get(i),
-                element,
-                &Time::from_element(data.trace.compress_id),
-                Some(data.trace.is_digest_row.as_element()),
-                Some("state_ptr".to_string()),
-                Some(MemorySliceIndex::Index(i)),
-            );
-        }
-
-        builder.watch_memory(&data.consts.iv.get(0), "iv[0]");
-        builder.watch_memory(&data.consts.iv.get(7), "iv[7]");
-        builder.watch_memory(
-            &data.consts.iv.get_at(data.consts.dummy_index),
-            "iv[dummy_index]",
-        );
-        builder.watch_memory(&data.consts.compress_iv.get(0), "compress_iv[0]");
-        builder.watch_memory(&data.consts.compress_iv.get(7), "compress_iv[7]");
-        builder.watch_memory(
-            &data.consts.compress_iv.get_at(data.consts.dummy_index),
-            "compress_iv[dummy_index]",
-        );
-        builder.watch_memory(
-            &data.consts.v_indices.flattened_memory.get(0),
-            "v_indices[0]",
-        );
-        builder.watch_memory(
-            &data.consts.v_indices.flattened_memory.get(31),
-            "v_indices[31]",
-        );
-        builder.watch_memory(
-            &data.consts.v_last_write_ages.flattened_memory.get(0),
-            "v_last_write_ages[0]",
-        );
-        builder.watch_memory(
-            &data.consts.v_last_write_ages.flattened_memory.get(31),
-            "v_last_write_ages[31]",
-        );
-        builder.watch_memory(
-            &data.consts.permutations.flattened_memory.get(0),
-            "permutations[0]",
-        );
-        builder.watch_memory(
-            &data.consts.permutations.flattened_memory.get(127),
-            "permutations[127]",
-        );
-        for i in 0..39 {
-            builder.watch_memory(&data.memory.h.get(i), &format!("h[{}]", i));
-        }
-        builder.watch_memory(
-            &data.memory.h.get_at(data.consts.dummy_index),
-            "h[dummy_index]",
-        );
-
-        builder.watch_memory(&data.memory.v.get(0), "v[0]");
-        builder.watch_memory(&data.memory.v.get(0), "v[15]");
-        builder.watch_memory(
-            &data.memory.v.get_at(data.consts.dummy_index),
-            "v[dummy_index]",
-        );
-        builder.watch_memory(&data.memory.v_final.get(0), "v_final[0]");
-        builder.watch_memory(&data.memory.v_final.get(0), "v_final[15]");
-        builder.watch_memory(
-            &data.memory.v_final.get_at(data.consts.dummy_index),
-            "v_final[dummy_index]",
-        );
 
         hash_state_public
     }
