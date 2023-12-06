@@ -1332,6 +1332,19 @@ where
                 Some("h".to_string()),
                 Some(MemorySliceIndex::IndexElement(h_idx)),
             );
+
+            // If this is the digest row, then also store the calculated digest.
+            // Only need to do so for the first 4 entries of h.
+            if i < 4 {
+                builder.store(
+                    &state_ptr.get(i),
+                    h_value,
+                    &Time::from_element(data.trace.compress_id),
+                    Some(data.trace.is_digest_row.as_element()),
+                    None,
+                    None,
+                );
+            }
         }
 
         hash_state_public
