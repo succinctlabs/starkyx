@@ -1,3 +1,4 @@
+use super::{MIX_LENGTH, MSG_ARRAY_SIZE, NUM_MIX_ROUNDS};
 use crate::chip::memory::instruction::MemorySliceIndex;
 use crate::chip::memory::pointer::slice::Slice;
 use crate::chip::memory::time::Time;
@@ -56,9 +57,9 @@ pub struct BLAKE2BConsts<L: AirParameters> {
     pub(crate) iv: Slice<U64Register>,
     pub(crate) iv_values: ArrayRegister<U64Register>,
     pub(crate) compress_iv: Slice<U64Register>,
-    pub(crate) v_indices: MemoryArray<L, 8, 4>,
-    pub(crate) v_last_write_ages: MemoryArray<L, 8, 4>,
-    pub(crate) permutations: MemoryArray<L, 12, 16>,
+    pub(crate) v_indices: MemoryArray<L, MIX_LENGTH, 4>,
+    pub(crate) v_last_write_ages: MemoryArray<L, MIX_LENGTH, 4>,
+    pub(crate) permutations: MemoryArray<L, NUM_MIX_ROUNDS, MSG_ARRAY_SIZE>,
     pub(crate) dummy_index: ElementRegister,
     pub(crate) dummy_index_2: ElementRegister,
     pub(crate) dummy_ts: ElementRegister,
