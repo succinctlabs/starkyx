@@ -21,7 +21,7 @@ impl FieldParameters for Ed25519BaseField {
         65517, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535,
         65535, 65535, 32767, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     ];
-    const WITNESS_OFFSET: usize = 1usize << 20;
+    const WITNESS_OFFSET: usize = 1usize << 21;
 
     fn modulus() -> BigUint {
         (BigUint::one() << 255) - BigUint::from(19u32)
@@ -39,7 +39,7 @@ impl FieldParameters for Ed25519ScalarField {
         54253, 23797, 25370, 22546, 40150, 41719, 63966, 5342, 0, 0, 0, 0, 0, 0, 0, 4096, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     ];
-    const WITNESS_OFFSET: usize = 1usize << 20;
+    const WITNESS_OFFSET: usize = 1usize << 21;
 
     fn modulus() -> BigUint {
         (BigUint::one() << 252) + BigUint::from(27742317777372353535851937790883648493u128)

@@ -53,7 +53,7 @@ pub mod tests {
             65517, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535,
             65535, 65535, 65535, 32767, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
-        const WITNESS_OFFSET: usize = 1usize << 20;
+        const WITNESS_OFFSET: usize = 1usize << 21;
 
         fn modulus() -> BigUint {
             (BigUint::one() << 255) - BigUint::from(19u32)
