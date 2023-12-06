@@ -50,14 +50,25 @@ impl<F: Field, E: CubicParameters<F>> LogLookupValues<ElementRegister, F, E> {
         &self,
         builder: &mut AirBuilder<L>,
     ) {
+        // Register the constraints on the trace values.
         builder.constraints.push(Constraint::lookup(
             LookupConstraint::<ElementRegister, _, _>::ValuesLocal(self.clone()).into(),
         ));
+        // If global values are present, register the constraints on the global values.
         if self.global_digest.is_some() {
             builder.global_constraints.push(Constraint::lookup(
                 LookupConstraint::<ElementRegister, _, _>::ValuesGlobal(self.clone()).into(),
             ));
         }
+        // Register the constraints on the digest.
+        builder.global_constraints.push(Constraint::lookup(
+            LookupConstraint::<ElementRegister, _, _>::ValuesDigest(
+                self.digest,
+                self.local_digest,
+                self.global_digest,
+            )
+            .into(),
+        ));
     }
 }
 
@@ -66,13 +77,24 @@ impl<F: Field, E: CubicParameters<F>> LogLookupValues<CubicRegister, F, E> {
         &self,
         builder: &mut AirBuilder<L>,
     ) {
+        // Register the constraints on the trace values.
         builder.constraints.push(Constraint::lookup(
             LookupConstraint::<CubicRegister, _, _>::ValuesLocal(self.clone()).into(),
         ));
+        // If global values are present, register the constraints on the global values.
         if self.global_digest.is_some() {
             builder.global_constraints.push(Constraint::lookup(
                 LookupConstraint::<CubicRegister, _, _>::ValuesGlobal(self.clone()).into(),
             ));
         }
+        // Register the constraints on the digest.
+        builder.global_constraints.push(Constraint::lookup(
+            LookupConstraint::<CubicRegister, _, _>::ValuesDigest(
+                self.digest,
+                self.local_digest,
+                self.global_digest,
+            )
+            .into(),
+        ));
     }
 }
