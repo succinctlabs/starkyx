@@ -1076,7 +1076,6 @@ where
             .map(|_| builder.alloc_array_public(4))
             .collect::<Vec<_>>();
 
-        /*
         let state_ptr = builder.uninit_slice();
 
         for (i, h_slice) in data
@@ -1089,17 +1088,11 @@ where
                 builder.free(&state_ptr.get(j), h, &Time::from_element(i));
             }
         }
-        */
 
         // Load the permutation values.
         let mut permutation_col: ElementRegister =
             builder.mul(data.trace.mix_index, data.const_nums.const_2);
 
-        builder.watch(
-            &data.trace.compress_iteration,
-            "getting permutation compress iterations val",
-        );
-        builder.watch(&permutation_col, "getting first permutation col val");
         let mut m_idx_1 = data.consts.permutations.get_at(
             builder,
             data.trace.compress_iteration,
@@ -1112,7 +1105,6 @@ where
         );
         permutation_col = builder.add(permutation_col, data.const_nums.const_1);
 
-        builder.watch(&permutation_col, "getting second permutation col val");
         let mut m_idx_2 = data.consts.permutations.get_at(
             builder,
             data.trace.compress_iteration,
@@ -1177,7 +1169,6 @@ where
         let save_v = builder.expression(
             data.trace.is_compress_finalize.not_expr() * data.trace.at_dummy_compress.not_expr(),
         );
-        builder.watch(&save_v, "save_v");
 
         // Save the output into v in all of the following conditions.
         // 1) in the last 4 rows of compress (e.g. is_compress_finalize)
@@ -1241,7 +1232,6 @@ where
                     * data.trace.at_dummy_compress.not_expr()),
         );
 
-        builder.watch(&read_dummy_h_idx, "read_dummy_h_idx 2");
         let h_ts = builder.select(
             read_dummy_h_idx,
             &data.consts.dummy_ts,
@@ -1260,8 +1250,6 @@ where
                 Some("h".to_string()),
                 Some(MemorySliceIndex::IndexElement(h_idx)),
             );
-            builder.watch(&h_idx, "debug h");
-            builder.watch_memory(&data.memory.h.get_at(h_idx), "debug h");
 
             // If we are at the first compress of a message, then use the iv values instead of the h values.
             h_value = builder.select(
@@ -1285,7 +1273,6 @@ where
                 - (data.trace.is_compress_final_row.expr()
                     * data.trace.at_dummy_compress.not_expr()),
         );
-        builder.watch(&read_dummy_v_final_idx, "read_dummy_v_final_idx");
         let v_final_ts = builder.select(
             read_dummy_v_final_idx,
             &data.consts.dummy_ts,
@@ -1354,16 +1341,17 @@ where
             );
         }
 
-        /*
         for (i, element) in h.get_subarray(0..4).iter().enumerate() {
+            builder.watch(&h.get(i), "digest");
             builder.store(
                 &state_ptr.get(i),
                 element,
                 &Time::from_element(data.trace.compress_id),
                 Some(data.trace.is_digest_row.as_element()),
+                Some("state_ptr".to_string()),
+                Some(MemorySliceIndex::Index(i)),
             );
         }
-        */
 
         builder.watch_memory(&data.consts.iv.get(0), "iv[0]");
         builder.watch_memory(&data.consts.iv.get(7), "iv[7]");

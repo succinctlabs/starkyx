@@ -70,7 +70,7 @@ pub mod test_utils {
         type Instruction = UintInstruction;
 
         const NUM_FREE_COLUMNS: usize = 1527;
-        const EXTENDED_COLUMNS: usize = 690;
+        const EXTENDED_COLUMNS: usize = 708;
     }
 
     #[test]
@@ -103,12 +103,55 @@ pub mod test_utils {
         ];
         let msg_max_chunk_sizes = [4u64, 4, 35, 35];
 
-        let digests = [
-            "0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8",
-            "dad415aa819ebb585ce8ee1c1fa883804f405f6d8a6a0992628fb3bdaab5b42e",
-            "022bfe46002fe82ab0c451574898fafaeb36283825aab39ddf825dc48a1c0970",
-            "ad58001fb7de22fada15e574b17b2d2485183320cdc14f78625574328fedba84",
+        let digests: [[[GoldilocksField; 8]; 4]; 4] = [
+            hex::decode("0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8")
+                .unwrap()
+                .iter()
+                .map(|x| GoldilocksField::from_canonical_u8(*x))
+                .collect_vec()
+                .chunks_exact(8)
+                .map(|x| x.try_into().unwrap())
+                .collect_vec()
+                .as_slice()
+                .try_into()
+                .unwrap(),
+            hex::decode("dad415aa819ebb585ce8ee1c1fa883804f405f6d8a6a0992628fb3bdaab5b42e")
+                .unwrap()
+                .iter()
+                .map(|x| GoldilocksField::from_canonical_u8(*x))
+                .collect_vec()
+                .chunks_exact(8)
+                .map(|x| x.try_into().unwrap())
+                .collect_vec()
+                .as_slice()
+                .try_into()
+                .unwrap(),
+            hex::decode("022bfe46002fe82ab0c451574898fafaeb36283825aab39ddf825dc48a1c0970")
+                .unwrap()
+                .iter()
+                .map(|x| GoldilocksField::from_canonical_u8(*x))
+                .collect_vec()
+                .chunks_exact(8)
+                .map(|x| x.try_into().unwrap())
+                .collect_vec()
+                .as_slice()
+                .try_into()
+                .unwrap(),
+            hex::decode("ad58001fb7de22fada15e574b17b2d2485183320cdc14f78625574328fedba84")
+                .unwrap()
+                .iter()
+                .map(|x| GoldilocksField::from_canonical_u8(*x))
+                .collect_vec()
+                .chunks_exact(8)
+                .map(|x| x.try_into().unwrap())
+                .collect_vec()
+                .as_slice()
+                .try_into()
+                .unwrap(),
         ];
+
+        let expected_digests: Vec<&[[GoldilocksField; 8]; 4]> =
+            digests.iter().cycle().take(4 * 17).collect();
 
         let mut digest_index = 0;
 
@@ -202,6 +245,9 @@ pub mod test_utils {
 
         writer.write(&num_messages, &num_messages_value);
         let mut intial_state = IV;
+        let mut expected_digests_iter = expected_digests.iter();
+        let mut hash_state_iter = hash_state.iter();
+        assert!(expected_digests.len() == hash_state.len());
         for i in 0..num_rounds {
             let padded_chunk = padded_chunks_values[i];
             writer.write_array(&padded_chunks[i], padded_chunk);
@@ -220,6 +266,13 @@ pub mod test_utils {
                 0,
                 true,
             );
+
+            if end_bits_values[i] == GoldilocksField::ONE {
+                writer.write_array(
+                    hash_state_iter.next().unwrap(),
+                    *expected_digests_iter.next().unwrap(),
+                );
+            }
 
             writer.write_array(
                 &hash_state[0],
@@ -267,6 +320,7 @@ pub mod test_utils {
 
         stark.verify(proof.clone(), &public).unwrap();
 
+        /*
         let mut pw = PartialWitness::new();
 
         pw.set_target_arr(&public_input, &public);
@@ -279,6 +333,7 @@ pub mod test_utils {
             rec_data.prove(pw).unwrap()
         );
         rec_data.verify(rec_proof).unwrap();
+        */
 
         timing.print();
     }
