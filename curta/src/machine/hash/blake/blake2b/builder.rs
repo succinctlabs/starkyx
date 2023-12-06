@@ -291,19 +291,6 @@ pub mod test_utils {
             }
         });
 
-        /*
-        // Compare expected digests with the trace values.
-        let writer = writer_data.public_writer();
-        for (digest, expected) in hash_state.iter().zip_eq(expected_digests) {
-            let array: ArrayRegister<S::IntRegister> = (*digest).into();
-            let digest = writer
-                .read_array::<_, 8>(&array)
-                .map(|x| S::field_value_to_int(&x));
-            let expected_digest = S::decode(expected);
-            assert_eq!(digest, expected_digest);
-        }
-        */
-
         let (trace, public) = (writer_data.trace, writer_data.public);
 
         let proof = timed!(
@@ -315,7 +302,6 @@ pub mod test_utils {
 
         stark.verify(proof.clone(), &public).unwrap();
 
-        /*
         let mut pw = PartialWitness::new();
 
         pw.set_target_arr(&public_input, &public);
@@ -328,7 +314,6 @@ pub mod test_utils {
             rec_data.prove(pw).unwrap()
         );
         rec_data.verify(rec_proof).unwrap();
-        */
 
         timing.print();
     }

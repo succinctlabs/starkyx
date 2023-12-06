@@ -130,13 +130,11 @@ impl<L: AirParameters, const R: usize, const C: usize> MemoryArray<L, R, C> {
         let mut idx = builder.mul(row, self.c_const);
         idx = builder.add(idx, col);
 
-        let ret = builder.load(
+        builder.load(
             &self.flattened_memory.get_at(idx),
             &Time::zero(),
             label.clone(),
             Some(MemorySliceIndex::IndexElement(idx)),
-        );
-
-        ret
+        )
     }
 }

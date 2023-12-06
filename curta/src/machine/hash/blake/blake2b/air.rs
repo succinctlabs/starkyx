@@ -74,15 +74,10 @@ where
         let state_ptr = builder.uninit_slice();
         let num_digests = data.public.digest_indices.len();
 
-        // Create the public registers to verify the hash.
+        // Create the public registers to input the expected digests.
         let hash_state_public = (0..num_digests)
             .map(|_| builder.alloc_array_public(4))
             .collect::<Vec<_>>();
-        for hash_state in hash_state_public.iter() {
-            for i in 0..4 {
-                builder.watch(&hash_state.get(i), "hash state");
-            }
-        }
 
         for (i, h_slice) in data
             .public
