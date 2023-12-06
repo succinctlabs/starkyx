@@ -61,7 +61,7 @@ impl<F: Field, E: CubicParameters<F>> LogLookupValues<ElementRegister, F, E> {
             ));
         }
         // Register the constraints on the digest.
-        builder.global_constraints.push(Constraint::lookup(
+        builder.constraints.push(Constraint::lookup(
             LookupConstraint::<ElementRegister, _, _>::ValuesDigest(
                 self.digest,
                 self.local_digest,
@@ -88,7 +88,7 @@ impl<F: Field, E: CubicParameters<F>> LogLookupValues<CubicRegister, F, E> {
             ));
         }
         // Register the constraints on the digest.
-        builder.global_constraints.push(Constraint::lookup(
+        builder.constraints.push(Constraint::lookup(
             LookupConstraint::<CubicRegister, _, _>::ValuesDigest(
                 self.digest,
                 self.local_digest,
