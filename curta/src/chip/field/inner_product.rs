@@ -35,8 +35,8 @@ pub struct FpInnerProductInstruction<P: FieldParameters> {
 impl<L: AirParameters> AirBuilder<L> {
     pub fn fp_inner_product<P: FieldParameters>(
         &mut self,
-        a: &Vec<FieldRegister<P>>,
-        b: &Vec<FieldRegister<P>>,
+        a: &[FieldRegister<P>],
+        b: &[FieldRegister<P>],
     ) -> FieldRegister<P>
     where
         L::Instruction: From<FpInnerProductInstruction<P>>,
@@ -62,8 +62,8 @@ impl<L: AirParameters> AirBuilder<L> {
         }
 
         let instr = FpInnerProductInstruction {
-            a: a.clone(),
-            b: b.clone(),
+            a: a.to_vec(),
+            b: b.to_vec(),
             result,
             carry,
             witness_low,
@@ -259,13 +259,13 @@ mod tests {
         let b_pub = builder.alloc_public::<Fp>();
         let c_pub = builder.alloc_public::<Fp>();
         let d_pub = builder.alloc_public::<Fp>();
-        let _ = builder.fp_inner_product(&vec![a_pub, b_pub], &vec![c_pub, d_pub]);
+        let _ = builder.fp_inner_product(&[a_pub, b_pub], &[c_pub, d_pub]);
 
         let a = builder.alloc::<Fp>();
         let b = builder.alloc::<Fp>();
         let c = builder.alloc::<Fp>();
         let d = builder.alloc::<Fp>();
-        let _ = builder.fp_inner_product(&vec![a, b], &vec![c, d]);
+        let _ = builder.fp_inner_product(&[a, b], &[c, d]);
 
         let (air, trace_data) = builder.build();
         let num_rows = 1 << 16;
