@@ -15,7 +15,7 @@ const STATE_SIZE: usize = 8;
 const WORK_VECTOR_SIZE: usize = 16;
 const COMPRESS_LENGTH: usize = MIX_LENGTH * NUM_MIX_ROUNDS;
 
-const IV: [u64; STATE_SIZE] = [
+pub const IV: [u64; STATE_SIZE] = [
     0x6a09e667f2bdc928,
     0xbb67ae8584caa73b,
     0x3c6ef372fe94f82b,
