@@ -271,7 +271,6 @@ pub mod test_utils {
 
             if end_bits_values[i] == GoldilocksField::ONE {
                 let expected_digest = expected_digests_iter.next().unwrap();
-                println!("Expected digest is {:?}", expected_digest);
                 writer.write_array(hash_state_iter.next().unwrap(), *expected_digest);
             }
         }

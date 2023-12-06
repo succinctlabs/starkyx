@@ -71,8 +71,35 @@ where
             num_messages,
         );
 
+        let state_ptr = builder.uninit_slice();
+        let num_digests = data.public.digest_indices.len();
+
+        // Create the public registers to verify the hash.
+        let hash_state_public = (0..num_digests)
+            .map(|_| builder.alloc_array_public(4))
+            .collect::<Vec<_>>();
+        for hash_state in hash_state_public.iter() {
+            for i in 0..4 {
+                builder.watch(&hash_state.get(i), "hash state");
+            }
+        }
+
+        for (i, h_slice) in data
+            .public
+            .digest_indices
+            .iter()
+            .zip(hash_state_public.iter())
+        {
+            for (j, h) in h_slice.iter().enumerate() {
+                builder.free(&state_ptr.get(j), h, &Time::from_element(i));
+            }
+        }
+
         let (v_indices, v_values) = Self::blake2b_compress_initialize(builder, &data);
-        Self::blake2b_compress(builder, &v_indices, &v_values, &data)
+        Self::blake2b_compress(builder, &v_indices, &v_values, &data);
+        Self::blake2b_compress_finalize(builder, &state_ptr, &data);
+
+        hash_state_public
     }
 
     pub fn blake2b_const_nums(builder: &mut BytesBuilder<L>) -> BLAKE2BConstNums {
@@ -1058,32 +1085,7 @@ where
         v_indices: &[ElementRegister; 4],
         v_values: &[U64Register; 4],
         data: &BLAKE2BData<L>,
-    ) -> Vec<ArrayRegister<U64Register>> {
-        let num_digests = data.public.digest_indices.len();
-
-        // Create the public registers to verify the hash.
-        let hash_state_public = (0..num_digests)
-            .map(|_| builder.alloc_array_public(4))
-            .collect::<Vec<_>>();
-        for hash_state in hash_state_public.iter() {
-            for i in 0..4 {
-                builder.watch(&hash_state.get(i), "hash state");
-            }
-        }
-
-        let state_ptr = builder.uninit_slice();
-
-        for (i, h_slice) in data
-            .public
-            .digest_indices
-            .iter()
-            .zip(hash_state_public.iter())
-        {
-            for (j, h) in h_slice.iter().enumerate() {
-                builder.free(&state_ptr.get(j), h, &Time::from_element(i));
-            }
-        }
-
+    ) {
         // Load the permutation values.
         let mut permutation_col: ElementRegister =
             builder.mul(data.trace.mix_index, data.const_nums.const_2);
@@ -1204,7 +1206,13 @@ where
                 Some(MemorySliceIndex::IndexElement(v_final_idx)),
             );
         }
+    }
 
+    pub fn blake2b_compress_finalize(
+        builder: &mut BytesBuilder<L>,
+        state_ptr: &Slice<U64Register>,
+        data: &BLAKE2BData<L>,
+    ) {
         // If we are at the last row of compress, then compute and save the h value.
 
         // First load the previous round's h value.
@@ -1346,8 +1354,6 @@ where
                 );
             }
         }
-
-        hash_state_public
     }
 
     pub fn blake2b_mix(
