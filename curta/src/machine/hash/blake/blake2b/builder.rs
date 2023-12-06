@@ -92,7 +92,7 @@ pub mod test_utils {
             // 1 block
             hex::decode("").unwrap(),
 
-            // 2 blocks
+            // 1 block
             hex::decode("092005a6f7a58a98df5f9b8d186b9877f12b603aa06c7debf0f610d5a49f9ed7262b5e095b309af2b0eae1c554e03b6cc4a5a0df207b662b329623f27fdce8d088554d82b1e63bedeb3fe9bd7754c7deccdfe277bcbfad4bbaff6302d3488bd2a8565f4f6e753fc7942fa29051e258da2e06d13b352220b9eadb31d8ead7f88b").unwrap(),
 
             // 8 blocks
@@ -103,58 +103,7 @@ pub mod test_utils {
         ];
         let msg_max_chunk_sizes = [4u64, 4, 35, 35];
 
-        let digests: [[[GoldilocksField; 8]; 4]; 4] = [
-            hex::decode("0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8")
-                .unwrap()
-                .iter()
-                .map(|x| GoldilocksField::from_canonical_u8(*x))
-                .collect_vec()
-                .chunks_exact(8)
-                .map(|x| x.try_into().unwrap())
-                .collect_vec()
-                .as_slice()
-                .try_into()
-                .unwrap(),
-            hex::decode("dad415aa819ebb585ce8ee1c1fa883804f405f6d8a6a0992628fb3bdaab5b42e")
-                .unwrap()
-                .iter()
-                .map(|x| GoldilocksField::from_canonical_u8(*x))
-                .collect_vec()
-                .chunks_exact(8)
-                .map(|x| x.try_into().unwrap())
-                .collect_vec()
-                .as_slice()
-                .try_into()
-                .unwrap(),
-            hex::decode("022bfe46002fe82ab0c451574898fafaeb36283825aab39ddf825dc48a1c0970")
-                .unwrap()
-                .iter()
-                .map(|x| GoldilocksField::from_canonical_u8(*x))
-                .collect_vec()
-                .chunks_exact(8)
-                .map(|x| x.try_into().unwrap())
-                .collect_vec()
-                .as_slice()
-                .try_into()
-                .unwrap(),
-            hex::decode("ad58001fb7de22fada15e574b17b2d2485183320cdc14f78625574328fedba84")
-                .unwrap()
-                .iter()
-                .map(|x| GoldilocksField::from_canonical_u8(*x))
-                .collect_vec()
-                .chunks_exact(8)
-                .map(|x| x.try_into().unwrap())
-                .collect_vec()
-                .as_slice()
-                .try_into()
-                .unwrap(),
-        ];
-
-        let expected_digests: Vec<&[[GoldilocksField; 8]; 4]> =
-            digests.iter().cycle().take(4 * 17).collect();
-
         let mut start_index = 0;
-
         for _i in 0..17 {
             for (msg, msg_max_chunk_size) in msgs.iter().zip_eq(msg_max_chunk_sizes.iter()) {
                 let msg_u64_limbs: Vec<[GoldilocksField; 8]> =
@@ -185,9 +134,9 @@ pub mod test_utils {
 
                     let at_digest_chunk = i == msg_digest_idx;
                     t_values_values.push(if at_digest_chunk {
-                        u64_to_le_field_bytes(msg_len as u64)
+                        msg_len as u64
                     } else {
-                        u64_to_le_field_bytes(t_value)
+                        t_value
                     });
 
                     digest_bits_values.push(GoldilocksField::from_canonical_usize(
@@ -246,32 +195,38 @@ pub mod test_utils {
         let mut writer = writer_data.public_writer();
 
         writer.write(&num_messages, &num_messages_value);
-        let mut intial_state = IV;
-        let mut expected_digests_iter = expected_digests.iter();
         let mut hash_state_iter = hash_state.iter();
-        assert!(expected_digests.len() == hash_state.len());
+        let mut current_state = IV;
         for i in 0..num_rounds {
             let padded_chunk = padded_chunks_values[i];
             writer.write_array(&padded_chunks[i], padded_chunk);
             writer.write(&end_bits.get(i), &end_bits_values[i]);
             writer.write(&digest_bits.get(i), &digest_bits_values[i]);
-            writer.write(&t_values.get(i), &t_values_values[i]);
+            writer.write(&t_values.get(i), &u64_to_le_field_bytes(t_values_values[i]));
 
             let chunk = padded_chunks_values[i];
-            let hash = BLAKE2BPure::compress(
+            BLAKE2BPure::compress(
                 &chunk
                     .iter()
                     .flatten()
                     .map(|x| GoldilocksField::as_canonical_u64(x) as u8)
                     .collect_vec(),
-                &mut intial_state,
-                0,
-                true,
+                &mut current_state,
+                t_values_values[i],
+                digest_bits_values[i] == GoldilocksField::ONE,
             );
 
+            if digest_bits_values[i] == GoldilocksField::ONE {
+                writer.write_array(
+                    hash_state_iter.next().unwrap(),
+                    current_state[0..4]
+                        .iter()
+                        .map(|x| u64_to_le_field_bytes(*x)),
+                );
+            }
+
             if end_bits_values[i] == GoldilocksField::ONE {
-                let expected_digest = expected_digests_iter.next().unwrap();
-                writer.write_array(hash_state_iter.next().unwrap(), *expected_digest);
+                current_state = IV;
             }
         }
 
