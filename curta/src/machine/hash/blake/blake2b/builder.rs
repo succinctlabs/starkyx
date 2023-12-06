@@ -176,10 +176,7 @@ pub mod test_utils {
 
                 let mut t_value = 0u64;
                 let msg_len = msg.len();
-                let mut msg_digest_idx = msg_len / 128;
-                if (msg_len % 128) == 0 && msg_len != 0 {
-                    msg_digest_idx += 1;
-                }
+                let msg_digest_idx = if msg_len == 0 { 0 } else { (msg_len - 1) / 128 };
                 assert!(msg_padded_chunks.len() == *msg_max_chunk_size as usize);
                 for (i, chunk) in msg_padded_chunks.iter().enumerate() {
                     padded_chunks_values.push(*chunk);
