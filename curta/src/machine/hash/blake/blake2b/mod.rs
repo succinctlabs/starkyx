@@ -9,11 +9,13 @@ pub struct BLAKE2BAir<L> {
 }
 
 const NUM_MIX_ROUNDS: usize = 12;
+const MIX_LENGTH: usize = 8;
 const MSG_ARRAY_SIZE: usize = 16;
-const HASH_ARRAY_SIZE: usize = 8;
+const STATE_SIZE: usize = 8;
 const WORK_VECTOR_SIZE: usize = 16;
+const COMPRESS_LENGTH: usize = MIX_LENGTH * NUM_MIX_ROUNDS;
 
-const IV: [u64; HASH_ARRAY_SIZE] = [
+const IV: [u64; STATE_SIZE] = [
     0x6a09e667f2bdc928,
     0xbb67ae8584caa73b,
     0x3c6ef372fe94f82b,
@@ -28,7 +30,7 @@ const IV: [u64; HASH_ARRAY_SIZE] = [
 // we assume that the output is 32 bytes
 // So that means the initial hash entry to be
 // 0x6a09e667f3bcc908 xor 0x01010020
-const COMPRESS_IV: [u64; HASH_ARRAY_SIZE] = [
+const COMPRESS_IV: [u64; STATE_SIZE] = [
     0x6a09e667f3bcc908,
     0xbb67ae8584caa73b,
     0x3c6ef372fe94f82b,
@@ -39,7 +41,7 @@ const COMPRESS_IV: [u64; HASH_ARRAY_SIZE] = [
     0x5be0cd19137e2179,
 ];
 
-const V_INDICES: [[u8; 4]; 8] = [
+const V_INDICES: [[u8; 4]; MIX_LENGTH] = [
     [0, 4, 8, 12],
     [1, 5, 9, 13],
     [2, 6, 10, 14],
@@ -50,7 +52,7 @@ const V_INDICES: [[u8; 4]; 8] = [
     [3, 4, 9, 14],
 ];
 
-const V_LAST_WRITE_AGES: [[u8; 4]; 8] = [
+const V_LAST_WRITE_AGES: [[u8; 4]; MIX_LENGTH] = [
     [4, 1, 2, 3],
     [4, 5, 2, 3],
     [4, 5, 6, 3],
@@ -61,7 +63,7 @@ const V_LAST_WRITE_AGES: [[u8; 4]; 8] = [
     [4, 7, 6, 5],
 ];
 
-const SIGMA_PERMUTATIONS: [[u8; 16]; 12] = [
+const SIGMA_PERMUTATIONS: [[u8; MSG_ARRAY_SIZE]; NUM_MIX_ROUNDS] = [
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     [14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3],
     [11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4],

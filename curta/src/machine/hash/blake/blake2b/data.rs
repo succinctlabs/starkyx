@@ -40,7 +40,7 @@ pub struct BLAKE2BTraceData {
     pub(crate) compress_id: ElementRegister,
     pub(crate) previous_compress_id: ElementRegister,
     pub(crate) compress_index: ElementRegister,
-    pub(crate) compress_iteration: ElementRegister,
+    pub(crate) mix_id: ElementRegister,
     pub(crate) mix_index: ElementRegister,
 }
 

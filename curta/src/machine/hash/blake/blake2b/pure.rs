@@ -1,4 +1,4 @@
-use super::{COMPRESS_IV, HASH_ARRAY_SIZE, WORK_VECTOR_SIZE};
+use super::{COMPRESS_IV, STATE_SIZE, WORK_VECTOR_SIZE};
 use crate::machine::hash::blake::blake2b::SIGMA_PERMUTATIONS;
 
 pub struct BLAKE2BPure;
@@ -6,14 +6,14 @@ pub struct BLAKE2BPure;
 impl BLAKE2BPure {
     pub fn compress(
         msg_chunk: &[u8],
-        state: &mut [u64; HASH_ARRAY_SIZE],
+        state: &mut [u64; STATE_SIZE],
         bytes_compressed: u64,
         last_chunk: bool,
-    ) -> [u64; HASH_ARRAY_SIZE] {
+    ) -> [u64; STATE_SIZE] {
         // Set up the work vector V
         let mut v: [u64; WORK_VECTOR_SIZE] = [0; WORK_VECTOR_SIZE];
 
-        v[..8].copy_from_slice(&state[..HASH_ARRAY_SIZE]);
+        v[..8].copy_from_slice(&state[..STATE_SIZE]);
         v[8..16].copy_from_slice(&COMPRESS_IV);
 
         v[12] ^= bytes_compressed;
@@ -102,11 +102,11 @@ impl BLAKE2BPure {
             );
         }
 
-        for i in 0..HASH_ARRAY_SIZE {
+        for i in 0..STATE_SIZE {
             state[i] ^= v[i];
         }
 
-        for i in 0..HASH_ARRAY_SIZE {
+        for i in 0..STATE_SIZE {
             state[i] ^= v[i + 8];
         }
 
