@@ -11,8 +11,7 @@ impl<L: AirParameters> BytesBuilder<L>
 where
     L::Instruction: UintInstructions,
 {
-    #[allow(dead_code)]
-    fn blake2b(
+    pub fn blake2b(
         &mut self,
         padded_chunks: &[ArrayRegister<U64Register>],
         t_values: &ArrayRegister<U64Register>,
