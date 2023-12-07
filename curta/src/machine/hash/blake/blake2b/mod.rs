@@ -2,6 +2,7 @@ pub mod air;
 pub mod builder;
 pub mod data;
 pub mod pure;
+pub mod register;
 pub mod utils;
 
 pub struct BLAKE2BAir<L> {
