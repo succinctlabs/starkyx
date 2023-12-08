@@ -27,7 +27,8 @@ impl<F: Field> Instruction<F> for GetInstruction<F> {
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let mut memory = writer.memory_mut().unwrap();
         let key = self.ptr.read(writer, row_index);
-        let (index, write_ts) = if self.memory_output.is_some() {
+        let (label, index, write_ts) = if self.memory_output.is_some() {
+            let label = &self.memory_output.as_ref().unwrap().label;
             let index = match self.memory_output.as_ref().unwrap().index {
                 Some(MemorySliceIndex::Index(index)) => Some(F::from_canonical_usize(index)),
                 Some(MemorySliceIndex::IndexElement(index)) => Some(writer.read(&index, row_index)),
@@ -35,9 +36,9 @@ impl<F: Field> Instruction<F> for GetInstruction<F> {
             };
             let ts =
                 writer.read_expression(&self.memory_output.as_ref().unwrap().ts.0, row_index)[0];
-            (index, ts)
+            (Some(label), index, ts)
         } else {
-            (None, F::ZERO)
+            (None, None, F::ZERO)
         };
         let entry = memory.get_mut(&key).unwrap_or_else(|| {
             panic!(
@@ -52,9 +53,11 @@ impl<F: Field> Instruction<F> for GetInstruction<F> {
             panic!(
                 "Attempt to read with multiplicity zero at: \n
                 pointer {:?}]\n
+                memory_label {:?}\n
+                index {:?}\n
                 value {:?} \n
                 row_index: {:?}\n",
-                key, self.register, row_index
+                key, label, index, self.register, row_index
             )
         }
         entry.multiplicity -= F::ONE;
