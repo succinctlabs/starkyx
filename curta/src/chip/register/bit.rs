@@ -113,6 +113,6 @@ impl<B: Builder> And<B> for BitRegister {
     type Output = Self;
 
     fn and(self, rhs: Self, builder: &mut B) -> Self::Output {
-        builder.expression(self.expr() * rhs.expr())
+        builder.mul(self, rhs)
     }
 }

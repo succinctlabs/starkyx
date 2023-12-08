@@ -1057,6 +1057,7 @@ where
             Some(MemorySliceIndex::IndexElement(t_idx)),
         );
 
+        builder.watch(&t, "t value");
         let v4_xor_t = builder.xor(v4_value, t);
         v4_value = builder.select(data.trace.is_compress_first_row, &v4_xor_t, &v4_value);
 
