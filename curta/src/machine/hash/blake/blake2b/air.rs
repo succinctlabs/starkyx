@@ -1341,11 +1341,11 @@ where
             if i < 4 {
                 builder.store(
                     &state_ptr.get(i),
-                    h_value,
+                    xor,
                     &Time::from_element(data.trace.compress_id),
                     Some(data.trace.is_digest_row.as_element()),
-                    None,
-                    None,
+                    Some("state_ptr".to_string()),
+                    Some(MemorySliceIndex::Index(i)),
                 );
             }
         }
