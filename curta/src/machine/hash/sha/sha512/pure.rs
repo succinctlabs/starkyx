@@ -1,9 +1,12 @@
 use super::{INITIAL_HASH, ROUND_CONSTANTS, SHA512};
 use crate::machine::hash::sha::algorithm::SHAPure;
+use crate::machine::hash::HashPureInteger;
+
+impl HashPureInteger for SHA512 {
+    type Integer = u64;
+}
 
 impl SHAPure<80> for SHA512 {
-    type Integer = u64;
-
     const INITIAL_HASH: [Self::Integer; 8] = INITIAL_HASH;
     const ROUND_CONSTANTS: [Self::Integer; 80] = ROUND_CONSTANTS;
 

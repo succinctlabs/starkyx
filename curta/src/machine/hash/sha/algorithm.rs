@@ -1,20 +1,20 @@
 use core::fmt::Debug;
 
 use log::debug;
-use num::{Num, Zero};
+use num::Zero;
 use plonky2::util::log2_ceil;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use super::data::SHAData;
 use crate::chip::memory::time::Time;
-use crate::chip::memory::value::MemoryValue;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::machine::builder::Builder;
 use crate::machine::hash::sha::data::{SHAMemory, SHAPublicData, SHATraceData};
+use crate::machine::hash::{HashInteger, HashPureInteger};
 use crate::math::prelude::*;
 
 const DUMMY_INDEX: u64 = i32::MAX as u64;
@@ -23,10 +23,8 @@ const DUMMY_INDEX: u64 = i32::MAX as u64;
 ///
 /// An interface for the SHA algorithm as a Rust function operating on numerical values.
 pub trait SHAPure<const CYCLE_LENGTH: usize>:
-    Debug + Clone + 'static + Serialize + DeserializeOwned + Send + Sync
+    HashPureInteger + Debug + Clone + 'static + Serialize + DeserializeOwned + Send + Sync
 {
-    type Integer: Num + Copy + Debug;
-
     const INITIAL_HASH: [Self::Integer; 8];
     const ROUND_CONSTANTS: [Self::Integer; CYCLE_LENGTH];
 
@@ -46,11 +44,11 @@ pub trait SHAPure<const CYCLE_LENGTH: usize>:
 /// SHA algorithm AIR implementation.
 ///
 /// An interface for the SHA algorithm as an AIR.
-pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
-    type IntRegister: MemoryValue + Register<Value<B::Field> = Self::Value>;
+pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>:
+    SHAPure<CYCLE_LENGTH> + HashInteger<B>
+{
     type StateVariable: Register + Into<ArrayRegister<Self::IntRegister>>;
     type StatePointer;
-    type Value;
 
     /// Convert an integer to the `Self::IntRegister` field value.
     fn int_to_field_value(int: Self::Integer) -> Self::Value;
