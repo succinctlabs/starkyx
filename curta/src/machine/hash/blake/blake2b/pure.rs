@@ -1,3 +1,8 @@
+use core::fmt::Debug;
+
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+
 use super::{BLAKE2B, COMPRESS_IV, STATE_SIZE, WORK_VECTOR_SIZE};
 use crate::machine::hash::blake::blake2b::SIGMA_PERMUTATIONS;
 use crate::machine::hash::HashPureInteger;
@@ -6,7 +11,9 @@ impl HashPureInteger for BLAKE2B {
     type Integer = u64;
 }
 
-pub trait BLAKE2BPure: HashPureInteger {
+pub trait BLAKE2BPure:
+    HashPureInteger + Debug + Clone + 'static + Serialize + DeserializeOwned + Send + Sync
+{
     fn compress(
         msg_chunk: &[u8],
         state: &mut [Self::Integer; STATE_SIZE],
