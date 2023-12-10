@@ -2,6 +2,7 @@ use log::debug;
 use plonky2::util::log2_ceil;
 
 use super::data::{BLAKE2BConstNums, BLAKE2BConsts, BLAKE2BData};
+use super::register::BLAKE2BDigestRegister;
 use super::{BLAKE2B, COMPRESS_LENGTH, IV, STATE_SIZE};
 use crate::chip::memory::instruction::MemorySliceIndex;
 use crate::chip::memory::pointer::slice::Slice;
@@ -37,6 +38,8 @@ const DUMMY_TS: u64 = (i32::MAX - 1) as u64;
 const FIRST_COMPRESS_H_READ_TS: u64 = i32::MAX as u64;
 
 pub trait BLAKEAir<B: Builder>: HashInteger<B> {
+    type StateVariable;
+
     fn cycles_end_bits(builder: &mut B) -> (BitRegister, BitRegister, BitRegister, BitRegister);
 
     fn blake2b(
@@ -138,6 +141,8 @@ impl<L: AirParameters> BLAKEAir<BytesBuilder<L>> for BLAKE2B
 where
     L::Instruction: UintInstructions,
 {
+    type StateVariable = BLAKE2BDigestRegister;
+
     fn cycles_end_bits(
         builder: &mut BytesBuilder<L>,
     ) -> (BitRegister, BitRegister, BitRegister, BitRegister) {
