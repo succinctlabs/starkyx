@@ -13,7 +13,7 @@ pub trait BlakeBuilder: Builder {
         digest_bits: &ArrayRegister<BitRegister>,
         digest_indices: &ArrayRegister<ElementRegister>,
         num_messages: &ElementRegister,
-    ) -> Vec<ArrayRegister<B::IntRegister>> {
+    ) -> Vec<B::DigestRegister> {
         B::blake2b(
             self,
             padded_chunks,
@@ -54,6 +54,7 @@ pub mod test_utils {
     use crate::machine::hash::blake::blake2b::pure::BLAKE2BPure;
     use crate::machine::hash::blake::blake2b::utils::BLAKE2BUtil;
     use crate::machine::hash::blake::blake2b::{BLAKE2B, IV};
+    use crate::machine::hash::HashDigest;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
     use crate::math::prelude::*;
     use crate::plonky2::stark::config::{CurtaConfig, CurtaPoseidonGoldilocksConfig};
@@ -89,7 +90,7 @@ pub mod test_utils {
 
         let msgs = [
             // 1 block
-            hex::decode("00f43f3ef4c05d1aca645d7b2b59af99d65661810b8a724818052db75e04afb60ea210002f9cac87493604cb5fff6644ea17c3b1817d243bc5a0aa6f0d11ab3df46f37b9adbf1ff3a446807e7a9ebc77647776b8bbda37dcf2f4f34ca7ba7bf4c7babfbe080642414245b501032c000000b7870a0500000000360b79058f3b331fbbb10d38a2e309517e24cc12094d0a5a7c9faa592884e9621aecff0224bc1a857a0bacadf4455e2c5b39684d2d5879b108c98315f6a14504348846c6deed3addcba24fc3af531d59f31c87bc454bf6f1d73eadaf2d22d60c05424142450101eead41c1266af7bc7becf961dcb93f3691642c9b6d50aeb65b92528b99c675608f2095a296ed52aa433c1bfed56e8546dae03b61cb59643a9cb39f82618f958b00041000000000000000000000000000000000000000000000000000000000000000008101a26cc6796f1025d51bd927351af541d3ab01d7a1b978a65e19c16ae2799b3286ca2401211009421c4e6bd80ef9e07918a26cc6796f1025d51bd927351af541d3ab01d7a1b978a65e19c16ae2799b3286ca2401211009421c4e6bd80ef9e079180400").unwrap(),
+            hex::decode("").unwrap(),
 
             // 1 block
             hex::decode("092005a6f7a58a98df5f9b8d186b9877f12b603aa06c7debf0f610d5a49f9ed7262b5e095b309af2b0eae1c554e03b6cc4a5a0df207b662b329623f27fdce8d088554d82b1e63bedeb3fe9bd7754c7deccdfe277bcbfad4bbaff6302d3488bd2a8565f4f6e753fc7942fa29051e258da2e06d13b352220b9eadb31d8ead7f88b").unwrap(),
@@ -216,8 +217,12 @@ pub mod test_utils {
             );
 
             if digest_bits_values[i] == GoldilocksField::ONE {
+                let digest: <BLAKE2B as HashDigest<BytesBuilder<BLAKE2BTest>>>::DigestRegister =
+                    *hash_state_iter.next().unwrap();
+                let array: ArrayRegister<_> = digest.into();
+
                 writer.write_array(
-                    hash_state_iter.next().unwrap(),
+                    &array,
                     current_state[0..4]
                         .iter()
                         .map(|x| u64_to_le_field_bytes(*x)),

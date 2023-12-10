@@ -14,7 +14,7 @@ use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::machine::builder::Builder;
 use crate::machine::hash::sha::data::{SHAMemory, SHAPublicData, SHATraceData};
-use crate::machine::hash::{HashInteger, HashPureInteger};
+use crate::machine::hash::{HashDigest, HashInteger, HashPureInteger};
 use crate::math::prelude::*;
 
 const DUMMY_INDEX: u64 = i32::MAX as u64;
@@ -23,7 +23,7 @@ const DUMMY_INDEX: u64 = i32::MAX as u64;
 ///
 /// An interface for the SHA algorithm as a Rust function operating on numerical values.
 pub trait SHAPure<const CYCLE_LENGTH: usize>:
-    HashPureInteger + Debug + Clone + 'static + Serialize + DeserializeOwned + Send + Sync
+    Debug + Clone + 'static + Serialize + DeserializeOwned + Send + Sync + HashPureInteger
 {
     const INITIAL_HASH: [Self::Integer; 8];
     const ROUND_CONSTANTS: [Self::Integer; CYCLE_LENGTH];
@@ -45,7 +45,7 @@ pub trait SHAPure<const CYCLE_LENGTH: usize>:
 ///
 /// An interface for the SHA algorithm as an AIR.
 pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>:
-    SHAPure<CYCLE_LENGTH> + HashInteger<B>
+    SHAPure<CYCLE_LENGTH> + HashInteger<B> + HashDigest<B>
 {
     type StateVariable: Register + Into<ArrayRegister<Self::IntRegister>>;
     type StatePointer;

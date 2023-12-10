@@ -24,7 +24,7 @@ use crate::machine::hash::blake::blake2b::{
     COMPRESS_IV, MIX_LENGTH, MSG_ARRAY_SIZE, NUM_MIX_ROUNDS, SIGMA_PERMUTATIONS, V_INDICES,
     V_LAST_WRITE_AGES,
 };
-use crate::machine::hash::HashInteger;
+use crate::machine::hash::{HashDigest, HashInteger};
 use crate::math::prelude::*;
 
 impl<B: Builder> HashInteger<B> for BLAKE2B {
@@ -32,14 +32,16 @@ impl<B: Builder> HashInteger<B> for BLAKE2B {
     type IntRegister = U64Register;
 }
 
+impl<B: Builder> HashDigest<B> for BLAKE2B {
+    type DigestRegister = BLAKE2BDigestRegister;
+}
+
 const DUMMY_INDEX: u64 = i32::MAX as u64;
 const DUMMY_INDEX_2: u64 = (i32::MAX - 1) as u64;
 const DUMMY_TS: u64 = (i32::MAX - 1) as u64;
 const FIRST_COMPRESS_H_READ_TS: u64 = i32::MAX as u64;
 
-pub trait BLAKEAir<B: Builder>: HashInteger<B> {
-    type StateVariable;
-
+pub trait BLAKEAir<B: Builder>: HashInteger<B> + HashDigest<B> {
     fn cycles_end_bits(builder: &mut B) -> (BitRegister, BitRegister, BitRegister, BitRegister);
 
     fn blake2b(
@@ -50,7 +52,7 @@ pub trait BLAKEAir<B: Builder>: HashInteger<B> {
         digest_bits: &ArrayRegister<BitRegister>,
         digest_indices: &ArrayRegister<ElementRegister>,
         num_messages: &ElementRegister,
-    ) -> Vec<ArrayRegister<Self::IntRegister>>;
+    ) -> Vec<Self::DigestRegister>;
 
     fn blake2b_const_nums(builder: &mut B) -> BLAKE2BConstNums;
 
@@ -141,8 +143,6 @@ impl<L: AirParameters> BLAKEAir<BytesBuilder<L>> for BLAKE2B
 where
     L::Instruction: UintInstructions,
 {
-    type StateVariable = BLAKE2BDigestRegister;
-
     fn cycles_end_bits(
         builder: &mut BytesBuilder<L>,
     ) -> (BitRegister, BitRegister, BitRegister, BitRegister) {
@@ -170,7 +170,7 @@ where
         digest_bits: &ArrayRegister<BitRegister>,
         digest_indices: &ArrayRegister<ElementRegister>,
         num_messages: &ElementRegister,
-    ) -> Vec<ArrayRegister<Self::IntRegister>> {
+    ) -> Vec<Self::DigestRegister> {
         let data = Self::blake2b_data(
             builder,
             padded_chunks,
@@ -185,9 +185,14 @@ where
         let num_digests = data.public.digest_indices.len();
 
         // Create the public registers to input the expected digests.
-        let hash_state_public = (0..num_digests)
-            .map(|_| builder.alloc_array_public(4))
-            .collect::<Vec<_>>();
+        let hash_state_public_tmp: Vec<ArrayRegister<Self::IntRegister>> = (0..num_digests)
+            .map(|_| builder.alloc_array_public::<Self::IntRegister>(4))
+            .collect::<_>();
+
+        let mut hash_state_public: Vec<Self::DigestRegister> = Vec::new();
+        for i in hash_state_public_tmp.iter() {
+            hash_state_public.push(Self::DigestRegister::from_array(*i));
+        }
 
         for (i, h_slice) in data
             .public

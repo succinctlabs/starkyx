@@ -13,17 +13,22 @@ use crate::chip::AirParameters;
 use crate::machine::builder::Builder;
 use crate::machine::bytes::builder::BytesBuilder;
 use crate::machine::hash::sha::algorithm::SHAir;
-use crate::machine::hash::HashInteger;
+use crate::machine::hash::{HashDigest, HashInteger};
 
 impl<B: Builder> HashInteger<B> for SHA512 {
     type Value = <U64Register as Register>::Value<B::Field>;
     type IntRegister = U64Register;
 }
 
+impl<B: Builder> HashDigest<B> for SHA512 {
+    type DigestRegister = SHA512DigestRegister;
+}
+
 impl<L: AirParameters> SHAir<BytesBuilder<L>, 80> for SHA512
 where
     L::Instruction: UintInstructions,
 {
+    // The state type is the same as the digest type for SHA
     type StateVariable = SHA512DigestRegister;
     type StatePointer = Slice<U64Register>;
 
