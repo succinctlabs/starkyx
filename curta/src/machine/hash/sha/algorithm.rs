@@ -14,7 +14,7 @@ use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::machine::builder::Builder;
 use crate::machine::hash::sha::data::{SHAMemory, SHAPublicData, SHATraceData};
-use crate::machine::hash::{HashDigest, HashInteger, HashPureInteger};
+use crate::machine::hash::{HashDigest, HashIntConversion, HashPureInteger};
 use crate::math::prelude::*;
 
 const DUMMY_INDEX: u64 = i32::MAX as u64;
@@ -45,16 +45,10 @@ pub trait SHAPure<const CYCLE_LENGTH: usize>:
 ///
 /// An interface for the SHA algorithm as an AIR.
 pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>:
-    SHAPure<CYCLE_LENGTH> + HashInteger<B> + HashDigest<B>
+    SHAPure<CYCLE_LENGTH> + HashIntConversion<B> + HashDigest<B>
 {
     type StateVariable: Register + Into<ArrayRegister<Self::IntRegister>>;
     type StatePointer;
-
-    /// Convert an integer to the `Self::IntRegister` field value.
-    fn int_to_field_value(int: Self::Integer) -> Self::Value;
-
-    /// Convert a `Self::IntRegister` field value to an integer.
-    fn field_value_to_int(value: &Self::Value) -> Self::Integer;
 
     /// The clock register, whose value equals the current row.
     fn clk(builder: &mut B) -> ElementRegister;

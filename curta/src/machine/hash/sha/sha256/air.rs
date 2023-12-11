@@ -13,11 +13,21 @@ use crate::chip::AirParameters;
 use crate::machine::builder::Builder;
 use crate::machine::bytes::builder::BytesBuilder;
 use crate::machine::hash::sha::algorithm::SHAir;
-use crate::machine::hash::{HashDigest, HashInteger};
+use crate::machine::hash::{HashDigest, HashIntConversion, HashInteger};
 
 impl<B: Builder> HashInteger<B> for SHA256 {
-    type Value = <U32Register as Register>::Value<B::Field>;
     type IntRegister = U32Register;
+    type Value = <U32Register as Register>::Value<B::Field>;
+}
+
+impl<B: Builder> HashIntConversion<B> for SHA256 {
+    fn int_to_field_value(int: Self::Integer) -> Self::Value {
+        u32_to_le_field_bytes(int)
+    }
+
+    fn field_value_to_int(value: &Self::Value) -> Self::Integer {
+        u32_from_le_field_bytes(value)
+    }
 }
 
 impl<B: Builder> HashDigest<B> for SHA256 {
@@ -31,14 +41,6 @@ where
     // The state type is the same as the digest type for SHA
     type StateVariable = SHA256DigestRegister;
     type StatePointer = Slice<U64Register>;
-
-    fn int_to_field_value(int: Self::Integer) -> Self::Value {
-        u32_to_le_field_bytes(int)
-    }
-
-    fn field_value_to_int(value: &Self::Value) -> Self::Integer {
-        u32_from_le_field_bytes(value)
-    }
 
     fn clk(builder: &mut BytesBuilder<L>) -> ElementRegister {
         builder.clk

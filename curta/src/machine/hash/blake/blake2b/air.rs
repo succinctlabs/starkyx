@@ -13,7 +13,7 @@ use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::chip::uint::operations::instruction::UintInstructions;
 use crate::chip::uint::register::U64Register;
-use crate::chip::uint::util::u64_to_le_field_bytes;
+use crate::chip::uint::util::{u64_from_le_field_bytes, u64_to_le_field_bytes};
 use crate::chip::AirParameters;
 use crate::machine::builder::Builder;
 use crate::machine::bytes::builder::BytesBuilder;
@@ -24,12 +24,22 @@ use crate::machine::hash::blake::blake2b::{
     COMPRESS_IV, MIX_LENGTH, MSG_ARRAY_SIZE, NUM_MIX_ROUNDS, SIGMA_PERMUTATIONS, V_INDICES,
     V_LAST_WRITE_AGES,
 };
-use crate::machine::hash::{HashDigest, HashInteger};
+use crate::machine::hash::{HashDigest, HashIntConversion, HashInteger};
 use crate::math::prelude::*;
 
 impl<B: Builder> HashInteger<B> for BLAKE2B {
     type Value = <U64Register as Register>::Value<B::Field>;
     type IntRegister = U64Register;
+}
+
+impl<B: Builder> HashIntConversion<B> for BLAKE2B {
+    fn int_to_field_value(int: Self::Integer) -> Self::Value {
+        u64_to_le_field_bytes(int)
+    }
+
+    fn field_value_to_int(value: &Self::Value) -> Self::Integer {
+        u64_from_le_field_bytes(value)
+    }
 }
 
 impl<B: Builder> HashDigest<B> for BLAKE2B {
@@ -41,7 +51,7 @@ const DUMMY_INDEX_2: u64 = (i32::MAX - 1) as u64;
 const DUMMY_TS: u64 = (i32::MAX - 1) as u64;
 const FIRST_COMPRESS_H_READ_TS: u64 = i32::MAX as u64;
 
-pub trait BLAKEAir<B: Builder>: HashInteger<B> + HashDigest<B> {
+pub trait BLAKEAir<B: Builder>: HashIntConversion<B> + HashDigest<B> {
     fn cycles_end_bits(builder: &mut B) -> (BitRegister, BitRegister, BitRegister, BitRegister);
 
     fn blake2b(
@@ -215,7 +225,8 @@ where
     fn blake2b_const_nums(builder: &mut BytesBuilder<L>) -> BLAKE2BConstNums {
         BLAKE2BConstNums {
             const_0: builder.constant(&L::Field::from_canonical_u8(0)),
-            const_0_u64: builder.constant(&u64_to_le_field_bytes(0u64)),
+            const_0_u64: builder
+                .constant(&<Self as HashIntConversion<BytesBuilder<L>>>::int_to_field_value(0u64)),
             const_1: builder.constant(&L::Field::from_canonical_u8(1)),
             const_2: builder.constant(&L::Field::from_canonical_u8(2)),
             const_3: builder.constant(&L::Field::from_canonical_u8(3)),
@@ -227,7 +238,9 @@ where
             const_91: builder.constant(&L::Field::from_canonical_u8(91)),
             const_96: builder.constant(&L::Field::from_canonical_u8(96)),
             const_ffffffffffffffff: builder.constant::<Self::IntRegister>(
-                &u64_to_le_field_bytes::<L::Field>(0xFFFFFFFFFFFFFFFF),
+                &<Self as HashIntConversion<BytesBuilder<L>>>::int_to_field_value(
+                    0xFFFFFFFFFFFFFFFF,
+                ),
             ),
         }
     }
@@ -258,7 +271,9 @@ where
         let first_compress_h_read_ts: ElementRegister =
             builder.constant(&L::Field::from_canonical_u64(FIRST_COMPRESS_H_READ_TS));
 
-        let iv_values = builder.constant_array::<Self::IntRegister>(&IV.map(u64_to_le_field_bytes));
+        let iv_values = builder.constant_array::<Self::IntRegister>(
+            &IV.map(&<Self as HashIntConversion<BytesBuilder<L>>>::int_to_field_value),
+        );
         let iv: Slice<crate::chip::uint::register::ByteArrayRegister<8>> = builder.uninit_slice();
         for (i, value) in iv_values.iter().enumerate() {
             builder.store(
@@ -286,8 +301,9 @@ where
             Some(MemorySliceIndex::IndexElement(dummy_index)),
         );
 
-        let compress_iv_values =
-            builder.constant_array::<Self::IntRegister>(&COMPRESS_IV.map(u64_to_le_field_bytes));
+        let compress_iv_values = builder.constant_array::<Self::IntRegister>(
+            &COMPRESS_IV.map(&<Self as HashIntConversion<BytesBuilder<L>>>::int_to_field_value),
+        );
         let compress_iv = builder.uninit_slice();
         for (i, value) in compress_iv_values.iter().enumerate() {
             builder.store(
