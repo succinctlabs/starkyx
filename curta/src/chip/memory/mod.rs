@@ -6,3 +6,4 @@ pub mod pointer;
 pub mod set;
 pub mod time;
 pub mod value;
+pub mod watch;

@@ -70,7 +70,7 @@ where
         flag: Option<ElementRegister>,
     ) {
         for (i, element) in state_next.iter().enumerate() {
-            builder.store(&state_ptr.get(i), element, time, flag);
+            builder.store(&state_ptr.get(i), element, time, flag, None, None);
         }
     }
 

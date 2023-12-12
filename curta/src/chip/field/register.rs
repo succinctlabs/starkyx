@@ -153,11 +153,11 @@ mod tests {
 
         let mult = builder.constant(&F::from_canonical_usize(num_rows));
 
-        builder.store(&a_ptr, a_pub, &Time::zero(), Some(mult));
-        builder.store(&b_ptr, b_pub, &Time::zero(), Some(mult));
+        builder.store(&a_ptr, a_pub, &Time::zero(), Some(mult), None, None);
+        builder.store(&b_ptr, b_pub, &Time::zero(), Some(mult), None, None);
 
-        let a = builder.load(&a_ptr, &Time::zero());
-        let b = builder.load(&b_ptr, &Time::zero());
+        let a = builder.load(&a_ptr, &Time::zero(), None, None);
+        let b = builder.load(&b_ptr, &Time::zero(), None, None);
         let _ = builder.add(a, b);
 
         let (air, trace_data) = builder.build();
