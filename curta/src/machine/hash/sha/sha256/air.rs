@@ -68,7 +68,7 @@ where
         let state_next = state_next.as_array();
         for i in 0..4 {
             let val = U64Register::from_limbs(&state_next.get_subarray(i * 2..i * 2 + 2));
-            builder.store(&state_ptr.get(i), val, time, flag);
+            builder.store(&state_ptr.get(i), val, time, flag, None, None);
         }
     }
 

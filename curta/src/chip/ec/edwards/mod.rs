@@ -101,10 +101,10 @@ where
         let y2 = q.y;
 
         // x3_numerator = x1 * y2 + x2 * y1.
-        let x3_numerator = builder.fp_inner_product(&vec![x1, x2], &vec![y2, y1]);
+        let x3_numerator = builder.fp_inner_product(&[x1, x2], &[y2, y1]);
 
         // y3_numerator = y1 * y2 + x1 * x2.
-        let y3_numerator = builder.fp_inner_product(&vec![y1, x1], &vec![y2, x2]);
+        let y3_numerator = builder.fp_inner_product(&[y1, x1], &[y2, x2]);
 
         // f = x1 * x2 * y1 * y2.
         let x1_mul_y1 = builder.fp_mul(&x1, &y1);

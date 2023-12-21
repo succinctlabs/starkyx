@@ -165,6 +165,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
                 round_constant_values.get(i),
                 &Time::zero(),
                 Some(num_round_element),
+                None,
+                None,
             );
         }
 
@@ -174,6 +176,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
                 round_constant_values.get(i),
                 &Time::zero(),
                 Some(num_round_minus_one),
+                None,
+                None,
             );
         }
 
@@ -207,6 +211,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
                 shift_read_values.get(i),
                 &Time::zero(),
                 Some(num_round_element),
+                None,
+                None,
             );
         }
         for i in length_last_round..CYCLE_LENGTH {
@@ -215,6 +221,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
                 shift_read_values.get(i),
                 &Time::zero(),
                 Some(num_round_minus_one),
+                None,
+                None,
             );
         }
 
@@ -233,7 +241,14 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
 
         for (i, padded_chunk) in padded_chunks.iter().enumerate() {
             for (j, word) in padded_chunk.iter().enumerate().take(16) {
-                builder.store(&w.get(CYCLE_LENGTH * i + j), word, &Time::zero(), None);
+                builder.store(
+                    &w.get(CYCLE_LENGTH * i + j),
+                    word,
+                    &Time::zero(),
+                    None,
+                    None,
+                    None,
+                );
             }
         }
 
@@ -242,6 +257,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
             dummy_entry,
             &Time::zero(),
             Some(num_dummy_reads),
+            None,
+            None,
         );
 
         let (cycle_16_end_bit, cycle_end_bit) = Self::cycles_end_bits(builder);
@@ -281,16 +298,27 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
                 end_bit_val,
                 &Time::zero(),
                 Some(reg_cycle_length),
+                None,
+                None,
             );
         }
         for i in num_real_rounds..num_rounds - 1 {
-            builder.store(&end_bit.get(i), zero, &Time::zero(), Some(reg_cycle_length));
+            builder.store(
+                &end_bit.get(i),
+                zero,
+                &Time::zero(),
+                Some(reg_cycle_length),
+                None,
+                None,
+            );
         }
         builder.store(
             &end_bit.get(num_rounds - 1),
             zero,
             &Time::zero(),
             Some(reg_last_length),
+            None,
+            None,
         );
         let digest_bit = builder.uninit_slice();
         for (i, digest_bit_val) in digest_bits.iter().enumerate() {
@@ -299,6 +327,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
                 digest_bit_val,
                 &Time::zero(),
                 Some(reg_cycle_length),
+                None,
+                None,
             );
         }
         for i in num_real_rounds..num_rounds - 1 {
@@ -307,6 +337,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
                 zero,
                 &Time::zero(),
                 Some(reg_cycle_length),
+                None,
+                None,
             );
         }
         builder.store(
@@ -314,6 +346,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
             zero,
             &Time::zero(),
             Some(reg_last_length),
+            None,
+            None,
         );
 
         // Initialize a bit slice to commit to `is_dummy` bits.
@@ -325,6 +359,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
                 zero,
                 &Time::zero(),
                 Some(reg_cycle_length),
+                None,
+                None,
             );
         }
         for i in num_real_rounds..num_rounds - 1 {
@@ -333,6 +369,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
                 one,
                 &Time::zero(),
                 Some(reg_cycle_length),
+                None,
+                None,
             );
         }
         let last_round_reg = builder.constant(&B::Field::from_canonical_usize(length_last_round));
@@ -341,8 +379,15 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
             one,
             &Time::zero(),
             Some(last_round_reg),
+            None,
+            None,
         );
-        let is_dummy = builder.load(&is_dummy_slice.get_at(process_id), &Time::zero());
+        let is_dummy = builder.load(
+            &is_dummy_slice.get_at(process_id),
+            &Time::zero(),
+            None,
+            None,
+        );
 
         let public = SHAPublicData {
             initial_hash,
@@ -398,14 +443,14 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         };
 
         let i_m_15 = shifted_index(15, builder);
-        let w_i_minus_15 = builder.load(&w.get_at(i_m_15), &time);
+        let w_i_minus_15 = builder.load(&w.get_at(i_m_15), &time, None, None);
         let i_m_2 = shifted_index(2, builder);
-        let w_i_minus_2 = builder.load(&w.get_at(i_m_2), &time);
+        let w_i_minus_2 = builder.load(&w.get_at(i_m_2), &time, None, None);
 
         let i_m_16 = shifted_index(16, builder);
-        let w_i_mimus_16 = builder.load(&w.get_at(i_m_16), &time);
+        let w_i_mimus_16 = builder.load(&w.get_at(i_m_16), &time, None, None);
         let i_m_7 = shifted_index(7, builder);
-        let w_i_mimus_7 = builder.load(&w.get_at(i_m_7), &time);
+        let w_i_mimus_7 = builder.load(&w.get_at(i_m_7), &time, None, None);
 
         let w_i_pre_process = Self::preprocessing_step(
             builder,
@@ -417,14 +462,18 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
 
         let mut i_idx = builder.select(is_preprocessing, &dummy_index, &clk);
         i_idx = builder.select(is_dummy, &dummy_index, &i_idx);
-        let w_i_read = builder.load(&w.get_at(i_idx), &time);
+        let w_i_read = builder.load(&w.get_at(i_idx), &time, None, None);
 
         let w_i = builder.select(is_preprocessing, &w_i_pre_process, &w_i_read);
 
-        let mut reading_mult =
-            builder.load(&shift_read_mult.get_at(data.trace.index), &Time::zero());
+        let mut reading_mult = builder.load(
+            &shift_read_mult.get_at(data.trace.index),
+            &Time::zero(),
+            None,
+            None,
+        );
         reading_mult = builder.expression(reading_mult.expr() * is_dummy.not_expr());
-        builder.store(&w.get_at(clk), w_i, &time, Some(reading_mult));
+        builder.store(&w.get_at(clk), w_i, &time, Some(reading_mult), None, None);
 
         w_i
     }
@@ -444,8 +493,12 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         let initial_hash = data.public.initial_hash;
         let cycle_end_bit = data.trace.cycle_end_bit;
 
-        let round_constant =
-            builder.load(&data.memory.round_constants.get_at(index), &Time::zero());
+        let round_constant = builder.load(
+            &data.memory.round_constants.get_at(index),
+            &Time::zero(),
+            None,
+            None,
+        );
 
         // Initialize working variables
         let state = builder.alloc_array::<Self::IntRegister>(8);
@@ -468,6 +521,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         let digest_bit = builder.load(
             &data.memory.digest_bit.get_at(data.trace.process_id),
             &Time::zero(),
+            None,
+            None,
         );
         let flag = Some(
             builder.expression(cycle_end_bit.expr() * is_dummy.not_expr() * digest_bit.expr()),
@@ -484,6 +539,8 @@ pub trait SHAir<B: Builder, const CYCLE_LENGTH: usize>: SHAPure<CYCLE_LENGTH> {
         let end_bit = builder.load(
             &data.memory.end_bit.get_at(data.trace.process_id),
             &Time::zero(),
+            None,
+            None,
         );
         let bit = cycle_end_bit;
         let state_next_arr: ArrayRegister<Self::IntRegister> = state_next.into();
