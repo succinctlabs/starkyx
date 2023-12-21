@@ -645,10 +645,10 @@ mod tests {
 
         let clk = Time::from_element(builder.clk);
 
-        let a = builder.load(&a_ptr, &clk);
+        let a = builder.load(&a_ptr, &clk, None, None);
         let b = builder.alloc::<U32Register>();
         let c = builder.and(&a, &b);
-        builder.store(&a_ptr, c, &clk.advance(), None);
+        builder.store(&a_ptr, c, &clk.advance(), None, None, None);
 
         let a_final = builder.alloc_public::<U32Register>();
 
@@ -736,6 +736,8 @@ mod tests {
             a_init.get(1),
             &Time::zero(),
             Some(num_rows_reg),
+            None,
+            None,
         );
 
         let clk = Time::from_element(builder.clk);
@@ -745,10 +747,10 @@ mod tests {
         let zero_trace = builder.alloc::<ElementRegister>();
         builder.set_to_expression(&zero_trace, GoldilocksField::ZERO.into());
         let a_0_trace = a_ptr.get_at(zero_trace);
-        let a = builder.load(&a_0_trace, &clk);
-        let b = builder.load(&a_ptr.get(1), &Time::zero());
+        let a = builder.load(&a_0_trace, &clk, None, None);
+        let b = builder.load(&a_ptr.get(1), &Time::zero(), None, None);
         let c = builder.and(&a, &b);
-        builder.store(&a_0_trace, c, &clk.advance(), None);
+        builder.store(&a_0_trace, c, &clk.advance(), None, None, None);
 
         let a_final = builder.alloc_public::<U32Register>();
 

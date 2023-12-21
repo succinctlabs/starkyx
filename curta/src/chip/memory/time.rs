@@ -9,7 +9,7 @@ use crate::math::prelude::*;
 pub type Time<F> = TimeStamp<ArithmeticExpression<F>>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct TimeStamp<T>(T);
+pub struct TimeStamp<T>(pub(crate) T);
 
 impl<T> TimeStamp<T> {
     pub(crate) fn new(value: T) -> Self {

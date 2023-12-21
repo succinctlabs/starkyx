@@ -1,5 +1,7 @@
+use log::debug;
 use serde::{Deserialize, Serialize};
 
+use super::instruction::{MemoryOutput, MemorySliceIndex};
 use super::map::MemEntry;
 use super::pointer::raw::RawPointer;
 use crate::air::parser::AirParser;
@@ -11,18 +13,19 @@ use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SetInstruction {
+pub struct SetInstruction<F> {
     ptr: RawPointer,
     register: MemorySlice,
     multiplicity: Option<ElementRegister>,
+    memory_output: Option<MemoryOutput<F>>,
 }
 
-impl<AP: AirParser> AirConstraint<AP> for SetInstruction {
+impl<AP: AirParser> AirConstraint<AP> for SetInstruction<AP::Field> {
     // No constraints for this instruction.
     fn eval(&self, _parser: &mut AP) {}
 }
 
-impl<F: Field> Instruction<F> for SetInstruction {
+impl<F: Field> Instruction<F> for SetInstruction<F> {
     fn write(&self, writer: &TraceWriter<F>, row_index: usize) {
         let multiplicity = if let Some(mult) = self.multiplicity {
             writer.read(&mult, row_index)
@@ -35,6 +38,31 @@ impl<F: Field> Instruction<F> for SetInstruction {
         let (id_0, id_1) = self.register.get_range();
 
         let key = self.ptr.read(writer, row_index);
+
+        if let Some(memory_output) = &self.memory_output {
+            // Can assume that self.write_ts and self.index are not None.
+
+            let mult = if let Some(multiplicity) = self.multiplicity {
+                writer.read(&multiplicity, row_index)
+            } else {
+                F::ONE
+            };
+
+            let index = match memory_output.index {
+                Some(MemorySliceIndex::Index(index)) => Some(F::from_canonical_usize(index)),
+                Some(MemorySliceIndex::IndexElement(index)) => Some(writer.read(&index, row_index)),
+                None => None,
+            };
+
+            debug!(
+                    "memory set - row: {:?}, mem label: {:?}, index: {:?}, multiplicity: {:?}, ts: {:?}",
+                    row_index,
+                    memory_output.label,
+                    index,
+                    mult,
+                    writer.read_expression(&memory_output.ts.0, row_index)[0],
+                );
+        }
 
         match self.register {
             MemorySlice::Local(_, _) => {
@@ -87,11 +115,35 @@ impl<F: Field> Instruction<F> for SetInstruction {
     }
 
     fn write_to_air(&self, writer: &mut impl AirWriter<Field = F>) {
+        let row_index = writer.row_index();
         let multiplicity = if let Some(mult) = self.multiplicity {
             writer.read(&mult)
         } else {
             F::ONE
         };
+
+        if let Some(memory_output) = &self.memory_output {
+            let mult = if let Some(multiplicity) = self.multiplicity {
+                writer.read(&multiplicity)
+            } else {
+                F::ONE
+            };
+
+            let index = match memory_output.index {
+                Some(MemorySliceIndex::Index(index)) => Some(F::from_canonical_usize(index)),
+                Some(MemorySliceIndex::IndexElement(index)) => Some(writer.read(&index)),
+                None => None,
+            };
+
+            debug!(
+                "memory set - row: {:?}, mem label: {}, index: {:?}, multiplicity: {:?}, ts: {:?}",
+                row_index,
+                memory_output.label,
+                index,
+                mult,
+                writer.read_expression(&memory_output.ts.0)[0],
+            );
+        }
 
         let key = self.ptr.read_from_air(writer);
 
@@ -112,16 +164,18 @@ impl<F: Field> Instruction<F> for SetInstruction {
     }
 }
 
-impl SetInstruction {
+impl<F: Field> SetInstruction<F> {
     pub fn new(
         ptr: RawPointer,
         register: MemorySlice,
         multiplicity: Option<ElementRegister>,
+        memory_output: Option<MemoryOutput<F>>,
     ) -> Self {
         Self {
             ptr,
             register,
             multiplicity,
+            memory_output,
         }
     }
 }

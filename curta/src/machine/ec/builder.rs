@@ -99,12 +99,19 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
 
                 // Store the EC point.
                 let time = Time::constant(256 * i);
-                self.store(&temp_x_ptr.get(i), point.x, &time, None);
-                self.store(&temp_y_ptr.get(i), point.y, &time, None);
+                self.store(&temp_x_ptr.get(i), point.x, &time, None, None, None);
+                self.store(&temp_y_ptr.get(i), point.y, &time, None, None, None);
 
                 // Store and the scalar limbs.
                 for (j, limb) in scalar.limbs.iter().enumerate() {
-                    self.store(&limb_ptr.get(i * 8 + j), limb, &zero, Some(cycle_32_size));
+                    self.store(
+                        &limb_ptr.get(i * 8 + j),
+                        limb,
+                        &zero,
+                        Some(cycle_32_size),
+                        None,
+                        None,
+                    );
                 }
 
                 self.free(&x_ptr.get(i), result.x, &zero);
@@ -125,12 +132,19 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
         let one_limbs = self.constant_array::<ElementRegister>(&one_scalar_limbs);
         for i in num_ops..(num_ops + num_dummy_ops) {
             let time = Time::constant(256 * i);
-            self.store(&temp_x_ptr.get(i), generator.x, &time, None);
-            self.store(&temp_y_ptr.get(i), generator.y, &time, None);
+            self.store(&temp_x_ptr.get(i), generator.x, &time, None, None, None);
+            self.store(&temp_y_ptr.get(i), generator.y, &time, None, None, None);
 
             // Store and the scalar limbs.
             for (j, limb) in one_limbs.iter().enumerate() {
-                self.store(&limb_ptr.get(i * 8 + j), limb, &zero, Some(cycle_32_size));
+                self.store(
+                    &limb_ptr.get(i * 8 + j),
+                    limb,
+                    &zero,
+                    Some(cycle_32_size),
+                    None,
+                    None,
+                );
             }
 
             self.free(&x_ptr.get(i), generator.x, &zero);
@@ -142,7 +156,7 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
 
         // Load the scalar limbs.
         let process_id_u32 = self.process_id(32, cycle_32.end_bit);
-        let limb = self.load(&limb_ptr.get_at(process_id_u32), &zero);
+        let limb = self.load(&limb_ptr.get_at(process_id_u32), &zero, None, None);
 
         // Decompose the limbs to bits.
         let scalar_bit = self.bit_decomposition(limb, cycle_32.start_bit, cycle_32.end_bit);
@@ -159,8 +173,22 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
         // Get `result_next` from the double and add function and store the value at the pointer.
         let result_next = self.double_and_add(&data);
         let end_flag = Some(cycle.end_bit.as_element());
-        self.store(&x_ptr.get_at(process_id), result_next.x, &zero, end_flag);
-        self.store(&y_ptr.get_at(process_id), result_next.y, &zero, end_flag);
+        self.store(
+            &x_ptr.get_at(process_id),
+            result_next.x,
+            &zero,
+            end_flag,
+            None,
+            None,
+        );
+        self.store(
+            &y_ptr.get_at(process_id),
+            result_next.y,
+            &zero,
+            end_flag,
+            None,
+            None,
+        );
     }
 
     fn double_and_add(&mut self, data: &DoubleAddData<E>) -> AffinePointRegister<E>
@@ -186,15 +214,29 @@ pub trait EllipticCurveBuilder<E: EllipticCurveAir<Self::Parameters>>: Builder {
         let temp_x_ptr = data.temp_x_ptr.get_at(process_id);
         let temp_y_ptr = data.temp_y_ptr.get_at(process_id);
         let clk = Time::from_element(self.clk());
-        let temp_x = self.load(&temp_x_ptr, &clk);
-        let temp_y = self.load(&temp_y_ptr, &clk);
+        let temp_x = self.load(&temp_x_ptr, &clk, None, None);
+        let temp_y = self.load(&temp_y_ptr, &clk, None, None);
         let temp = AffinePointRegister::new(temp_x, temp_y);
 
         // Assign temp_next = temp + temp;
         let not_end_bit = self.expression(data.end_bit.not_expr());
         let temp_next = self.double(&temp);
-        self.store(&temp_x_ptr, temp_next.x, &clk.advance(), Some(not_end_bit));
-        self.store(&temp_y_ptr, temp_next.y, &clk.advance(), Some(not_end_bit));
+        self.store(
+            &temp_x_ptr,
+            temp_next.x,
+            &clk.advance(),
+            Some(not_end_bit),
+            None,
+            None,
+        );
+        self.store(
+            &temp_y_ptr,
+            temp_next.y,
+            &clk.advance(),
+            Some(not_end_bit),
+            None,
+            None,
+        );
 
         // Allocate the intermeddiate result.
         let result = self.alloc_ec_point();

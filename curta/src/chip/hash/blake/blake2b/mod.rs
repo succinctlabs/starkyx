@@ -1187,7 +1187,7 @@ mod tests {
 
         let _ = env_logger::builder().is_test(true).try_init();
 
-        let mut timing = TimingTree::new("Blake2b test", log::Level::Debug);
+        let mut timing = TimingTree::new("Blake2b test", log::Level::Info);
 
         let mut builder = AirBuilder::<L>::new();
         let clk = builder.clock();
@@ -1249,7 +1249,7 @@ mod tests {
             }
         }
 
-        timed!(timing, "Write the execusion trace", {
+        timed!(timing, log::Level::Info, "Write the execusion trace", {
             byte_table.write_table_entries(&writer);
             blake_gadget.write(
                 padded_messages,
@@ -1300,6 +1300,7 @@ mod tests {
         // Generate proof and verify as a stark
         timed!(
             timing,
+            log::Level::Info,
             "Stark proof and verify",
             test_starky(&stark, &config, &generator, &public_inputs)
         );
@@ -1307,6 +1308,7 @@ mod tests {
         // Generate recursive proof
         timed!(
             timing,
+            log::Level::Info,
             "Recursive proof generation and verification",
             test_recursive_starky(stark, config, generator, &public_inputs)
         );
