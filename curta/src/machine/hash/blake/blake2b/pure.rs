@@ -45,7 +45,7 @@ impl BLAKE2BPure for BLAKE2B {
 
         let msg_u64_chunks = msg_chunk
             .chunks_exact(8)
-            .map(|x| Self::Integer::from_le_bytes(x.try_into().unwrap()))
+            .map(|x| u64::from_le_bytes(x.try_into().unwrap()))
             .collect::<Vec<_>>();
 
         for s in SIGMA_PERMUTATIONS.iter() {
