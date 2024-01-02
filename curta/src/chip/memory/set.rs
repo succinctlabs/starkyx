@@ -1,4 +1,4 @@
-use log::debug;
+use log::trace;
 use serde::{Deserialize, Serialize};
 
 use super::instruction::{MemoryOutput, MemorySliceIndex};
@@ -54,7 +54,7 @@ impl<F: Field> Instruction<F> for SetInstruction<F> {
                 None => None,
             };
 
-            debug!(
+            trace!(
                     "memory set - row: {:?}, mem label: {:?}, index: {:?}, multiplicity: {:?}, ts: {:?}",
                     row_index,
                     memory_output.label,
@@ -135,7 +135,7 @@ impl<F: Field> Instruction<F> for SetInstruction<F> {
                 None => None,
             };
 
-            debug!(
+            trace!(
                 "memory set - row: {:?}, mem label: {}, index: {:?}, multiplicity: {:?}, ts: {:?}",
                 row_index,
                 memory_output.label,
