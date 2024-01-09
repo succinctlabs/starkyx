@@ -22,7 +22,7 @@ impl RegisterSerializable for BLAKE2BDigestRegister {
 
 impl RegisterSized for BLAKE2BDigestRegister {
     fn size_of() -> usize {
-        U64Register::size_of() * 8
+        U64Register::size_of() * 4
     }
 }
 
@@ -56,7 +56,7 @@ impl BLAKE2BDigestRegister {
     }
 
     pub fn from_array(array: ArrayRegister<U64Register>) -> Self {
-        assert_eq!(array.len(), 8);
+        assert_eq!(array.len(), 4);
         Self(array)
     }
 }

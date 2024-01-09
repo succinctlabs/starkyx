@@ -1,17 +1,39 @@
-use super::{COMPRESS_IV, STATE_SIZE, WORK_VECTOR_SIZE};
+use super::{BLAKE2B, COMPRESS_IV, STATE_SIZE, WORK_VECTOR_SIZE};
 use crate::machine::hash::blake::blake2b::SIGMA_PERMUTATIONS;
+use crate::machine::hash::HashPureInteger;
 
-pub struct BLAKE2BPure;
+impl HashPureInteger for BLAKE2B {
+    type Integer = u64;
+}
 
-impl BLAKE2BPure {
-    pub fn compress(
+pub trait BLAKE2BPure: HashPureInteger {
+    fn compress(
         msg_chunk: &[u8],
-        state: &mut [u64; STATE_SIZE],
+        state: &mut [Self::Integer; STATE_SIZE],
         bytes_compressed: u64,
         last_chunk: bool,
-    ) -> [u64; STATE_SIZE] {
+    ) -> [Self::Integer; STATE_SIZE];
+
+    fn mix(
+        v: &mut [Self::Integer; WORK_VECTOR_SIZE],
+        a: usize,
+        b: usize,
+        c: usize,
+        d: usize,
+        x: Self::Integer,
+        y: Self::Integer,
+    );
+}
+
+impl BLAKE2BPure for BLAKE2B {
+    fn compress(
+        msg_chunk: &[u8],
+        state: &mut [Self::Integer; STATE_SIZE],
+        bytes_compressed: u64,
+        last_chunk: bool,
+    ) -> [Self::Integer; STATE_SIZE] {
         // Set up the work vector V
-        let mut v: [u64; WORK_VECTOR_SIZE] = [0; WORK_VECTOR_SIZE];
+        let mut v: [Self::Integer; WORK_VECTOR_SIZE] = [0; WORK_VECTOR_SIZE];
 
         v[..8].copy_from_slice(&state[..STATE_SIZE]);
         v[8..16].copy_from_slice(&COMPRESS_IV);
@@ -23,7 +45,7 @@ impl BLAKE2BPure {
 
         let msg_u64_chunks = msg_chunk
             .chunks_exact(8)
-            .map(|x| u64::from_le_bytes(x.try_into().unwrap()))
+            .map(|x| Self::Integer::from_le_bytes(x.try_into().unwrap()))
             .collect::<Vec<_>>();
 
         for s in SIGMA_PERMUTATIONS.iter() {
@@ -114,13 +136,13 @@ impl BLAKE2BPure {
     }
 
     fn mix(
-        v: &mut [u64; WORK_VECTOR_SIZE],
+        v: &mut [Self::Integer; WORK_VECTOR_SIZE],
         a: usize,
         b: usize,
         c: usize,
         d: usize,
-        x: u64,
-        y: u64,
+        x: Self::Integer,
+        y: Self::Integer,
     ) {
         v[a] = v[a].wrapping_add(v[b]).wrapping_add(x);
         v[d] = (v[d] ^ v[a]).rotate_right(32);

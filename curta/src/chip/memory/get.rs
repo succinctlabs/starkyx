@@ -1,4 +1,4 @@
-use log::debug;
+use log::trace;
 use serde::{Deserialize, Serialize};
 
 use super::instruction::MemoryOutput;
@@ -63,9 +63,13 @@ impl<F: Field> Instruction<F> for GetInstruction<F> {
         entry.multiplicity -= F::ONE;
 
         if let Some(memory_output) = &self.memory_output {
-            debug!(
+            trace!(
                 "memory get - row: {:?}, mem label: {}, index: {:?}, multiplicity: {:?}, ts: {:?}",
-                row_index, memory_output.label, index, entry.multiplicity, write_ts
+                row_index,
+                memory_output.label,
+                index,
+                entry.multiplicity,
+                write_ts
             );
         }
 
@@ -115,7 +119,7 @@ impl<F: Field> Instruction<F> for GetInstruction<F> {
         let value = entry.value.to_vec();
 
         if self.memory_output.is_some() {
-            debug!(
+            trace!(
                 "memory get - row: {:?}, mem label: {}, index: {:?}, multiplicity: {:?}, ts: {:?}",
                 row_index,
                 label.unwrap(),

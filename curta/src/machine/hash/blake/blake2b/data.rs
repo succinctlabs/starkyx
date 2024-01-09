@@ -6,16 +6,14 @@ use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::bit::BitRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::uint::register::U64Register;
-use crate::chip::AirParameters;
 use crate::machine::builder::Builder;
-use crate::machine::bytes::builder::BytesBuilder;
 use crate::math::field::Field;
 
-pub struct BLAKE2BData<L: AirParameters> {
+pub struct BLAKE2BData<B: Builder> {
     pub public: BLAKE2BPublicData,
     pub trace: BLAKE2BTraceData,
     pub memory: BLAKE2BMemory,
-    pub consts: BLAKE2BConsts<L>,
+    pub consts: BLAKE2BConsts<B>,
     pub const_nums: BLAKE2BConstNums,
 }
 
@@ -53,13 +51,13 @@ pub struct BLAKE2BMemory {
     pub(crate) t: Slice<U64Register>,
 }
 
-pub struct BLAKE2BConsts<L: AirParameters> {
+pub struct BLAKE2BConsts<B: Builder> {
     pub(crate) iv: Slice<U64Register>,
     pub(crate) iv_values: ArrayRegister<U64Register>,
     pub(crate) compress_iv: Slice<U64Register>,
-    pub(crate) v_indices: MemoryArray<L, MIX_LENGTH, 4>,
-    pub(crate) v_last_write_ages: MemoryArray<L, MIX_LENGTH, 4>,
-    pub(crate) permutations: MemoryArray<L, NUM_MIX_ROUNDS, MSG_ARRAY_SIZE>,
+    pub(crate) v_indices: MemoryArray<B, MIX_LENGTH, 4>,
+    pub(crate) v_last_write_ages: MemoryArray<B, MIX_LENGTH, 4>,
+    pub(crate) permutations: MemoryArray<B, NUM_MIX_ROUNDS, MSG_ARRAY_SIZE>,
     pub(crate) dummy_index: ElementRegister,
     pub(crate) dummy_index_2: ElementRegister,
     pub(crate) dummy_ts: ElementRegister,
@@ -82,24 +80,24 @@ pub struct BLAKE2BConstNums {
     pub(crate) const_ffffffffffffffff: U64Register,
 }
 
-pub(crate) struct MemoryArray<L: AirParameters, const R: usize, const C: usize> {
+pub(crate) struct MemoryArray<B: Builder, const R: usize, const C: usize> {
     pub flattened_memory: Slice<ElementRegister>,
     c_const: ElementRegister,
-    _marker: std::marker::PhantomData<L>,
+    _marker: std::marker::PhantomData<B>,
 }
 
-impl<L: AirParameters, const R: usize, const C: usize> MemoryArray<L, R, C> {
-    pub(crate) fn new(builder: &mut BytesBuilder<L>) -> Self {
+impl<B: Builder, const R: usize, const C: usize> MemoryArray<B, R, C> {
+    pub(crate) fn new(builder: &mut B) -> Self {
         Self {
             flattened_memory: builder.uninit_slice(),
-            c_const: builder.constant(&L::Field::from_canonical_usize(C)),
+            c_const: builder.constant(&B::Field::from_canonical_usize(C)),
             _marker: core::marker::PhantomData,
         }
     }
 
     pub(crate) fn store_row(
         &mut self,
-        builder: &mut BytesBuilder<L>,
+        builder: &mut B,
         row: usize,
         values: &[u8],
         mul: ElementRegister,
@@ -109,7 +107,7 @@ impl<L: AirParameters, const R: usize, const C: usize> MemoryArray<L, R, C> {
         assert!(row < R);
 
         for (i, value) in values.iter().enumerate() {
-            let value_const = builder.constant(&L::Field::from_canonical_u8(*value));
+            let value_const = builder.constant(&B::Field::from_canonical_u8(*value));
             builder.store::<ElementRegister>(
                 &self.flattened_memory.get(row * C + i),
                 value_const,
@@ -123,7 +121,7 @@ impl<L: AirParameters, const R: usize, const C: usize> MemoryArray<L, R, C> {
 
     pub(crate) fn get_at(
         &self,
-        builder: &mut BytesBuilder<L>,
+        builder: &mut B,
         row: ElementRegister,
         col: ElementRegister,
         label: Option<String>,
