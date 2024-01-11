@@ -9,6 +9,7 @@ use crate::chip::table::bus::channel::BusChannel;
 use crate::chip::table::bus::global::Bus;
 use crate::chip::table::lookup::table::LookupTable;
 use crate::chip::table::lookup::values::LookupValues;
+use crate::chip::table::powers::Powers;
 use crate::chip::AirParameters;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,6 +21,7 @@ pub struct AirTraceData<L: AirParameters> {
     pub execution_trace_length: usize,
     pub instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
+    pub powers: Vec<Powers<L::Field, L::CubicParams>>,
     pub accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
     pub pointer_row_accumulators: Vec<PointerAccumulator<L::Field, L::CubicParams>>,
     pub pointer_global_accumulators: Vec<PointerAccumulator<L::Field, L::CubicParams>>,
@@ -50,6 +52,11 @@ impl<L: AirParameters> AirTraceData<L> {
 
     pub fn write_extended_trace(&self, writer: &TraceWriter<L::Field>) {
         let num_rows = writer.read_trace().unwrap().height();
+
+        // Fill in the challenge powers.
+        for power in self.powers.iter() {
+            writer.write_powers(power);
+        }
         // Write accumulations.
         for acc in self.accumulators.iter() {
             writer.write_accumulation(acc);

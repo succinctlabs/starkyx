@@ -57,7 +57,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let multiplicity_data = MultiplicityData::new(multiplicities);
 
         // Accumulate entries for the lookup table
-        let challenges = self.alloc_array_challenge::<CubicRegister>(5);
+        let challenges = self.challenge_powers(5);
 
         let digests = OPCODE_INDICES
             .into_iter()

@@ -112,15 +112,6 @@ where
         main_writer: &TraceWriter<L::Field>,
         lookup_writer: &TraceWriter<L::Field>,
     ) {
-        self.air_data.write_extended_trace(main_writer);
-
-        // Update global values
-        lookup_writer
-            .global
-            .write()
-            .unwrap()
-            .copy_from_slice(&main_writer.global.read().unwrap());
-
         // Write the extended trace values
         self.lookup_air_data.write_extended_trace(lookup_writer);
 
@@ -130,6 +121,15 @@ where
             .write()
             .unwrap()
             .copy_from_slice(&lookup_writer.global.read().unwrap());
+
+        self.air_data.write_extended_trace(main_writer);
+
+        // Update global values
+        lookup_writer
+            .global
+            .write()
+            .unwrap()
+            .copy_from_slice(&main_writer.global.read().unwrap());
     }
 
     fn generate_trace(

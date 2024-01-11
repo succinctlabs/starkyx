@@ -48,8 +48,7 @@ impl<L: AirParameters> AirBuilder<L> {
     #[inline]
     pub(crate) fn uninit<V: MemoryValue>(&mut self) -> Pointer<V> {
         let ptr_challenge = self.alloc_challenge();
-        let compression_challenges =
-            self.alloc_array_challenge::<CubicRegister>(V::num_challenges());
+        let compression_challenges = self.challenge_powers(V::num_challenges());
         Pointer::from_challenges(ptr_challenge, compression_challenges)
     }
 
@@ -86,8 +85,7 @@ impl<L: AirParameters> AirBuilder<L> {
     #[inline]
     pub(crate) fn uninit_slice<V: MemoryValue>(&mut self) -> Slice<V> {
         let raw_slice = RawSlice::new(self);
-        let compression_challenges =
-            self.alloc_array_challenge::<CubicRegister>(V::num_challenges());
+        let compression_challenges = self.challenge_powers(V::num_challenges());
         Slice::new(raw_slice, compression_challenges)
     }
 
