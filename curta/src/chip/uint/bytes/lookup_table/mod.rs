@@ -13,7 +13,6 @@ use crate::air::parser::AirParser;
 use crate::air::AirConstraint;
 use crate::chip::builder::AirBuilder;
 use crate::chip::instruction::Instruction;
-use crate::chip::table::lookup::values::LogLookupValues;
 use crate::chip::trace::writer::{AirWriter, TraceWriter};
 use crate::chip::AirParameters;
 
@@ -56,24 +55,34 @@ impl<L: AirParameters> AirBuilder<L> {
         table: &mut ByteLogLookupTable<L::Field, L::CubicParams>,
         operations: ByteLookupOperations,
     ) -> ByteMultiplicityData {
-        let lookup_values = table
-            .lookup
-            .register_lookup_values(self, &operations.values);
+        let trace_digest_values = operations
+            .trace_operations
+            .iter()
+            .map(|op| self.accumulate_expressions(&table.challenges, &op.expressions()))
+            .collect::<Vec<_>>();
 
-        let LogLookupValues {
-            trace_values,
-            public_values,
-            ..
-        } = lookup_values;
+        let public_digest_values = operations
+            .public_operations
+            .iter()
+            .map(|op| self.accumulate_public_expressions(&table.challenges, &op.expressions()))
+            .collect::<Vec<_>>();
 
-        ByteMultiplicityData::new(table.multiplicity_data.clone(), trace_values, public_values)
+        let values = [trace_digest_values, public_digest_values].concat();
+
+        let _ = table.lookup.register_lookup_values(self, &values);
+
+        ByteMultiplicityData::new(
+            table.multiplicity_data.clone(),
+            operations.trace_operations.clone(),
+            operations.public_operations.clone(),
+        )
     }
 
     pub fn constraint_byte_lookup_table(
         &mut self,
         table: &ByteLogLookupTable<L::Field, L::CubicParams>,
     ) {
-        self.constrain_element_lookup_table(table.lookup.clone())
+        self.constrain_cubic_lookup_table(table.lookup.clone())
     }
 }
 
@@ -172,8 +181,8 @@ mod tests {
 
         type Instruction = ByteInstructionSet;
 
-        const NUM_FREE_COLUMNS: usize = 377;
-        const EXTENDED_COLUMNS: usize = 159;
+        const NUM_FREE_COLUMNS: usize = 195;
+        const EXTENDED_COLUMNS: usize = 453;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
     }
 

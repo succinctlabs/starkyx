@@ -1,6 +1,3 @@
-use core::array::from_fn;
-
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use super::super::operations::NUM_BIT_OPPS;
@@ -8,19 +5,16 @@ use super::multiplicity_data::MultiplicityData;
 use super::ByteInstructionSet;
 use crate::chip::builder::AirBuilder;
 use crate::chip::register::array::ArrayRegister;
-use crate::chip::register::bit::BitRegister;
+use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::Register;
 use crate::chip::table::lookup::table::LogLookupTable;
 use crate::chip::trace::writer::TraceWriter;
-use crate::chip::uint::bytes::bit_operations::and::And;
-use crate::chip::uint::bytes::bit_operations::not::Not;
-use crate::chip::uint::bytes::bit_operations::util::u8_to_bits_le;
-use crate::chip::uint::bytes::bit_operations::xor::Xor;
 use crate::chip::uint::bytes::decode::ByteDecodeInstruction;
-use crate::chip::uint::bytes::operations::value::{ByteOperation, ByteOperationDigestConstraint};
+use crate::chip::uint::bytes::operations::value::ByteOperation;
 use crate::chip::uint::bytes::operations::{
-    OPCODE_AND, OPCODE_INDICES, OPCODE_NOT, OPCODE_RANGE, OPCODE_ROT, OPCODE_SHR, OPCODE_XOR,
+    OPCODE_AND, OPCODE_INDICES, OPCODE_NOT, OPCODE_RANGE, OPCODE_ROT, OPCODE_SHR, OPCODE_SHR_CARRY,
+    OPCODE_XOR,
 };
 use crate::chip::uint::bytes::register::ByteRegister;
 use crate::chip::AirParameters;
@@ -29,15 +23,18 @@ use crate::maybe_rayon::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ByteLogLookupTable<F, E> {
+    pub challenges: ArrayRegister<CubicRegister>,
     pub a: ByteRegister,
     pub b: ByteRegister,
-    pub results: [ByteRegister; NUM_BIT_OPPS],
-    a_bits: ArrayRegister<BitRegister>,
-    b_bits: ArrayRegister<BitRegister>,
-    results_bits: [ArrayRegister<BitRegister>; NUM_BIT_OPPS],
+    pub a_and_b: ByteRegister,
+    pub a_xor_b: ByteRegister,
+    pub a_shr_b: ByteRegister,
+    pub a_shr_carry_b: ByteRegister,
+    pub a_rot_b: ByteRegister,
+    pub a_not: ByteRegister,
     pub multiplicity_data: MultiplicityData,
-    pub digests: Vec<ElementRegister>,
-    pub lookup: LogLookupTable<ElementRegister, F, E>,
+    pub digests: Vec<CubicRegister>,
+    pub lookup: LogLookupTable<CubicRegister, F, E>,
 }
 
 impl<L: AirParameters> AirBuilder<L> {
@@ -49,79 +46,49 @@ impl<L: AirParameters> AirBuilder<L> {
 
         let a = self.alloc::<ByteRegister>();
         let b = self.alloc::<ByteRegister>();
-        let results = from_fn::<_, NUM_BIT_OPPS, _>(|_| self.alloc::<ByteRegister>());
 
-        let a_bits = self.alloc_array::<BitRegister>(8);
-        let b_bits = self.alloc_array::<BitRegister>(8);
-        let results_bits = from_fn::<_, NUM_BIT_OPPS, _>(|_| self.alloc_array::<BitRegister>(8));
+        let a_and_b = self.alloc::<ByteRegister>();
+        let a_xor_b = self.alloc::<ByteRegister>();
+        let a_shr_b = self.alloc::<ByteRegister>();
+        let a_shr_carry_b = self.alloc::<ByteRegister>();
+        let a_rot_b = self.alloc::<ByteRegister>();
+        let a_not = self.alloc::<ByteRegister>();
 
         let multiplicity_data = MultiplicityData::new(multiplicities);
 
-        // Constrain the bit instructions
-        for (k, &opcode) in OPCODE_INDICES.iter().enumerate() {
-            match opcode {
-                OPCODE_AND => {
-                    let and = And {
-                        a: a_bits,
-                        b: b_bits,
-                        result: results_bits[k],
-                    };
-                    self.register_instruction::<ByteInstructionSet>(and.into());
-                }
-                OPCODE_XOR => {
-                    let xor = Xor {
-                        a: a_bits,
-                        b: b_bits,
-                        result: results_bits[k],
-                    };
-                    self.register_instruction::<ByteInstructionSet>(xor.into());
-                }
-                OPCODE_NOT => {
-                    let not = Not {
-                        a: a_bits,
-                        result: results_bits[k],
-                    };
-                    self.register_instruction::<ByteInstructionSet>(not.into());
-                }
-                OPCODE_SHR => {
-                    self.set_shr(&a_bits, &b_bits.get_subarray(0..3), &results_bits[k]);
-                }
-                OPCODE_ROT => {
-                    self.set_rotate_right(&a_bits, &b_bits.get_subarray(0..3), &results_bits[k]);
-                }
-                OPCODE_RANGE => {}
-                _ => unreachable!("Invalid opcode"),
-            }
-        }
-
-        // Constrain the equality between the byte registers and their bit representations
-        self.decode_byte(&a, &a_bits);
-        self.decode_byte(&b, &b_bits);
-        for (result, bits) in results.iter().zip_eq(results_bits.iter()) {
-            self.decode_byte(result, bits);
-        }
-
         // Accumulate entries for the lookup table
-        let mut digests = Vec::new();
-        for (k, opcode) in OPCODE_INDICES.iter().enumerate() {
-            let operation =
-                ByteOperation::from_opcode_and_values(*opcode, a, b, results.get(k).copied());
-            let digest = self.alloc::<ElementRegister>();
-            digests.push(digest);
+        let challenges = self.alloc_array_challenge::<CubicRegister>(5);
 
-            let digest_constraint = ByteOperationDigestConstraint::new(operation, digest);
-            self.register_instruction::<ByteInstructionSet>(digest_constraint.into());
-        }
+        let digests = OPCODE_INDICES
+            .into_iter()
+            .map(|op| {
+                let operation = match op {
+                    OPCODE_AND => ByteOperation::And(a, b, a_and_b),
+                    OPCODE_XOR => ByteOperation::Xor(a, b, a_xor_b),
+                    OPCODE_SHR => ByteOperation::Shr(a, b, a_shr_b),
+                    OPCODE_SHR_CARRY => ByteOperation::ShrFull(a, b, a_shr_b, a_shr_carry_b),
+                    OPCODE_ROT => ByteOperation::Rot(a, b, a_rot_b),
+                    OPCODE_NOT => ByteOperation::Not(a, a_not),
+                    OPCODE_RANGE => ByteOperation::Range(a),
+                    _ => unreachable!("Invalid opcode: {}", op),
+                };
+                let values = operation.expressions();
+                self.accumulate_expressions(&challenges, &values)
+            })
+            .collect::<Vec<_>>();
 
         let lookup = self.new_lookup(&digests, &multiplicities);
 
         ByteLogLookupTable {
+            challenges,
             a,
             b,
-            results,
-            a_bits,
-            b_bits,
-            results_bits,
+            a_and_b,
+            a_xor_b,
+            a_shr_b,
+            a_shr_carry_b,
+            a_rot_b,
+            a_not,
             multiplicity_data,
             digests,
             lookup,
@@ -142,43 +109,36 @@ impl<F: PrimeField64, E: CubicParameters<F>> ByteLogLookupTable<F, E> {
             .rows_par_mut()
             .enumerate()
             .for_each(|(i, row)| {
-                for (k, operation) in operations_dict[&i].iter().enumerate() {
-                    let as_field_bits = |&x| u8_to_bits_le(x).map(|b| F::from_canonical_u8(b));
+                for operation in operations_dict[&i].iter() {
                     let as_field = |&x| F::from_canonical_u8(x);
-                    let digest_val = F::from_canonical_u32(operation.lookup_digest_value());
-                    self.digests[k].assign_to_raw_slice(row, &digest_val);
                     match operation {
                         ByteOperation::And(a, b, c) => {
                             // Write field values
                             self.a.assign_to_raw_slice(row, &as_field(a));
                             self.b.assign_to_raw_slice(row, &as_field(b));
-                            self.results[k].assign_to_raw_slice(row, &as_field(c));
-                            // Write bit values
-                            self.a_bits.assign_to_raw_slice(row, &as_field_bits(a));
-                            self.b_bits.assign_to_raw_slice(row, &as_field_bits(b));
-                            self.results_bits[k].assign_to_raw_slice(row, &as_field_bits(c));
+                            self.a_and_b.assign_to_raw_slice(row, &as_field(c));
                         }
                         ByteOperation::Xor(_, _, c) => {
                             // Write field values
-                            self.results[k].assign_to_raw_slice(row, &as_field(c));
-                            // Write bit values
-                            self.results_bits[k].assign_to_raw_slice(row, &as_field_bits(c));
+                            self.a_xor_b.assign_to_raw_slice(row, &as_field(c));
                         }
                         ByteOperation::Not(_, c) => {
                             // Write field values
-                            self.results[k].assign_to_raw_slice(row, &as_field(c));
-                            // Write bit values
-                            self.results_bits[k].assign_to_raw_slice(row, &as_field_bits(c));
+                            self.a_not.assign_to_raw_slice(row, &as_field(c));
                         }
                         ByteOperation::Shr(_, _, c) => {
                             // Write field value
-                            self.results[k].assign_to_raw_slice(row, &as_field(c));
+                            self.a_shr_b.assign_to_raw_slice(row, &as_field(c));
+                        }
+                        ByteOperation::ShrFull(_, _, r, c) => {
+                            // Write field value
+                            self.a_shr_b.assign_to_raw_slice(row, &as_field(r));
+                            self.a_shr_carry_b.assign_to_raw_slice(row, &as_field(c));
                         }
                         ByteOperation::Rot(_, _, c) => {
                             // Write field value
-                            self.results[k].assign_to_raw_slice(row, &as_field(c));
+                            self.a_rot_b.assign_to_raw_slice(row, &as_field(c));
                         }
-
                         ByteOperation::Range(_) => {}
                         _ => unreachable!("const parameter operations are not supported"),
                     }

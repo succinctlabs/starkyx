@@ -68,8 +68,8 @@ pub mod test_utils {
         type CubicParams = GoldilocksCubicParameters;
         type Instruction = UintInstruction;
 
-        const NUM_FREE_COLUMNS: usize = 1527;
-        const EXTENDED_COLUMNS: usize = 708;
+        const NUM_FREE_COLUMNS: usize = 1271;
+        const EXTENDED_COLUMNS: usize = 1476;
     }
 
     #[test]

@@ -42,8 +42,8 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for BLAKE2BAirParamet
 
     type Instruction = UintInstruction;
 
-    const NUM_FREE_COLUMNS: usize = 3545;
-    const EXTENDED_COLUMNS: usize = 1632;
+    const NUM_FREE_COLUMNS: usize = 2413;
+    const EXTENDED_COLUMNS: usize = 4758;
     const NUM_ARITHMETIC_COLUMNS: usize = 0;
 }
 

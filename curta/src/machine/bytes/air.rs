@@ -16,6 +16,6 @@ impl<F: PrimeField64, E: CubicParameters<F>> AirParameters for ByteParameters<F,
     type Instruction = UintInstruction;
 
     const NUM_ARITHMETIC_COLUMNS: usize = 0;
-    const NUM_FREE_COLUMNS: usize = 107;
-    const EXTENDED_COLUMNS: usize = 21;
+    const NUM_FREE_COLUMNS: usize = 15;
+    const EXTENDED_COLUMNS: usize = 45;
 }

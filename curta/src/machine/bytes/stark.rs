@@ -549,8 +549,8 @@ mod tests {
         type Instruction = UintInstruction;
 
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
-        const NUM_FREE_COLUMNS: usize = 17;
-        const EXTENDED_COLUMNS: usize = 12;
+        const NUM_FREE_COLUMNS: usize = 13;
+        const EXTENDED_COLUMNS: usize = 24;
     }
 
     #[test]
@@ -621,8 +621,8 @@ mod tests {
 
         type Instruction = UintInstruction;
 
-        const NUM_FREE_COLUMNS: usize = 17;
-        const EXTENDED_COLUMNS: usize = 21;
+        const NUM_FREE_COLUMNS: usize = 13;
+        const EXTENDED_COLUMNS: usize = 33;
     }
 
     #[test]
@@ -706,8 +706,8 @@ mod tests {
 
         type Instruction = UintInstruction;
 
-        const NUM_FREE_COLUMNS: usize = 18;
-        const EXTENDED_COLUMNS: usize = 24;
+        const NUM_FREE_COLUMNS: usize = 14;
+        const EXTENDED_COLUMNS: usize = 36;
     }
 
     #[test]
