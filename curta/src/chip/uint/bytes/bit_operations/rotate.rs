@@ -90,7 +90,7 @@ impl<L: AirParameters> AirBuilder<L> {
             for i in 0..n {
                 self.set_select(
                     &bit,
-                    &temp.get((i - num_shift_bits) % n),
+                    &temp.get((n + i - num_shift_bits) % n),
                     &temp.get(i),
                     &res.get(i),
                 );

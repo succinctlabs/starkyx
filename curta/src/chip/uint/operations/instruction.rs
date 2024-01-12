@@ -103,7 +103,7 @@ mod tests {
         type Instruction = UintInstruction;
 
         const NUM_FREE_COLUMNS: usize = 1100;
-        const EXTENDED_COLUMNS: usize = 1300;
+        const EXTENDED_COLUMNS: usize = 1500;
         const NUM_ARITHMETIC_COLUMNS: usize = 0;
     }
 
