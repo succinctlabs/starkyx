@@ -34,7 +34,11 @@ pub struct Ed25519FpSqrtInstruction {
 }
 
 impl<L: AirParameters> AirBuilder<L> {
-    /// given two field elements `a` and `b`, computes the quotient `a / b = c`.
+    /// given two field elements `a` and `b`, computes a positive square root.
+    ///
+    /// WARNING: While trace generation will give the correct result which is whithin the rangwe of
+    /// the field modulus, there are no constraints checking that and such checks must be done by
+    /// the caller.
     pub fn ed25519_sqrt(
         &mut self,
         a: &FieldRegister<Ed25519BaseField>,
