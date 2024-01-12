@@ -401,6 +401,72 @@ impl ByteOperation<ByteRegister> {
         }
     }
 
+    pub fn read_from_writer<F: PrimeField64>(
+        &self,
+        writer: &TraceWriter<F>,
+        row_index: usize,
+    ) -> ByteOperation<u8> {
+        let from_field = |x: F| F::as_canonical_u64(&x) as u8;
+        match self {
+            ByteOperation::And(a, b, c) => {
+                let a_val = from_field(writer.read(a, row_index));
+                let b_val = from_field(writer.read(b, row_index));
+                let c_val = from_field(writer.read(c, row_index));
+                ByteOperation::And(a_val, b_val, c_val)
+            }
+            ByteOperation::Xor(a, b, c) => {
+                let a_val = from_field(writer.read(a, row_index));
+                let b_val = from_field(writer.read(b, row_index));
+                let c_val = from_field(writer.read(c, row_index));
+                ByteOperation::Xor(a_val, b_val, c_val)
+            }
+            ByteOperation::Shr(a, b, c) => {
+                let a_val = from_field(writer.read(a, row_index));
+                let b_val = from_field(writer.read(b, row_index));
+                let c_val = from_field(writer.read(c, row_index));
+                ByteOperation::Shr(a_val, b_val, c_val)
+            }
+            ByteOperation::ShrConst(a, b, c) => {
+                let a_val = from_field(writer.read(a, row_index));
+                let c_val = from_field(writer.read(c, row_index));
+                ByteOperation::Shr(a_val, *b, c_val)
+            }
+            ByteOperation::ShrFull(a, b, result, carry) => {
+                let a_val = from_field(writer.read(a, row_index));
+                let b_val = from_field(writer.read(b, row_index));
+                let res_val = from_field(writer.read(result, row_index));
+                let carry_val = from_field(writer.read(carry, row_index));
+                ByteOperation::ShrFull(a_val, b_val, res_val, carry_val)
+            }
+            ByteOperation::ShrCarry(a, b, result, carry) => {
+                let a_val = from_field(writer.read(a, row_index));
+                let res_val = from_field(writer.read(result, row_index));
+                let carry_val = from_field(writer.read(carry, row_index));
+                ByteOperation::ShrFull(a_val, *b, res_val, carry_val)
+            }
+            ByteOperation::Rot(a, b, c) => {
+                let a_val = from_field(writer.read(a, row_index));
+                let b_val = from_field(writer.read(b, row_index));
+                let c_val = from_field(writer.read(c, row_index));
+                ByteOperation::Rot(a_val, b_val, c_val)
+            }
+            ByteOperation::RotConst(a, b, c) => {
+                let a_val = from_field(writer.read(a, row_index));
+                let c_val = from_field(writer.read(c, row_index));
+                ByteOperation::Rot(a_val, *b, c_val)
+            }
+            ByteOperation::Not(a, b) => {
+                let a_val = from_field(writer.read(a, row_index));
+                let b_val = from_field(writer.read(b, row_index));
+                ByteOperation::Not(a_val, b_val)
+            }
+            ByteOperation::Range(a) => {
+                let a_val = from_field(writer.read(a, row_index));
+                ByteOperation::Range(a_val)
+            }
+        }
+    }
+
     pub fn read_from_slice<F: PrimeField64>(&self, slice: &[F]) -> ByteOperation<u8> {
         let from_field = |x: F| F::as_canonical_u64(&x) as u8;
         match self {

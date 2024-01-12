@@ -57,6 +57,7 @@ impl<L: AirParameters> AirTraceData<L> {
         for power in self.powers.iter() {
             writer.write_powers(power);
         }
+
         // Write accumulations.
         for acc in self.accumulators.iter() {
             writer.write_accumulation(acc);

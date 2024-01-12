@@ -86,10 +86,10 @@ impl ByteMultiplicityData {
         let mut multiplicities_trace = AirTrace::new_with_value(NUM_BIT_OPPS + 1, 1 << 16, 0u32);
 
         // Count the multiplicities in the trace
-        let trace = writer.read_trace().unwrap();
-        for row in trace.rows() {
+        let num_rows = writer.height;
+        for i in 0..num_rows {
             for op in self.trace_operations.iter() {
-                let op_value = op.read_from_slice(row);
+                let op_value = op.read_from_writer(writer, i);
                 let (row_index, col_index) = self.data.operations_multipcitiy_dict[&op_value];
                 assert!(col_index < NUM_BIT_OPPS + 1);
                 assert!(row_index < 1 << 16);
