@@ -1,5 +1,6 @@
 use core::marker::PhantomData;
 
+use plonky2::field::ops::Square;
 use serde::{Deserialize, Serialize};
 
 use super::raw::RawPointer;
@@ -21,10 +22,17 @@ pub enum CompressedValue<F> {
     Element(ArithmeticExpression<F>),
 }
 
+/// Accumulating the pointer value for lookup.
+///
+/// Given a raw pointer consisting of a challenge `gamma` and a shift, the accumulated value is
+/// given by `value + gamma * shift + gamma^2`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PointerAccumulator<F, E> {
+    /// The raw pointer to be accumulated.
     ptr: RawPointer,
+    /// The value in compressed form, consisting of the value and a timestamp.
     value: CompressedValue<F>,
+    /// The final digest which is inserted into the bus.
     pub(crate) digest: CubicRegister,
     _marker: PhantomData<E>,
 }
@@ -60,22 +68,27 @@ impl<E: CubicParameters<AP::Field>, AP: CubicParser<E>> AirConstraint<AP>
     for PointerAccumulator<AP::Field, E>
 {
     fn eval(&self, parser: &mut AP) {
-        let challenge = self.ptr.eval(parser);
-        let digest = self.digest.eval(parser);
+        let (powers, shift) = self.ptr.eval(parser);
+        let shift = parser.element_from_base_field(shift);
 
-        let expected_value = match self.value.clone() {
-            CompressedValue::Cubic(cubic) => {
-                let value = CubicElement(cubic.0.map(|e| e.eval(parser)[0]));
-                parser.mul_extension(challenge, value)
+        let value = match self.value.clone() {
+            CompressedValue::Element(e) => {
+                let value = e.eval(parser)[0];
+                parser.element_from_base_field(value)
             }
-            CompressedValue::Element(element) => {
-                let value_base = element.eval(parser)[0];
-                let value = parser.element_from_base_field(value_base);
-                parser.mul_extension(challenge, value)
-            }
+            CompressedValue::Cubic(e) => CubicElement(e.0.map(|e| e.eval(parser)[0])),
         };
 
-        parser.assert_eq_extension(expected_value, digest);
+        let mut expected_digest = value;
+        let shift_times_challenge = parser.mul_extension(shift, powers[1]);
+        // Expected digest is now value + gamma * shift.
+        expected_digest = parser.add_extension(expected_digest, shift_times_challenge);
+        // Expected digest is now value + gamma * shift + gamma^2.
+        expected_digest = parser.add_extension(expected_digest, powers[2]);
+
+        // Compare expected digest with actual digest.
+        let digest = self.digest.eval(parser);
+        parser.assert_eq_extension(expected_digest, digest);
     }
 }
 
@@ -87,19 +100,18 @@ impl<F: Field> TraceWriter<F> {
     ) {
         let ptr_key = accumulator.ptr.read(self, row_index);
         let ptr_challenge = self.read(&ptr_key.challenge, row_index);
-        let ptr_value = ptr_challenge + CubicElement::from_base(ptr_key.shift, F::ZERO);
-
         let value = match accumulator.value.clone() {
             CompressedValue::Cubic(cubic) => {
-                let value = CubicElement(cubic.0.map(|e| self.read_expression(&e, row_index)[0]));
-                value * ptr_value
+                CubicElement(cubic.0.map(|e| self.read_expression(&e, row_index)[0]))
             }
             CompressedValue::Element(element) => {
                 let value = self.read_expression(&element, row_index)[0];
-                ptr_value * CubicElement::from_base(value, F::ZERO)
+                CubicElement::from_base(value, F::ZERO)
             }
         };
 
-        self.write(&accumulator.digest, &value, row_index);
+        let digest = value + ptr_challenge * ptr_key.shift + ptr_challenge.square();
+
+        self.write(&accumulator.digest, &digest, row_index);
     }
 }

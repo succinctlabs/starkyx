@@ -11,7 +11,7 @@ use crate::chip::AirParameters;
 
 #[derive(Clone, Debug)]
 pub struct RawSlice {
-    challenge: CubicRegister,
+    powers: ArrayRegister<CubicRegister>,
 }
 
 #[derive(Clone, Debug)]
@@ -49,20 +49,20 @@ impl<V: MemoryValue> Slice<V> {
 impl RawSlice {
     pub(crate) fn get(&self, idx: usize) -> RawPointer {
         assert!(idx <= i32::MAX as usize);
-        RawPointer::new(self.challenge, None, Some(idx as i32))
+        RawPointer::new(self.powers, None, Some(idx as i32))
     }
 
     pub(crate) fn new<L: AirParameters>(builder: &mut AirBuilder<L>) -> Self {
-        let challenge = builder.alloc_challenge();
+        let powers = builder.challenge_powers(3);
 
-        Self { challenge }
+        Self { powers }
     }
 
     pub(crate) fn get_at(&self, idx: ElementRegister) -> RawPointer {
-        RawPointer::new(self.challenge, Some(idx), None)
+        RawPointer::new(self.powers, Some(idx), None)
     }
 
     pub(crate) fn get_at_shifted(&self, idx: ElementRegister, shift: i32) -> RawPointer {
-        RawPointer::new(self.challenge, Some(idx), Some(shift))
+        RawPointer::new(self.powers, Some(idx), Some(shift))
     }
 }

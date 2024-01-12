@@ -5,6 +5,7 @@ use super::key::RawPointerKey;
 use crate::air::extension::cubic::CubicParser;
 use crate::chip::arithmetic::expression::ArithmeticExpression;
 use crate::chip::builder::AirBuilder;
+use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::CubicRegister;
 use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
@@ -16,27 +17,28 @@ use crate::math::prelude::CubicParameters;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct RawPointer {
-    challenge: CubicRegister,
+    /// The powers `1, gamma, gamma^2, ...` of the challenge identifying the unique pointer.
+    powers: ArrayRegister<CubicRegister>,
     element_shift: Option<ElementRegister>,
     constant_shift: Option<i32>,
 }
 
 impl RawPointer {
     pub(crate) fn new(
-        challenge: CubicRegister,
+        powers: ArrayRegister<CubicRegister>,
         element_shift: Option<ElementRegister>,
         constant_shift: Option<i32>,
     ) -> Self {
         Self {
-            challenge,
+            powers,
             element_shift,
             constant_shift,
         }
     }
 
-    pub(crate) fn from_challenge(challenge: CubicRegister) -> Self {
+    pub(crate) fn from_challenge(powers: ArrayRegister<CubicRegister>) -> Self {
         Self {
-            challenge,
+            powers,
             element_shift: None,
             constant_shift: None,
         }
@@ -84,8 +86,8 @@ impl RawPointer {
     pub fn eval<E: CubicParameters<AP::Field>, AP: CubicParser<E>>(
         &self,
         parser: &mut AP,
-    ) -> CubicElement<AP::Var> {
-        let challenge = self.challenge.eval(parser);
+    ) -> ([CubicElement<AP::Var>; 3], AP::Var) {
+        let challenges = self.powers.eval_array::<_, 3>(parser);
 
         let shift = match (self.element_shift, self.constant_shift) {
             (Some(e), None) => Some(e.eval(parser)),
@@ -98,10 +100,20 @@ impl RawPointer {
             (None, None) => None,
         };
 
-        let shift_ext = shift.map(|e| parser.element_from_base_field(e));
-        shift_ext
-            .map(|e| parser.add_extension(challenge, e))
-            .unwrap_or(challenge)
+        (challenges, shift.unwrap_or(parser.zero()))
+    }
+
+    pub fn shift_expr<F: Field>(&self) -> ArithmeticExpression<F> {
+        match (self.element_shift, self.constant_shift) {
+            (Some(e), None) => e.expr(),
+            (None, Some(c)) => ArithmeticExpression::from_constant(i32_to_field(c)),
+            (Some(e), Some(c)) => {
+                let element = e.expr::<F>();
+                let constant = i32_to_field::<F>(c);
+                element + constant
+            }
+            (None, None) => ArithmeticExpression::zero(),
+        }
     }
 
     pub fn read<F: Field>(&self, writer: &TraceWriter<F>, row_index: usize) -> RawPointerKey<F> {
@@ -111,7 +123,7 @@ impl RawPointer {
             .unwrap_or(F::ZERO);
         let constant_shift = self.constant_shift.map(i32_to_field).unwrap_or(F::ZERO);
         let shift = element_shift + constant_shift;
-        RawPointerKey::new(self.challenge, shift)
+        RawPointerKey::new(self.powers.get(1), shift)
     }
 
     pub fn read_from_air<F: Field>(&self, writer: &impl AirWriter<Field = F>) -> RawPointerKey<F> {
@@ -121,7 +133,7 @@ impl RawPointer {
             .unwrap_or(F::ZERO);
         let constant_shift = self.constant_shift.map(i32_to_field).unwrap_or(F::ZERO);
         let shift = element_shift + constant_shift;
-        RawPointerKey::new(self.challenge, shift)
+        RawPointerKey::new(self.powers.get(1), shift)
     }
 }
 
