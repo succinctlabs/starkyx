@@ -1,6 +1,8 @@
 use anyhow::Result;
 use plonky2::field::extension::Extendable;
+use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::hash::hash_types::RichField;
+use plonky2::hash::merkle_tree::MerkleCap;
 use plonky2::iop::challenger::{Challenger, RecursiveChallenger};
 use plonky2::iop::target::Target;
 use plonky2::iop::witness::WitnessWrite;
@@ -9,7 +11,7 @@ use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use serde::{Deserialize, Serialize};
 
-use super::air::ByteParameters;
+use super::air::{get_preprocessed_byte_trace, ByteAir, ByteParameters};
 use super::proof::{
     ByteStarkChallenges, ByteStarkChallengesTarget, ByteStarkProof, ByteStarkProofTarget,
 };
@@ -17,6 +19,7 @@ use crate::chip::trace::data::AirTraceData;
 use crate::chip::trace::writer::{InnerWriterData, TraceWriter};
 use crate::chip::uint::bytes::lookup_table::multiplicity_data::ByteMultiplicityData;
 use crate::chip::uint::bytes::lookup_table::table::ByteLogLookupTable;
+use crate::chip::uint::bytes::operations::NUM_BIT_OPPS;
 use crate::chip::{AirParameters, Chip};
 use crate::machine::bytes::builder::NUM_LOOKUP_ROWS;
 use crate::maybe_rayon::*;
@@ -31,13 +34,18 @@ use crate::trace::AirTrace;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
-pub struct ByteStark<L: AirParameters, C, const D: usize> {
+pub struct ByteStark<L: AirParameters, C, const D: usize>
+where
+    L::Field: RichField,
+    C: CurtaConfig<D, F = L::Field>,
+{
     pub config: StarkyConfig<C, D>,
     pub stark: Starky<Chip<L>>,
     pub air_data: AirTraceData<L>,
+    pub byte_trace_cap: MerkleCap<L::Field, C::Hasher>,
     pub(crate) multiplicity_data: ByteMultiplicityData,
     pub(crate) lookup_config: StarkyConfig<C, D>,
-    pub(crate) lookup_stark: Starky<Chip<ByteParameters<L::Field, L::CubicParams>>>,
+    pub(crate) lookup_stark: Starky<ByteAir<L::Field, L::CubicParams>>,
     pub(crate) lookup_air_data: AirTraceData<ByteParameters<L::Field, L::CubicParams>>,
     pub(crate) lookup_table: ByteLogLookupTable<L::Field, L::CubicParams>,
 }
@@ -56,12 +64,19 @@ where
         &self.config
     }
 
-    pub const fn lookup_stark(&self) -> &Starky<Chip<ByteParameters<L::Field, L::CubicParams>>> {
+    pub const fn lookup_stark(&self) -> &Starky<ByteAir<L::Field, L::CubicParams>> {
         &self.lookup_stark
     }
 
     pub const fn lookup_config(&self) -> &StarkyConfig<C, D> {
         &self.lookup_config
+    }
+
+    fn get_preprocessed_byte_trace(
+        &self,
+        lookup_writer: &TraceWriter<L::Field>,
+    ) -> PolynomialBatch<L::Field, C::GenericConfig, D> {
+        get_preprocessed_byte_trace(lookup_writer, &self.lookup_config, &self.lookup_stark)
     }
 
     fn generate_execution_traces(
@@ -157,16 +172,22 @@ where
             width: self.stark.air.execution_trace_length,
         };
 
-        let lookup_execution_trace_values = lookup_writer
+        let lookup_preprocessed_commitment = timed!(
+            timing,
+            "Preprocess lookup trace",
+            self.get_preprocessed_byte_trace(&lookup_writer)
+        );
+
+        let lookup_multiplicity_trace_values = lookup_writer
             .read_trace()
             .unwrap()
             .rows_par()
-            .flat_map(|row| row[0..self.lookup_stark.air.execution_trace_length].to_vec())
+            .flat_map(|row| row[0..NUM_BIT_OPPS + 1].to_vec())
             .collect::<Vec<_>>();
 
-        let lookup_execution_trace = AirTrace {
-            values: lookup_execution_trace_values,
-            width: self.lookup_stark.air.execution_trace_length,
+        let lookup_multiplicity_trace = AirTrace {
+            values: lookup_multiplicity_trace_values,
+            width: NUM_BIT_OPPS + 1,
         };
 
         // Commit to execution traces
@@ -176,15 +197,17 @@ where
             self.config.commit(&main_execution_trace, timing)
         );
 
-        let lookup_execution_commitment = timed!(
+        let lookup_multiplicity_commitment = timed!(
             timing,
             "Commit to lookup execution trace",
-            self.lookup_config.commit(&lookup_execution_trace, timing)
+            self.lookup_config
+                .commit(&lookup_multiplicity_trace, timing)
         );
 
         // Absorve the trace commitments into the challenger.
+        challenger.observe_cap(&lookup_preprocessed_commitment.merkle_tree.cap);
         challenger.observe_cap(&main_execution_commitment.merkle_tree.cap);
-        challenger.observe_cap(&lookup_execution_commitment.merkle_tree.cap);
+        challenger.observe_cap(&lookup_multiplicity_commitment.merkle_tree.cap);
 
         // Get random AIR challenges.
         let challenges = challenger.get_n_challenges(self.stark.air.num_challenges);
@@ -235,12 +258,12 @@ where
 
         let lookup_extended_trace_values = lookup_trace
             .rows_par()
-            .flat_map(|row| row[self.lookup_stark.air.execution_trace_length..].to_vec())
+            .flat_map(|row| row[self.lookup_stark.air.0.execution_trace_length..].to_vec())
             .collect::<Vec<_>>();
         let lookup_extended_trace = AirTrace {
             values: lookup_extended_trace_values,
             width: ByteParameters::<L::Field, L::CubicParams>::num_columns()
-                - self.lookup_stark.air.execution_trace_length,
+                - self.lookup_stark.air.0.execution_trace_length,
         };
         let lookup_extended_commitment = timed!(
             timing,
@@ -263,7 +286,11 @@ where
                 challenges: main_challenges,
             },
             AirCommitment {
-                trace_commitments: vec![lookup_execution_commitment, lookup_extended_commitment],
+                trace_commitments: vec![
+                    lookup_multiplicity_commitment,
+                    lookup_preprocessed_commitment,
+                    lookup_extended_commitment,
+                ],
                 public_inputs: lookup_public,
                 global_values: lookup_global,
                 challenges: global_challenges,
@@ -331,6 +358,9 @@ where
         // Observe public values.
         challenger.observe_elements(public_values);
 
+        // Observe preprocessesd trace commitment.
+        challenger.observe_cap(&proof.lookup_proof.trace_caps[1]);
+
         // Observe execution trace commitments.
         challenger.observe_cap(&proof.main_proof.trace_caps[0]);
         challenger.observe_cap(&proof.lookup_proof.trace_caps[0]);
@@ -342,7 +372,7 @@ where
         challenger.observe_elements(&proof.global_values);
         // Observe extended trace commitments.
         challenger.observe_cap(&proof.main_proof.trace_caps[1]);
-        challenger.observe_cap(&proof.lookup_proof.trace_caps[1]);
+        challenger.observe_cap(&proof.lookup_proof.trace_caps[2]);
 
         // Get all challenges.
         let main_challenges = proof.main_proof.get_iop_challenges(
@@ -380,6 +410,10 @@ where
             global_values,
         } = proof;
 
+        // Verify that the byte lookup table matches the preprocessed value.
+        assert_eq!(lookup_proof.trace_caps[1], self.byte_trace_cap);
+
+        // Verify the main AIR proof.
         StarkyVerifier::verify_with_challenges(
             &self.config,
             &self.stark,
@@ -388,6 +422,7 @@ where
             &global_values,
             main_challenges,
         )?;
+        // Verify the lookup AIR proof.
         StarkyVerifier::verify_with_challenges(
             &self.lookup_config,
             &self.lookup_stark,
@@ -431,6 +466,9 @@ where
         // Observe public values.
         challenger.observe_elements(public_values);
 
+        // Observe preprocessesd trace commitment.
+        challenger.observe_cap(&proof.lookup_proof.trace_caps[1]);
+
         // Observe execution trace commitments.
         challenger.observe_cap(&proof.main_proof.trace_caps[0]);
         challenger.observe_cap(&proof.lookup_proof.trace_caps[0]);
@@ -442,7 +480,7 @@ where
         challenger.observe_elements(&proof.global_values);
         // Observe extended trace commitments.
         challenger.observe_cap(&proof.main_proof.trace_caps[1]);
-        challenger.observe_cap(&proof.lookup_proof.trace_caps[1]);
+        challenger.observe_cap(&proof.lookup_proof.trace_caps[2]);
 
         // Get all challenges.
         let main_challenges = proof.main_proof.get_iop_challenges_target(
@@ -476,6 +514,10 @@ where
             lookup_proof,
             global_values,
         } = proof;
+
+        // Verify that the byte lookup table matches the preprocessed value.
+        let expected_cap = builder.constant_merkle_cap(&self.byte_trace_cap);
+        builder.connect_merkle_caps(&expected_cap, &lookup_proof.trace_caps[1]);
 
         StarkyVerifier::verify_with_challenges_circuit(
             builder,
