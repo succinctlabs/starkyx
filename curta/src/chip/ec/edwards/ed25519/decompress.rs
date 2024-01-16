@@ -78,7 +78,7 @@ impl<L: AirParameters> AirBuilder<L> {
     }
 }
 
-pub fn decompress(compressed_point: &CompressedEdwardsY) -> AffinePoint<Ed25519> {
+pub fn decompress(compressed_point: &CompressedEdwardsY) -> (AffinePoint<Ed25519>, BigUint) {
     let mut point_bytes = *compressed_point.as_bytes();
     let sign = point_bytes[31] >> 7 == 1;
     // mask out the sign bit
@@ -93,15 +93,12 @@ pub fn decompress(compressed_point: &CompressedEdwardsY) -> AffinePoint<Ed25519>
     let v_inv = v.modpow(&(modulus - BigUint::from(2u64)), modulus);
     let u_div_v = (u * &v_inv) % modulus;
 
-    let mut x = sqrt(u_div_v);
-
+    let root = sqrt(u_div_v);
     // sqrt always returns the nonnegative square root,
     // so we negate according to the supplied sign bit.
-    if sign {
-        x = modulus - &x;
-    }
+    let x = if sign { modulus - &root } else { root.clone() };
 
-    AffinePoint::new(x, y.clone())
+    (AffinePoint::new(x, y.clone()), root)
 }
 
 #[cfg(test)]
@@ -354,7 +351,7 @@ mod tests {
                 affine_p_y.clone(),
             );
 
-            let decompressed_p = decompress(&compressed_p);
+            let (decompressed_p, _) = decompress(&compressed_p);
             assert_eq!(decompressed_p, affine_p);
         }
     }
