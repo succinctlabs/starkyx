@@ -32,7 +32,7 @@ pub struct FpDenInstruction<P: FieldParameters> {
 }
 
 impl<L: AirParameters> AirBuilder<L> {
-    /// Computes the element `a / (1 + sign * b)`.
+    /// Computes the element `a / (1 - b)` when `sign == true` and `a / (1 + b)` when `sign == 1`.
     ///
     /// The constraints in `fp_den` only check that `result * (1 + sign * b) = a mod p`, they do NOT
     /// check that the denominator is non-zero[^1].
