@@ -809,7 +809,7 @@ checksum = "626dec3cac7cc0e1577a2ec3fc496277ec2baa084bebad95bb6fdbfae235f84c"
 [[package]]
 name = "plonky2"
 version = "0.1.4"
-source = "git+https://github.com/mir-protocol/plonky2.git#d2598bded0cb24d36b0a9900e8ffd104c470831b"
+source = "git+https://github.com/mir-protocol/plonky2.git?rev=d2598bd#d2598bded0cb24d36b0a9900e8ffd104c470831b"
 dependencies = [
  "ahash",
  "anyhow",
@@ -820,7 +820,7 @@ dependencies = [
  "log",
  "num",
  "plonky2_field",
- "plonky2_maybe_rayon 0.1.1 (git+https://github.com/mir-protocol/plonky2.git)",
+ "plonky2_maybe_rayon 0.1.1 (git+https://github.com/mir-protocol/plonky2.git?rev=d2598bd)",
  "plonky2_util",
  "rand",
  "rand_chacha",
@@ -834,7 +834,7 @@ dependencies = [
 [[package]]
 name = "plonky2_field"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git#d2598bded0cb24d36b0a9900e8ffd104c470831b"
+source = "git+https://github.com/mir-protocol/plonky2.git?rev=d2598bd#d2598bded0cb24d36b0a9900e8ffd104c470831b"
 dependencies = [
  "anyhow",
  "itertools 0.11.0",
@@ -858,7 +858,7 @@ dependencies = [
 [[package]]
 name = "plonky2_maybe_rayon"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git#d2598bded0cb24d36b0a9900e8ffd104c470831b"
+source = "git+https://github.com/mir-protocol/plonky2.git?rev=d2598bd#d2598bded0cb24d36b0a9900e8ffd104c470831b"
 dependencies = [
  "rayon",
 ]
@@ -866,7 +866,7 @@ dependencies = [
 [[package]]
 name = "plonky2_util"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git#d2598bded0cb24d36b0a9900e8ffd104c470831b"
+source = "git+https://github.com/mir-protocol/plonky2.git?rev=d2598bd#d2598bded0cb24d36b0a9900e8ffd104c470831b"
 
 [[package]]
 name = "plotters"
