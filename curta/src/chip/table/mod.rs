@@ -17,3 +17,4 @@ pub mod accumulator;
 pub mod bus;
 pub mod log_derivative;
 pub mod lookup;
+pub mod powers;

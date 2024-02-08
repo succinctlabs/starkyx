@@ -79,7 +79,7 @@ impl<L: AirParameters> AirBuilder<L> {
         let mut temp = *a;
         for (k, bit) in b.into_iter().enumerate() {
             // Calculate temp.right_rotate(2^k) and set it to result if bit = 1
-            let num_shift_bits = 1 << k;
+            let num_shift_bits = (1 << k) % n;
 
             let res = if k == m - 1 {
                 *result
@@ -90,7 +90,7 @@ impl<L: AirParameters> AirBuilder<L> {
             for i in 0..n {
                 self.set_select(
                     &bit,
-                    &temp.get((i - num_shift_bits) % n),
+                    &temp.get((n + i - num_shift_bits) % n),
                     &temp.get(i),
                     &res.get(i),
                 );

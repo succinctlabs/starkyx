@@ -15,10 +15,17 @@ use crate::math::field::Field;
 use crate::polynomial::Polynomial;
 
 impl<L: AirParameters> AirBuilder<L> {
+    /// Given a compressed point, returns a pair `(p,r)` consisting of the decompressed point `p`
+    /// and the positive suqare root of `x^2`, where `x` is the x-coordinate of `p`. To insure
+    /// soundness, the caller MUST verify that `r` is within the field modulus range, i.e
+    /// `0 <= r < modulus`.
     pub fn ed25519_decompress(
         &mut self,
         compressed_p: &CompressedPointRegister,
-    ) -> AffinePointRegister<EdwardsCurve<Ed25519Parameters>>
+    ) -> (
+        AffinePointRegister<EdwardsCurve<Ed25519Parameters>>,
+        FieldRegister<Ed25519BaseField>,
+    )
     where
         L::Instruction: FromFieldInstruction<Ed25519BaseField> + From<Ed25519FpSqrtInstruction>,
     {
@@ -61,15 +68,17 @@ impl<L: AirParameters> AirBuilder<L> {
         let v = self.fp_add::<Ed25519BaseField>(&one, &dyy);
         let u_div_v = self.fp_div::<Ed25519BaseField>(&u, &v);
 
-        let mut x = self.ed25519_sqrt(&u_div_v);
-        let neg_x = self.fp_sub::<Ed25519BaseField>(&zero, &x);
-        x = self.select(&compressed_p.sign, &neg_x, &x);
+        let r = self.ed25519_sqrt(&u_div_v);
+        let neg_r = self.fp_sub::<Ed25519BaseField>(&zero, &r);
+        let x = self.select(&compressed_p.sign, &neg_r, &r);
 
-        AffinePointRegister::<EdwardsCurve<Ed25519Parameters>>::new(x, compressed_p.y)
+        let point = AffinePointRegister::<EdwardsCurve<Ed25519Parameters>>::new(x, compressed_p.y);
+
+        (point, r)
     }
 }
 
-pub fn decompress(compressed_point: &CompressedEdwardsY) -> AffinePoint<Ed25519> {
+pub fn decompress(compressed_point: &CompressedEdwardsY) -> (AffinePoint<Ed25519>, BigUint) {
     let mut point_bytes = *compressed_point.as_bytes();
     let sign = point_bytes[31] >> 7 == 1;
     // mask out the sign bit
@@ -84,15 +93,12 @@ pub fn decompress(compressed_point: &CompressedEdwardsY) -> AffinePoint<Ed25519>
     let v_inv = v.modpow(&(modulus - BigUint::from(2u64)), modulus);
     let u_div_v = (u * &v_inv) % modulus;
 
-    let mut x = sqrt(u_div_v);
-
+    let root = sqrt(u_div_v);
     // sqrt always returns the nonnegative square root,
     // so we negate according to the supplied sign bit.
-    if sign {
-        x = modulus - &x;
-    }
+    let x = if sign { modulus - &root } else { root.clone() };
 
-    AffinePoint::new(x, y.clone())
+    (AffinePoint::new(x, y.clone()), root)
 }
 
 #[cfg(test)]
@@ -293,7 +299,7 @@ mod tests {
         let mut builder = AirBuilder::<L>::new();
 
         let compressed_p_reg = builder.alloc_ec_compressed_point();
-        let affine_p_reg = builder.ed25519_decompress(&compressed_p_reg);
+        let (affine_p_reg, _) = builder.ed25519_decompress(&compressed_p_reg);
         let expected_affine_p = builder.alloc_ec_point();
         builder.assert_equal(&expected_affine_p.x, &affine_p_reg.x);
         builder.assert_equal(&expected_affine_p.y, &affine_p_reg.y);
@@ -345,7 +351,7 @@ mod tests {
                 affine_p_y.clone(),
             );
 
-            let decompressed_p = decompress(&compressed_p);
+            let (decompressed_p, _) = decompress(&compressed_p);
             assert_eq!(decompressed_p, affine_p);
         }
     }

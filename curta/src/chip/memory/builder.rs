@@ -47,10 +47,9 @@ impl<L: AirParameters> AirBuilder<L> {
 
     #[inline]
     pub(crate) fn uninit<V: MemoryValue>(&mut self) -> Pointer<V> {
-        let ptr_challenge = self.alloc_challenge();
-        let compression_challenges =
-            self.alloc_array_challenge::<CubicRegister>(V::num_challenges());
-        Pointer::from_challenges(ptr_challenge, compression_challenges)
+        let ptr_challenge_powers = self.challenge_powers(3);
+        let compression_challenges = self.challenge_powers(V::num_challenges());
+        Pointer::from_challenges(ptr_challenge_powers, compression_challenges)
     }
 
     /// Frees the memory at location `ptr` with value `value` and write time given by `time`.
@@ -86,8 +85,7 @@ impl<L: AirParameters> AirBuilder<L> {
     #[inline]
     pub(crate) fn uninit_slice<V: MemoryValue>(&mut self) -> Slice<V> {
         let raw_slice = RawSlice::new(self);
-        let compression_challenges =
-            self.alloc_array_challenge::<CubicRegister>(V::num_challenges());
+        let compression_challenges = self.challenge_powers(V::num_challenges());
         Slice::new(raw_slice, compression_challenges)
     }
 

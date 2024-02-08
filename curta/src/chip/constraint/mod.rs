@@ -8,6 +8,7 @@ use super::table::accumulator::Accumulator;
 use super::table::bus::channel::BusChannel;
 use super::table::bus::global::Bus;
 use super::table::lookup::constraint::LookupChipConstraint;
+use super::table::powers::Powers;
 use super::AirParameters;
 use crate::air::extension::cubic::CubicParser;
 use crate::air::parser::{AirParser, MulParser};
@@ -17,6 +18,7 @@ use crate::air::AirConstraint;
 pub enum Constraint<L: AirParameters> {
     Instruction(AirInstruction<L::Field, L::Instruction>),
     Arithmetic(ArithmeticConstraint<L::Field>),
+    Powers(Powers<L::Field, L::CubicParams>),
     Accumulator(Accumulator<L::Field, L::CubicParams>),
     Pointer(PointerAccumulator<L::Field, L::CubicParams>),
     BusChannel(BusChannel<CubicRegister, L::CubicParams>),
@@ -61,6 +63,7 @@ where
             //     instruction.eval(&mut mul_parser)
             // }
             Constraint::Arithmetic(constraint) => constraint.eval(parser),
+            Constraint::Powers(powers) => powers.eval(parser),
             Constraint::Accumulator(accumulator) => accumulator.eval(parser),
             Constraint::Pointer(accumulator) => accumulator.eval(parser),
             Constraint::BusChannel(bus_channel) => bus_channel.eval(parser),
@@ -97,5 +100,11 @@ impl<L: AirParameters> From<BusChannel<CubicRegister, L::CubicParams>> for Const
 impl<L: AirParameters> From<Bus<CubicRegister, L::CubicParams>> for Constraint<L> {
     fn from(bus: Bus<CubicRegister, L::CubicParams>) -> Self {
         Self::Bus(bus)
+    }
+}
+
+impl<L: AirParameters> From<Powers<L::Field, L::CubicParams>> for Constraint<L> {
+    fn from(powers: Powers<L::Field, L::CubicParams>) -> Self {
+        Self::Powers(powers)
     }
 }

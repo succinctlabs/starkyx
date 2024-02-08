@@ -1,10 +1,9 @@
 use super::Accumulator;
 use crate::chip::register::memory::MemorySlice;
-use crate::chip::register::{Register, RegisterSerializable};
+use crate::chip::register::RegisterSerializable;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::extension::cubic::element::CubicElement;
 use crate::math::prelude::*;
-use crate::maybe_rayon::*;
 
 impl<F: PrimeField> TraceWriter<F> {
     pub(crate) fn write_accumulation<E: CubicParameters<F>>(
@@ -26,15 +25,16 @@ impl<F: PrimeField> TraceWriter<F> {
                 self.write(&accumulator.digest, &acc, 0);
             }
             _ => {
-                self.write_trace().unwrap().rows_par_mut().for_each(|row| {
+                let num_rows = self.height;
+                (0..num_rows).for_each(|row| {
                     let acc = accumulator
                         .values
                         .iter()
-                        .flat_map(|x| x.read_from_slice(row))
+                        .flat_map(|x| self.read_expression(x, row))
                         .zip(challenges.iter())
                         .map(|(val, alpha)| *alpha * val)
                         .sum::<CubicElement<F>>();
-                    accumulator.digest.assign_to_raw_slice(row, &acc);
+                    self.write(&accumulator.digest, &acc, row);
                 });
             }
         }

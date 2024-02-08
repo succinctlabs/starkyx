@@ -24,7 +24,6 @@ pub struct LogLookupValues<T: EvalCubic, F, E> {
     pub(crate) public_values: Vec<LogEntry<T>>,
     pub(crate) row_accumulators: ArrayRegister<CubicRegister>,
     pub(crate) global_accumulators: ArrayRegister<CubicRegister>,
-    // pub(crate) log_lookup_accumulator: CubicRegister,
     pub local_digest: CubicRegister,
     pub global_digest: Option<CubicRegister>,
     pub digest: CubicRegister,

@@ -22,11 +22,11 @@ impl<T> Pointer<T> {
     }
 
     pub(crate) fn from_challenges(
-        raw_ptr_challenge: CubicRegister,
+        raw_ptr_challenge_powers: ArrayRegister<CubicRegister>,
         compression_challenges: ArrayRegister<CubicRegister>,
     ) -> Self {
         Self::new(
-            RawPointer::from_challenge(raw_ptr_challenge),
+            RawPointer::from_challenge(raw_ptr_challenge_powers),
             compression_challenges,
         )
     }

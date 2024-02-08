@@ -81,19 +81,30 @@ impl<AP: AirParser> AirConstraint<AP> for LimbBitInstruction {
         // Assert that the bit accumulator is summed correctly. For that purpose, we assert that for
         // every row other than the last one in the cycle (determined by end_bit) we have that
         //     `bit_accumulator_next = (bit_accumulator - bit) / 2.`
+        // And, that in the end of the cycle, we have:
+        //     `bit_accumulator = bit`
         //
-        // This translates to the constraint:
+        // This translates to the constraints:
         //     `end_bit.not() * (2 * bit_accumulator_next - bit_accumulator + bit) = 0`
+        //     `end_bit * (bit_accumulator - bit) = 0`
         let bit = self.bit.eval(parser);
         let end_bit = self.end_bit.eval(parser);
         let one = parser.one();
         let not_end_bit = parser.sub(one, end_bit);
-        let mut constraint = self.bit_accumulator.next().eval(parser);
-        constraint = parser.mul_const(constraint, AP::Field::from_canonical_u8(2));
-        constraint = parser.sub(constraint, bit_accumulator);
-        constraint = parser.add(constraint, bit);
-        constraint = parser.mul(not_end_bit, constraint);
-        parser.constraint_transition(constraint);
+
+        // Constrain `end_bit.not() * (2 * bit_accumulator_next - bit_accumulator + bit) = 0`
+        let mut transition_constraint = self.bit_accumulator.next().eval(parser);
+        transition_constraint =
+            parser.mul_const(transition_constraint, AP::Field::from_canonical_u8(2));
+        transition_constraint = parser.sub(transition_constraint, bit_accumulator);
+        transition_constraint = parser.add(transition_constraint, bit);
+        transition_constraint = parser.mul(not_end_bit, transition_constraint);
+        parser.constraint_transition(transition_constraint);
+
+        // Constrain `end_bit * (bit_accumulator - bit) = 0`
+        let mut end_constraint = parser.sub(bit_accumulator, bit);
+        end_constraint = parser.mul(end_bit, end_constraint);
+        parser.constraint(end_constraint);
     }
 }
 

@@ -20,6 +20,7 @@ use super::table::bus::channel::BusChannel;
 use super::table::bus::global::Bus;
 use super::table::lookup::table::LookupTable;
 use super::table::lookup::values::LookupValues;
+use super::table::powers::Powers;
 use super::trace::data::AirTraceData;
 use super::{AirParameters, Chip};
 use crate::chip::register::RegisterSerializable;
@@ -37,6 +38,7 @@ pub struct AirBuilder<L: AirParameters> {
     pub(crate) global_instructions: Vec<AirInstruction<L::Field, L::Instruction>>,
     pub(crate) constraints: Vec<Constraint<L>>,
     pub(crate) global_constraints: Vec<Constraint<L>>,
+    pub(crate) powers: Vec<Powers<L::Field, L::CubicParams>>,
     pub(crate) accumulators: Vec<Accumulator<L::Field, L::CubicParams>>,
     pub(crate) pointer_row_accumulators: Vec<PointerAccumulator<L::Field, L::CubicParams>>,
     pub(crate) pointer_global_accumulators: Vec<PointerAccumulator<L::Field, L::CubicParams>>,
@@ -71,6 +73,7 @@ impl<L: AirParameters> AirBuilder<L> {
             global_instructions: Vec::new(),
             constraints: Vec::new(),
             global_constraints: Vec::new(),
+            powers: Vec::new(),
             accumulators: Vec::new(),
             pointer_row_accumulators: Vec::new(),
             pointer_global_accumulators: Vec::new(),
@@ -285,6 +288,7 @@ impl<L: AirParameters> AirBuilder<L> {
                 execution_trace_length,
                 instructions: self.instructions,
                 global_instructions: self.global_instructions,
+                powers: self.powers,
                 accumulators: self.accumulators,
                 pointer_row_accumulators: self.pointer_row_accumulators,
                 pointer_global_accumulators: self.pointer_global_accumulators,

@@ -127,7 +127,7 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupTable<T, F, E> {
             builder.alloc_array_extended::<CubicRegister>(trace_values.len() / 2);
         let global_accumulators =
             builder.alloc_array_global::<CubicRegister>(public_values.len() / 2);
-        let log_lookup_accumulator = builder.alloc_extended::<CubicRegister>();
+        let local_digest = builder.alloc_extended::<CubicRegister>();
 
         let digest = builder.alloc_global::<CubicRegister>();
         let global_digest = Some(builder.alloc_global::<CubicRegister>());
@@ -140,8 +140,7 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupTable<T, F, E> {
             public_values,
             row_accumulators,
             global_accumulators,
-            // log_lookup_accumulator,
-            local_digest: log_lookup_accumulator,
+            local_digest,
             global_digest,
             digest,
             _marker: PhantomData,
@@ -169,8 +168,12 @@ impl<F: Field, E: CubicParameters<F>> LogLookupTable<CubicRegister, F, E> {
         &mut self,
         builder: &mut AirBuilder<L>,
         values: &[CubicRegister],
-    ) {
+    ) -> LogLookupValues<CubicRegister, F, E> {
         let lookup_values = self.new_lookup_values(builder, values);
         lookup_values.register_constraints(builder);
+        builder
+            .lookup_values
+            .push(LookupValues::Cubic(lookup_values.clone()));
+        lookup_values
     }
 }

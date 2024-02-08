@@ -32,6 +32,13 @@ pub struct FpDenInstruction<P: FieldParameters> {
 }
 
 impl<L: AirParameters> AirBuilder<L> {
+    /// Computes the element `a / (1 - b)` when `sign == 0` and `a / (1 + b)` when `sign == 1`.
+    ///
+    /// The constraints in `fp_den` only check that `result * denominator = a mod p`, they do NOT
+    /// check that the denominator is non-zero[^1].
+    ///
+    /// [^1]: The reason is that the main use of this instruction is for Edwards addition in which we
+    ///  know that the denominator is non-zero.
     pub fn fp_den<P: FieldParameters>(
         &mut self,
         a: &FieldRegister<P>,
