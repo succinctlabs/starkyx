@@ -10,7 +10,7 @@ on:
     branches:
       - "**"
 
-jobs:  
+jobs:
   # test:
   #   name: Test Suite
   #   runs-on: ubuntu-latest
@@ -24,7 +24,7 @@ jobs:
   #       uses: actions-rs/toolchain@v1
   #       with:
   #         profile: minimal
-  #         toolchain: nightly
+  #         toolchain: nightly-2024-01-25
   #         override: true
 
   #     - name: rust-cache
@@ -61,7 +61,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: nightly-2024-01-25
           override: true
           components: rustfmt, clippy
 
@@ -91,4 +91,3 @@ jobs:
           args: --all-features --all-targets -- -D warnings -A incomplete-features
         env:
           CARGO_INCREMENTAL: 1
-
