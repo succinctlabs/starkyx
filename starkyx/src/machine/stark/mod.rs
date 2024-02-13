@@ -424,7 +424,6 @@ mod tests {
 
         let a = builder.alloc::<FieldRegister<Fp25519>>();
         let b = builder.alloc::<FieldRegister<Fp25519>>();
-        let c = builder.add(a, b);
 
         let num_rows = 1 << 16;
         let stark = builder.build::<C, 2>(num_rows);
