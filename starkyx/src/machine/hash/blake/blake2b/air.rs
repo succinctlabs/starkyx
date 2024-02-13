@@ -344,10 +344,6 @@ where
                 Some("v_indices".to_string()),
             );
         }
-        builder.watch(
-            &num_total_mix_iterations_element,
-            "num_total_mix_iterations_element",
-        );
 
         let mut v_last_write_ages = MemoryArray::<BytesBuilder<L>, MIX_LENGTH, 4>::new(builder);
         for (i, ages) in V_LAST_WRITE_AGES.iter().enumerate() {
@@ -368,8 +364,6 @@ where
         let num_full_compresses_element = builder.constant::<ElementRegister>(
             &L::Field::from_canonical_usize(num_real_compresses + num_dummy_compresses - 1),
         );
-        builder.watch(&num_compresses_element, "num_compresses_element");
-        builder.watch(&num_full_compresses_element, "num_full_compresses_element");
 
         for (i, permutation) in SIGMA_PERMUTATIONS.iter().enumerate() {
             permutations.store_row(
@@ -641,12 +635,6 @@ where
             Some(MemorySliceIndex::IndexElement(compress_id)),
         );
         let is_digest_row = builder.expression(cycle_96_end_bit.expr() * at_digest_compress.expr());
-        builder.watch(&compress_id, "compress id");
-        builder.watch(&at_first_compress, "at first compress");
-        builder.watch(&at_digest_compress, "at digest compress");
-        builder.watch(&at_end_compress, "at end compress");
-        builder.watch(&at_dummy_compress, "at dummy compress");
-        builder.watch(&is_digest_row, "is digest row");
 
         BLAKE2BTraceData {
             clk,
@@ -682,9 +670,6 @@ where
     ) -> BLAKE2BMemory {
         // Initialize the h memory
         let h = builder.uninit_slice();
-
-        builder.watch(num_messages_element, "num_messages_element");
-        builder.watch(num_real_compresses_element, "num_real_compresses_element");
 
         // Set dummy reads for h
         // Every row in the first compress of each message will read it 10 times. (96 * 10 * num_messages))
@@ -906,8 +891,6 @@ where
         builder: &mut BytesBuilder<L>,
         data: &BLAKE2BData<BytesBuilder<L>>,
     ) -> ([ElementRegister; 4], [Self::IntRegister; 4]) {
-        builder.watch(&data.trace.compress_index, "compress index");
-
         let init_idx_1 = data.trace.compress_index;
         let init_idx_2 = builder.add(data.trace.compress_index, data.const_nums.const_4);
 
@@ -1263,12 +1246,6 @@ where
         );
 
         // Output the "parameters" being sent to the mix function.
-        builder.watch(&v_values[0], "va");
-        builder.watch(&v_values[1], "vb");
-        builder.watch(&v_values[2], "vc");
-        builder.watch(&v_values[3], "vd");
-        builder.watch(&m_1, "m_1");
-        builder.watch(&m_2, "m_2");
 
         let (updated_v0, updated_v1, updated_v2, updated_v3) = Self::blake2b_mix(
             builder,
@@ -1444,7 +1421,6 @@ where
             );
             let xor = builder.xor(h_workspace_2.get(i), v_value);
             builder.set_to_expression(&h.get(i), xor.expr());
-            builder.watch(&xor, "final h");
 
             let mut h_idx = builder.expression(
                 data.trace.compress_id.expr() * data.const_nums.const_8.expr() + i_element.expr(),
@@ -1497,23 +1473,16 @@ where
         let mut v_a_inter = builder.add(*v_a, *v_b);
         v_a_inter = builder.add(v_a_inter, *x);
 
-        builder.watch(&v_a_inter, "after first operation, va");
-
         let mut v_d_inter = builder.xor(*v_d, v_a_inter);
-        builder.watch(&v_d_inter, "after first xor, vd");
         v_d_inter = builder.rotate_right(v_d_inter, 32);
-        builder.watch(&v_d_inter, "after first operation, vd");
 
         let mut v_c_inter = builder.add(*v_c, v_d_inter);
-        builder.watch(&v_c_inter, "after first operation, vc");
 
         let mut v_b_inter = builder.xor(*v_b, v_c_inter);
         v_b_inter = builder.rotate_right(v_b_inter, 24);
-        builder.watch(&v_b_inter, "after first operation, vb");
 
         v_a_inter = builder.add(v_a_inter, v_b_inter);
         v_a_inter = builder.add(v_a_inter, *y);
-        builder.watch(&v_a_inter, "after second operation, va");
 
         v_d_inter = builder.xor(v_d_inter, v_a_inter);
         v_d_inter = builder.rotate_right(v_d_inter, 16);

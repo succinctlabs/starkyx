@@ -401,8 +401,6 @@ pub(crate) mod tests {
         // x1' <- x0 + x1
         builder.set_to_expression_transition(&x_1.next(), x_0.expr() + x_1.expr());
 
-        builder.watch(&x_1, "x_1 fib");
-
         let num_rows = 1 << 10;
         let public_inputs = [
             F::ZERO,
