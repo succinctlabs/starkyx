@@ -36,4 +36,4 @@ StarkyX starks can be integrated into a [Plonky2](https://github.com/mir-protoco
 
 ## Audit
 
-Curta has been audited by [KALOS](https://kalos.xyz). The audit report can be found [here](https://hackmd.io/qS36EcIASx6Gt_2uNwlK4A).
+StarkyX has been audited by [KALOS](https://kalos.xyz). The audit report can be found [here](https://hackmd.io/qS36EcIASx6Gt_2uNwlK4A).
