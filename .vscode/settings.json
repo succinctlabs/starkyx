@@ -8,7 +8,7 @@
     100
   ],
   "rust-analyzer.linkedProjects": [
-    "./curta/Cargo.toml",
+    "./starkyx/Cargo.toml",
   ],
   "rust-analyzer.check.overrideCommand": [
     "cargo",
