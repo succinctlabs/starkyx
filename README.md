@@ -33,3 +33,7 @@ cargo test --release
 ## Integrating into a Plonky2 circuit
 
 StarkyX starks can be integrated into a [Plonky2](https://github.com/mir-protocol/plonky2) circuit
+
+## Audit
+
+StarkyX has been audited by [KALOS](https://kalos.xyz). The audit report can be found [here](https://hackmd.io/qS36EcIASx6Gt_2uNwlK4A).
