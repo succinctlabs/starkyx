@@ -795,7 +795,7 @@ dependencies = [
  "log",
  "num",
  "plonky2_field",
- "plonky2_maybe_rayon 0.2.0",
+ "plonky2_maybe_rayon 0.2.0 (git+https://github.com/mir-protocol/plonky2.git)",
  "plonky2_util",
  "rand",
  "rand_chacha",
@@ -822,9 +822,9 @@ dependencies = [
 
 [[package]]
 name = "plonky2_maybe_rayon"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "194db0cbdd974e92d897cd92b74adb3968dc1b967315eb280357c49a7637994e"
+checksum = "92ff44a90aaca13e10e7ddf8fab815ba1b404c3f7c3ca82aaf11c46beabaa923"
 dependencies = [
  "rayon",
 ]
@@ -1150,7 +1150,7 @@ dependencies = [
  "log",
  "num",
  "plonky2",
- "plonky2_maybe_rayon 0.1.1",
+ "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pprof",
  "rand",
  "seq-macro",
