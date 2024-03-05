@@ -172,7 +172,7 @@ pub(crate) mod tests {
 
     /// Generate the proof and verify as a stark
     pub(crate) fn test_starky<
-        A: 'static + Debug + Send + Sync,
+        A,
         T,
         F: RichField + Extendable<D>,
         C: CurtaConfig<D, F = F, FE = F::Extension>,
@@ -183,6 +183,7 @@ pub(crate) mod tests {
         trace_generator: &T,
         public_inputs: &[F],
     ) where
+        A: 'static + Debug + Send + Sync,
         A: StarkyAir<F, D>,
         T: TraceGenerator<F, A>,
         T::Error: Into<anyhow::Error>,
