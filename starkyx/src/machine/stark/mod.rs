@@ -378,7 +378,7 @@ where
 mod tests {
     use num::bigint::RandBigInt;
     use plonky2::field::goldilocks_field::GoldilocksField;
-    use plonky2::iop::witness::{PartialWitness, WitnessWrite};
+    use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use serde::{Deserialize, Serialize};
 

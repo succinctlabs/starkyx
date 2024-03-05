@@ -165,12 +165,9 @@ mod tests {
 
     use super::*;
     pub use crate::chip::builder::tests::*;
-    use crate::chip::builder::AirBuilder;
     use crate::chip::register::Register;
     use crate::chip::uint::bytes::operations::value::ByteOperation;
     use crate::chip::uint::bytes::register::ByteRegister;
-    use crate::chip::AirParameters;
-    use crate::math::field::Field;
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     struct ByteOpTest<const N: usize>;

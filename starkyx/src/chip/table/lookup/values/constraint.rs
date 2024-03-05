@@ -12,8 +12,9 @@ use crate::chip::AirParameters;
 use crate::math::prelude::*;
 
 impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupValues<T, F, E> {
-    pub(crate) fn eval<AP: CubicParser<E>>(&self, parser: &mut AP)
+    pub(crate) fn eval<AP>(&self, parser: &mut AP)
     where
+        AP: CubicParser<E>,
         AP: AirParser<Field = F>,
     {
         let beta = self.challenge.eval(parser);
@@ -27,8 +28,9 @@ impl<T: EvalCubic, F: Field, E: CubicParameters<F>> LogLookupValues<T, F, E> {
         );
     }
 
-    pub(crate) fn eval_global<AP: CubicParser<E>>(&self, parser: &mut AP)
+    pub(crate) fn eval_global<AP>(&self, parser: &mut AP)
     where
+        AP: CubicParser<E>,
         AP: AirParser<Field = F>,
     {
         let beta = self.challenge.eval(parser);

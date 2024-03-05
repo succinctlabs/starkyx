@@ -1,5 +1,3 @@
-use plonky2_maybe_rayon::MaybeIntoParIter;
-
 use super::LogLookupTable;
 use crate::chip::register::array::ArrayRegister;
 use crate::chip::register::cubic::EvalCubic;

@@ -181,7 +181,6 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpDivInstruction<P>
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
-    use num::BigUint;
     use rand::thread_rng;
 
     use super::*;

@@ -128,7 +128,6 @@ mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField;
 
     use super::*;
-    use crate::chip::builder::AirBuilder;
     use crate::chip::uint::operations::instruction::UintInstruction;
     use crate::chip::AirParameters;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;

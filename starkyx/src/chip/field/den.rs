@@ -226,7 +226,6 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpDenInstruction<P>
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
-    use num::BigUint;
     use rand::thread_rng;
 
     use super::*;

@@ -56,8 +56,6 @@ mod tests {
 
     use super::*;
     pub use crate::chip::builder::tests::*;
-    use crate::chip::builder::AirBuilder;
-    use crate::chip::AirParameters;
 
     #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
     struct DecodeTest;
