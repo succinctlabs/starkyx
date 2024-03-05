@@ -7,7 +7,6 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use super::element::CubicElement;
-use super::parameters::CubicParameters;
 use crate::math::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

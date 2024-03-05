@@ -193,7 +193,6 @@ impl<F: PrimeField64, P: FieldParameters> Instruction<F> for FpMulConstInstructi
 #[cfg(test)]
 mod tests {
     use num::bigint::RandBigInt;
-    use num::BigUint;
     use rand::thread_rng;
 
     use super::*;

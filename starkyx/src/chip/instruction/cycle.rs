@@ -262,12 +262,10 @@ impl<F: Field> Instruction<F> for ProcessIdInstruction {
 
 #[cfg(test)]
 mod tests {
-    use plonky2::field::goldilocks_field::GoldilocksField;
 
     use super::*;
     use crate::chip::builder::tests::*;
     use crate::chip::trace::writer::data::AirWriterData;
-    use crate::trace::window_parser::TraceWindowParser;
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct CycleTest;

@@ -1,6 +1,4 @@
 use alloc::format;
-use alloc::string::String;
-use alloc::vec::Vec;
 use core::ops::Range;
 
 use plonky2::field::extension::Extendable;

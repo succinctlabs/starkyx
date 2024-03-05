@@ -3,7 +3,7 @@
 use core::fmt::Debug;
 use core::iter::once;
 
-use anyhow::{self, ensure, Result};
+use anyhow::{ensure, Result};
 use plonky2::field::extension::Extendable;
 use plonky2::field::packable::Packable;
 use plonky2::field::packed::PackedField;

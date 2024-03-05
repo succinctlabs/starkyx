@@ -6,7 +6,7 @@ use crate::chip::register::element::ElementRegister;
 use crate::chip::register::{Register, RegisterSerializable};
 use crate::math::prelude::cubic::element::CubicElement;
 use crate::math::prelude::cubic::extension::CubicExtension;
-use crate::math::prelude::{CubicParameters, *};
+use crate::math::prelude::*;
 
 /// A log derivative table entry.
 ///

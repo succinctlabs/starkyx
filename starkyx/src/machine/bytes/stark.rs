@@ -562,7 +562,7 @@ where
 #[cfg(test)]
 mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField;
-    use plonky2::iop::witness::{PartialWitness, WitnessWrite};
+    use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use rand::Rng;
     use serde::{Deserialize, Serialize};
@@ -571,7 +571,6 @@ mod tests {
     use crate::chip::memory::time::Time;
     use crate::chip::register::element::ElementRegister;
     use crate::chip::register::Register;
-    use crate::chip::trace::writer::InnerWriterData;
     use crate::chip::uint::operations::instruction::UintInstruction;
     use crate::chip::uint::register::U32Register;
     use crate::chip::uint::util::u32_to_le_field_bytes;

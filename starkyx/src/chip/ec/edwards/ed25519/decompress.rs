@@ -105,8 +105,6 @@ pub fn decompress(compressed_point: &CompressedEdwardsY) -> (AffinePoint<Ed25519
 mod tests {
     use core::str::FromStr;
 
-    use curve25519_dalek::edwards::CompressedEdwardsY;
-    use num::BigUint;
     use serde::{Deserialize, Serialize};
 
     use super::*;
@@ -114,7 +112,6 @@ mod tests {
     use crate::chip::ec::edwards::ed25519::gadget::{CompressedPointGadget, CompressedPointWriter};
     use crate::chip::ec::edwards::ed25519::instruction::Ed25519FpInstruction;
     use crate::chip::ec::gadget::{EllipticCurveGadget, EllipticCurveWriter};
-    use crate::chip::ec::point::AffinePoint;
 
     #[derive(Clone, Debug, Copy, Serialize, Deserialize)]
     pub struct Ed25519DecompressTest;

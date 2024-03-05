@@ -49,7 +49,6 @@ pub mod test_utils {
     use crate::chip::uint::util::u64_to_le_field_bytes;
     use crate::chip::AirParameters;
     use crate::machine;
-    use crate::machine::builder::Builder;
     use crate::machine::bytes::builder::BytesBuilder;
     use crate::machine::hash::blake::blake2b::pure::BLAKE2BPure;
     use crate::machine::hash::blake::blake2b::utils::BLAKE2BUtil;

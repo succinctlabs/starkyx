@@ -127,7 +127,6 @@ mod tests {
     use super::*;
     use crate::chip::builder::tests::*;
     use crate::chip::register::bit::BitRegister;
-    use crate::chip::AirParameters;
     use crate::math::extension::cubic::element::CubicElement;
     use crate::math::prelude::*;
 

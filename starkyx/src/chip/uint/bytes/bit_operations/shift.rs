@@ -124,9 +124,7 @@ pub mod tests {
 
     use super::*;
     pub use crate::chip::builder::tests::*;
-    use crate::chip::builder::AirBuilder;
     use crate::chip::uint::bytes::bit_operations::util::{bits_u8_to_val, u8_to_bits_le};
-    use crate::chip::AirParameters;
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct ShfitTest<const N: usize, const M: usize>;

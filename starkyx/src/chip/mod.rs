@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 
 use self::constraint::Constraint;
 use self::instruction::Instruction;
-use crate::math::extension::cubic::parameters::CubicParameters;
 use crate::math::prelude::*;
 use crate::plonky2::stark::Starky;
 

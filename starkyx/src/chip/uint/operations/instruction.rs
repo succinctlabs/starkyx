@@ -91,7 +91,6 @@ mod tests {
     use crate::chip::register::bit::BitRegister;
     use crate::chip::uint::register::ByteArrayRegister;
     use crate::chip::AirParameters;
-    use crate::math::field::Field;
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     struct U32OpTest;

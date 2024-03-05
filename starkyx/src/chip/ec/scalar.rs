@@ -173,8 +173,6 @@ mod tests {
 
     use super::*;
     use crate::chip::builder::tests::ArithmeticGenerator;
-    use crate::chip::builder::AirBuilder;
-    use crate::chip::AirParameters;
     use crate::math::goldilocks::cubic::GoldilocksCubicParameters;
     use crate::plonky2::stark::config::PoseidonGoldilocksStarkConfig;
     use crate::plonky2::stark::tests::{test_recursive_starky, test_starky};

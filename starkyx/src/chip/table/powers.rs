@@ -8,7 +8,7 @@ use crate::chip::register::Register;
 use crate::chip::trace::writer::TraceWriter;
 use crate::math::prelude::*;
 use crate::prelude::cubic::element::CubicElement;
-use crate::prelude::{AirConstraint, AirParameters, CubicParameters};
+use crate::prelude::{AirConstraint, AirParameters};
 
 /// Powers of a challenge element.
 ///

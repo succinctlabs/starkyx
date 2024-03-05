@@ -108,8 +108,6 @@ pub mod tests {
 
     use super::*;
     pub use crate::chip::builder::tests::*;
-    use crate::chip::builder::AirBuilder;
-    use crate::chip::AirParameters;
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct RotateTest<const N: usize, const M: usize>;

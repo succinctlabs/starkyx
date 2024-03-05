@@ -314,7 +314,6 @@ pub(crate) mod tests {
     pub use crate::air::parser::AirParser;
     pub use crate::air::RAir;
     pub use crate::chip::instruction::empty::EmptyInstruction;
-    use crate::chip::register::element::ElementRegister;
     pub use crate::chip::register::u16::U16Register;
     pub use crate::chip::register::RegisterSerializable;
     pub use crate::chip::trace::generator::ArithmeticGenerator;

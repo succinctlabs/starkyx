@@ -143,7 +143,6 @@ mod tests {
     use crate::chip::arithmetic::expression::ArithmeticExpression;
     use crate::chip::builder::tests::*;
     use crate::chip::register::Register;
-    use crate::chip::AirParameters;
     use crate::math::extension::cubic::element::CubicElement;
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
